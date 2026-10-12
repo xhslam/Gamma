@@ -1,0 +1,136 @@
+/* Auris 公式展示与编辑样式，适配 Gamma 主题。 */
+.markdown-workspace-prose .notes-v2__math-block {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 56px;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 8px 0;
+  overflow-x: auto;
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / .5);
+}
+
+.markdown-workspace-prose .notes-v2__math-block .katex {
+  font-size: 1.08em;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline .katex {
+  font-size: 1em;
+}
+
+.markdown-workspace-prose .notes-v2__math-node {
+  cursor: pointer;
+  position: relative;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline:not(.is-editing):hover,
+.markdown-workspace-prose .notes-v2__math-inline:not(.is-editing):focus-visible {
+  background: color-mix(in srgb, hsl(var(--primary)) 12%, transparent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.markdown-workspace-prose .notes-v2__math-block:not(.is-editing):hover,
+.markdown-workspace-prose .notes-v2__math-block:not(.is-editing):focus-visible {
+  background: color-mix(in srgb, hsl(var(--primary)) 8%, hsl(var(--background)));
+  outline: 1px solid color-mix(in srgb, hsl(var(--primary)) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline-preview,
+.markdown-workspace-prose .notes-v2__math-block-preview {
+  max-width: 100%;
+}
+
+.markdown-workspace-prose .notes-v2__math-block-preview {
+  overflow-x: auto;
+  text-align: center;
+  width: 100%;
+}
+
+.markdown-workspace-prose .notes-v2__math-preview--empty {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-style: italic;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline.is-editing {
+  cursor: text;
+}
+
+.markdown-workspace-prose .notes-v2__math-block.is-editing {
+  cursor: text;
+  overflow: visible;
+  place-items: stretch;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline-source,
+.markdown-workspace-prose .notes-v2__math-block-source {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: hsl(var(--foreground));
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  outline: none;
+}
+
+.markdown-workspace-prose .notes-v2__math-inline-source {
+  border-bottom: 1px solid color-mix(in srgb, hsl(var(--primary)) 52%, transparent);
+  display: inline-block;
+  font-size: 0.92em;
+  line-height: inherit;
+  margin: 0 2px;
+  max-width: min(70vw, 720px);
+  min-width: 6ch;
+  padding: 0 1px 1px;
+}
+
+.markdown-workspace-prose .notes-v2__math-block-source {
+  font-size: 13px;
+  line-height: 1.55;
+  min-height: 96px;
+  padding: 10px 12px;
+  resize: vertical;
+  text-align: left;
+  width: 100%;
+}
+
+.markdown-workspace-prose .notes-v2__math-live-preview {
+  align-items: center;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 8px 24px hsl(var(--foreground) / .12), 0 2px 4px hsl(var(--foreground) / .06);
+  color: hsl(var(--foreground));
+  display: flex;
+  justify-content: center;
+  left: 50%;
+  max-width: min(420px, 80vw);
+  min-height: 36px;
+  min-width: 64px;
+  overflow-x: auto;
+  padding: 7px 10px;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 30;
+}
+
+.markdown-workspace-prose .notes-v2__math-block .notes-v2__math-live-preview {
+  max-width: min(760px, calc(100vw - 96px));
+  white-space: normal;
+}
+
+
+.markdown-workspace-prose .notes-v2__math-node[hidden], .markdown-workspace-prose .notes-v2__math-node [hidden] { display: none; }

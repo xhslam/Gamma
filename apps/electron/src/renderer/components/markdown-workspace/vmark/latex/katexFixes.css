@@ -1,0 +1,40 @@
+/* 移植自 xiaolai/vmark @ 07c40609；ISC 许可见 vmark/LICENSE。 */
+/**
+ * KaTeX Fixes
+ *
+ * Must be imported immediately after katex.min.css. Loaded by the app
+ * (main.tsx) and by the export CSS bundle, so a fix here reaches both.
+ *
+ * Tailwind v4's preflight sets `* { border: 0 solid }` which breaks
+ * KaTeX fraction lines and other elements that expect browser defaults.
+ */
+
+.katex .frac-line {
+  border-bottom-width: max(1px, 0.04em);
+}
+
+.katex .overline .overline-line,
+.katex .underline .underline-line {
+  border-bottom-width: max(1px, 0.04em);
+}
+
+.katex .sqrt > .root {
+  border-bottom-width: 0;
+}
+
+.katex .hdashline,
+.katex .hline {
+  border-bottom-width: max(1px, 0.04em);
+}
+
+/* `\tag{…}` must sit at the right edge of the BLOCK (#1376, #1402). KaTeX
+   places the tag with `position: absolute; right: 0` inside `.katex-html`,
+   which fills `.katex-display`. VMark's math previews are flex containers, so
+   `.katex-display` becomes a flex item and shrink-wraps to the equation —
+   `right: 0` then lands on the last term. Full width restores the block;
+   centring is KaTeX's own `text-align: center`. Unscoped on purpose: a
+   container-scoped copy is how the first fix landed on a class nothing
+   renders (displayMathTag.test.ts). */
+.katex-display {
+  width: 100%;
+}

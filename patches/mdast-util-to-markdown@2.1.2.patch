@@ -1,0 +1,64 @@
+diff --git a/lib/util/container-phrasing.js b/lib/util/container-phrasing.js
+index 3b4dc46bcab677d1a86c0ca3cc0d11e876e7e81b..7b42522d79ac84ee7ef58c12345fac67a8cd6c16 100644
+--- a/lib/util/container-phrasing.js
++++ b/lib/util/container-phrasing.js
+@@ -88,9 +88,18 @@ export function containerPhrasing(parent, state, info) {
+     // If we had to encode the first character after the previous node and it’s
+     // still the same character,
+     // encode it.
++    //
++    // VMark patch (#1407 soak): encode the whole CODE POINT, not one UTF-16
++    // code unit. Encoding only the high surrogate of an astral character (an
++    // emoji, most CJK Extension B) emits `&#xD83D;` plus a raw low surrogate,
++    // which decodes to U+FFFD: the character is destroyed. Repairing that
++    // afterwards in the string is too late, because the attention handler
++    // beside it has already decided its flanking against the raw surrogate.
+     if (encodeAfter && encodeAfter === value.slice(0, 1)) {
++      const codePoint = /** @type {number} */ (value.codePointAt(0))
+       value =
+-        encodeCharacterReference(encodeAfter.charCodeAt(0)) + value.slice(1)
++        encodeCharacterReference(codePoint) +
++        value.slice(codePoint > 0xffff ? 2 : 1)
+     }
+ 
+     const encodingInfo = state.attentionEncodeSurroundingInfo
+@@ -106,9 +115,20 @@ export function containerPhrasing(parent, state, info) {
+         encodingInfo.before &&
+         before === results[results.length - 1].slice(-1)
+       ) {
++        // VMark patch (#1407 soak): the whole code point, as above — here the
++        // raw half left behind would be the high surrogate.
++        const previous = results[results.length - 1]
++        const low = previous.charCodeAt(previous.length - 1)
++        const high = previous.charCodeAt(previous.length - 2)
++        const width =
++          low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff
++            ? 2
++            : 1
+         results[results.length - 1] =
+-          results[results.length - 1].slice(0, -1) +
+-          encodeCharacterReference(before.charCodeAt(0))
++          previous.slice(0, -width) +
++          encodeCharacterReference(
++            /** @type {number} */ (previous.codePointAt(previous.length - width))
++          )
+       }
+ 
+       if (encodingInfo.after) encodeAfter = after
+diff --git a/lib/util/safe.js b/lib/util/safe.js
+index 456fe215ae3d032ffaea4590f0d097bcb9195619..10f82c99cff8123142f230c087e6d09742f2b313 100644
+--- a/lib/util/safe.js
++++ b/lib/util/safe.js
+@@ -56,7 +56,11 @@ export function safe(state, input, config) {
+       const after = 'after' in pattern
+       const position = match.index + (before ? match[1].length : 0)
+ 
+-      if (positions.includes(position)) {
++      // VMark patch (#1407): `infos` gains a key exactly when `positions`
++      // gains the position, so an own-key check is the same test in O(1).
++      // `positions.includes` made escaping O(escapes²) — a text node of 116k
++      // backticks took 15s to serialize.
++      if (Object.hasOwn(infos, position)) {
+         if (infos[position].before && !before) {
+           infos[position].before = false
+         }
