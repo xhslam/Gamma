@@ -8,8 +8,8 @@
  * 提供统一接口获取启用的工具定义和系统提示词。
  */
 
-import type { ToolDefinition, ToolParameterProperty } from '@proma/core'
-import type { ChatToolInfo, ChatToolMeta } from '@proma/shared'
+import type { ToolDefinition, ToolParameterProperty } from '@gamma/core'
+import type { ChatToolInfo, ChatToolMeta } from '@gamma/shared'
 import { getChatToolsConfig } from './chat-tool-config'
 import {
   AGENT_RECOMMEND_TOOL_META,

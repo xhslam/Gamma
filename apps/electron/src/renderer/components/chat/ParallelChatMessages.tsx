@@ -6,7 +6,7 @@
  * - 各列独立 StickToBottom 滚动
  * - ChatMessageItem 以 isParallelMode={true} 渲染
  *
- * 移植自 proma-frontend 的 parallel-chat-messages.tsx。
+ * 移植自 gamma-frontend 的 parallel-chat-messages.tsx。
  */
 
 import { Fragment, useMemo, useRef, useEffect } from 'react'
@@ -30,7 +30,7 @@ import {
 } from '@/components/ai-elements/reasoning'
 import { streamingModelAtom, channelsAtom } from '@/atoms/chat-atoms'
 import { getModelLogo, resolveModelProvider } from '@/lib/model-logo'
-import type { ChatMessage } from '@proma/shared'
+import type { ChatMessage } from '@gamma/shared'
 
 /** 消息段落（按分隔线分割） */
 interface MessageSegment {

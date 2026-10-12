@@ -6,7 +6,7 @@
  * - 读取：主文件 → .tmp 残留 → .bak 回退，多层容错
  */
 
-import { closeSync, copyFileSync, existsSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, copyFileSync, existsSync, fchmodSync, fsyncSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
@@ -41,14 +41,15 @@ export function writeJsonFileAtomic(filePath: string, data: object, skipBackup =
  * directory could pre-create it as a symlink. `wx` creates a private sibling
  * exclusively, and rename replaces the target itself rather than following it.
  */
-export function writeTextFileAtomic(filePath: string, content: string): void {
+export function writeTextFileAtomic(filePath: string, content: string, preservedMode?: number): void {
+  if (preservedMode !== undefined && (!Number.isInteger(preservedMode) || preservedMode < 0 || preservedMode > 0o777)) throw new Error('无效文件权限')
   const parent = dirname(filePath)
   const stem = basename(filePath)
   let tmpPath: string | null = null
   let descriptor: number | null = null
   try {
     for (let attempt = 0; attempt < 16; attempt++) {
-      const candidate = join(parent, `.${stem}.proma-${randomBytes(12).toString('hex')}.tmp`)
+      const candidate = join(parent, `.${stem}.gamma-${randomBytes(12).toString('hex')}.tmp`)
       try {
         descriptor = openSync(candidate, 'wx', 0o600)
         tmpPath = candidate
@@ -60,6 +61,8 @@ export function writeTextFileAtomic(filePath: string, content: string): void {
     }
     if (descriptor === null || tmpPath === null) throw new Error(`无法为原子写入创建临时文件: ${filePath}`)
     writeFileSync(descriptor, content, 'utf-8')
+    if (preservedMode !== undefined) fchmodSync(descriptor, preservedMode)
+    fsyncSync(descriptor)
     closeSync(descriptor)
     descriptor = null
     renameSync(tmpPath, filePath)

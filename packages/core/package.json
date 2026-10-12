@@ -1,8 +1,8 @@
 {
-  "name": "@proma/core",
-  "version": "0.2.17",
+  "name": "@gamma/core",
+  "version": "0.2.18",
   "license": "AGPL-3.0-only",
-  "description": "proma core types,storage and core logic with agents",
+  "description": "gamma core types,storage and core logic with agents",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -14,7 +14,7 @@
     "./highlight": "./src/highlight/index.ts"
   },
   "dependencies": {
-    "@proma/shared": "workspace:*",
+    "@gamma/shared": "workspace:*",
     "highlight.js": "^11.11.1",
     "shiki": "^3.22.0"
   },

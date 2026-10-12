@@ -11,7 +11,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import DOMPurify from 'dompurify'
 import { File as PierreFile } from '@pierre/diffs/react'
 import { toast } from 'sonner'
-import type { FilePreviewMetadata } from '@proma/shared'
+import type { FilePreviewMetadata } from '@gamma/shared'
 import { cn } from '@/lib/utils'
 import {
   agentDiffPanelTabAtom,

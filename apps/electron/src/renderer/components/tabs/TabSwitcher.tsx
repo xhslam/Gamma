@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { useAtomValue, useSetAtom, useStore } from 'jotai'
-import type { AgentSessionMeta, ConversationMeta } from '@proma/shared'
+import type { AgentSessionMeta, ConversationMeta } from '@gamma/shared'
 import { cn } from '@/lib/utils'
 import {
   activeTabIdAtom,
@@ -345,11 +345,11 @@ export function TabSwitcher(): ReactElement | null {
       // macOS 上这里的 Ctrl 是物理 Control 键，不等同于 Cmd。
       if (event.key !== 'Tab' || !event.ctrlKey || event.metaKey || event.altKey) return
 
-      event.preventDefault()
-      event.stopPropagation()
-
       const candidates = candidatesRef.current
       if (candidates.length === 0 || !hasAlternateTarget()) return
+
+      event.preventDefault()
+      event.stopPropagation()
 
       const direction: 1 | -1 = event.shiftKey ? -1 : 1
       if (!isOpenRef.current) {

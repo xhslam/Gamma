@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * 准备随 Proma 安装包分发的 OfficeCLI 二进制。
+ * 准备随 Gamma 安装包分发的 OfficeCLI 二进制。
  *
  * 每次 Electron build / dev 启动前按当前构建目标的平台与架构从 OfficeCLI 官方 GitHub
  * Release 取得固定版本，流式校验文件大小及 SHA-256，再原子写入 resources/officecli/。

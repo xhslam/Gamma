@@ -16,8 +16,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { normalizeMcpTransportType } from '@proma/shared'
-import type { McpServerEntry } from '@proma/shared'
+import { normalizeMcpTransportType } from '@gamma/shared'
+import type { McpServerEntry } from '@gamma/shared'
 import { getMcpApiKeyEnvironment, getMcpOAuthHeaders } from './mcp-oauth-service'
 
 /**
@@ -68,7 +68,7 @@ export async function validateMcpServer(
     }
   }
 
-  const client = new Client({ name: 'Proma MCP validator', version: '1.0.0' }, { capabilities: {} })
+  const client = new Client({ name: 'Gamma MCP validator', version: '1.0.0' }, { capabilities: {} })
   let transport: StdioClientTransport | SSEClientTransport | StreamableHTTPClientTransport | undefined
   const timeoutMs = Math.max(1, entry.timeout ?? 30) * 1000
 

@@ -1,6 +1,6 @@
-# Proma 工程约定
+# Gamma 工程约定
 
-Proma 是一个本地优先的 Electron AI 桌面 Agent。仓库是 Bun monorepo；主应用在 `apps/electron`，共享包在 `packages/*`。
+Gamma 是一个本地优先的 Electron AI 桌面 Agent。仓库是 Bun monorepo；主应用在 `apps/electron`，共享包在 `packages/*`。
 
 ## 必须遵守
 
@@ -61,9 +61,9 @@ release-notes/                    版本发布日志
 
 ### Agent 与项目指令
 
-- Proma 仅使用 **Pi Agent runtime**。不要重新引入 Claude Agent SDK 或其专属配置、session 语义和打包依赖。
+- Gamma 仅使用 **Pi Agent runtime**。不要重新引入 Claude Agent SDK 或其专属配置、session 语义和打包依赖。
 - 用户项目的 `AGENTS.md` 由 `project-instruction-resolver.ts` 在已授权项目根内显式解析；禁止恢复 cwd、祖先目录或附加目录的环境式规则发现。
-- Proma 受管工作区的 `AGENTS.md` 与用户项目的 `AGENTS.md` 有不同所有权边界，均须通过已验证的显式路径注入。
+- Gamma 受管工作区的 `AGENTS.md` 与用户项目的 `AGENTS.md` 有不同所有权边界，均须通过已验证的显式路径注入。
 - 旧项目 `CLAUDE.md` 仅是兼容输入，不能自动覆盖、合并或删除用户文件。
 - 改动 Agent 工具、权限或上下文路径时，检查工作区隔离、附加目录边界、会话恢复与 Automation/Collaboration 的回归。
 

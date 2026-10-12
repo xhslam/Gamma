@@ -1,7 +1,7 @@
 /**
  * AI Elements - 消息组件原语
  *
- * 简化迁移自 proma-frontend 的 ai-elements/message.tsx，
+ * 简化迁移自 gamma-frontend 的 ai-elements/message.tsx，
  * 保留核心消息展示组件，适配 Electron + Jotai 架构。
  *
  * 包含：
@@ -37,8 +37,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { LoadingIndicator } from '@/components/ui/loading-indicator'
-import { CodeBlock, MermaidBlock } from '@proma/ui'
-import { detectLanguage } from '@proma/core'
+import { CodeBlock, MermaidBlock } from '@gamma/ui'
+import { detectLanguage } from '@gamma/core'
 import { FilePathChip, ResolvableFilePathChip, isAbsoluteFilePath, isImageFilePath, isLocalFileReference, isRelativeFilePath } from './file-path-chip'
 import { buildAgentHistoryQuoteLabel, parseAgentHistoryQuoteMention } from '@/lib/quoted-selection'
 import { createMentionPattern } from '@/lib/mention-patterns'
@@ -46,7 +46,7 @@ import { resolveSkillMentionName } from '@/lib/skill-mention-name'
 import { useSkillMentionNames } from '@/components/agent/SkillMentionNamesProvider'
 import { useAgentBrowserLink } from '@/components/browser/AgentBrowserLinkProvider'
 import type { HTMLAttributes, ComponentProps, ReactNode } from 'react'
-import type { FileAttachment } from '@proma/shared'
+import type { FileAttachment } from '@gamma/shared'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 
 // ===== Message 根容器 =====
@@ -592,7 +592,7 @@ const MarkdownLink = React.memo(function MarkdownLink({
 })
 
 /**
- * 将 Agent Markdown 中的本地图片路径转换为经主进程授权的 proma-file URL。
+ * 将 Agent Markdown 中的本地图片路径转换为经主进程授权的 gamma-file URL。
  *
  * 浏览器无法直接加载 `~`、绝对本地路径或 Agent cwd 下的相对路径；必须先通过
  * file:resolve-path 解析，避免把本地路径暴露给 renderer，也保留会话授权边界。
@@ -805,7 +805,7 @@ export const MessageResponse = React.memo(
     const renderedMarkdown = (remarkPlugins?.includes(remarkMentions)
       ? normalizeNamedReferenceDelimiters(children)
       : children
-    ).replace(/<!--PROMA_AUTOMATION:[\s\S]*?-->/g, '').trim()
+    ).replace(/<!--GAMMA_AUTOMATION:[\s\S]*?-->/g, '').trim()
 
     return (
       <div

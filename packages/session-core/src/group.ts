@@ -2,7 +2,7 @@
  * Turn 分组 — 将流式产生的 SDKMessage 列表(含同一回合的多行快照碎片)
  * 合并为可渲染/可导出的 Turn 分组。
  *
- * 这是 Proma 会话「快照去重」的唯一真源：Electron 渲染层、proma CLI 以及
+ * 这是 Gamma 会话「快照去重」的唯一真源：Electron 渲染层、gamma CLI 以及
  * 未来的 query 型接口都复用本模块，避免各处重抄一份会随存储格式漂移的解析器。
  *
  * 逻辑逐字迁移自 apps/electron 渲染层 SDKMessageRenderer.tsx，保持行为一致。
@@ -14,7 +14,7 @@ import {
   type SDKAssistantMessage,
   type SDKUserMessage,
   type SDKSystemMessage,
-} from '@proma/shared'
+} from '@gamma/shared'
 import { normalizeThinkTagsInContentBlocks } from './thinking-tags'
 
 // ===== 辅助：从 SDKMessage 提取元数据 =====
@@ -272,10 +272,15 @@ function mergeAdjacentSameModelTurns(groups: MessageGroup[]): MessageGroup[] {
 
 // ===== 预览/摘要 =====
 
-const SCHEDULED_RUN_MARKER = '<!--PROMA_SCHEDULED_RUN-->'
+const SCHEDULED_RUN_MARKERS = ['<!--GAMMA_SCHEDULED_RUN-->', '<!--PROMA_SCHEDULED_RUN-->'] as const
+
+/** 旧会话保留原始标记；改名后读取时同时识别两种来源。 */
+export function isScheduledRunText(text: string): boolean {
+  return SCHEDULED_RUN_MARKERS.some((marker) => text.includes(marker))
+}
 
 export function stripScheduledRunMarker(text: string): string {
-  return text.replaceAll(SCHEDULED_RUN_MARKER, '').trim()
+  return SCHEDULED_RUN_MARKERS.reduce((result, marker) => result.replaceAll(marker, ''), text).trim()
 }
 
 /**

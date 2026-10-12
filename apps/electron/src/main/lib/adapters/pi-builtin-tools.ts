@@ -10,14 +10,14 @@
 import { Type } from 'typebox'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { AgentToolResult } from '@earendil-works/pi-agent-core'
-import { AGENT_IPC_CHANNELS, getTerminalProfilesForPlatform, normalizePathForCompare, parseTerminalProfile } from '@proma/shared'
+import { AGENT_IPC_CHANNELS, getTerminalProfilesForPlatform, normalizePathForCompare, parseTerminalProfile } from '@gamma/shared'
 import type {
   AgentWorkspace,
   CreateAutomationInput,
-  PromaPermissionMode,
+  GammaPermissionMode,
   TerminalProfile,
   UpdateAutomationInput,
-} from '@proma/shared'
+} from '@gamma/shared'
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -89,8 +89,8 @@ import {
   discardInapplicableAutomationScheduleFields,
 } from './automation-tool-schema'
 import { updateSettings } from '../settings-service'
-import { getConfiguredVaultFileSystem, getVaultConfig } from '../vault-service'
 import type { ProductivityToolsSettings } from '../../../types'
+import { buildPiWebTools } from './pi-web-tools'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 
@@ -106,7 +106,7 @@ export interface PiBuiltinToolsContext {
   agentCwd?: string
   /** 图片外发前必须校验在这些已授权目录内。 */
   allowedRoots?: string[]
-  permissionMode?: PromaPermissionMode
+  permissionMode?: GammaPermissionMode
   triggeredBy?: 'user' | 'automation' | 'delegation' | 'external'
   /** Windows 设备是否已有可供 Pi Bash 使用的 Git Bash 或 WSL。 */
   windowsShellAvailable?: boolean
@@ -158,7 +158,7 @@ function buildWorkspaceMcpManagementTools(sdk: PiSdk, ctx: PiBuiltinToolsContext
 
   return [
     sdk.defineTool({
-      name: 'proma_workspace_list_mcp_servers',
+      name: 'gamma_workspace_list_mcp_servers',
       label: '列出工作区 MCP',
       description: 'List the current workspace MCP servers and their safe connection status. No credentials, headers, environment values, or endpoint details are returned.',
       promptSnippet: 'Use this before adding or updating an MCP to avoid overwriting an existing server. If the same server exists with a different connection, ask the user before retrying with replaceExisting=true.',
@@ -168,7 +168,7 @@ function buildWorkspaceMcpManagementTools(sdk: PiSdk, ctx: PiBuiltinToolsContext
       },
     }),
     sdk.defineTool({
-      name: 'proma_workspace_configure_mcp_server',
+      name: 'gamma_workspace_configure_mcp_server',
       label: '配置工作区 MCP',
       description: 'Create or update a non-sensitive workspace MCP transport and validate it with a real handshake and listTools call. Credentials, authorization headers, and environment secrets are intentionally not accepted; guide the user to the MCP UI for those.',
       promptSnippet: 'Use only after confirming the official MCP transport. A successful server becomes available in the next user message or new run; tools cannot be hot-added to the current run.',
@@ -179,7 +179,7 @@ function buildWorkspaceMcpManagementTools(sdk: PiSdk, ctx: PiBuiltinToolsContext
         args: Type.Optional(Type.Array(Type.String(), { description: 'Optional stdio command arguments.' })),
         url: Type.Optional(Type.String({ description: 'Required for HTTP or SSE MCP.' })),
         timeout: Type.Optional(Type.Number({ minimum: 1, maximum: 300, description: 'Optional handshake timeout in seconds for any MCP transport.' })),
-        enabled: Type.Optional(Type.Boolean({ description: 'Defaults to true. When true, Proma enables the server only after handshake and listTools succeed.' })),
+        enabled: Type.Optional(Type.Boolean({ description: 'Defaults to true. When true, Gamma enables the server only after handshake and listTools succeed.' })),
         oauth: Type.Optional(Type.Object({
           provider: Type.Optional(Type.String({ description: 'Stable, non-secret OAuth provider label, for example github.' })),
           authorizationEndpoint: Type.Optional(Type.String({ description: 'Public HTTPS OAuth authorization endpoint from official documentation.' })),
@@ -238,7 +238,7 @@ interface AutomationSummary {
 }
 
 function summarizeAutomation(
-  a: import('@proma/shared').Automation,
+  a: import('@gamma/shared').Automation,
   includeHistory: boolean,
   workspacesById?: ReadonlyMap<string, AgentWorkspace>,
 ): AutomationSummary {
@@ -350,7 +350,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
     sdk.defineTool({
       name: 'mcp__automation__list_automations',
       label: '列出定时任务',
-      description: '列出 Proma 持久化定时任务。用于查看已有长期反复任务、判断是否需要新建任务、检查运行状态和最近失败情况。',
+      description: '列出 Gamma 持久化定时任务。用于查看已有长期反复任务、判断是否需要新建任务、检查运行状态和最近失败情况。',
       parameters: Type.Object({
         active: Type.Optional(Type.Boolean({ description: '只列出启用或暂停任务；不传则列出全部' })),
         includeHistory: Type.Optional(Type.Boolean({ description: '是否包含运行历史，默认 false' })),
@@ -367,7 +367,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
     sdk.defineTool({
       name: 'mcp__automation__get_automation',
       label: '查看定时任务',
-      description: '读取单个 Proma 定时任务详情和运行记录。定时任务自动执行中可以省略 id 来读取当前任务，用于自检和自迭代。',
+      description: '读取单个 Gamma 定时任务详情和运行记录。定时任务自动执行中可以省略 id 来读取当前任务，用于自检和自迭代。',
       parameters: Type.Object({
         id: Type.Optional(Type.String({ description: '定时任务 ID；定时任务自动执行中可省略以读取当前任务' })),
       }),
@@ -383,7 +383,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
     sdk.defineTool({
       name: 'mcp__automation__create_automation',
       label: '创建定时任务',
-      description: '创建 Proma 持久化定时任务。可通过 workspaceId 指定其他工作区，先用 list_workspaces 查询；省略则使用当前工作区。适合无人值守、有稳定价值的场景。纯提醒/闹钟、需要用户实时参与判断、或现在就该做完即终结的事不要创建。',
+      description: '创建 Gamma 持久化定时任务。可通过 workspaceId 指定其他工作区，先用 list_workspaces 查询；省略则使用当前工作区。适合无人值守、有稳定价值的场景。纯提醒/闹钟、需要用户实时参与判断、或现在就该做完即终结的事不要创建。',
       parameters: automationCreateToolParameters,
       async execute(_toolCallId: string, params: unknown) {
         const args = params as Record<string, unknown>
@@ -448,7 +448,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
     sdk.defineTool({
       name: 'mcp__automation__update_automation',
       label: '修改定时任务',
-      description: '修改 Proma 定时任务，包括名称、执行提示词、频率和启用状态。定时任务自动执行中可以省略 id 来修改当前任务。',
+      description: '修改 Gamma 定时任务，包括名称、执行提示词、频率和启用状态。定时任务自动执行中可以省略 id 来修改当前任务。',
       parameters: Type.Object({
         id: Type.Optional(Type.String({ description: '定时任务 ID；定时任务自动执行中可省略以更新当前任务' })),
         name: Type.Optional(Type.String({ description: '新的任务名' })),
@@ -538,7 +538,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
     sdk.defineTool({
       name: 'mcp__automation__delete_automation',
       label: '删除定时任务',
-      description: '删除 Proma 定时任务。只在用户明确要求删除，或任务已经长期无价值且用户确认后使用。',
+      description: '删除 Gamma 定时任务。只在用户明确要求删除，或任务已经长期无价值且用户确认后使用。',
       parameters: Type.Object({
         id: Type.String({ description: '要删除的定时任务 ID' }),
       }),
@@ -552,7 +552,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
     sdk.defineTool({
       name: 'mcp__automation__run_automation_now',
       label: '立即运行定时任务',
-      description: '立即运行 Proma 定时任务。用于用户要求马上验证，或修改任务后需要试跑一次。',
+      description: '立即运行 Gamma 定时任务。用于用户要求马上验证，或修改任务后需要试跑一次。',
       parameters: Type.Object({
         id: Type.Optional(Type.String({ description: '要立即运行的定时任务 ID；定时任务自动执行中可省略以运行当前任务' })),
       }),
@@ -603,7 +603,7 @@ function buildPlanningTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefinit
   return [
     sdk.defineTool({
       name: 'mcp__planning__list_todos', label: '列出 Todo',
-      description: '列出 Proma Todo（包含用户明确连接的系统提醒事项投影）。返回项的 nativeOrigin 表示编辑会写回系统；对该类项单项编辑/完成先征得用户确认，批量修改和删除必须明确确认。仅 Pi Agent 可用。',
+      description: '列出 Gamma Todo（包含用户明确连接的系统提醒事项投影）。返回项的 nativeOrigin 表示编辑会写回系统；对该类项单项编辑/完成先征得用户确认，批量修改和删除必须明确确认。仅 Pi Agent 可用。',
       parameters: Type.Object({
         status: Type.Optional(Type.Union([Type.Literal('open'), Type.Literal('completed')])),
         dueBefore: Type.Optional(Type.Number({ description: '仅返回此截止时间之前的 Todo，Unix 毫秒时间戳' })),
@@ -627,7 +627,7 @@ function buildPlanningTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefinit
     }),
     sdk.defineTool({
       name: 'mcp__planning__create_todo', label: '创建 Todo',
-      description: '创建 Proma 本地 Todo。调用前必须先用 list_todos(status=open) 检查重复，并用 list_groups({ scope: todo }) 查询并优先复用 Todo 分组；用户明确提出待办，或可合理确定下一步时使用。未传 dueAt 时默认当天结束前；仅 Pi Agent 可用。',
+      description: '创建 Gamma 本地 Todo。调用前必须先用 list_todos(status=open) 检查重复，并用 list_groups({ scope: todo }) 查询并优先复用 Todo 分组；用户明确提出待办，或可合理确定下一步时使用。未传 dueAt 时默认当天结束前；仅 Pi Agent 可用。',
       parameters: Type.Object({ title: Type.String(), ...optionalPlanningFields, priority: Type.Optional(Type.Union([Type.Literal('low'), Type.Literal('medium'), Type.Literal('high')])), dueAt: Type.Optional(Type.Number({ description: '截止时间 Unix 毫秒时间戳' })) }),
       async execute(_id: string, params: unknown) {
         const args = params as Record<string, unknown>
@@ -691,7 +691,7 @@ function buildPlanningTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefinit
     }),
     sdk.defineTool({
       name: 'mcp__planning__list_calendar_events', label: '列出日程',
-      description: '列出 Proma 日程（包含用户明确连接的系统日历投影）。nativeOrigin 表示编辑会写回系统；Agent 修改前必须先取得用户确认。仅 Pi Agent 可用。',
+      description: '列出 Gamma 日程（包含用户明确连接的系统日历投影）。nativeOrigin 表示编辑会写回系统；Agent 修改前必须先取得用户确认。仅 Pi Agent 可用。',
       parameters: Type.Object({
         startAt: Type.Optional(Type.Number({ description: '查询范围起点，Unix 毫秒时间戳' })),
         endAt: Type.Optional(Type.Number({ description: '查询范围终点，Unix 毫秒时间戳' })),
@@ -715,7 +715,7 @@ function buildPlanningTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefinit
     }),
     sdk.defineTool({
       name: 'mcp__planning__create_calendar_event', label: '创建日程',
-      description: '创建 Proma 本地日程。分组必须来自 list_groups({ scope: calendar })；用户明确提供时间安排时使用。仅 Pi Agent 可用。',
+      description: '创建 Gamma 本地日程。分组必须来自 list_groups({ scope: calendar })；用户明确提供时间安排时使用。仅 Pi Agent 可用。',
       parameters: Type.Object({ title: Type.String(), startAt: Type.Number({ description: '开始时间 Unix 毫秒时间戳' }), endAt: Type.Optional(Type.Number()), allDay: Type.Optional(Type.Boolean()), ...optionalPlanningFields, todoId: Type.Optional(Type.String()) }),
       async execute(_id: string, params: unknown) {
         const args = params as Record<string, unknown>
@@ -899,7 +899,7 @@ function buildWindowsShellInstallerTools(sdk: PiSdk, ctx: PiBuiltinToolsContext)
           installer: 'git-for-windows',
           version: source.version,
           filePath: result.filePath,
-          message: '已下载并打开 Git for Windows 安装程序。请完成安装后重试原任务；Proma 会在下次运行时自动检测 Git Bash。',
+          message: '已下载并打开 Git for Windows 安装程序。请完成安装后重试原任务；Gamma 会在下次运行时自动检测 Git Bash。',
         })
       },
     }),
@@ -940,10 +940,10 @@ function buildVisionRelayTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefi
 // ===== Collaboration 工具（占位，下阶段实现） =====
 
 // collaboration 逻辑较重（涉及子会话生命周期管理、EventBus 订阅、BlockedEvent 冒泡），
-// 需要独立桥接文件。当前阶段先确保 automation 和 proma-cloud 可用。
+// 需要独立桥接文件。当前阶段先确保 automation 和 gamma-cloud 可用。
 // TODO: 从 agent-collaboration-tools.ts 提取核心逻辑到 service 层，再桥接到 Pi。
 
-// ===== Proma Cloud 工具 =====
+// ===== Gamma Cloud 工具 =====
 
 function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefinition[] {
   return [
@@ -1303,7 +1303,7 @@ function canonicalPath(path: string): string {
 
 /**
  * 仅允许绑定当前会话已授权仓库（或工作区已登记仓库）的 linked worktree。
- * 这让 Agent 能在 `proma-worktree start` 后接管新目录，但不能借此扩大文件访问边界。
+ * 这让 Agent 能在 `gamma-worktree start` 后接管新目录，但不能借此扩大文件访问边界。
  */
 async function selectAgentWorktree(ctx: PiBuiltinToolsContext, worktreePath: string) {
   const requestedPath = resolve(ctx.agentCwd ?? process.cwd(), worktreePath)
@@ -1388,8 +1388,8 @@ function buildAgentTerminalTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDe
       ? `Shell profile for the new terminal: ${supportedTerminalProfiles.join(' | ')}. default preserves the user's configured login shell; zsh and bash apply only to this terminal. Windows-only profiles fail explicitly.`
       : `Shell profile for the new terminal: ${supportedTerminalProfiles.join(' | ')}. default uses the configured login shell when available; zsh and bash apply only to this terminal. Unsupported profiles fail explicitly.`
   const defaultShellBehavior = process.platform === 'win32'
-    ? 'If shell is omitted, Proma reuses the user’s last selected Windows shell when available; otherwise it uses the platform default.'
-    : 'If shell is omitted, Proma uses the platform default shell without persisting an explicit per-terminal selection.'
+    ? 'If shell is omitted, Gamma reuses the user’s last selected Windows shell when available; otherwise it uses the platform default.'
+    : 'If shell is omitted, Gamma uses the platform default shell without persisting an explicit per-terminal selection.'
 
   let lastWindowsTerminalProfile = ctx.lastWindowsTerminalProfile
   const terminalInput = (args: Record<string, unknown>): { cwd?: string; title?: string; profile?: TerminalProfile } => ({
@@ -1538,12 +1538,12 @@ function buildAgentTerminalTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDe
   ] as ToolDefinition[]
 }
 
-function buildPromaCloudTools(sdk: PiSdk, _ctx: PiBuiltinToolsContext): ToolDefinition[] {
-  // proma-cloud MCP 工具（get_credentials / create_app_key）通常由 Proma 的
+function buildGammaCloudTools(sdk: PiSdk, _ctx: PiBuiltinToolsContext): ToolDefinition[] {
+  // gamma-cloud MCP 工具（get_credentials / create_app_key）通常由 Gamma 的
   // 内置 MCP server 进程独立提供（非 SDK in-process），Pi adapter 在 orchestrator
   // 构建 mcpServers 后通过 customTools 或 MCP stdio 通道访问。
-  // 如果 proma-cloud 是 SDK in-process MCP，需要在此桥接：
-  // 当前实现中 proma-cloud 走的是外部 MCP（不在 injectBuiltinMcpServers 内），
+  // 如果 gamma-cloud 是 SDK in-process MCP，需要在此桥接：
+  // 当前实现中 gamma-cloud 走的是外部 MCP（不在 injectBuiltinMcpServers 内），
   // 所以 Pi runtime 需要通过 MCP stdio transport 独立连接，不在这里注册。
   return []
 }
@@ -1574,7 +1574,7 @@ export async function buildPiBuiltinTools(
     console.error('[Pi 桥接] 注入 MCP 管理工具失败:', error)
   }
 
-  // 自动化是 Proma 基础运行时能力，不作为可配置 MCP 展示或开关。
+  // 自动化是 Gamma 基础运行时能力，不作为可配置 MCP 展示或开关。
   try {
     tools.push(...buildAutomationTools(sdk, ctx))
   } catch (error) {
@@ -1595,7 +1595,7 @@ export async function buildPiBuiltinTools(
   }
 
   // collaboration 桥接
-  // 协作是 Proma 基础运行时能力；仅由工作区和委派上下文决定是否可用。
+  // 协作是 Gamma 基础运行时能力；仅由工作区和委派上下文决定是否可用。
   const collaborationAvailable = !!ctx.workspaceId &&
     ctx.triggeredBy !== 'delegation'
 
@@ -1644,6 +1644,13 @@ export async function buildPiBuiltinTools(
     console.error('[Pi 桥接] 注入受管浏览器工具失败:', error)
   }
 
+  // 公开搜索和静态正文读取在所有来源的会话中可用，权限仍由运行时统一包装。
+  try {
+    tools.push(...buildPiWebTools(sdk))
+  } catch (error) {
+    console.error('[Pi 桥接] 注入公开网络查询工具失败:', error)
+  }
+
   // 视觉助手仅在仍不支持原生视觉的 DeepSeek V4 Pro 用户会话中按需出现。
   try {
     tools.push(...buildVisionRelayTools(sdk, ctx))
@@ -1651,7 +1658,7 @@ export async function buildPiBuiltinTools(
     console.error('[Pi 桥接] 注入视觉助手失败:', error)
   }
 
-  const cloudTools = buildPromaCloudTools(sdk, ctx)
+  const cloudTools = buildGammaCloudTools(sdk, ctx)
   tools.push(...cloudTools)
 
   return { tools, collaborationAvailable }

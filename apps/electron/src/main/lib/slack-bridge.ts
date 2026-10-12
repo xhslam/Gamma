@@ -10,8 +10,8 @@ import type {
   SlackBotConfig,
   SlackBridgeState,
   SlackThreadBinding,
-} from '@proma/shared'
-import { SLACK_IPC_CHANNELS } from '@proma/shared'
+} from '@gamma/shared'
+import { SLACK_IPC_CHANNELS } from '@gamma/shared'
 import { getSlackBotBindingsPath, getSlackBotDeliveryPath } from './config-paths'
 import { getSettings } from './settings-service'
 import { createAgentSession, getAgentSessionMeta } from './agent-session-manager'
@@ -81,7 +81,7 @@ interface SlackBindingsFile {
 
 /**
  * Local Slack Socket Mode adapter. It deliberately owns Slack-specific protocol
- * concerns only; all agent execution still goes through Proma's existing
+ * concerns only; all agent execution still goes through Gamma's existing
  * session, event bus and headless runner services.
  */
 export class SlackBridge {
@@ -176,7 +176,7 @@ export class SlackBridge {
       await this.expireInteraction(interaction.requestId, 'Slack Bot 已停止或重启')
     }
     for (const run of activeRuns) {
-      const text = '⚠️ Slack Bot 已停止或重启，本次任务已取消。请重新 @mention Proma 发起任务。'
+      const text = '⚠️ Slack Bot 已停止或重启，本次任务已取消。请重新 @mention Gamma 发起任务。'
       const clientMessageId = run.responseTs ? undefined : randomUUID()
       this.deliveryStore.update(run.eventId, {
         status: 'final-ready',
@@ -247,7 +247,7 @@ export class SlackBridge {
       })
     })
 
-    for (const actionId of ['proma_ask_select', 'proma_ask_submit', 'proma_plan_approve', 'proma_plan_deny', 'proma_permission_allow', 'proma_permission_deny']) {
+    for (const actionId of ['gamma_ask_select', 'gamma_ask_submit', 'gamma_plan_approve', 'gamma_plan_deny', 'gamma_permission_allow', 'gamma_permission_deny']) {
       app.action(actionId, async (args: any) => {
         await args.ack()
         await this.handleAction(args.body as SlackActionBody)
@@ -260,7 +260,7 @@ export class SlackBridge {
       const message = redactSensitiveLogText(error instanceof Error ? error.message : String(error))
       console.error(`[Slack Bridge/${this.botConfig.name}] 接收消息失败:`, redactSensitiveLogValue(error))
       this.deliveryStore.update(incoming.eventId, { status: 'failed', errorMessage: message })
-      void this.sendPlain(incoming.channelId, incoming.threadTs ?? incoming.ts, `⚠️ Proma 无法启动此任务：${message}`)
+      void this.sendPlain(incoming.channelId, incoming.threadTs ?? incoming.ts, `⚠️ Gamma 无法启动此任务：${message}`)
     })
   }
 
@@ -320,28 +320,28 @@ export class SlackBridge {
         permissionModeOverride: 'plan',
       }, {
         source: 'slack',
-        onError: (error) => { void this.finalizeRun(binding.sessionId, `⚠️ Proma 运行失败：${error}`) },
+        onError: (error) => { void this.finalizeRun(binding.sessionId, `⚠️ Gamma 运行失败：${error}`) },
         onComplete: () => { void this.finalizeRun(binding.sessionId) },
         onTitleUpdated: () => {},
       })
     } catch (error) {
-      await this.finalizeRun(binding.sessionId, `⚠️ Proma 运行失败：${redactSensitiveLogText(error instanceof Error ? error.message : String(error))}`)
+      await this.finalizeRun(binding.sessionId, `⚠️ Gamma 运行失败：${redactSensitiveLogText(error instanceof Error ? error.message : String(error))}`)
     }
   }
 
   private handleAgentPayload(sessionId: string, payload: AgentStreamPayload): void {
     const run = this.activeRuns.get(sessionId)
 
-    if (payload.kind === 'proma_event'
+    if (payload.kind === 'gamma_event'
       && (payload.event.type === 'run_started'
         || (payload.event.type === 'external_run_started' && payload.event.source !== 'slack'))) {
       if (this.botConfig.homeChannelId) {
         const session = getAgentSessionMeta(sessionId)
-        this.homeRuns.set(sessionId, { sessionId, title: session?.title ?? `Proma 会话 ${sessionId.slice(0, 8)}` })
+        this.homeRuns.set(sessionId, { sessionId, title: session?.title ?? `Gamma 会话 ${sessionId.slice(0, 8)}` })
       }
       return
     }
-    if (payload.kind === 'proma_event' && payload.event.type === 'run_completed') {
+    if (payload.kind === 'gamma_event' && payload.event.type === 'run_completed') {
       const homeRun = this.homeRuns.get(sessionId)
       this.homeRuns.delete(sessionId)
       if (homeRun) void this.postHomeNotification(homeRun, payload.event.stoppedByUser)
@@ -365,7 +365,7 @@ export class SlackBridge {
       return
     }
 
-    if (payload.kind !== 'proma_event') return
+    if (payload.kind !== 'gamma_event') return
     const event = payload.event
     if (event.type === 'ask_user_request') {
       void this.publishAskUser(run, event.request)
@@ -410,7 +410,7 @@ export class SlackBridge {
     run.finalized = true
     if (run.updateTimer) clearTimeout(run.updateTimer)
 
-    const text = forcedText ?? (run.finalText.trim() || run.partialText.trim() || 'Proma 已完成，但没有可显示的文本结果。')
+    const text = forcedText ?? (run.finalText.trim() || run.partialText.trim() || 'Gamma 已完成，但没有可显示的文本结果。')
     const clientMessageId = run.responseTs ? undefined : randomUUID()
     this.deliveryStore.update(run.eventId, {
       status: 'final-ready',
@@ -465,7 +465,7 @@ export class SlackBridge {
   }
 
   private async recoverPendingDeliveries(): Promise<void> {
-    const interruption = '⚠️ Proma 在任务完成前重启，因此无法可靠恢复本次执行。请重新 @mention Proma 发起任务。'
+    const interruption = '⚠️ Gamma 在任务完成前重启，因此无法可靠恢复本次执行。请重新 @mention Gamma 发起任务。'
     for (const record of this.deliveryStore.interruptedRuns()) {
       this.deliveryStore.update(record.eventId, { status: 'final-ready', finalText: interruption })
     }
@@ -489,7 +489,7 @@ export class SlackBridge {
     })
     const rendered = buildAskUserBlocks(request)
     if (!await this.postInteractive(run.binding, rendered.text, rendered.blocks)) {
-      await this.expireInteraction(request.requestId, '无法将问题发送到 Slack，请在 Proma 桌面端继续')
+      await this.expireInteraction(request.requestId, '无法将问题发送到 Slack，请在 Gamma 桌面端继续')
     }
   }
 
@@ -506,7 +506,7 @@ export class SlackBridge {
     })
     const rendered = buildPlanApprovalBlocks(request)
     if (!await this.postInteractive(run.binding, rendered.text, rendered.blocks)) {
-      await this.expireInteraction(request.requestId, '无法将计划审批发送到 Slack，请在 Proma 桌面端继续')
+      await this.expireInteraction(request.requestId, '无法将计划审批发送到 Slack，请在 Gamma 桌面端继续')
     }
   }
 
@@ -523,7 +523,7 @@ export class SlackBridge {
     })
     const rendered = buildPermissionBlocks(request)
     if (!await this.postInteractive(run.binding, rendered.text, rendered.blocks)) {
-      await this.expireInteraction(request.requestId, '无法将授权请求发送到 Slack，请在 Proma 桌面端继续')
+      await this.expireInteraction(request.requestId, '无法将授权请求发送到 Slack，请在 Gamma 桌面端继续')
     }
   }
 
@@ -551,15 +551,15 @@ export class SlackBridge {
 
     if (interaction.kind === 'ask') {
       const sessionId = askUserService.cancelAskUser(requestId, reason)
-      if (sessionId) agentEventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'ask_user_resolved', requestId } })
+      if (sessionId) agentEventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'ask_user_resolved', requestId } })
     } else if (interaction.kind === 'plan') {
       const result = exitPlanService.respondToExitPlanMode({ requestId, action: 'deny' })
-      if (result) agentEventBus.emit(result.sessionId, { kind: 'proma_event', event: { type: 'exit_plan_mode_resolved', requestId } })
+      if (result) agentEventBus.emit(result.sessionId, { kind: 'gamma_event', event: { type: 'exit_plan_mode_resolved', requestId } })
     } else {
       const sessionId = permissionService.respondToPermission(requestId, 'deny', false)
-      if (sessionId) agentEventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'permission_resolved', requestId, behavior: 'deny' } })
+      if (sessionId) agentEventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'permission_resolved', requestId, behavior: 'deny' } })
     }
-    await this.sendPlain(interaction.channelId, interaction.threadTs, `Proma 已取消等待：${reason}`)
+    await this.sendPlain(interaction.channelId, interaction.threadTs, `Gamma 已取消等待：${reason}`)
   }
 
   private async handleAction(body: SlackActionBody): Promise<void> {
@@ -572,7 +572,7 @@ export class SlackBridge {
     const interaction = this.interactions.get(requestId)
     if (!interaction || !this.validateActionContext(interaction, body)) return
 
-    if (actionId === 'proma_ask_select') {
+    if (actionId === 'gamma_ask_select') {
       const index = Number(actionValue.questionIndex)
       const labels = this.selectedLabels(action)
       if (!Number.isInteger(index) || labels.length === 0) return
@@ -581,27 +581,27 @@ export class SlackBridge {
       if (!question?.multiSelect) await this.resolveAskIfComplete(interaction)
       return
     }
-    if (actionId === 'proma_ask_submit') {
+    if (actionId === 'gamma_ask_submit') {
       await this.resolveAskIfComplete(interaction)
       return
     }
-    if (actionId === 'proma_plan_approve' || actionId === 'proma_plan_deny') {
+    if (actionId === 'gamma_plan_approve' || actionId === 'gamma_plan_deny') {
       const result = exitPlanService.respondToExitPlanMode({
         requestId,
-        action: actionId === 'proma_plan_approve' ? 'approve_bypass' : 'deny',
+        action: actionId === 'gamma_plan_approve' ? 'approve_bypass' : 'deny',
       })
       if (result) {
-        agentEventBus.emit(result.sessionId, { kind: 'proma_event', event: { type: 'exit_plan_mode_resolved', requestId } })
+        agentEventBus.emit(result.sessionId, { kind: 'gamma_event', event: { type: 'exit_plan_mode_resolved', requestId } })
       }
       this.clearInteraction(requestId)
       return
     }
-    if (actionId === 'proma_permission_allow' || actionId === 'proma_permission_deny') {
-      const sessionId = permissionService.respondToPermission(requestId, actionId === 'proma_permission_allow' ? 'allow' : 'deny', false)
+    if (actionId === 'gamma_permission_allow' || actionId === 'gamma_permission_deny') {
+      const sessionId = permissionService.respondToPermission(requestId, actionId === 'gamma_permission_allow' ? 'allow' : 'deny', false)
       if (sessionId) {
         agentEventBus.emit(sessionId, {
-          kind: 'proma_event',
-          event: { type: 'permission_resolved', requestId, behavior: actionId === 'proma_permission_allow' ? 'allow' : 'deny' },
+          kind: 'gamma_event',
+          event: { type: 'permission_resolved', requestId, behavior: actionId === 'gamma_permission_allow' ? 'allow' : 'deny' },
         })
       }
       this.clearInteraction(requestId)
@@ -617,7 +617,7 @@ export class SlackBridge {
     }
     const answers = Object.fromEntries(request.questions.map((question, index) => [question.question, interaction.answers!.get(index)!]))
     const sessionId = askUserService.respondToAskUser(request.requestId, answers)
-    if (sessionId) agentEventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'ask_user_resolved', requestId: request.requestId } })
+    if (sessionId) agentEventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'ask_user_resolved', requestId: request.requestId } })
     this.clearInteraction(request.requestId)
   }
 
@@ -641,7 +641,7 @@ export class SlackBridge {
     const settings = getSettings()
     const workspaceId = settings.agentWorkspaceId
     if (!workspaceId || !getAgentWorkspace(workspaceId)) {
-      throw new Error('请先在 Proma 设置中选择有效的默认项目')
+      throw new Error('请先在 Gamma 设置中选择有效的默认项目')
     }
     const channelIdForModel = this.botConfig.defaultChannelId ?? settings.agentChannelId ?? ''
     // 使用默认标题，让首条 Slack 消息走 Agent 编排器的统一自动命名流程，
@@ -704,7 +704,7 @@ export class SlackBridge {
       const response = await client.chat.postMessage({
         channel: binding.channelId,
         thread_ts: binding.rootThreadTs,
-        text: 'Proma 正在规划…',
+        text: 'Gamma 正在规划…',
       })
       return typeof response.ts === 'string' ? response.ts : undefined
     } catch (error) {
@@ -719,8 +719,8 @@ export class SlackBridge {
     if (!client || !channel) return
     // Home Channel is a status surface, not an export of private session content.
     const summary = stoppedByUser
-      ? `Proma 桌面会话已停止：${run.title}`
-      : `Proma 桌面会话已完成：${run.title}`
+      ? `Gamma 桌面会话已停止：${run.title}`
+      : `Gamma 桌面会话已完成：${run.title}`
     const rendered = renderSlackMessage(summary)
     try {
       await client.chat.postMessage({ channel, text: rendered.text, blocks: rendered.blocks as never })

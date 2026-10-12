@@ -7,7 +7,7 @@
 
 export type SlackBridgeStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
-/** 单个本地 Slack Bot 配置（持久化到 ~/.proma/slack.json）。 */
+/** 单个本地 Slack Bot 配置（持久化到 ~/.gamma/slack.json）。 */
 export interface SlackBotConfig {
   id: string
   name: string
@@ -75,7 +75,7 @@ export interface SlackMultiBridgeState {
   bots: Record<string, SlackBotBridgeState>
 }
 
-/** 一个 Slack thread + 发言人映射到一个独立 Proma 会话。 */
+/** 一个 Slack thread + 发言人映射到一个独立 Gamma 会话。 */
 export interface SlackThreadBinding {
   key: string
   botId: string

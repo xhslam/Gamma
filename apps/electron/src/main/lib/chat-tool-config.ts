@@ -1,14 +1,14 @@
 /**
  * Chat 工具配置服务
  *
- * 管理 ~/.proma/chat-tools.json 的读写。
+ * 管理 ~/.gamma/chat-tools.json 的读写。
  * 管理 Agent 模式推荐和自定义 HTTP 工具。旧凭据字段仅透传保留，不再执行旧搜索或生图能力。
  */
 
 import { readFileSync, existsSync } from 'node:fs'
 import { getChatToolsConfigPath } from './config-paths'
 import { writeJsonFileAtomic } from './safe-file'
-import type { ChatToolsFileConfig, ChatToolState, ChatToolMeta } from '@proma/shared'
+import type { ChatToolsFileConfig, ChatToolState, ChatToolMeta } from '@gamma/shared'
 
 /** 默认配置 */
 const DEFAULT_CONFIG: ChatToolsFileConfig = {

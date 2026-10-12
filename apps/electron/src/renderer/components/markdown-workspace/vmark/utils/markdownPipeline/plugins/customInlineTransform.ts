@@ -1,0 +1,216 @@
+// 移植自 xiaolai/vmark @ ca71e3e0；Copyright (c) 2026 Xiaolai Li，ISC 许可见本移植目录根 LICENSE。
+/**
+ * Custom inline marker transform (parse side).
+ *
+ * Purpose: the mdast tree transform that turns VMark's inline markers
+ * (`==highlight==`, `++underline++`, `^superscript^`, `~subscript~`) into typed
+ * nodes. Extracted from customInline.ts so that file stays under the size limit;
+ * the serialize handlers remain there.
+ *
+ * Two passes: per-text-node parsing (`parseMarksInText`), then a cross-node pass
+ * (`parseMarksAcrossChildren`) for pairs remark split by parsing an inner mark
+ * (e.g. `**bold**`) first.
+ *
+ * Key decisions:
+ *   - Which markers form a pair is `markPairing.ts`'s question, not this one's.
+ *     BOTH passes here must ask it: applying the whitespace rule only in the
+ *     per-text-node scan let a `strong` node between two numeric ranges re-form
+ *     in the cross-node pass the very pair the first pass had refused (#1280).
+ *
+ * @coordinates-with markPairing.ts — MARKS, findMarkPair, the whitespace rule
+ * @coordinates-with customInline.ts — the plugin + serialize handlers
+ * @coordinates-with types.ts — Subscript, Superscript, Highlight, Underline
+ * @module utils/markdownPipeline/plugins/customInlineTransform
+ */
+import type { Root, PhrasingContent, Text } from "mdast";
+import { MARKS, findMarkerIn, spanIsPairable, type MarkDefinition } from "./markPairing";
+import { isSkippableNode, isTextNode, parseMarksInText } from "./customInlineMarks";
+
+export interface FromMarkdownExtension {
+  transforms?: Array<(tree: Root) => void>;
+}
+
+
+export function customInlineFromMarkdown(): FromMarkdownExtension {
+  return {
+    // We use transforms instead of tokenizers
+    transforms: [transformCustomMarks],
+  };
+}
+
+function transformCustomMarks(tree: Root): void {
+  walkAndReplace(tree);
+}
+
+/**
+ * Apply the mark transform to every node, deepest first.
+ *
+ * Iterative because this used to recurse once per non-text child, and the
+ * weekly pathological soak has been failing on exactly that:
+ *
+ *   Error: [MarkdownPipeline] Parse failed: Maximum call stack size exceeded
+ *   Input preview: "*a **a *a **a *a **a *a **a …"
+ *
+ * `*a **a ` repeated N times nests N deep, so the walk cost N frames. It was
+ * MARGINAL rather than reliably broken — three consecutive runs on identical
+ * input gave ok, overflow, ok — which is why the job reads as flaky.
+ *
+ * Two phases, because the per-node work is POST-order: `parseMarksAcrossChildren`
+ * has to see children that are already final. Collecting in preorder and then
+ * processing in reverse gives that, since a node is always discovered before
+ * its descendants and therefore processed after them.
+ *
+ * Nodes created by `parseMarksInText` are deliberately not collected — the
+ * recursive version never descended into them either, and they are built from
+ * a text value that has already been fully scanned.
+ */
+function walkAndReplace(root: Root | PhrasingContent | { children?: unknown[] }): void {
+  const order: { children?: unknown[] }[] = [];
+  const stack: { children?: unknown[] }[] = [root as { children?: unknown[] }];
+
+  while (stack.length > 0) {
+    const node = stack.pop() as { children?: unknown[] };
+    if (isSkippableNode(node)) continue;
+    if (!("children" in node) || !Array.isArray(node.children)) continue;
+    order.push(node);
+    // Text children are handled by the owning node, never descended into.
+    for (let i = node.children.length - 1; i >= 0; i -= 1) {
+      const child = node.children[i];
+      if (!isTextNode(child)) stack.push(child as { children?: unknown[] });
+    }
+  }
+
+  for (let i = order.length - 1; i >= 0; i -= 1) applyMarksToNode(order[i]!);
+}
+
+/** The per-node half of the walk: children are already final when this runs. */
+function applyMarksToNode(node: { children?: unknown[] }): void {
+  if (!Array.isArray(node.children)) return;
+
+  const newChildren: unknown[] = [];
+  let modified = false;
+
+  for (const child of node.children) {
+    if (isTextNode(child)) {
+      const replaced = parseMarksInText(child.value);
+      if (replaced.length === 1 && isTextNode(replaced[0]) && replaced[0].value === child.value) {
+        newChildren.push(child);
+      } else {
+        newChildren.push(...replaced);
+        modified = true;
+      }
+    } else {
+      // Already processed: this node is reached only after its descendants.
+      newChildren.push(child);
+    }
+  }
+
+  // Second pass: markers whose pair was split across sibling nodes. remark
+  // parses `**bold**` into a `strong` node BEFORE this transform runs, so
+  // `==highlight **bold**==` arrives as [text "==highlight ", strong, text "=="]
+  // — a pair the per-text-node scan above can never see.
+  const spanned = parseMarksAcrossChildren(newChildren);
+  if (spanned !== newChildren) modified = true;
+
+  if (modified) {
+    (node as { children: unknown[] }).children = spanned;
+  }
+}
+
+/**
+ * Wrap marker pairs whose opening and closing markers live in different sibling
+ * nodes. Runs after per-node parsing, so anything left here is genuinely split.
+ * Repeats until no more pairs are found, so nested and multiple spans resolve.
+ */
+function parseMarksAcrossChildren(children: unknown[]): unknown[] {
+  let current = children;
+  for (;;) {
+    let wrappedThisRound: unknown[] | null = null;
+    for (const mark of MARKS) {
+      wrappedThisRound = tryWrapAcross(current, mark);
+      if (wrappedThisRound !== null) break;
+    }
+    if (wrappedThisRound === null) return current;
+    current = wrappedThisRound;
+  }
+}
+
+
+/** Wrap the first cross-node pair for `mark`, or null if none exists. */
+function tryWrapAcross(children: unknown[], mark: MarkDefinition): unknown[] | null {
+  for (let i = 0; i < children.length; i++) {
+    const open = children[i];
+    if (!isTextNode(open)) continue;
+    const openAt = findMarkerIn(open.value, mark, 0);
+    if (openAt === -1) continue;
+
+    // The span can only grow as `j` advances, so whitespace already present in
+    // the opening node's tail rules out every closing candidate at once.
+    if (!spanIsPairable(open.value.slice(openAt + mark.markerLen), mark)) continue;
+
+    for (let j = i + 1; j < children.length; j++) {
+      const between = children[j];
+      // A marker pair must not span code/math/raw-HTML — abort this opening.
+      if (isSkippableNode(between)) break;
+      if (!isTextNode(between)) continue;
+      const closeAt = findMarkerIn(between.value, mark, 0);
+      if (closeAt === -1) continue;
+      // Same rule as the single-node scan, applied to everything the span
+      // would swallow — otherwise `4~6 **bold** and 1~2` pairs across the
+      // bold node that the per-text-node pass could not see (#1280).
+      const swallowed =
+        collectText(children.slice(i + 1, j)) + between.value.slice(0, closeAt);
+      if (!spanIsPairable(swallowed, mark)) break;
+      return buildSpan(children, i, openAt, j, closeAt, mark);
+    }
+  }
+  return null;
+}
+
+/** All text a candidate span would swallow, however deeply nested. */
+function collectText(nodes: unknown[]): string {
+  let out = "";
+  for (const node of nodes) {
+    if (isTextNode(node)) {
+      out += node.value;
+    } else if (node && typeof node === "object") {
+      const children = (node as { children?: unknown[] }).children;
+      if (Array.isArray(children)) out += collectText(children);
+    }
+  }
+  return out;
+}
+
+/** Build the children array with [i..j] wrapped into a `mark` node. */
+function buildSpan(
+  children: unknown[],
+  i: number,
+  openAt: number,
+  j: number,
+  closeAt: number,
+  mark: MarkDefinition,
+): unknown[] {
+  const openText = (children[i] as Text).value;
+  const closeText = (children[j] as Text).value;
+  const beforeOpen = openText.slice(0, openAt);
+  const afterOpen = openText.slice(openAt + mark.markerLen);
+  const beforeClose = closeText.slice(0, closeAt);
+  const afterClose = closeText.slice(closeAt + mark.markerLen);
+
+  const asText = (value: string): Text[] => (value ? [{ type: "text", value }] : []);
+  const inner: unknown[] = [
+    ...asText(afterOpen),
+    ...children.slice(i + 1, j),
+    ...asText(beforeClose),
+  ];
+  // A nested split pair may live inside the span too (e.g. `==a ++b **x**++==`).
+  const markNode = { type: mark.name, children: parseMarksAcrossChildren(inner) };
+
+  return [
+    ...children.slice(0, i),
+    ...asText(beforeOpen),
+    markNode,
+    ...asText(afterClose),
+    ...children.slice(j + 1),
+  ];
+}

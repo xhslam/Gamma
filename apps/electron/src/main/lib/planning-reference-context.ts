@@ -1,4 +1,4 @@
-import type { CalendarEvent, Todo } from "@proma/shared";
+import type { CalendarEvent, Todo } from "@gamma/shared";
 import { getCalendarEvent, getTodo } from "./planning-manager";
 
 const MAX_REFERENCED_PLANNING_ITEMS = 10;

@@ -47,7 +47,7 @@ export async function resolveLiveMarkdownImageSrc(
   src: string,
   resolveCandidate: ResolveLiveMarkdownMediaCandidate,
 ): Promise<string | null> {
-  if (/^(?:https?:|data:|blob:|proma-file:)/i.test(src)) return src
+  if (/^(?:https?:|data:|blob:|gamma-file:)/i.test(src)) return src
   for (const candidate of getLiveMarkdownMediaCandidates(markdownFilePath, src)) {
     const resolved = await resolveCandidate(candidate)
     if (resolved) return resolved

@@ -11,7 +11,7 @@ import { watch } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 import { basename, dirname } from 'node:path'
 import { BrowserWindow } from 'electron'
-import { CHAT_TOOL_IPC_CHANNELS } from '@proma/shared'
+import { CHAT_TOOL_IPC_CHANNELS } from '@gamma/shared'
 import { getChatToolsConfigPath } from './config-paths'
 
 /** debounce 延迟（ms） */

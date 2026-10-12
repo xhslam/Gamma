@@ -1,0 +1,191 @@
+/* 正文、按需格式栏与底部状态栏沿用 VMark 的空间层级，颜色仍由 Gamma 主题提供。 */
+.markdown-workspace-view { container-type: inline-size; container-name: markdown-workspace; }
+.markdown-workspace-editor { container-type: inline-size; container-name: markdown-editor; }
+.markdown-workspace-panes > div { height: 100%; }
+.markdown-workspace-panes > [hidden] { display: none; }
+.markdown-workspace-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.markdown-workspace-split .markdown-workspace-source-pane { border-right: 1px solid hsl(var(--border)); }
+.markdown-workspace-scroll > div { min-height: 100%; }
+.markdown-workspace-prose {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--md-editor-width, 72ch);
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  min-height: 100%;
+  font-family: var(--md-editor-font, var(--font-sans));
+  font-size: var(--md-editor-size, 18px);
+  line-height: var(--md-editor-line-height, 1.8);
+  letter-spacing: var(--md-editor-letter-spacing, 0);
+  outline: none;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--foreground));
+}
+.markdown-workspace-prose > * + * { margin-top: calc(16px * var(--md-editor-spacing, 1)); }
+.markdown-workspace-prose > :first-child { margin-top: 0; }
+.markdown-workspace-prose h1, .markdown-workspace-prose h2, .markdown-workspace-prose h3,
+.markdown-workspace-prose h4, .markdown-workspace-prose h5, .markdown-workspace-prose h6 { margin-top: calc(32px * var(--md-editor-spacing, 1)); margin-bottom: calc(12px * var(--md-editor-spacing, 1)); font-weight: 600; line-height: 1.3; text-align: var(--md-editor-heading-align, left); }
+.markdown-workspace-prose h1 { font-size: 1.778em; padding-bottom: 16px; border-bottom: 1px solid hsl(var(--border) / .6); }
+.markdown-workspace-prose h2 { font-size: 1.556em; }
+.markdown-workspace-prose h3 { font-size: 1.333em; }
+.markdown-workspace-prose h4 { font-size: 1.111em; }
+.markdown-workspace-prose h5, .markdown-workspace-prose h6 { font-size: 1em; }
+.markdown-workspace-prose h6 { color: hsl(var(--muted-foreground)); }
+.markdown-workspace-prose strong { font-weight: 600; }
+.markdown-workspace-prose ul { list-style: disc; padding-left: 24px; }
+.markdown-workspace-prose ol { list-style: decimal; padding-left: 24px; }
+.markdown-workspace-prose li + li { margin-top: 4px; }
+.markdown-workspace-prose blockquote, .markdown-workspace-prose aside { border-left: 3px solid hsl(var(--border)); padding: 4px 16px; color: hsl(var(--muted-foreground)); }
+.markdown-workspace-prose hr { margin: 24px 0; border-color: hsl(var(--border) / .6); }
+.markdown-workspace-prose pre { overflow: auto; padding: 16px; border-radius: 8px; background: hsl(var(--muted)); font-size: 14px; line-height: 1.6; white-space: pre; }
+.markdown-workspace-prose code { font-family: var(--md-editor-mono, var(--font-mono, monospace)); }
+.markdown-workspace-prose :not(pre) > code { background: hsl(var(--muted)); border-radius: 4px; padding: 0 4px; font-size: 16px; }
+.markdown-workspace-prose table { border-collapse: collapse; width: 100%; font-size: 16px; }
+.markdown-workspace-view[data-table-fit='true'] table { table-layout: fixed; }
+.markdown-workspace-view[data-table-fit='true'] th, .markdown-workspace-view[data-table-fit='true'] td { min-width: 0; overflow-wrap: anywhere; }
+.markdown-workspace-prose th, .markdown-workspace-prose td { border: 1px solid hsl(var(--border)); padding: 8px 12px; min-width: 48px; }
+.markdown-workspace-prose th { background: hsl(var(--muted) / .5); font-weight: 600; text-align: left; }
+.markdown-workspace-prose .selectedCell { background: hsl(var(--accent)); }
+.markdown-workspace-prose img { max-width: 100%; height: auto; border-radius: 4px; }
+.markdown-workspace-prose a, .markdown-workspace-prose [data-vmark-node='wikiLink'] { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.markdown-workspace-prose .markdown-artifact { font-size: 14px; color: hsl(var(--muted-foreground)); border: 1px dashed hsl(var(--border)); }
+.markdown-workspace-prose .markdown-task-item { display: flex; align-items: baseline; gap: 8px; }
+.markdown-workspace-prose .markdown-task-item > div { flex: 1; min-width: 0; }
+.markdown-workspace-prose .markdown-task-item input { accent-color: hsl(var(--primary)); }
+.markdown-find-match { background: hsl(var(--accent)); }
+.markdown-find-active { background: hsl(var(--primary) / .2); outline: 1px solid hsl(var(--primary) / .5); }
+
+.markdown-workspace-status { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 4px; height: 40px; min-width: 0; padding: 4px 8px; border-top: 1px solid hsl(var(--border) / .5); color: hsl(var(--muted-foreground)); }
+.markdown-workspace-status .markdown-status-button { width: 28px; height: 28px; padding: 0; flex-shrink: 0; color: hsl(var(--muted-foreground)); }
+.markdown-status-button svg, .markdown-format-button svg { width: 16px; height: 16px; }
+.markdown-status-button[aria-pressed='true'], .markdown-format-button[aria-pressed='true'] { color: hsl(var(--foreground)); background: hsl(var(--accent)); }
+.markdown-document-tabs { display: flex; align-items: center; flex: 1; min-width: 48px; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.markdown-document-tabs::-webkit-scrollbar { display: none; }
+
+/* VMark 原生胶囊 Tab 样式 */
+.tab-pill, .markdown-document-tab {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  border-radius: 9999px;
+  padding: 0 4px 0 10px;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+  max-width: 192px;
+}
+.tab-pill:hover, .markdown-document-tab:hover {
+  background-color: hsl(var(--muted) / .8);
+  color: hsl(var(--foreground));
+}
+.tab-pill.is-active, .tab-pill.active, .markdown-document-tab.is-active {
+  background-color: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-weight: 500;
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.15);
+}
+.markdown-document-tab-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  min-width: 0;
+  font-size: 12px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+.markdown-document-tab-name > :first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tab-pill.is-active .tab-dirty-dot, .markdown-document-tab.is-active .markdown-document-dirty {
+  color: hsl(var(--background));
+  font-size: 12px;
+  line-height: 1;
+}
+.tab-dirty-dot, .markdown-document-dirty {
+  color: hsl(var(--primary));
+  font-size: 12px;
+  line-height: 1;
+}
+.tab-strip-close, .markdown-document-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.tab-strip-close svg, .markdown-document-tab-close svg {
+  width: 11px;
+  height: 11px;
+}
+.tab-pill:hover .tab-strip-close, .markdown-document-tab:hover .markdown-document-tab-close,
+.tab-pill:focus-within .tab-strip-close, .markdown-document-tab:focus-within .markdown-document-tab-close {
+  opacity: 0.7;
+}
+.tab-strip-close:hover, .markdown-document-tab-close:hover {
+  opacity: 1 !important;
+  background-color: hsl(var(--muted-foreground) / 0.2);
+}
+.tab-pill.is-active .tab-strip-close:hover, .markdown-document-tab.is-active .markdown-document-tab-close:hover {
+  background-color: hsl(var(--background) / 0.25);
+}
+.markdown-document-tab-name:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  border-radius: 9999px;
+  outline-offset: 1px;
+}
+.markdown-document-statistics { flex-shrink: 0; padding: 0 8px; font-size: 12px; white-space: nowrap; }
+.markdown-format-toolbar { height: 40px; border-top: 1px solid hsl(var(--border) / .4); }
+.markdown-format-toolbar .markdown-format-overflow { display: none; }
+.markdown-workspace-source-pane .cm-editor { max-width: 96ch; margin: 0 auto; }
+
+.markdown-source-peek { overflow: hidden; margin: 16px 0; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--muted) / .3); font-size: 12px; line-height: 1.5; }
+.markdown-source-peek > header, .markdown-source-peek > footer { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.markdown-source-peek > header { justify-content: space-between; border-bottom: 1px solid hsl(var(--border) / .5); }
+.markdown-source-peek > footer { justify-content: flex-end; }
+.markdown-source-peek-content { height: 160px; }
+.markdown-source-peek .cm-content { padding: 12px 8px; }
+.markdown-workspace-prose .markdown-peek-original { display: none; }
+@container markdown-editor (max-width: 480px) {
+  .markdown-format-toolbar [data-format-index]:not([data-format-index="0"]):not([data-format-index="1"]):not([data-format-index="2"]) { display: none; }
+  .markdown-format-toolbar .markdown-format-overflow { display: inline-flex; }
+  .markdown-workspace-prose { padding: 24px 16px 64px; }
+}
+@container markdown-workspace (max-width: 800px) { .markdown-document-statistics { display: none; } }
+@container markdown-workspace (max-width: 520px) { .markdown-workspace-status .markdown-status-secondary { display: none; } }
+@container markdown-workspace (max-width: 480px) {
+  .markdown-workspace-split { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) minmax(0,1fr); }
+  .markdown-workspace-split .markdown-workspace-source-pane { border-right: 0; border-bottom: 1px solid hsl(var(--border)); }
+  .markdown-workspace-body > aside { position: absolute; inset: 0 auto 0 0; z-index: 10; width: min(240px, calc(100% - 48px)); background: hsl(var(--background)); box-shadow: 4px 0 16px hsl(var(--foreground) / .05); }
+  .markdown-document-tab { max-width: 128px; }
+}
+
+/* 设置采用 VMark 的左侧分类与安静的横向设置行，复用 Gamma 的可访问控件。 */
+.markdown-settings-sidebar { width: 184px; }
+.markdown-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; }
+.markdown-setting-control { flex-shrink: 0; max-width: 210px; }
+.markdown-editor-settings section + section { margin-top: 24px; }
+@media (max-width: 720px) {
+  .markdown-settings-sidebar { width: 144px; padding: 8px; }
+  .markdown-setting-row { flex-wrap: wrap; gap: 8px; }
+  .markdown-setting-control { max-width: 100%; }
+}

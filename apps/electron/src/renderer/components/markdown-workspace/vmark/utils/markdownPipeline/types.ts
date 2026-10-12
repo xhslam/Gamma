@@ -1,0 +1,147 @@
+// 移植自 xiaolai/vmark @ ca71e3e0；Copyright (c) 2026 Xiaolai Li，ISC 许可见本移植目录根 LICENSE。
+/**
+ * Types for the markdown pipeline
+ *
+ * Re-exports MDAST types and defines custom types for VMark extensions.
+ *
+ * @module utils/markdownPipeline/types
+ */
+
+export interface MarkdownPipelineOptions {
+  preserveLineBreaks?: boolean;
+  hardBreakStyle?: "backslash" | "twoSpaces";
+  /**
+   * When true, re-emit captured inter-block blank-line runs (the
+   * `blankLinesBefore` PM attribute) instead of collapsing them to a single
+   * blank line. Default false = legacy output. See
+   * .claude/adr/plans/20260721-blank-line-preservation.md.
+   */
+  preserveBlankLines?: boolean;
+}
+
+// Re-export standard MDAST types
+export type { FootnoteDefinition, FootnoteReference } from "mdast";
+
+// Position type from unist (optional on all AST nodes).
+//
+// `offset` is explicitly `| undefined` to match unist's own declaration: these
+// positions are COPIED OFF real mdast nodes, and a parser that tracked lines
+// but not byte offsets hands over the key holding undefined.
+interface UnistPosition {
+  start: { line: number; column: number; offset?: number | undefined };
+  end: { line: number; column: number; offset?: number | undefined };
+}
+
+// Frontmatter type from remark-frontmatter
+export interface Yaml {
+  type: "yaml";
+  value: string;
+  position?: UnistPosition;
+}
+
+// Custom inline types for VMark
+export interface Subscript {
+  type: "subscript";
+  children: PhrasingContent[];
+}
+
+export interface Superscript {
+  type: "superscript";
+  children: PhrasingContent[];
+}
+
+export interface Highlight {
+  type: "highlight";
+  children: PhrasingContent[];
+}
+
+export interface Underline {
+  type: "underline";
+  children: PhrasingContent[];
+}
+
+// Wiki link types
+export interface WikiLink {
+  type: "wikiLink";
+  value: string; // The page name
+  alias?: string; // Optional display alias
+  position?: UnistPosition;
+  data?: {
+    permalink?: string;
+    hProperties?: Record<string, unknown>;
+  };
+}
+
+// Alert block types (GitHub-style markdown alerts)
+type AlertType = "NOTE" | "TIP" | "IMPORTANT" | "WARNING" | "CAUTION";
+
+export interface Alert {
+  type: "alert";
+  alertType: AlertType;
+  children: import("mdast").BlockContent[];
+  position?: UnistPosition;
+}
+
+// Table of Contents block type
+export interface Toc {
+  type: "toc";
+  position?: UnistPosition;
+}
+
+// Details block types (HTML <details>/<summary>)
+// Note: children uses the extended BlockContent type to support nested details
+export interface Details {
+  type: "details";
+  open?: boolean;
+  /** The summary's source text. Read as inline markdown when parsed. */
+  summary?: string;
+  /**
+   * The summary as inline nodes, set when the block comes from the editor.
+   * The serializer writes these in preference to `summary`, so marks in a
+   * summary are written back and its text is escaped exactly once.
+   */
+  summaryChildren?: import("mdast").PhrasingContent[];
+  children: BlockContentBase[];
+  position?: UnistPosition;
+}
+
+// Base BlockContent type from mdast (used before our extended type is defined)
+type BlockContentBase = import("mdast").BlockContent | Details;
+
+// Union type for all phrasing (inline) content
+// Note: mdast PhrasingContent already includes InlineMath via mdast-util-math augmentation
+type PhrasingContent =
+  | import("mdast").PhrasingContent
+  | Subscript
+  | Superscript
+  | Highlight
+  | Underline
+  | WikiLink;
+
+// Augment MDAST module for custom VMark types
+// Note: math and inlineMath are already augmented by mdast-util-math
+declare module "mdast" {
+  interface BlockContentMap {
+    toc: Toc;
+  }
+
+  interface RootContentMap {
+    yaml: Yaml;
+    alert: Alert;
+    details: Details;
+    toc: Toc;
+  }
+
+  interface PhrasingContentMap {
+    subscript: Subscript;
+    superscript: Superscript;
+    highlight: Highlight;
+    underline: Underline;
+    wikiLink: WikiLink;
+  }
+
+  interface ListItemData {
+    /** The source had no blank line before this item of a loose list (listItemGapJoin.ts). */
+    tightBefore?: boolean;
+  }
+}

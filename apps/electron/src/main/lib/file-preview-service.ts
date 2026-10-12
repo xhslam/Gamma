@@ -14,7 +14,7 @@ import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import AdmZip from 'adm-zip'
 import { DOMParser } from '@xmldom/xmldom'
-import type { FilePreviewReadResult, OfficePreviewResult } from '@proma/shared'
+import type { FilePreviewReadResult, OfficePreviewResult } from '@gamma/shared'
 import { getBundledOfficeCliPath } from './officecli-manager'
 import { expandHomeDirectory } from './agent-file-path'
 
@@ -38,7 +38,7 @@ const execFileAsync = promisify(execFile)
 // ─── 临时文件 ───
 
 function getPreviewTmpDir(): string {
-  const dir = join(tmpdir(), 'proma-preview')
+  const dir = join(tmpdir(), 'gamma-preview')
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -72,7 +72,7 @@ function removeTempFileLater(path: string): void {
 
 /** 清理所有临时预览文件 */
 export function cleanPreviewTmpDir(): number {
-  const dir = join(tmpdir(), 'proma-preview')
+  const dir = join(tmpdir(), 'gamma-preview')
   if (!existsSync(dir)) return 0
   let count = 0
   try {
@@ -590,13 +590,13 @@ export function resolveAndReadFile(filePath: string, basePaths?: string[]): File
   }
 }
 
-/** 仅解析文件路径（不读取内容），供图片等用 proma-file:// 协议加载的场景使用 */
+/** 仅解析文件路径（不读取内容），供图片等用 gamma-file:// 协议加载的场景使用 */
 export function resolveFilePath(filePath: string, basePaths?: string[]): string | null {
   const safePath = resolveTargetPath(filePath, basePaths)
   return existsSync(safePath) ? safePath : null
 }
 
-/** 为内联 PDF 预览生成临时 HTML 文件（使用 proma-file:// 加载 PDF，无体积膨胀） */
+/** 为内联 PDF 预览生成临时 HTML 文件（使用 gamma-file:// 加载 PDF，无体积膨胀） */
 export async function preparePdfPreview(filePath: string, basePaths?: string[]): Promise<{ resolvedPath: string; tmpHtmlUrl: string } | null> {
   const safePath = resolveTargetPath(filePath, basePaths)
   if (!existsSync(safePath)) return null
@@ -609,13 +609,13 @@ export async function preparePdfPreview(filePath: string, basePaths?: string[]):
   let standardFontDataUrl: string
   let registerFilePath: (path: string) => string
   try {
-    const { registerPromaDirectoryPath, registerPromaFilePath } = await import('./local-file-protocol')
-    registerFilePath = registerPromaFilePath
-    fileUrl = registerPromaFilePath(safePath)
-    pdfScriptUrl = registerPromaFilePath(require.resolve(`${PDFJS_PACKAGE}/build/pdf.min.mjs`))
-    pdfWorkerUrl = registerPromaFilePath(require.resolve(`${PDFJS_PACKAGE}/build/pdf.worker.min.mjs`))
+    const { registerGammaDirectoryPath, registerGammaFilePath } = await import('./local-file-protocol')
+    registerFilePath = registerGammaFilePath
+    fileUrl = registerGammaFilePath(safePath)
+    pdfScriptUrl = registerGammaFilePath(require.resolve(`${PDFJS_PACKAGE}/build/pdf.min.mjs`))
+    pdfWorkerUrl = registerGammaFilePath(require.resolve(`${PDFJS_PACKAGE}/build/pdf.worker.min.mjs`))
     const pdfPackageDir = dirname(require.resolve(`${PDFJS_PACKAGE}/package.json`))
-    standardFontDataUrl = `${registerPromaDirectoryPath(join(pdfPackageDir, 'standard_fonts'))}/`
+    standardFontDataUrl = `${registerGammaDirectoryPath(join(pdfPackageDir, 'standard_fonts'))}/`
   } catch (err) {
     console.error('[file-preview] preparePdfPreview asset resolution failed:', err)
     return null
@@ -733,8 +733,8 @@ function restrictOfficeCliHtml(html: string): string {
 }
 
 async function registerOfficeCliOutputFile(path: string): Promise<string> {
-  const { registerPromaFilePath } = await import('./local-file-protocol')
-  return registerPromaFilePath(path)
+  const { registerGammaFilePath } = await import('./local-file-protocol')
+  return registerGammaFilePath(path)
 }
 
 export async function renderOfficeWithOfficeCli(

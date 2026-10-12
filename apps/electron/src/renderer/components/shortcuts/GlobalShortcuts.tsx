@@ -214,7 +214,7 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'clear-context',
     useCallback(() => {
-      window.dispatchEvent(new CustomEvent('proma:clear-context'))
+      window.dispatchEvent(new CustomEvent('gamma:clear-context'))
     }, []),
   )
 
@@ -222,7 +222,7 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'focus-input',
     useCallback(() => {
-      window.dispatchEvent(new CustomEvent('proma:focus-input'))
+      window.dispatchEvent(new CustomEvent('gamma:focus-input'))
     }, []),
   )
 
@@ -250,7 +250,7 @@ export function GlobalShortcuts(): null {
             activeDelegationSessionId ? { type: 'agent', sessionId: activeDelegationSessionId } : null,
           )
       if (target) {
-        window.dispatchEvent(new CustomEvent('proma:stop-generation', { detail: target }))
+        window.dispatchEvent(new CustomEvent('gamma:stop-generation', { detail: target }))
       }
     }, [activeAgentSidePanelSplit, activeAgentSidePanelTab, activeDelegationSessionId, activeTab, agentSessions, isActiveAgentSidePanelOpen]),
   )
@@ -358,7 +358,7 @@ export function GlobalShortcuts(): null {
           store.set(currentConversationIdAtom, meta.id)
 
           // 处理附件：保存到磁盘，收集 FileAttachment[]
-          const savedAttachments: import('@proma/shared').FileAttachment[] = []
+          const savedAttachments: import('@gamma/shared').FileAttachment[] = []
           if (data.files && data.files.length > 0) {
             for (const file of data.files) {
               if (!file.base64) {
@@ -403,7 +403,7 @@ export function GlobalShortcuts(): null {
     return cleanup
   }, [store])
 
-  // ===== 语音输入 → 写入当前 Proma 输入框 =====
+  // ===== 语音输入 → 写入当前 Gamma 输入框 =====
 
   useEffect(() => {
     const cleanupPreview = window.electronAPI.onVoiceDictationPreviewText((data) => {
@@ -426,13 +426,13 @@ export function GlobalShortcuts(): null {
         return
       }
 
-      const insertedAtCursor = !window.dispatchEvent(new CustomEvent('proma:insert-voice-dictation-text', {
+      const insertedAtCursor = !window.dispatchEvent(new CustomEvent('gamma:insert-voice-dictation-text', {
         cancelable: true,
         detail: { ...data, text: trimmed },
       }))
       if (insertedAtCursor) {
         acknowledgeDelivery(true)
-        window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        window.dispatchEvent(new CustomEvent('gamma:focus-input'))
         return
       }
 
@@ -479,7 +479,7 @@ export function GlobalShortcuts(): null {
           map.set(sessionId, (map.get(sessionId) ?? 0) + 1)
           return map
         })
-        window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        window.dispatchEvent(new CustomEvent('gamma:focus-input'))
         acknowledgeDelivery(true)
         return
       }
@@ -499,7 +499,7 @@ export function GlobalShortcuts(): null {
           map.set(conversationId, (map.get(conversationId) ?? 0) + 1)
           return map
         })
-        window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        window.dispatchEvent(new CustomEvent('gamma:focus-input'))
         acknowledgeDelivery(true)
         return
       }

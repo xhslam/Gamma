@@ -4,7 +4,7 @@
  * 不依赖 Electron、文件系统或网络，供受控 Agent 配置服务与单元测试共用。
  */
 
-import type { McpOAuthConfiguration, McpServerEntry, McpTransportType } from '@proma/shared'
+import type { McpOAuthConfiguration, McpServerEntry, McpTransportType } from '@gamma/shared'
 import { RESERVED_BUILTIN_KEYS } from './builtin-mcp/baseline'
 
 export interface ConfigureWorkspaceMcpInput {
@@ -25,7 +25,7 @@ export interface ConfigureWorkspaceMcpInput {
 export function requireWorkspaceMcpServerName(name: string): string {
   const normalized = name.trim()
   if (!normalized) throw new Error('MCP 服务名不能为空')
-  if (RESERVED_BUILTIN_KEYS.has(normalized)) throw new Error(`MCP 服务名 ${normalized} 是 Proma 运行时保留名`)
+  if (RESERVED_BUILTIN_KEYS.has(normalized)) throw new Error(`MCP 服务名 ${normalized} 是 Gamma 运行时保留名`)
   if (normalized.length > 120) throw new Error('MCP 服务名不能超过 120 个字符')
   if (/\p{C}/u.test(normalized)) throw new Error('MCP 服务名不能包含控制字符')
   return normalized

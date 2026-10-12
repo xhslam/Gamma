@@ -1,7 +1,7 @@
 {
-  "name": "@proma/electron",
-  "version": "0.19.58",
-  "description": "Proma，为专业用户设计的 Agent",
+  "name": "@gamma/electron",
+  "version": "0.19.79",
+  "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
     "name": "ErlichLiu",
@@ -37,7 +37,7 @@
     "ensure:node-pty-helper": "bun run scripts/ensure-node-pty-helper-executable.ts",
     "start": "bun run build && bunx electron .",
     "typecheck": "tsc --noEmit",
-    "generate:icons": "cd resources && ./generate-icons.sh",
+    "generate:icons": "bun run scripts/generate-icons.ts",
     "pack": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --dir",
     "dist": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder",
     "dist:mac": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --mac",
@@ -48,6 +48,8 @@
     "dist:debug": "bun run scripts/dist.ts --current-arch --verbose"
   },
   "dependencies": {
+    "@codemirror/commands": "6.11.0",
+    "@codemirror/lang-markdown": "6.5.2",
     "@codemirror/language": "^6.12.4",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.9",
@@ -67,9 +69,18 @@
     "iconv-lite": "^0.6.3",
     "ink-mde": "0.33.0",
     "mammoth": "^1.12.0",
+    "mdast-util-find-and-replace": "3.0.3",
+    "mdast-util-math": "3.0.0",
+    "remark-breaks": "4.0.0",
+    "remark-frontmatter": "5.0.0",
+    "remark-parse": "11.0.0",
+    "remark-stringify": "11.0.0",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.1.0",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "^4.10.38",
     "sharp": "^0.35.3",
+    "turndown": "7.2.4",
     "typebox": "1.1.38"
   },
   "devDependencies": {
@@ -77,10 +88,10 @@
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@larksuiteoapi/node-sdk": "^1.65.0",
-    "@proma/core": "workspace:*",
-    "@proma/session-core": "workspace:*",
-    "@proma/shared": "workspace:*",
-    "@proma/ui": "workspace:*",
+    "@gamma/core": "workspace:*",
+    "@gamma/session-core": "workspace:*",
+    "@gamma/shared": "workspace:*",
+    "@gamma/ui": "workspace:*",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -119,6 +130,7 @@
     "@types/adm-zip": "^0.5.8",
     "@types/dompurify": "^3.2.0",
     "@types/markdown-it": "^14.1.2",
+    "@types/mdast": "4.0.4",
     "@types/node": "^20.0.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/pngjs": "^6.0.5",
@@ -126,6 +138,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/semver": "^7.7.1",
+    "@types/turndown": "5.0.6",
     "@types/word-extractor": "1.0.6",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
@@ -183,6 +196,6 @@
   "build": {
     "extends": "electron-builder.yml"
   },
-  "proma": {},
+  "gamma": {},
   "homepage": "https://github.com/proma-ai/Proma"
 }

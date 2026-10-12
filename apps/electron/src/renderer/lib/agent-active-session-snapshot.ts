@@ -1,4 +1,4 @@
-import type { AgentActiveSessionSnapshot } from '@proma/shared'
+import type { AgentActiveSessionSnapshot } from '@gamma/shared'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import { createQueuedAgentStreamState } from './agent-message-queue'
 

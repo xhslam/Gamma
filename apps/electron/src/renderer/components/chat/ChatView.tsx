@@ -59,7 +59,7 @@ import type {
   ChatSendInput,
   FileAttachment,
   AttachmentSaveInput,
-} from '@proma/shared'
+} from '@gamma/shared'
 
 interface ChatViewProps {
   conversationId: string
@@ -499,8 +499,8 @@ function ChatViewInner({ conversationId }: ChatViewProps): React.ReactElement {
       const target = getStopGenerationTarget(event)
       if (target?.kind === 'chat' && target.sessionId === conversationId && isStreaming) handleStop()
     }
-    window.addEventListener('proma:stop-generation', handler)
-    return () => window.removeEventListener('proma:stop-generation', handler)
+    window.addEventListener('gamma:stop-generation', handler)
+    return () => window.removeEventListener('gamma:stop-generation', handler)
   }, [conversationId, isStreaming, handleStop])
 
   /** 删除消息 */

@@ -1,4 +1,4 @@
-import type { RetryAttempt } from '@proma/shared'
+import type { RetryAttempt } from '@gamma/shared'
 
 /** 前 N 次 Pi native retry 不通知 UI，与 Claude runtime 的自动恢复体验保持一致。 */
 export const PI_RETRY_VISIBILITY_THRESHOLD = 5
@@ -91,7 +91,7 @@ function shouldExposePiRetry(event: PiNativeRetryDetails): boolean {
 }
 
 /**
- * 将 Pi native retry 生命周期转换为 Proma UI 已识别的 retry 事件。
+ * 将 Pi native retry 生命周期转换为 Gamma UI 已识别的 retry 事件。
  * 前五次恢复的完整生命周期都会被过滤；若最终未恢复，终态 assistant error 仍会正常展示。
  */
 export function mapPiNativeRetryEvent(

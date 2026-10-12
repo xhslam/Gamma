@@ -6,7 +6,7 @@
  */
 
 import * as React from 'react'
-import type { BrowserStateChange, BrowserTabFocusChange } from '@proma/shared'
+import type { BrowserStateChange, BrowserTabFocusChange } from '@gamma/shared'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import {
   tabsAtom,
@@ -21,7 +21,7 @@ import { TabContent } from './TabContent'
 import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
-import { VaultView } from '@/components/vault/VaultView'
+const MarkdownWorkspaceView = React.lazy(() => import('@/components/markdown-workspace/MarkdownWorkspaceView'))
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { registerShortcut } from '@/lib/shortcut-registry'
@@ -154,8 +154,8 @@ export function MainArea(): React.ReactElement {
             automationFormOpen ? <AutomationFormView /> : <PlanningView />
           ) : activeView === 'agent-skills' ? (
             <AgentSkillsView />
-          ) : activeView === 'vault' ? (
-            <VaultView />
+          ) : activeView === 'markdown' ? (
+            <React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载 Markdown 工作区…</div>}><MarkdownWorkspaceView /></React.Suspense>
           ) : (
             <>
               {showCenterTabBar && <TabBar />}

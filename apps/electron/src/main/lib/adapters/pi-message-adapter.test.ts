@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AssistantMessage } from '@earendil-works/pi-ai/compat'
-import type { SDKAssistantMessage } from '@proma/shared'
+import type { SDKAssistantMessage } from '@gamma/shared'
 import {
   convertPiMessage,
   convertResultMessage,
@@ -17,7 +17,7 @@ function writeToolCall(content: string): AssistantMessage {
       id: 'tool-call-1',
       name: 'write',
       arguments: {
-        path: 'C:\\Users\\WNI10\\.proma\\agent-workspaces\\moneybull\\workspace-files\\large.md',
+        path: 'C:\\Users\\WNI10\\.gamma\\agent-workspaces\\moneybull\\workspace-files\\large.md',
         content,
       },
     }],
@@ -32,8 +32,8 @@ describe('convertPiMessage', () => {
     }) as { message: { content: Array<{ input?: Record<string, unknown> }> } }
 
     expect(message.message.content[0]?.input).toEqual({
-      path: 'C:\\Users\\WNI10\\.proma\\agent-workspaces\\moneybull\\workspace-files\\large.md',
-      file_path: 'C:\\Users\\WNI10\\.proma\\agent-workspaces\\moneybull\\workspace-files\\large.md',
+      path: 'C:\\Users\\WNI10\\.gamma\\agent-workspaces\\moneybull\\workspace-files\\large.md',
+      file_path: 'C:\\Users\\WNI10\\.gamma\\agent-workspaces\\moneybull\\workspace-files\\large.md',
       content,
     })
     expect(JSON.stringify(message).length).toBeGreaterThan(content.length)

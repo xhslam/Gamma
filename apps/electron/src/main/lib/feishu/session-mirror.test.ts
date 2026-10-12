@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { FeishuBotConfig } from '@proma/shared'
+import type { FeishuBotConfig } from '@gamma/shared'
 import {
   buildSessionMirrorGroupName,
   normalizeFeishuSessionMirrorSettings,
@@ -56,6 +56,6 @@ describe('飞书 Session 镜像设置', () => {
     expect(buildSessionMirrorGroupName({
       id: '1234567890abcdef',
       title: '新 Agent 会话',
-    })).toBe('Proma - 新会话 12345678')
+    })).toBe('Gamma - 新会话 12345678')
   })
 })

@@ -1,17 +1,17 @@
 /**
- * Proma-managed Pi mode deliberately opts out of Pi's ambient local resources.
+ * Gamma-managed Pi mode deliberately opts out of Pi's ambient local resources.
  *
- * Proma supplies the system prompt, Skills and product tools explicitly. Do not
+ * Gamma supplies the system prompt, Skills and product tools explicitly. Do not
  * let a user project's ancestor context files, extensions, or APPEND_SYSTEM.md
  * silently alter that managed runtime. Inline extension factories remain
  * available: Pi loads them independently of `noExtensions`.
  */
-export interface PromaProjectInstructionFile {
+export interface GammaProjectInstructionFile {
   path: string
   content: string
 }
 
-export function createPromaManagedResourceLoaderOptions() {
+export function createGammaManagedResourceLoaderOptions() {
   return {
     noContextFiles: true,
     noExtensions: true,
@@ -22,20 +22,20 @@ export function createPromaManagedResourceLoaderOptions() {
 }
 
 /**
- * Pi still owns the final <project_context> formatting. Proma supplies this override only after validating explicit Proma-managed
+ * Pi still owns the final <project_context> formatting. Gamma supplies this override only after validating explicit Gamma-managed
  * workspace paths and user-authorized project paths, so no ambient context-file
  * discovery is re-enabled.
  */
-export function createPromaProjectInstructionFilesOverride(files: PromaProjectInstructionFile[]) {
+export function createGammaProjectInstructionFilesOverride(files: GammaProjectInstructionFile[]) {
   const agentsFiles = files.map(({ path, content }) => ({ path, content }))
   return () => ({ agentsFiles })
 }
 
 
 /** Keep managed workspace rules ahead of user-project rules in Pi project context. */
-export function combinePromaInstructionFiles(
-  workspaceFile: PromaProjectInstructionFile | undefined,
-  projectFiles: PromaProjectInstructionFile[],
-): PromaProjectInstructionFile[] {
+export function combineGammaInstructionFiles(
+  workspaceFile: GammaProjectInstructionFile | undefined,
+  projectFiles: GammaProjectInstructionFile[],
+): GammaProjectInstructionFile[] {
   return workspaceFile ? [workspaceFile, ...projectFiles] : projectFiles
 }

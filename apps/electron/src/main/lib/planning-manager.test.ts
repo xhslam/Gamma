@@ -14,7 +14,7 @@ const electronBinary = createRequire(import.meta.url)('electron') as string
  * 因此用 Bun 打包 TypeScript 验证脚本，再用独立 Electron Node 进程执行真实 SQLite 回归。
  */
 test('Given a fresh planning database When planning data changes Then isolation, transactions, reminders and optimistic versions stay correct', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'proma-planning-'))
+  const home = mkdtempSync(join(tmpdir(), 'gamma-planning-'))
   const sourcePath = join(home, 'verify-planning-manager.ts')
   const outputPath = join(home, 'verify-planning-manager.mjs')
   const source = `
@@ -24,7 +24,7 @@ test('Given a fresh planning database When planning data changes Then isolation,
     import { DatabaseSync } from 'node:sqlite'
     import * as manager from ${JSON.stringify(managerModulePath)}
 
-    const configDir = join(process.env.HOME, '.proma-dev')
+    const configDir = join(process.env.HOME, '.gamma-dev')
     mkdirSync(configDir, { recursive: true })
     const now = Date.now()
 
@@ -113,7 +113,7 @@ test('Given a fresh planning database When planning data changes Then isolation,
 
     const result = spawnSync(electronBinary, [outputPath], {
       cwd: repoRoot,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HOME: home, PROMA_DEV: '1' },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HOME: home, GAMMA_DEV: '1' },
       encoding: 'utf8',
     })
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)

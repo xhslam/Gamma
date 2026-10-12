@@ -78,8 +78,8 @@ import {
 
 // ===== 行数计算 =====
 
-const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'proma:session-quick-switch-keydown'
-const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'proma:session-quick-switch-keyup'
+const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'gamma:session-quick-switch-keydown'
+const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'gamma:session-quick-switch-keyup'
 
 function isMacPlatform(): boolean {
   return typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || '')
@@ -200,7 +200,7 @@ export interface RichTextInputHandle {
   insertSessionMention: (item: SessionReferenceDragItem) => boolean
   /** 在光标处插入可定位的 Agent 历史引用 chip。 */
   insertAgentHistoryQuoteMention: (quote: QuotedSelection) => boolean
-  /** 在光标处插入文件或 Vault 的选区引用 chip；可重复插入、多条并存。 */
+  /** 在光标处插入文件的选区引用 chip；可重复插入、多条并存。 */
   insertQuotedSelectionMention: (quote: QuotedSelection) => boolean
 }
 

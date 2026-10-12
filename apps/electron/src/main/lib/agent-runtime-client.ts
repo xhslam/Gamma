@@ -22,7 +22,7 @@ import {
   type AgentRuntimeRequest,
   type AgentRuntimeResponse,
   type AgentRuntimeState,
-} from '@proma/shared'
+} from '@gamma/shared'
 
 type RuntimePort = Pick<MessagePortMain, 'close' | 'postMessage' | 'start'> & {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -194,8 +194,8 @@ export class AgentRuntimeClient {
       && this.state.status === 'starting'
     const runtimeProcess = await startUtilityProcessWithRetry(
       () => utilityProcess.fork(this.entryPath, [], {
-        serviceName: 'Proma Runtime',
-        env: { ...process.env, ...this.env, PROMA_AGENT_SESSION_ID: this.sessionId },
+        serviceName: 'Gamma Runtime',
+        env: { ...process.env, ...this.env, GAMMA_AGENT_SESSION_ID: this.sessionId },
       }),
       { shouldContinue: shouldContinueStartup },
     )
@@ -230,7 +230,7 @@ export class AgentRuntimeClient {
     port.start()
 
     const transfer: AgentRuntimePortTransfer = {
-      type: 'proma-agent-runtime-port',
+      type: 'gamma-agent-runtime-port',
       protocolVersion: AGENT_RUNTIME_PROTOCOL_VERSION,
     }
     runtimeProcess.postMessage(transfer, [channel.port1])

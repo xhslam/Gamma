@@ -3,7 +3,7 @@
  * 自定义 MIME 用于可靠识别来源，text/plain 仅作为宿主兼容兜底。
  */
 
-export const SESSION_REFERENCE_DRAG_MIME = 'application/x-proma-session-reference'
+export const SESSION_REFERENCE_DRAG_MIME = 'application/x-gamma-session-reference'
 
 export interface SessionReferenceDragItem {
   sessionId: string
@@ -70,7 +70,7 @@ export function getSessionReferenceDragData(
  * detail 携带目标会话 id（当前主视图打开的 Agent 会话）与被引用的会话信息；
  * 由持有 RichTextInput ref 的 AgentView 监听后回写 inserted，调用方据此决定是否提示用户。
  */
-export const INSERT_SESSION_REFERENCE_MENTION_EVENT = 'proma:insert-session-reference-mention'
+export const INSERT_SESSION_REFERENCE_MENTION_EVENT = 'gamma:insert-session-reference-mention'
 
 export interface InsertSessionReferenceMentionDetail {
   targetSessionId: string

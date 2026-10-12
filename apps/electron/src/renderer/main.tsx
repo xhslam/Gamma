@@ -4,6 +4,9 @@
  * 挂载 React 应用，初始化主题系统。
  */
 
+// 首个依赖先迁移缓存，后续主题/Jotai 模块才能读取既有用户选择。
+import './lib/legacy-storage-migration'
+
 // 引入 Inter Variable 自托管字体（含 400/500/600/700 等所有字重）
 // index.css 声明了全部语言子集（latin/latin-ext/cyrillic/greek/vietnamese 等），
 // 但每个 @font-face 都带 unicode-range，浏览器仅按需下载实际用到的子集（本应用主要是 latin）。
@@ -71,19 +74,18 @@ import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
 import { slackBotStatesAtom } from './atoms/slack-atoms'
 import { currentConversationIdAtom, channelsAtom, channelsLoadedAtom, selectedModelAtom } from './atoms/chat-atoms'
 import { appModeAtom } from './atoms/app-mode'
-import type { FeishuBotBridgeState, FeishuBridgeState, DingTalkBotBridgeState, DingTalkBridgeState } from '@proma/shared'
+import type { FeishuBotBridgeState, FeishuBridgeState, DingTalkBotBridgeState, DingTalkBridgeState } from '@gamma/shared'
 import { Toaster } from './components/ui/sonner'
 import { toast } from 'sonner'
 import { ArrowUpRight } from 'lucide-react'
-import { diffCapabilities } from '@proma/shared'
-import type { WorkspaceCapabilities } from '@proma/shared'
+import { diffCapabilities } from '@gamma/shared'
+import type { WorkspaceCapabilities } from '@gamma/shared'
 import { showCapabilityChangeToasts } from './lib/capabilities-toast'
 import { GlobalShortcuts } from './components/shortcuts/GlobalShortcuts'
 import { VoiceDictationApp } from './components/voice-dictation/VoiceDictationApp'
 import { TabSwitcher } from './components/tabs/TabSwitcher'
-import { PromaLogo } from './lib/model-logo'
+import { GammaLogo } from './lib/model-logo'
 import { initShortcutRegistry, updateShortcutOverrides } from './lib/shortcut-registry'
-import { triggerLegacyScratchPadMigration } from './lib/legacy-scratch-pad-migration'
 import { initializePerformanceMonitor } from './lib/performance-monitor'
 import { createUpdateReminderScheduler, type UpdateReminderScheduler } from './lib/update-reminder-scheduler'
 import './styles/globals.css'
@@ -101,7 +103,7 @@ initializePerformanceMonitor()
 
 // 主窗口与记忆窗口均由内部面板管理滚动，避免页面本身出现第二层滚动。
 if (isMainWindow || isWorkspaceMemoryWindow) {
-  document.documentElement.classList.add('proma-main-window')
+  document.documentElement.classList.add('gamma-main-window')
 }
 
 /**
@@ -356,10 +358,10 @@ function UpdaterInitializer(): null {
     readyToastIdRef.current = toast.custom((toastId) => (
       <div className="w-[344px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5 backdrop-blur-xl dark:ring-white/10">
         <div className="flex items-center gap-2.5">
-          <img src={PromaLogo} alt="Proma" className="size-8 rounded-lg" />
+          <img src={GammaLogo} alt="Gamma" className="size-8 rounded-lg" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-sm leading-5">
-              <span className="font-semibold tracking-tight">Proma 更新已下载</span>
+              <span className="font-semibold tracking-tight">Gamma 更新已下载</span>
               <span className="text-xs text-primary">{versionLabel}</span>
             </div>
             <p className="text-xs leading-4 text-muted-foreground">所有 Agent 完成后即可自动安装。</p>
@@ -398,7 +400,7 @@ function UpdaterInitializer(): null {
                     scheduledToastIdRef.current = toast.custom((scheduledToastId) => (
                       <div className="w-[312px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5 backdrop-blur-xl dark:ring-white/10">
                         <div className="flex items-center gap-2.5">
-                          <img src={PromaLogo} alt="Proma" className="size-7 rounded-md" />
+                          <img src={GammaLogo} alt="Gamma" className="size-7 rounded-md" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold tracking-tight">已安排空闲时更新</p>
                             <p className="text-xs leading-4 text-muted-foreground">当前任务结束后会自动重启安装。</p>
@@ -1014,17 +1016,6 @@ function TabStatePersistenceInitializer(): null {
   return null
 }
 
-/**
- * Legacy Scratch Pad migration trigger.
- * The retained load IPC moves old content into the managed Vault without restoring UI state.
- */
-function LegacyScratchPadMigrationInitializer(): null {
-  useEffect(() => {
-    triggerLegacyScratchPadMigration(window.electronAPI.loadScratchPad)
-  }, [])
-  return null
-}
-
 // ===== 快速任务窗口：轻量渲染 =====
 if (isQuickTaskWindow) {
   import('./components/quick-task/QuickTaskApp').then(({ QuickTaskApp }) => {
@@ -1094,7 +1085,6 @@ if (isQuickTaskWindow) {
       <SlackInitializer />
       <DingTalkInitializer />
       <TabStatePersistenceInitializer />
-      <LegacyScratchPadMigrationInitializer />
       <VoiceDictationApp embedded />
       <GlobalShortcuts />
       <TabSwitcher />

@@ -9,7 +9,7 @@ import type {
   AgentExternalRunSource,
   AgentMessage,
   AgentSendInput,
-} from '@proma/shared'
+} from '@gamma/shared'
 
 export interface HeadlessAgentRunCallbacks {
   onError: (error: string) => void

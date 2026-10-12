@@ -5,7 +5,7 @@
  * 所有 Anthropic URL 规范化逻辑统一收口在此文件，避免分散重复。
  */
 
-import type { ProviderType } from '@proma/shared'
+import type { ProviderType } from '@gamma/shared'
 
 function trimTrailingUrlPathSlash(rawUrl: string): string {
   const trimmed = rawUrl.trim()
@@ -66,7 +66,7 @@ function removePathSuffixForSdkBaseUrl(rawUrl: string, suffix: string): string {
 }
 
 /**
- * 规范化 Anthropic Base URL（用于 Proma Chat 直接调用 API）
+ * 规范化 Anthropic Base URL（用于 Gamma Chat 直接调用 API）
  *
  * 去除尾部斜杠，去除误填的 /messages 后缀，如果没有版本路径则追加 /v1。
  * 结果用于直接拼接 /messages 发起请求。

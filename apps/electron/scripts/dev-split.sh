@@ -22,16 +22,16 @@ elif command -v tmux &> /dev/null; then
   echo "启动 tmux 会话..."
 
   # 创建新的 tmux 会话
-  tmux new-session -d -s proma-dev "cd $(pwd) && bun run dev:vite"
+  tmux new-session -d -s gamma-dev "cd $(pwd) && bun run dev:vite"
 
   # 创建左右分屏并运行 Electron
-  tmux split-window -h -t proma-dev "cd $(pwd) && bun run dev:electron"
+  tmux split-window -h -t gamma-dev "cd $(pwd) && bun run dev:electron"
 
   # 选择左侧窗格（Vite）
-  tmux select-pane -t proma-dev:0.0
+  tmux select-pane -t gamma-dev:0.0
 
   # 附加到会话
-  tmux attach-session -t proma-dev
+  tmux attach-session -t gamma-dev
 
 elif [[ "$OSTYPE" == "darwin"* ]]; then
   echo "在 macOS 上打开左右分屏..."

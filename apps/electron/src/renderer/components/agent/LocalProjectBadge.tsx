@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import type { LocalProjectRootStatus } from '@proma/shared'
+import type { LocalProjectRootStatus } from '@gamma/shared'
 import { cn } from '@/lib/utils'
 
 interface LocalProjectBadgeProps {

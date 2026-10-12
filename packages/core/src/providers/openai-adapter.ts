@@ -10,7 +10,7 @@
  * - 认证：Authorization: Bearer
  */
 
-import type { ProviderType } from '@proma/shared'
+import type { ProviderType } from '@gamma/shared'
 import type {
   ProviderAdapter,
   ProviderRequest,

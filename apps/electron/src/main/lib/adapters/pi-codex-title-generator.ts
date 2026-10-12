@@ -1,13 +1,13 @@
 /**
  * 通过 Pi 的 ChatGPT Codex OAuth runtime 发起轻量文本请求。
  *
- * 标题生成不能复用 @proma/core 的 Chat Completions / Messages 请求：
+ * 标题生成不能复用 @gamma/core 的 Chat Completions / Messages 请求：
  * Codex OAuth 只支持 Pi 管理的 Responses 协议、认证头和账号路由。此模块复用
  * 相同的 ModelRuntime/credential store，且不写入 Pi 的全局认证目录。
  */
 
 import { randomUUID } from 'node:crypto'
-import type { CodexOAuthCredentials } from '@proma/shared'
+import type { CodexOAuthCredentials } from '@gamma/shared'
 import type { AssistantMessage, Context, Model, OpenAICodexResponsesOptions } from '@earendil-works/pi-ai/compat'
 import type { Dispatcher } from 'undici'
 import { buildCodexModel } from './pi-model-registry'

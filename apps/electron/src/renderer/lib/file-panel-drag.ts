@@ -5,16 +5,16 @@
  * Agent 输入框 drop 时识别该载荷并把文件作为引用（添加到聊天）加入待发送附件。
  *
  * 载荷结构：
- *   application/x-proma-file-panel → JSON string of FilePanelDragItem[]
+ *   application/x-gamma-file-panel → JSON string of FilePanelDragItem[]
  */
 
-export const FILE_PANEL_DRAG_MIME = 'application/x-proma-file-panel'
+export const FILE_PANEL_DRAG_MIME = 'application/x-gamma-file-panel'
 
 /**
  * 三点菜单「引用到 Agent」触发的事件名。
  * detail 携带 FilePanelDragItem[]；AgentView 监听后调用 RichTextInput.insertFileMentions。
  */
-export const INSERT_FILE_MENTION_EVENT = 'proma:insert-file-mention'
+export const INSERT_FILE_MENTION_EVENT = 'gamma:insert-file-mention'
 
 export interface FilePanelDragItem {
   /** 文件绝对路径 */

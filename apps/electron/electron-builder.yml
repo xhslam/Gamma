@@ -1,8 +1,8 @@
 # electron-builder 配置
 # 文档: https://www.electron.build/configuration/configuration
 
-appId: com.proma.app
-productName: Proma
+appId: com.gamma.app
+productName: Gamma
 copyright: Copyright © 2024-2026 Erlich Liu
 
 # Electron 版本（CI 环境 bun workspace 下无法自动检测，需显式指定）
@@ -47,7 +47,7 @@ files:
   # 将 external 依赖闭包同步到 apps/electron/node_modules。
   - node_modules/**/*
   # 排除 workspace 包的 symlink（代码已被 esbuild/Vite 打包到 dist/ 中）
-  - "!node_modules/@proma/**"
+  - "!node_modules/@gamma/**"
   # 排除明确只在开发/构建期使用的大体积包。
   - "!node_modules/electron/**"
   - "!node_modules/electron-builder/**"
@@ -61,25 +61,26 @@ files:
 
 # 通用额外资源
 extraResources:
-  # proma CLI 自包含二进制（build:cli 用 bun build --compile 产出到 resources/bin/）。
-  # 运行时由主进程注入 PROMA_CLI 环境变量，暴露给 skill / Agent 调用。
+  # gamma CLI 自包含二进制（build:cli 用 bun build --compile 产出到 resources/bin/）。
+  # 运行时由主进程注入 GAMMA_CLI 环境变量，暴露给 skill / Agent 调用。
   - from: resources/bin
     to: bin
     filter:
-      - "**/*"
+      - "gamma"
+      - "gamma.exe"
   # OfficeCLI Excel 高保真渲染器；由 prepare:officecli 下载、固定版本并校验 SHA-256。
   - from: resources/officecli
     to: officecli
     filter:
       - "**/*"
-  # 默认 Skills 模板（首次启动时同步到 ~/.proma/default-skills/）
+  # 默认 Skills 模板（首次启动时同步到 ~/.gamma/default-skills/）
   - from: default-skills
     to: default-skills
     filter:
       - "**/*"
-  # Proma 品牌 Logo 素材（品牌素材下载功能使用）
-  - from: resources/proma-logos
-    to: proma-logos
+  # Gamma 品牌 Logo 素材（品牌素材下载功能使用）
+  - from: resources/gamma-logos
+    to: gamma-logos
     filter:
       - "**/*"
   # 默认 Dock 图标（macOS app.dock.setIcon 使用）
@@ -101,7 +102,7 @@ mac:
   extraResources:
     - from: resources/agent-island/macos-agent-island-helper
       to: agent-island/macos-agent-island-helper
-    # EventKit N-API bridge 在 Electron main 进程内执行，确保 TCC 归属 Proma.app。
+    # EventKit N-API bridge 在 Electron main 进程内执行，确保 TCC 归属 Gamma.app。
     - from: resources/eventkit/macos-eventkit.node
       to: eventkit/macos-eventkit.node
   binaries:
@@ -113,9 +114,9 @@ mac:
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
   extendInfo:
-    NSMicrophoneUsageDescription: "Proma 需要访问麦克风，用于将你的语音实时转写为文本。"
-    NSCalendarsFullAccessUsageDescription: "Proma 需要访问你的日历，以显示、创建和同步你选择的日程。"
-    NSRemindersFullAccessUsageDescription: "Proma 需要访问你的提醒事项，以同步 Todo 和你选择的列表。"
+    NSMicrophoneUsageDescription: "Gamma 需要访问麦克风，用于将你的语音实时转写为文本。"
+    NSCalendarsFullAccessUsageDescription: "Gamma 需要访问你的日历，以显示、创建和同步你选择的日程。"
+    NSRemindersFullAccessUsageDescription: "Gamma 需要访问你的提醒事项，以同步 Todo 和你选择的列表。"
   # 架构由 CLI 参数控制（CI 矩阵分别传 --arm64 / --x64），
   # 每个 runner 只构建其宿主架构对应的产物，与 bun 按 os/cpu 装好的
   # 每个 runner 只构建其宿主架构对应的产物。
@@ -158,12 +159,12 @@ nsis:
 # ============================================
 linux:
   icon: resources/icon.png
-  executableName: proma
+  executableName: gamma
   desktop:
-    StartupWMClass: proma
+    StartupWMClass: gamma
   category: Development
   synopsis: 本地优先的 AI 桌面 Agent
-  description: Proma 把多模型 Chat、通用 Agent、工作区、Skills、MCP 与记忆能力放进同一个开源客户端，数据和配置默认留在本地（~/.proma/）。
+  description: Gamma 把多模型 Chat、通用 Agent、工作区、Skills、MCP 与记忆能力放进同一个开源客户端，数据和配置默认留在本地（~/.gamma/）。
   maintainer: ErlichLiu <erlichliu@gmail.com>
   target:
     - target: AppImage
@@ -175,13 +176,13 @@ linux:
 
 # electron-builder 25 对 AppImage 默认使用 --no-sandbox，这是 AppImage
 # 挂载文件系统无法可靠提供 SUID sandbox 的已知限制。deb 不继承该参数，
-# 而是通过 afterInstall 尝试配置 /opt/Proma/chrome-sandbox。
+# 而是通过 afterInstall 尝试配置 /opt/Gamma/chrome-sandbox。
 appImage:
   executableArgs:
     - --no-sandbox
 
 deb:
-  packageName: proma
+  packageName: gamma
   afterInstall: resources/linux/deb-after-install.sh
   # 以 Ubuntu 22.04 为首个支持目标；显式声明，避免 electron-builder 的历史默认
   # 依赖（如已废弃的 gconf2/libappindicator1）进入新包。
@@ -200,7 +201,7 @@ deb:
     - libxkbcommon0
     - libxrandr2
     - libxss1
-  artifactName: proma_${version}_${arch}.${ext}
+  artifactName: gamma_${version}_${arch}.${ext}
 
 # ============================================
 # 发布配置

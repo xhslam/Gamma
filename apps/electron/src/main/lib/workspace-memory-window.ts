@@ -1,13 +1,13 @@
 import { app, BrowserWindow, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { AGENT_IPC_CHANNELS } from '@proma/shared'
+import { AGENT_IPC_CHANNELS } from '@gamma/shared'
 import { join } from 'node:path'
 
 const DEFAULT_WIDTH = 980
 const DEFAULT_HEIGHT = 720
 const MIN_WIDTH = 680
 const MIN_HEIGHT = 480
-const MEMORY_WINDOW_TITLE = 'Proma · 工作区记忆'
+const MEMORY_WINDOW_TITLE = 'Gamma · 工作区记忆'
 
 const windowsByWorkspace = new Map<string, BrowserWindow>()
 const approvedCloseWindows = new WeakSet<BrowserWindow>()

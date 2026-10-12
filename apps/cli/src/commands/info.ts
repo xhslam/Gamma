@@ -1,5 +1,5 @@
 /**
- * proma session info — 会话体量与结构概览（决定怎么读之前先看大小）。
+ * gamma session info — 会话体量与结构概览（决定怎么读之前先看大小）。
  *
  * 读 JSONL 解析为 turns，但只输出统计量（turn 数 / 角色分布 / 估算 tokens / 字节数 / 时间区间），
  * 不输出正文——让 Agent 据此判断该全量读还是分段/搜索读。
@@ -7,8 +7,8 @@
 import { register } from '../registry'
 import { resolveSession } from '../sessions'
 import { emitJson, emitText, errorLine, info, EXIT_OK, EXIT_ERROR, UsageError } from '../output'
-import { readSessionMessages } from '@proma/session-core/node'
-import { groupIntoTurns, toTranscript } from '@proma/session-core'
+import { readSessionMessages } from '@gamma/session-core/node'
+import { groupIntoTurns, toTranscript } from '@gamma/session-core'
 
 register({
   name: 'info',

@@ -1,4 +1,4 @@
-import { AGENT_RUNTIME_METHODS } from '@proma/shared'
+import { AGENT_RUNTIME_METHODS } from '@gamma/shared'
 
 const DEFAULT_PARENT_REQUEST_TIMEOUT_MS = 120_000
 // AskUserQuestion 属于用户主导的自由文本交互；两分钟不足以完成输入。

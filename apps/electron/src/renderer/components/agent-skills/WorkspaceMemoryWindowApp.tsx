@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { toast } from 'sonner'
 import { Code2, Eye, FilePlus2, FileText, Loader2, RefreshCw, Save } from 'lucide-react'
-import type { SkillFileNode } from '@proma/shared'
+import type { SkillFileNode } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -48,7 +48,7 @@ export function WorkspaceMemoryWindowApp(): React.ReactElement {
     textRef.current = text
   }, [dirty, selectedPath, text])
   React.useEffect(() => {
-    document.title = 'Proma · 工作区记忆'
+    document.title = 'Gamma · 工作区记忆'
   }, [])
   React.useEffect(() => {
     void window.electronAPI.markWorkspaceMemoryWindowReady(workspaceSlug).catch(() => {})

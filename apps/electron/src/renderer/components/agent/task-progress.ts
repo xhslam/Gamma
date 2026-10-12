@@ -5,7 +5,7 @@ export const TASK_TOOL_NAMES = new Set(['TaskCreate', 'TaskUpdate'])
 
 export type TaskItemStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'cancelled' | 'error' | 'deleted'
 
-/** Claude SDK 与 Pi 兼容任务工具共用的终态集合。 */
+/** Pi 任务工具及历史兼容记录共用的终态集合。 */
 export function isTerminalTaskStatus(status: TaskItemStatus): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'error' || status === 'deleted'
 }
@@ -34,13 +34,6 @@ export function getTaskProgressCounts(items: TaskItem[]): {
     terminal,
     total: items.length,
     hasActive: terminal < items.length,
-  }
-}
-
-interface TaskCreateOutput {
-  task?: {
-    id?: unknown
-    subject?: unknown
   }
 }
 
@@ -79,18 +72,16 @@ export function extractToolResultText(content: unknown): string | undefined {
 }
 
 export function parseTaskCreateResult(result: string | undefined): { id: string; subject?: string } | null {
+  const task = parseTaskResult(result)
+  const id = stringId(task?.id)
+  return task && id ? { id, subject: typeof task.subject === 'string' ? task.subject : undefined } : null
+}
+
+/** TaskCreate/TaskUpdate 返回的是执行后的完整任务快照。 */
+function parseTaskResult(result: string | undefined): Record<string, unknown> | null {
   if (!result) return null
-
-  const json = parseJsonObject(result) as TaskCreateOutput | null
-  const task = json?.task
-  if (isRecord(task) && (typeof task.id === 'string' || typeof task.id === 'number')) {
-    return {
-      id: String(task.id),
-      subject: typeof task.subject === 'string' ? task.subject : undefined,
-    }
-  }
-
-  return null
+  const task = parseJsonObject(result)?.task
+  return isRecord(task) ? task : null
 }
 
 function toTaskStatus(value: unknown, fallback: TaskItemStatus = 'pending'): TaskItemStatus {
@@ -122,79 +113,60 @@ function taskIdFromInput(input: Record<string, unknown>): string | undefined {
  * 从 ToolActivity[] 中提取并聚合所有任务项的最新状态。
  *
  * 策略：
- * 1. TaskCreate 读取 SDK 0.3 的结构化输出 `{ task: { id, subject } }`
- * 2. TaskUpdate 通过 taskId 更新已有条目，跨 turn 时可用历史 subject 恢复任务名
+ * 1. 仅应用已执行成功的任务工具，以 `{ task }` 结果为准；历史无快照记录兼容 input。
+ * 2. TaskUpdate 通过 taskId 更新已有条目，跨 turn 时可用历史 subject 恢复任务名。
+ * 3. run 结束只影响动画，不能改写已确认的任务状态。
  */
 export function aggregateTaskItems(
   activities: ToolActivity[],
-  streamEnded: boolean,
+  _streamEnded: boolean,
   historicalTaskSubjects?: Map<string, string>,
 ): TaskItem[] {
   const taskMap = new Map<string, TaskItem>()
 
-  const taskCreateIdMap = new Map<string, string>()
-  const taskCreateSubjectMap = new Map<string, string>()
-
   for (const activity of activities) {
-    if (activity.toolName !== 'TaskCreate') continue
-
-    const parsedResult = parseTaskCreateResult(activity.result)
-    const taskId = parsedResult?.id ?? activity.toolUseId
-    taskCreateIdMap.set(activity.toolUseId, taskId)
-
-    if (parsedResult?.subject) {
-      taskCreateSubjectMap.set(taskId, parsedResult.subject)
-    }
-  }
-
-  for (const activity of activities) {
+    if (!TASK_TOOL_NAMES.has(activity.toolName) || !activity.done || activity.isError) continue
+    const task = parseTaskResult(activity.result)
+    // 执行结果优先，兼容没有结构化快照的旧任务工具记录。
+    const confirmed = { ...activity.input, ...task }
     if (activity.toolName === 'TaskCreate') {
-      const id = taskCreateIdMap.get(activity.toolUseId) ?? activity.toolUseId
-      const subject = typeof activity.input.subject === 'string'
-        ? activity.input.subject
-        : taskCreateSubjectMap.get(id)
-          ?? (typeof activity.input.description === 'string' ? activity.input.description : '未命名任务')
+      const id = stringId(task?.id) ?? activity.toolUseId
+      const subject = typeof confirmed.subject === 'string'
+        ? confirmed.subject
+        : (typeof confirmed.description === 'string' ? confirmed.description : '未命名任务')
 
       taskMap.set(id, {
         id,
         subject,
-        status: 'pending',
-        activeForm: typeof activity.input.activeForm === 'string' ? activity.input.activeForm : undefined,
+        status: toTaskStatus(confirmed.status),
+        activeForm: typeof confirmed.activeForm === 'string' ? confirmed.activeForm : undefined,
       })
     } else if (activity.toolName === 'TaskUpdate') {
-      const taskId = taskIdFromInput(activity.input)
+      const taskId = stringId(task?.id) ?? taskIdFromInput(activity.input)
       if (!taskId) continue
 
       const existing = taskMap.get(taskId)
-      const status = toTaskStatus(activity.input.status, existing?.status ?? 'pending')
+      const status = toTaskStatus(confirmed.status, existing?.status ?? 'pending')
 
       if (existing) {
         taskMap.set(taskId, {
           ...existing,
           status,
-          ...(typeof activity.input.subject === 'string' && { subject: activity.input.subject }),
-          ...(typeof activity.input.activeForm === 'string' && { activeForm: activity.input.activeForm }),
+          ...(typeof confirmed.subject === 'string' && { subject: confirmed.subject }),
+          ...(typeof confirmed.activeForm === 'string' && { activeForm: confirmed.activeForm }),
         })
       } else {
         taskMap.set(taskId, {
           id: taskId,
-          subject: typeof activity.input.subject === 'string'
-            ? activity.input.subject
+          subject: typeof confirmed.subject === 'string'
+            ? confirmed.subject
             : historicalTaskSubjects?.get(taskId) ?? `任务 #${taskId}`,
           status,
-          activeForm: typeof activity.input.activeForm === 'string' ? activity.input.activeForm : undefined,
+          activeForm: typeof confirmed.activeForm === 'string' ? confirmed.activeForm : undefined,
         })
       }
     }
   }
 
-  let items = Array.from(taskMap.values()).filter((t) => t.status !== 'deleted')
-  if (streamEnded) {
-    items = items.map((t) =>
-      t.status === 'in_progress'
-        ? { ...t, status: 'pending' as const, activeForm: undefined }
-        : t
-    )
-  }
-  return items
+  return Array.from(taskMap.values()).filter((t) => t.status !== 'deleted')
 }

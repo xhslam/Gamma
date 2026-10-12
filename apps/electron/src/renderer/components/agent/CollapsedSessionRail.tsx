@@ -27,7 +27,7 @@ import {
   reduceCollapsedRailPopoverState,
   type CollapsedRailPopoverState,
 } from '@/lib/collapsed-agent-rail'
-import type { AgentSessionMeta } from '@proma/shared'
+import type { AgentSessionMeta } from '@gamma/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 
 export interface RailRecentItem {

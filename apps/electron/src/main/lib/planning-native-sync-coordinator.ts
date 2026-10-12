@@ -22,7 +22,7 @@ function isTodoDueDateOnly(dueAt: number | undefined): boolean {
 }
 
 async function cleanupItem(item: PlanningSyncCleanupItem): Promise<void> {
-  await removePlanningNativeSyncItem(item.entity, { targetId: item.targetId, identity: item.promaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, startAt: item.nativeStartAt })
+  await removePlanningNativeSyncItem(item.entity, { targetId: item.targetId, identity: item.gammaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, startAt: item.nativeStartAt })
   completePlanningSyncCleanup(item)
 }
 
@@ -30,21 +30,21 @@ async function syncNativeItem(item: PlanningNativeOutboxItem): Promise<void> {
   if (item.operation === 'hide') {
     // 连接的可写 Calendar / Reminder 均按用户选择真实删除 EventKit 项。
     // 升级前只读集合可能残留 hide outbox；该历史项只能继续本地隐藏，不能借升级越权删除。
-    if (item.connection.canWrite) await removePlanningNativeSyncItem(item.connection.entity, { targetId: item.connection.targetId, identity: item.promaEntityId, calendarItemIdentifier: item.calendarItemIdentifier })
+    if (item.connection.canWrite) await removePlanningNativeSyncItem(item.connection.entity, { targetId: item.connection.targetId, identity: item.gammaEntityId, calendarItemIdentifier: item.calendarItemIdentifier })
     completePlanningNativeOutbox(item)
     return
   }
   if (!item.connection.canWrite) throw new Error('该系统集合为只读，不能写入')
   if (item.connection.entity === 'calendar') {
-    const event = getCalendarEvent(item.promaEntityId)
+    const event = getCalendarEvent(item.gammaEntityId)
     if (!event) { completePlanningNativeOutbox({ ...item, operation: 'hide' }); return }
-    const identifiers = await upsertPlanningNativeSyncItem('calendar', { targetId: item.connection.targetId, identity: item.promaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, allowRecreate: item.recreatePending, title: event.title, notes: event.notes, startAt: event.startAt, endAt: event.endAt, allDay: event.allDay })
+    const identifiers = await upsertPlanningNativeSyncItem('calendar', { targetId: item.connection.targetId, identity: item.gammaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, allowRecreate: item.recreatePending, title: event.title, notes: event.notes, startAt: event.startAt, endAt: event.endAt, allDay: event.allDay })
     completePlanningNativeOutbox(item, identifiers)
     return
   } else {
-    const todo = getTodo(item.promaEntityId)
+    const todo = getTodo(item.gammaEntityId)
     if (!todo) { completePlanningNativeOutbox({ ...item, operation: 'hide' }); return }
-    const identifiers = await upsertPlanningNativeSyncItem('reminder', { targetId: item.connection.targetId, identity: item.promaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, allowRecreate: item.recreatePending, title: todo.title, notes: todo.notes, dueAt: todo.dueAt, dueDateOnly: item.dueDateOnly ?? isTodoDueDateOnly(todo.dueAt), priority: todo.priority, completed: todo.status === 'completed', completedAt: todo.completedAt })
+    const identifiers = await upsertPlanningNativeSyncItem('reminder', { targetId: item.connection.targetId, identity: item.gammaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, allowRecreate: item.recreatePending, title: todo.title, notes: todo.notes, dueAt: todo.dueAt, dueDateOnly: item.dueDateOnly ?? isTodoDueDateOnly(todo.dueAt), priority: todo.priority, completed: todo.status === 'completed', completedAt: todo.completedAt })
     completePlanningNativeOutbox(item, identifiers)
   }
 }
@@ -93,20 +93,20 @@ async function reconcileManagedCalendarProfiles(force = false): Promise<void> {
 async function syncItem(item: PlanningSyncOutboxItem): Promise<void> {
   const entity = item.profile.entity
   if (item.operation === 'delete') {
-    await removePlanningNativeSyncItem(entity, { targetId: item.profile.targetId, identity: item.promaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, startAt: item.nativeStartAt })
+    await removePlanningNativeSyncItem(entity, { targetId: item.profile.targetId, identity: item.gammaEntityId, calendarItemIdentifier: item.calendarItemIdentifier, startAt: item.nativeStartAt })
     completePlanningSyncOutbox(item)
     return
   }
 
   if (entity === 'calendar') {
-    const event = getCalendarEvent(item.promaEntityId)
+    const event = getCalendarEvent(item.gammaEntityId)
     if (!event) {
       completePlanningSyncOutbox({ ...item, operation: 'delete' })
       return
     }
     const identifiers = await upsertPlanningNativeSyncItem('calendar', {
       targetId: item.profile.targetId,
-      identity: item.promaEntityId,
+      identity: item.gammaEntityId,
       calendarItemIdentifier: item.calendarItemIdentifier,
       title: event.title,
       notes: event.notes,
@@ -118,14 +118,14 @@ async function syncItem(item: PlanningSyncOutboxItem): Promise<void> {
     return
   }
 
-  const todo = getTodo(item.promaEntityId)
+  const todo = getTodo(item.gammaEntityId)
   if (!todo) {
     completePlanningSyncOutbox({ ...item, operation: 'delete' })
     return
   }
   const identifiers = await upsertPlanningNativeSyncItem('reminder', {
     targetId: item.profile.targetId,
-    identity: item.promaEntityId,
+    identity: item.gammaEntityId,
     calendarItemIdentifier: item.calendarItemIdentifier,
     title: todo.title,
     notes: todo.notes,

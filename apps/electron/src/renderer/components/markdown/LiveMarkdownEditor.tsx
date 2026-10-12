@@ -9,16 +9,12 @@ import {
   createLiveMarkdownFindController,
   type ResolveLiveMarkdownImageSrc,
   type SaveLiveMarkdownPastedImage,
-  type ChangeLiveMarkdownProperties,
   type LiveMarkdownFindOptions,
 } from './LiveMarkdownPreview'
 import {
   shouldRebuildMarkdownHeadingDecorations,
   shouldRebuildMarkdownSyntaxDecorations,
 } from './live-markdown-lifecycle'
-export type { ChangeLiveMarkdownProperties } from './LiveMarkdownPreview'
-export type { LiveMarkdownPropertyEntry } from './live-markdown-frontmatter'
-import type { LiveMarkdownPropertyEntry } from './live-markdown-frontmatter'
 
 export type { LiveMarkdownFindOptions } from './LiveMarkdownPreview'
 
@@ -90,10 +86,6 @@ interface LiveMarkdownEditorProps {
   resolveImageSrc?: ResolveLiveMarkdownImageSrc
   /** 保存剪贴板图片并返回其可写入 Markdown 的相对来源。 */
   savePastedImage?: SaveLiveMarkdownPastedImage
-  /** Vault adapter callback for editing flat YAML Properties. */
-  onChangeProperties?: ChangeLiveMarkdownProperties
-  /** Vault-only opt-in for replacing flat YAML frontmatter with editable Properties. */
-  enableProperties?: boolean
   extensions?: readonly Extension[]
   className?: string
 }
@@ -150,7 +142,7 @@ const markdownSyntaxMarkerNames = new Set([
   'HeaderMark',
   'LinkMark',
   'QuoteMark',
-  // ink-mde 使用 GFM parser；隐藏 ~~ 定界符，让删除线呈现与 Obsidian Live Preview 一致。
+  // ink-mde 使用 GFM parser；隐藏 ~~ 定界符，让删除线呈现与 Live Preview 一致。
   'StrikethroughMark',
 ])
 const hiddenMarkdownSyntax = Decoration.replace({ class: 'live-markdown-syntax-hidden' })
@@ -226,7 +218,7 @@ function activeCursorLines(state: EditorState, focused: boolean): Set<number> {
 }
 
 /**
- * Obsidian-style live preview: Markdown markers disappear on inactive lines,
+ * WYSIWYG live preview: Markdown markers disappear on inactive lines,
  * but reappear as soon as the cursor enters that line. The formatted content
  * remains visible in both states, so users can edit syntax without a mode flip.
  */
@@ -321,8 +313,6 @@ export const LiveMarkdownEditor = React.forwardRef<LiveMarkdownEditorHandle, Liv
   readOnly = false,
   resolveImageSrc,
   savePastedImage,
-  onChangeProperties,
-  enableProperties = false,
   extensions = [],
   className,
 }, ref): React.ReactElement {
@@ -338,21 +328,12 @@ export const LiveMarkdownEditor = React.forwardRef<LiveMarkdownEditorHandle, Liv
   const onCancelRef = React.useRef(onCancel)
   const onReadyRef = React.useRef(onReady)
   const onTextSelectionChangeRef = React.useRef(onTextSelectionChange)
-  const onChangePropertiesRef = React.useRef(onChangeProperties)
   valueRef.current = value
   onChangeRef.current = onChange
   onSaveRef.current = onSave
   onCancelRef.current = onCancel
   onReadyRef.current = onReady
   onTextSelectionChangeRef.current = onTextSelectionChange
-  onChangePropertiesRef.current = onChangeProperties
-
-  const onChangePropertiesProxy = React.useCallback((entries: LiveMarkdownPropertyEntry[], documentValue?: string): void => {
-    // The extension is retained for the editor lifetime. Forward its live
-    // CodeMirror snapshot so the Vault adapter never falls back to a stale
-    // controlled prop after a body edit.
-    onChangePropertiesRef.current?.(entries, documentValue)
-  }, [])
 
   const applyFindMatches = React.useCallback((query: string, options: LiveMarkdownFindOptions, activeIndex: number, scrollIntoView: boolean): number => {
     const view = viewRef.current
@@ -527,7 +508,7 @@ export const LiveMarkdownEditor = React.forwardRef<LiveMarkdownEditorHandle, Liv
           }
         }),
         ...markdownSyntaxVisibility,
-        createLiveMarkdownBlockPreview(resolveImageSrc, savePastedImage, onChangePropertiesProxy, enableProperties, findControllerRef.current),
+        createLiveMarkdownBlockPreview(resolveImageSrc, savePastedImage, findControllerRef.current),
         ...extensions,
       ].map((extension) => ({ type: 'default' as const, value: extension })),
       search: false,
@@ -574,7 +555,7 @@ export const LiveMarkdownEditor = React.forwardRef<LiveMarkdownEditorHandle, Liv
   React.useEffect(() => {
     const instance = instanceRef.current
     if (!instance || instance.getDoc() === value) return
-    // External document refreshes (for example an Agent writing the opened Vault
+    // External document refreshes (for example an Agent writing the opened
     // note) must not eject a reader back to the top of a long CodeMirror document.
     const scroller = hostRef.current?.querySelector<HTMLElement>('.cm-scroller')
     const scrollTop = scroller?.scrollTop
@@ -588,5 +569,5 @@ export const LiveMarkdownEditor = React.forwardRef<LiveMarkdownEditorHandle, Liv
     }
   }, [value])
 
-  return <div ref={hostRef} className={cn('live-markdown-editor vault-ink-mde h-full min-h-0', className)} />
+  return <div ref={hostRef} className={cn('live-markdown-editor h-full min-h-0', className)} />
 })

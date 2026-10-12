@@ -2,8 +2,8 @@
  * Lightweight renderer performance diagnostics.
  *
  * Disabled by default. Enable with `?perf=1` or localStorage:
- * `localStorage.setItem('proma-performance-debug', '1')`.
- * When enabled, `window.__promaPerformance.snapshot()` exposes aggregate metrics
+ * `localStorage.setItem('gamma-performance-debug', '1')`.
+ * When enabled, `window.__gammaPerformance.snapshot()` exposes aggregate metrics
  * without leaving a high-frequency trace in normal production sessions.
  */
 
@@ -35,7 +35,7 @@ function isBrowser(): boolean {
 export function isPerformanceMonitoringEnabled(): boolean {
   if (!isBrowser()) return false
   return new URLSearchParams(window.location.search).get('perf') === '1'
-    || window.localStorage.getItem('proma-performance-debug') === '1'
+    || window.localStorage.getItem('gamma-performance-debug') === '1'
 }
 
 export function recordPerformanceSample(name: string, durationMs: number): void {
@@ -78,7 +78,7 @@ export function initializePerformanceMonitor(): void {
   if (!isBrowser() || initialized || !isPerformanceMonitoringEnabled()) return
   initialized = true
 
-  window.__promaPerformance = {
+  window.__gammaPerformance = {
     snapshot: getPerformanceSnapshot,
     clear: clearPerformanceMetrics,
   }

@@ -1,9 +1,8 @@
-import type { ConversationMeta } from '@proma/shared'
+import type { ConversationMeta } from '@gamma/shared'
 
 /**
  * Deduplicate concurrent first-use requests for an Agent session's side Chat.
- * Preview and Vault are mounted independently, so component-local pending refs
- * cannot prevent both from issuing createConversation at the same time.
+ * Independent mounts cannot prevent multiple callers from issuing createConversation at the same time.
  */
 const pendingSideChatCreates = new Map<string, Promise<ConversationMeta>>()
 

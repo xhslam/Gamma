@@ -5,9 +5,9 @@
  */
 
 import * as React from 'react'
-import { useAtomValue, useSetAtom } from 'jotai'
-import { Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, MessageCircle, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X } from 'lucide-react'
-import { OBSIDIAN_NAME, ObsidianIcon } from '@/components/obsidian/obsidian-brand'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { ArrowLeftRight, Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, MessageCircle, PanelLeft, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X, BookOpen } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getScrollLeftToRevealTab } from '@/lib/tab-visibility'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -24,7 +24,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { agentDiffUnseenChangesAtom, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
+import { agentDiffUnseenChangesAtom, agentSidePanelLayoutAtomFamily, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
 import type { AgentSidePanelTab, SessionIndicatorStatus, WorkspaceComponentTab } from '@/atoms/agent-atoms'
 import { groupRightWorkspaceTabs, type RightWorkspacePane } from '@/lib/right-workspace-split'
 import { getDelegationStatusIconClass } from '@/lib/agent-session-list'
@@ -56,7 +56,6 @@ interface DiffPanelTabBarProps {
   onOpenFile: () => void
   onOpenTerminal?: () => void
   onOpenWorkspaceComponent?: (component: WorkspaceComponentTab) => void
-  onOpenVault?: () => void
   productivityTools?: ProductivityToolsSettings
   onOpenChat?: () => void
   /** 仅当前右侧 Tab 需要的紧凑动作，渲染于标签列表之后，不影响内容区布局。 */
@@ -80,8 +79,7 @@ export function DiffPanelTabBar({
   onOpenFile,
   onOpenTerminal,
   onOpenWorkspaceComponent,
-  onOpenVault,
-  productivityTools = { todosEnabled: true, calendarEnabled: true, obsidianEnabled: true },
+  productivityTools = { todosEnabled: true, calendarEnabled: true },
   onOpenChat,
   activeTabAction,
   visibleTabs,
@@ -95,6 +93,10 @@ export function DiffPanelTabBar({
   const unseenMap = useAtomValue(agentDiffUnseenChangesAtom)
   const setUnseenMap = useSetAtom(agentDiffUnseenChangesAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
+  const [layout, setLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
+  const workspaceSide = layout.workspaceSide === 'left' ? 'left' : 'right'
+  const workspaceSideLabel = workspaceSide === 'left' ? '左侧' : '右侧'
+  const swapFocusRef = React.useRef<HTMLButtonElement | null>(null)
   const unseenChanges = unseenMap.get(currentSessionId ?? '') ?? false
   const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const [isSplitTabGroupHovered, setIsSplitTabGroupHovered] = React.useState(false)
@@ -110,6 +112,11 @@ export function DiffPanelTabBar({
   const activeTabDragCancelRef = React.useRef<(() => void) | null>(null)
 
   React.useEffect(() => () => onAddTabMenuOpenChange?.(false), [onAddTabMenuOpenChange])
+  React.useLayoutEffect(() => {
+    // 移动 DOM 容器后继续保留触发按钮的键盘焦点，方便连续交换。
+    swapFocusRef.current?.focus({ preventScroll: true })
+    swapFocusRef.current = null
+  }, [workspaceSide])
   React.useEffect(() => () => activeTabDragCancelRef.current?.(), [])
   React.useEffect(() => {
     if (!visibleTabs?.left || !visibleTabs.right) setIsSplitTabGroupHovered(false)
@@ -319,7 +326,7 @@ export function DiffPanelTabBar({
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
       <div className="relative flex h-full min-w-0 flex-1 items-center titlebar-no-drag">
         <div className="relative flex min-w-0 flex-1 self-stretch">
-          <div ref={tabListRef} className="flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none" role="tablist" aria-label="右侧工作区">
+          <div ref={tabListRef} className="flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none" role="tablist" aria-label={`${workspaceSideLabel}工作区`}>
           {orderedTabs.map((tab) => {
             const selected = activeTab === tab.id
             const isSplitView = visibleTabs?.left !== undefined && visibleTabs.right !== undefined
@@ -434,6 +441,28 @@ export function DiffPanelTabBar({
           )}
         </div>
         {activeTabAction && <div className="ml-1 flex shrink-0 items-center titlebar-no-drag">{activeTabAction}</div>}
+        {currentSessionId && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mr-1 h-7 w-7 shrink-0 px-0 text-muted-foreground"
+                aria-label="交换 Agent 与工作区位置"
+                aria-pressed={workspaceSide === 'left'}
+                title="交换 Agent 与工作区位置"
+                onClick={event => {
+                  swapFocusRef.current = event.currentTarget
+                  setLayout(previous => ({ ...previous, workspaceSide: previous.workspaceSide === 'left' ? 'right' : 'left' }))
+                }}
+              >
+                <ArrowLeftRight aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">交换 Agent 与工作区位置</TooltipContent>
+          </Tooltip>
+        )}
         {visibleTabs?.left && visibleTabs.right && onCollapseSplit && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -457,7 +486,7 @@ export function DiffPanelTabBar({
                 <button
                   type="button"
                   className="mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-                  aria-label="添加右侧工作区标签"
+                  aria-label={`添加${workspaceSideLabel}工作区标签`}
                 >
                   <Plus className="size-4" />
                 </button>
@@ -504,6 +533,7 @@ export function DiffPanelTabBar({
                     打开日程
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('markdown')}><BookOpen className="size-3.5" />打开 Markdown</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('skills')}>
                   <Blocks className="size-3.5" />
                   打开 Skills
@@ -533,12 +563,6 @@ export function DiffPanelTabBar({
                 打开定时任务
               </DropdownMenuItem>
             )}
-            {onOpenVault && (
-              <DropdownMenuItem onSelect={onOpenVault}>
-                <ObsidianIcon className="size-3.5" />
-                打开 {OBSIDIAN_NAME}
-              </DropdownMenuItem>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
         {onClose && (
@@ -548,12 +572,12 @@ export function DiffPanelTabBar({
                 type="button"
                 onClick={onClose}
                 className="mr-2 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-                aria-label="折叠右侧工作区"
+                aria-label={`折叠${workspaceSideLabel}工作区`}
               >
-                <PanelRight className="size-4" />
+                {workspaceSide === 'left' ? <PanelLeft className="size-4" /> : <PanelRight className="size-4" />}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">折叠右侧工作区 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</TooltipContent>
+            <TooltipContent side="bottom">折叠{workspaceSideLabel}工作区 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</TooltipContent>
           </Tooltip>
         )}
       </div>

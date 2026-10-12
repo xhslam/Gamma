@@ -48,7 +48,7 @@ export function sanitizeGeneratedTitle(title: string | unknown): string | null {
  * 无法调用标题模型时，基于首条用户消息生成一个稳定兜底标题。
  *
  * ChatGPT (Codex) OAuth 使用 Pi SDK 的 Codex Responses 协议，不适配当前
- * @proma/core 的 Chat Completions / Messages 标题请求，因此需要本地兜底，
+ * @gamma/core 的 Chat Completions / Messages 标题请求，因此需要本地兜底，
  * 避免会话长期停留在“新 Agent 会话”。
  */
 export function createFallbackTitle(userMessage: string): string | null {

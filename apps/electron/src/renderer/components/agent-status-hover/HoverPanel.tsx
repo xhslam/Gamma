@@ -4,7 +4,7 @@ import type {
   AgentIslandSessionSnapshot,
   AgentIslandPhase,
   AgentIslandInteractionKind,
-} from '@proma/shared'
+} from '@gamma/shared'
 import { Lock, HelpCircle, ClipboardList } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

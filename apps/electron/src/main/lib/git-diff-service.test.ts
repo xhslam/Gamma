@@ -14,8 +14,8 @@ function git(...args: string[]): void {
 function createRepository(prefix: string, fileName: string): string {
   const path = mkdtempSync(join(tmpdir(), prefix))
   execFileSync('git', ['init'], { cwd: path, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', 'test@proma.local'], { cwd: path, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', 'Proma Test'], { cwd: path, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'test@gamma.local'], { cwd: path, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.name', 'Gamma Test'], { cwd: path, stdio: 'pipe' })
   writeFileSync(join(path, fileName), 'base\n')
   execFileSync('git', ['add', fileName], { cwd: path, stdio: 'pipe' })
   execFileSync('git', ['commit', '-m', 'initial'], { cwd: path, stdio: 'pipe' })
@@ -23,7 +23,7 @@ function createRepository(prefix: string, fileName: string): string {
 }
 
 beforeEach(() => {
-  repoPath = createRepository('proma-git-diff-', 'tracked.txt')
+  repoPath = createRepository('gamma-git-diff-', 'tracked.txt')
 })
 
 afterEach(() => {
@@ -49,7 +49,7 @@ describe('git diff scan cache', () => {
   })
 
   test('refreshes a linked worktree when its symbolic HEAD ref changes outside the watcher', async () => {
-    const linkedParentPath = mkdtempSync(join(tmpdir(), 'proma-git-diff-linked-parent-'))
+    const linkedParentPath = mkdtempSync(join(tmpdir(), 'gamma-git-diff-linked-parent-'))
     const linkedWorktreePath = join(linkedParentPath, 'linked')
     try {
       execFileSync('git', ['worktree', 'add', '-b', 'linked-cache-test', linkedWorktreePath], { cwd: repoPath, stdio: 'pipe' })
@@ -75,7 +75,7 @@ describe('git diff scan cache', () => {
   })
 
   test('keeps another repository cache valid after targeted invalidation', async () => {
-    const secondRepo = createRepository('proma-git-diff-second-', 'other.txt')
+    const secondRepo = createRepository('gamma-git-diff-second-', 'other.txt')
     try {
       writeFileSync(join(repoPath, 'tracked.txt'), 'base\nfirst\n')
       writeFileSync(join(secondRepo, 'other.txt'), 'base\nfirst\n')

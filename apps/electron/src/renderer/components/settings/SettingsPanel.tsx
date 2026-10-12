@@ -56,6 +56,7 @@ import { VisionRelaySettings } from "./VisionRelaySettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { ProxySettings } from "./ProxySettings";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { MarkdownEditorSettingsPage } from "./MarkdownEditorSettings";
 import { AboutSettings } from "./AboutSettings";
 import { PromptSettings } from "./PromptSettings";
 import { BotHubSettings } from "./BotHubSettings";
@@ -94,7 +95,7 @@ const SHORTCUTS_TAB: TabItem = {
 };
 const ONBOARDING_TAB: TabItem = {
   id: "onboarding",
-  label: "Proma 新手引导",
+  label: "Gamma 新手引导",
   icon: <GraduationCap size={16} />,
 };
 const VOICE_INPUT_TAB: TabItem = {
@@ -107,6 +108,7 @@ const TAIL_TABS: TabItem[] = [
   { id: "migration", label: "数据迁移", icon: <HardDriveDownload size={16} /> },
   { id: "storage", label: "磁盘管理", icon: <HardDrive size={16} /> },
   { id: "appearance", label: "外观设置", icon: <Palette size={16} /> },
+  { id: "markdown-editor", label: "文档设置", icon: <BookOpen size={16} /> },
   ONBOARDING_TAB,
   { id: "about", label: "关于/更新", icon: <Info size={16} /> },
 ];
@@ -126,6 +128,8 @@ function renderTabContent(tab: SettingsTab): React.ReactElement {
       return <ProxySettings />;
     case "appearance":
       return <AppearanceSettings />;
+    case "markdown-editor":
+      return <MarkdownEditorSettingsPage />;
     case "about":
       return <AboutSettings />;
     case "bots":

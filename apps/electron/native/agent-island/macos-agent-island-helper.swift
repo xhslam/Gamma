@@ -6,7 +6,7 @@ import SwiftUI
 private let expandedBottomCornerRadius: CGFloat = 32
 private let expandedBottomCornerClearance: CGFloat = 32
 
-// Proma macOS Agent Island native host.
+// Gamma macOS Agent Island native host.
 // JSON Lines stdin/stdout protocol: TypeScript owns product state; this process only
 // owns AppKit geometry, rendering and constrained pointer intents.
 
@@ -219,7 +219,7 @@ struct NotchMetrics {
       // approximation. It keeps the compact island contiguous with the cutout.
       height = topInset
       // Keep the physical notch as the visual anchor, but reserve only the
-      // space needed by Proma's compact status and quota badge on small Macs.
+      // space needed by Gamma's compact status and quota badge on small Macs.
       let availableWidth = max(1, screen.frame.width - IslandLayout.horizontalScreenInset * 2)
       compactWidth = min(availableWidth, max(IslandLayout.compactMinimumWidth, notch + IslandLayout.compactNotchSideReserve))
     } else {
@@ -495,9 +495,9 @@ struct ExpandedIslandView: View {
 
   private var headerEyebrow: String {
     switch primaryPhase {
-    case "needs-interaction": return "PROMA · HANDOFF"
-    case .some: return "PROMA · AGENT"
-    case .none: return "PROMA · REMINDER"
+    case "needs-interaction": return "GAMMA · HANDOFF"
+    case .some: return "GAMMA · AGENT"
+    case .none: return "GAMMA · REMINDER"
     }
   }
 
@@ -550,7 +550,7 @@ struct ExpandedIslandView: View {
             }.buttonStyle(IslandButtonStyle())
             Button(action: { action("open-main", [:]) }) {
               HStack(spacing: 5) {
-                Text("打开 Proma")
+                Text("打开 Gamma")
                 Image(systemName: "arrow.up.right")
               }
               .font(.system(size: 10, weight: .semibold))
@@ -955,7 +955,7 @@ func emitIntent(_ name: String, _ values: [String: Any]) {
 
 @main
 @MainActor
-struct PromaAgentIslandHost {
+struct GammaAgentIslandHost {
   static func main() {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)

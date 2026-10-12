@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { renameIfDestinationAbsentWithRetry } from './fs-retry'
 
 test('renameIfDestinationAbsentWithRetry preserves an existing destination', () => {
-  const root = mkdtempSync(join(tmpdir(), 'proma-fs-retry-'))
+  const root = mkdtempSync(join(tmpdir(), 'gamma-fs-retry-'))
   const source = join(root, 'source')
   const destination = join(root, 'destination')
 

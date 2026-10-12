@@ -6,6 +6,7 @@
  */
 
 import { DEFAULT_SHORTCUTS, SHORTCUT_MAP } from './shortcut-defaults'
+import { shouldPreserveTerminalControlKey } from './terminal-keyboard-policy'
 import type { ShortcutOverrides } from './shortcut-defaults'
 
 // ===== 平台检测 =====
@@ -161,6 +162,25 @@ function rebuildCache(): void {
 function dispatchShortcut(e: KeyboardEvent): void {
   // 忽略输入法组合过程
   if (e.isComposing) return
+  // 文档编辑器先处理原生文本命令，避免 capture 阶段把 Cmd+B 等抢给应用。
+  const inMarkdownEditor = e.target instanceof Element && e.target.closest(
+    '.markdown-workspace-editor .ProseMirror, .markdown-source-editor .cm-editor, .markdown-source-peek textarea',
+  ) !== null
+  const textModifier = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+  const textKey = e.key.toLowerCase()
+  const nativeTextCommand = !e.altKey && textModifier && (
+    (!e.shiftKey && ['a', 'b', 'c', 'f', 'i', 'k', 's', 'u', 'v', 'x', 'y', 'z'].includes(textKey))
+    || (e.shiftKey && ['x', 'z'].includes(textKey))
+  )
+  if (inMarkdownEditor && nativeTextCommand) return
+  if (shouldPreserveTerminalControlKey({
+    key: e.key,
+    ctrlKey: e.ctrlKey,
+    metaKey: e.metaKey,
+    altKey: e.altKey,
+    shiftKey: e.shiftKey,
+    inTerminal: e.target instanceof Element && e.target.closest('.xterm') !== null,
+  })) return
 
   for (const [id, parsed] of parsedCache) {
     if (matchesParsed(e, parsed)) {

@@ -1,4 +1,4 @@
-import type { AgentStreamEvent, AgentStreamPayload, SDKMessage } from '@proma/shared'
+import type { AgentStreamEvent, AgentStreamPayload, SDKMessage } from '@gamma/shared'
 
 export const FOREGROUND_PARTIAL_INTERVAL_MS = 50
 export const BACKGROUND_PARTIAL_INTERVAL_MS = 250

@@ -11,7 +11,7 @@ import type {
   DingTalkBotBridgeState,
   DingTalkTestResult,
   DingTalkBotConfig,
-} from '@proma/shared'
+} from '@gamma/shared'
 import { DingTalkBridge } from './dingtalk-bridge'
 import { getDingTalkMultiBotConfig, getDingTalkBotById } from './dingtalk-config'
 import { getDingTalkBotBindingsPath } from './config-paths'

@@ -7,7 +7,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { X, ExternalLink, ChevronRight, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, MessageCircle, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal, Terminal } from 'lucide-react'
+import { X, ExternalLink, ChevronRight, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, MessageCircle, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal, Terminal, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -29,8 +29,7 @@ import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { ChatView } from '@/components/chat/ChatView'
 import { AgentView } from '@/components/agent/AgentView'
-import { VaultView } from '@/components/vault/VaultView'
-import { OBSIDIAN_NAME, ObsidianIcon } from '@/components/obsidian/obsidian-brand'
+const MarkdownWorkspaceView = React.lazy(() => import('@/components/markdown-workspace/MarkdownWorkspaceView'))
 import {
   currentSessionSidePanelOpenAtom,
   agentFileSourceFilterMapAtom,
@@ -107,7 +106,7 @@ import {
 import { PreviewPanel } from '@/components/diff/PreviewPanel'
 import { clearPreviewContentCacheForFile } from '@/lib/preview-content-cache'
 import { useOpenPreview } from '@/components/diff/preview-opener'
-import type { FileEntry, AgentPendingFile, AgentSessionMeta, SDKMessage, WorktreeInfo } from '@proma/shared'
+import type { FileEntry, AgentPendingFile, AgentSessionMeta, SDKMessage, WorktreeInfo } from '@gamma/shared'
 import { setFilePanelDragData, getMediaTypeFromFilename, dispatchInsertFileMention } from '@/lib/file-panel-drag'
 import { CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT } from '@/lib/right-workspace-events'
 import {
@@ -886,9 +885,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     component !== 'todos' || productivityTools.todosEnabled
   ) && (
     component !== 'calendar' || productivityTools.calendarEnabled
-  ) && (
-    component !== 'vault' || productivityTools.obsidianEnabled
-  ), [productivityTools.calendarEnabled, productivityTools.obsidianEnabled, productivityTools.todosEnabled])
+  ), [productivityTools.calendarEnabled, productivityTools.todosEnabled])
 
   React.useEffect(() => {
     const validTabs = sanitizeWorkspaceComponentTabs(workspaceComponentTabs)
@@ -1211,11 +1208,11 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     const terminalId = crypto.randomUUID()
     setTerminalTabsMap((previous) => {
       const next = new Map(previous)
-      next.set(sessionId, [...(next.get(sessionId) ?? []), { terminalId, title, cwd }])
+      next.set(sessionId, [...(next.get(sessionId) ?? []), { terminalId, title, cwd: cwd ?? sessionPath ?? undefined }])
       return next
     })
     handleWorkspaceTabChange(getTerminalSidePanelTab(terminalId))
-  }, [handleWorkspaceTabChange, sessionId, setTerminalTabsMap])
+  }, [handleWorkspaceTabChange, sessionId, sessionPath, setTerminalTabsMap])
 
   const handleOpenWorktreeTerminal = React.useCallback((worktree: WorktreeInfo) => {
     handleOpenTerminal(worktree.path, `终端 · ${worktree.branch}`)
@@ -1276,7 +1273,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   // WebContentsView 是原生子视图，会盖住 renderer 的 portal。加号菜单打开时，
   // BrowserPanel 为它保留一个固定避让区，而非 setVisible(false)。
   React.useEffect(() => {
-    if (activeTab !== 'todos' && activeTab !== 'calendar' && activeTab !== 'vault') return
+    if (activeTab !== 'todos' && activeTab !== 'calendar') return
     if (!isWorkspaceComponentEnabled(activeTab)) onTabChange('files')
   }, [activeTab, isWorkspaceComponentEnabled, onTabChange])
 
@@ -1292,7 +1289,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
         skills: { label: 'Skills', icon: <Blocks className="size-3.5" /> },
         mcp: { label: 'MCP', icon: <ServerCog className="size-3.5" /> },
         memory: { label: '项目记忆', icon: <Brain className="size-3.5" /> },
-        vault: { label: OBSIDIAN_NAME, icon: <ObsidianIcon className="size-3.5" /> },
+        markdown: { label: 'Markdown', icon: <BookOpen className="size-3.5" /> },
       }
       return { id: component, ...meta[component], closable: true }
     }),
@@ -1635,8 +1632,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       ) : (
         <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">等待项目初始化...</div>
       )
-    ) : paneTab === 'vault' ? (
-      <div className="min-h-0 flex-1 overflow-hidden"><VaultView embedded sessionId={sessionId} /></div>
+    ) : paneTab === 'markdown' ? (
+      <div className="min-h-0 flex-1 overflow-hidden"><React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载 Markdown 工作区…</div>}><MarkdownWorkspaceView key={currentWorkspaceId + ':' + sessionId} workspaceId={currentWorkspaceId ?? undefined} sessionId={sessionId} /></React.Suspense></div>
     ) : paneTab === 'changes' ? (
       sessionPath ? (
         <DiffChangesList
@@ -1799,11 +1796,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
               setWorkspaceComponentTabs((previous) => previous.includes(component) ? previous : [...previous, component])
               handleWorkspaceTabChange(component)
             }}
-            onOpenVault={productivityTools.obsidianEnabled ? () => {
-              setWorkspaceComponentTabs((previous) => previous.includes('vault') ? previous : [...previous, 'vault'])
-              setIsOpen(true)
-              handleWorkspaceTabChange('vault')
-            } : undefined}
             productivityTools={productivityTools}
             visibleTabs={split ? { left: split.leftTab, right: split.rightTab } : undefined}
             focusedPane={split?.focusedPane}

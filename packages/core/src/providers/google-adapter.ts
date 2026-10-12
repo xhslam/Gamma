@@ -20,7 +20,7 @@ import type {
   ToolDefinition,
   ContinuationMessage,
 } from './types.ts'
-import { getGeminiModelCapability, normalizeGeminiThinkingLevel } from '@proma/shared'
+import { getGeminiModelCapability, normalizeGeminiThinkingLevel } from '@gamma/shared'
 import { normalizeBaseUrl } from './url-utils.ts'
 
 // ===== Google 特有类型 =====

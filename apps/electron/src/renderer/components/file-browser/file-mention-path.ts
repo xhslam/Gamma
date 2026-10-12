@@ -1,4 +1,4 @@
-import type { FileIndexEntry } from '@proma/shared'
+import type { FileIndexEntry } from '@gamma/shared'
 
 type MentionSelection = Pick<FileIndexEntry, 'path' | 'source'>
 

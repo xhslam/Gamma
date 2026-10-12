@@ -1,8 +1,8 @@
 {
-  "name": "@proma/ui",
-  "version": "0.1.10",
+  "name": "@gamma/ui",
+  "version": "0.1.11",
   "license": "AGPL-3.0-only",
-  "description": "Shared UI components for proma",
+  "description": "Shared UI components for gamma",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -22,7 +22,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@proma/core": "workspace:*",
+    "@gamma/core": "workspace:*",
     "beautiful-mermaid": "1.1.3",
     "mermaid": "11.15.0",
     "shiki": "^3.22.0"

@@ -11,7 +11,7 @@ let dingtalkConfig: DingTalkConfigModule
 let configPaths: ConfigPathsModule
 let tempHome: string
 const originalHome = process.env.HOME
-const originalPromaDev = process.env.PROMA_DEV
+const originalGammaDev = process.env.GAMMA_DEV
 
 mock.module('electron', () => ({
   app: {
@@ -31,16 +31,16 @@ mock.module('node:os', () => ({
 }))
 
 beforeAll(async () => {
-  tempHome = mkdtempSync(join(os.tmpdir(), 'proma-dingtalk-config-'))
+  tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-dingtalk-config-'))
   process.env.HOME = tempHome
-  process.env.PROMA_DEV = '0'
+  process.env.GAMMA_DEV = '0'
   configPaths = await import('./config-paths')
   dingtalkConfig = await import('./dingtalk-config')
 })
 
 beforeEach(() => {
-  rmSync(join(tempHome, '.proma'), { recursive: true, force: true })
-  mkdirSync(join(tempHome, '.proma'), { recursive: true })
+  rmSync(join(tempHome, '.gamma'), { recursive: true, force: true })
+  mkdirSync(join(tempHome, '.gamma'), { recursive: true })
 })
 
 afterAll(() => {
@@ -49,10 +49,10 @@ afterAll(() => {
   } else {
     process.env.HOME = originalHome
   }
-  if (originalPromaDev === undefined) {
-    delete process.env.PROMA_DEV
+  if (originalGammaDev === undefined) {
+    delete process.env.GAMMA_DEV
   } else {
-    process.env.PROMA_DEV = originalPromaDev
+    process.env.GAMMA_DEV = originalGammaDev
   }
   rmSync(tempHome, { recursive: true, force: true })
 })

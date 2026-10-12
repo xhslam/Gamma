@@ -1,4 +1,4 @@
-import type { SlackAppManifestResult } from '@proma/shared'
+import type { SlackAppManifestResult } from '@gamma/shared'
 
 export interface SlackManifestOptions {
   botName?: string
@@ -7,11 +7,11 @@ export interface SlackManifestOptions {
 
 /** 生成可直接粘贴到 Slack「From an app manifest」流程的频道 Socket Mode Manifest。 */
 export function buildSlackManifest(options: SlackManifestOptions = {}): SlackAppManifestResult {
-  const botName = options.botName?.trim() || 'Proma'
+  const botName = options.botName?.trim() || 'Gamma'
   const manifest: Record<string, unknown> = {
     display_information: {
       name: botName,
-      description: options.description?.trim() || 'Your local-first Proma Agent on Slack',
+      description: options.description?.trim() || 'Your local-first Gamma Agent on Slack',
       background_color: '#171717',
     },
     features: {

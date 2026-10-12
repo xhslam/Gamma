@@ -67,7 +67,7 @@ Expected: PASS.
 
 **Step 1: Bump package patch version**
 
-Change `@proma/electron` from `0.19.6` to `0.19.7` per repository policy.
+Change `@gamma/electron` from `0.19.6` to `0.19.7` per repository policy.
 
 **Step 2: Run focused tests**
 

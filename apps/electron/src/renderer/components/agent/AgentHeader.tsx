@@ -6,8 +6,8 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { Check, ChevronDown, PanelRight, Pencil, Split, X } from 'lucide-react'
-import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
+import { Check, ChevronDown, PanelLeft, PanelRight, Pencil, Split, X } from 'lucide-react'
+import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, agentSidePanelLayoutAtomFamily, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
 import { tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { cn } from '@/lib/utils'
@@ -31,6 +31,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
+  const workspaceSide = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)).workspaceSide === 'left' ? 'left' : 'right'
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -182,9 +183,10 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           type="button"
           onClick={() => setRightPanelOpen(true)}
           className="titlebar-no-drag ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-          aria-label="展开右侧工作区"
+          aria-label={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
+          title={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
         >
-          <PanelRight className="size-4" />
+          {workspaceSide === 'left' ? <PanelLeft className="size-4" /> : <PanelRight className="size-4" />}
         </button>
       )}
     </div>

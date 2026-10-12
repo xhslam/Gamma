@@ -1,7 +1,7 @@
 /**
  * 语音输入会话路由
  *
- * Proma 前台时，听写状态内嵌在底部输入工具栏。
+ * Gamma 前台时，听写状态内嵌在底部输入工具栏。
  * 外部应用前台时，显示无焦点、无转写文本的轻量状态条，避免用户失去听写反馈。
  */
 
@@ -15,7 +15,7 @@ import {
   captureVoiceDictationTarget,
   releaseVoiceDictationOutputContext,
 } from './text-output-service'
-import { getMainWindow } from '../index'
+import { getMainWindow } from './main-window-store'
 
 const INDICATOR_WIDTH = 360
 const INDICATOR_HEIGHT = 110
@@ -32,12 +32,12 @@ let activeOutputContextId: string | null = null
 let voiceIndicatorWindow: BrowserWindow | null = null
 
 interface VoiceDictationToggleOptions {
-  targetIsProma?: boolean
+  targetIsGamma?: boolean
   sourceInputId?: string
 }
 
 /**
- * 保留原导出以兼容启动流程；Proma 内部听写不再创建独立窗口。
+ * 保留原导出以兼容启动流程；Gamma 内部听写不再创建独立窗口。
  */
 export function createVoiceDictationWindow(): void {
   const mainWindow = getMainWindow()
@@ -68,20 +68,20 @@ export function toggleVoiceDictationWindow(options: VoiceDictationToggleOptions 
     return
   }
 
-  const targetIsProma = captureVoiceDictationTarget(options.targetIsProma)
+  const targetIsGamma = captureVoiceDictationTarget(options.targetIsGamma)
   const outputMode = getSettings().voiceDictation?.outputMode ?? 'auto'
-  const routeToPromaInput = shouldRouteVoiceDictationToPromaInput(targetIsProma, outputMode)
+  const routeToGammaInput = shouldRouteVoiceDictationToGammaInput(targetIsGamma, outputMode)
   const outputContextId = randomUUID()
-  beginVoiceDictationOutputContext(outputContextId, { routeToPromaInput, outputMode })
+  beginVoiceDictationOutputContext(outputContextId, { routeToGammaInput, outputMode })
   activeOutputContextId = outputContextId
   voiceDictationState = 'active'
-  usesExternalIndicator = !targetIsProma
+  usesExternalIndicator = !targetIsGamma
   indicatorState = 'preparing'
   indicatorVolume = 0
   indicatorTranscript = ''
   if (usesExternalIndicator) showVoiceIndicator()
   const shownEvent: VoiceDictationShownEvent = {
-    routeToPromaInput,
+    routeToGammaInput,
     outputContextId,
     sourceInputId: options.sourceInputId,
   }
@@ -136,11 +136,11 @@ function isVoiceDictationEnabled(): boolean {
   return getSettings().voiceDictation?.enabled === true
 }
 
-function shouldRouteVoiceDictationToPromaInput(
-  targetIsProma: boolean,
+function shouldRouteVoiceDictationToGammaInput(
+  targetIsGamma: boolean,
   outputMode: VoiceDictationOutputMode,
 ): boolean {
-  return outputMode === 'proma-input' || (outputMode === 'auto' && targetIsProma)
+  return outputMode === 'gamma-input' || (outputMode === 'auto' && targetIsGamma)
 }
 
 function showVoiceIndicator(): void {

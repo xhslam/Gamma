@@ -20,7 +20,7 @@ import {
   conversationParallelModeAtom,
 } from '@/atoms/chat-atoms'
 import type { SelectedModel, ContextLengthValue } from '@/atoms/chat-atoms'
-import type { GeminiThinkingLevel } from '@proma/shared'
+import type { GeminiThinkingLevel } from '@gamma/shared'
 import {
   selectedPromptIdAtom,
   conversationPromptIdAtom,

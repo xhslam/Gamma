@@ -417,7 +417,7 @@ export function LiveMarkdownTableEditor({
   }
 
   return (
-    <div className="vault-markdown-table live-markdown-table-editor">
+    <div className="live-markdown-table-editor">
       {!readOnly && <div className="live-markdown-table-editor-hint" aria-hidden="true">点击编辑、右键操作更多</div>}
       <table aria-label="Markdown 表格">
         <thead><tr>{table.header.map((_, column) => renderCell(0, column, true))}</tr></thead>

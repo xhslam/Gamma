@@ -29,7 +29,7 @@ interface AgentHistoryQuoteMarkerPayload {
   turn?: number
 }
 
-/** 可嵌入输入框、支持多条的通用选区引用 payload（文件或 Vault 选区）。 */
+/** 可嵌入输入框、支持多条的通用选区引用 payload（文件选区）。 */
 interface InlineQuotedSelectionPayload {
   version: 2
   text: string
@@ -168,7 +168,7 @@ export function serializeAgentHistoryQuoteMention(quote: QuotedSelection): strin
   return `${AGENT_HISTORY_QUOTE_MENTION_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`
 }
 
-/** 将文件/Vault 选区编码为与历史引用同款的内联 chip marker，可在一条草稿中累积多次。 */
+/** 将文件选区编码为与历史引用同款的内联 chip marker，可在一条草稿中累积多次。 */
 export function serializeQuotedSelectionMention(quote: QuotedSelection): string | null {
   if (!isNonEmptyString(quote.text) || !isNonEmptyString(quote.filePath)) return null
   if (quote.sourceType === 'agent-history') return serializeAgentHistoryQuoteMention(quote)

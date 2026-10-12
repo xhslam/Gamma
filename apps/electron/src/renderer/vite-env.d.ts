@@ -40,15 +40,16 @@ interface UpdaterAPI {
   cancelIdleInstall: () => Promise<void>
 }
 
-interface PromaPerformanceDiagnostics {
+interface GammaPerformanceDiagnostics {
   snapshot: () => import('./lib/performance-monitor').PerformanceSnapshot
   clear: () => void
 }
 
 // 附件临时 base64 缓存（用于发送前暂存数据）
+// MarkdownWorkspace 的类型来自 preload 的 ElectronAPI；renderer 不增加直接文件写入口。
 interface Window {
   __pendingAttachmentData?: Map<string, string>
   __pendingAgentFileData?: Map<string, string>
-  /** 仅在 ?perf=1 或 proma-performance-debug=1 时安装的性能诊断接口。 */
-  __promaPerformance?: PromaPerformanceDiagnostics
+  /** 仅在 ?perf=1 或 gamma-performance-debug=1 时安装的性能诊断接口。 */
+  __gammaPerformance?: GammaPerformanceDiagnostics
 }

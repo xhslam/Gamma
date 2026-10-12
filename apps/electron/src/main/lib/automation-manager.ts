@@ -2,7 +2,7 @@
  * 定时任务（Automation）管理器
  *
  * 负责定时任务的 CRUD 与运行历史持久化。
- * - 索引文件：~/.proma/automations.json
+ * - 索引文件：~/.gamma/automations.json
  *
  * 照搬 agent-session-manager.ts 的原子写模式（safe-file）。
  * 调度逻辑见 automation-scheduler.ts，本文件只管数据。
@@ -18,7 +18,7 @@ import {
   type AutomationRun,
   type CreateAutomationInput,
   type UpdateAutomationInput,
-} from '@proma/shared'
+} from '@gamma/shared'
 
 /** 索引文件格式 */
 interface AutomationsIndex {
@@ -111,7 +111,7 @@ function readIndex(): AutomationsIndex {
     return cachedIndex
   }
   if (data.version > INDEX_VERSION) {
-    // 数据由更高版本的 Proma 写入（用户回滚到旧版的场景）。保留原始 automations 数组只读返回，
+    // 数据由更高版本的 Gamma 写入（用户回滚到旧版的场景）。保留原始 automations 数组只读返回，
     // 避免下次 writeIndex 用空数据覆盖磁盘导致永久丢失任务配置和运行历史。
     console.warn(
       `[定时任务] 索引文件版本 ${data.version} 高于当前构建（${INDEX_VERSION}），将以原数据加载，` +

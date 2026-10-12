@@ -33,7 +33,7 @@ import { useConversationIdOptional } from '@/contexts/session-context'
 import { inputToolbarControlHeightClass } from '@/components/ai-elements/input-toolbar-styles'
 import { getModelLogo, getChannelLogo, DefaultLogo } from '@/lib/model-logo'
 import { cn } from '@/lib/utils'
-import type { Channel, ModelOption, ProviderType } from '@proma/shared'
+import type { Channel, ModelOption, ProviderType } from '@gamma/shared'
 import { ChannelPlanQuotaBadge } from './ChannelPlanQuotaBadge'
 import { getModelSelectorOptionVisualState } from './model-selector-visual-state'
 

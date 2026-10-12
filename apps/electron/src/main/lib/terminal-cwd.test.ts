@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { requireTerminalCwd, resolveTerminalCwd } from './terminal-cwd'
 
 test('resolveTerminalCwd preserves an existing directory', () => {
-  const root = mkdtempSync(join(tmpdir(), 'proma-terminal-cwd-'))
+  const root = mkdtempSync(join(tmpdir(), 'gamma-terminal-cwd-'))
 
   try {
     expect(resolveTerminalCwd(root, 'fallback')).toBe(root)
@@ -15,7 +15,7 @@ test('resolveTerminalCwd preserves an existing directory', () => {
 })
 
 test('resolveTerminalCwd falls back when the requested path is missing or a file', () => {
-  const root = mkdtempSync(join(tmpdir(), 'proma-terminal-cwd-'))
+  const root = mkdtempSync(join(tmpdir(), 'gamma-terminal-cwd-'))
   const fallback = join(root, 'fallback')
   const file = join(root, 'file')
 
@@ -30,7 +30,7 @@ test('resolveTerminalCwd falls back when the requested path is missing or a file
 })
 
 test('requireTerminalCwd rejects missing and non-directory Agent cwd values', () => {
-  const root = mkdtempSync(join(tmpdir(), 'proma-terminal-cwd-'))
+  const root = mkdtempSync(join(tmpdir(), 'gamma-terminal-cwd-'))
   const file = join(root, 'file')
 
   try {

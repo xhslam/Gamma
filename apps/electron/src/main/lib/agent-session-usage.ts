@@ -5,7 +5,7 @@
  * 同一自然日内即便上次运行成功，如果上下文已经接近窗口上限，
  * 继续往里塞会导致本次运行刚开始就触发 SDK 自动压缩，得不偿失。
  *
- * 数据来源：~/.proma/agent-sessions/{id}.jsonl 里最后一条带 usage 的消息。
+ * 数据来源：~/.gamma/agent-sessions/{id}.jsonl 里最后一条带 usage 的消息。
  * 优先级：
  * 1. SDK result 消息（subtype=success/error_*）：usage + modelUsage[?].contextWindow
  * 2. SDK assistant 消息：message.usage + 按 message.model 推断 contextWindow
@@ -20,8 +20,8 @@
  * 避免对整份会话 JSONL 全量 JSON.parse（高频 daily 任务一天可触发数百次）。
  */
 
-import { calculateContextUsageRatio, inferContextWindow } from '@proma/shared'
-import type { SDKAssistantMessage, SDKResultMessage } from '@proma/shared'
+import { calculateContextUsageRatio, inferContextWindow } from '@gamma/shared'
+import type { SDKAssistantMessage, SDKResultMessage } from '@gamma/shared'
 import { existsSync, readFileSync } from 'node:fs'
 import { getAgentSessionMessagesPath } from './config-paths'
 

@@ -1,6 +1,13 @@
 export const RIGHT_PANEL_MAX_VIEWPORT_RATIO = 3 / 5
 export const MIN_MAIN_AREA_WIDTH = 320
 
+export type WorkspaceSide = 'left' | 'right'
+
+/** 宽度属于工作区：左侧工作区的右边界向右拖动时变宽，右侧则相反。 */
+export function getWorkspaceResizeWidth(width: number, startX: number, clientX: number, side: WorkspaceSide): number {
+  return width + (clientX - startX) * (side === 'left' ? 1 : -1)
+}
+
 export function getRightPanelMaxWidth(
   viewportWidth: number,
   leftSidebarOccupiedWidth: number,

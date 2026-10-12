@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Brain } from 'lucide-react'
-import { getGeminiModelCapability, type GeminiThinkingLevel } from '@proma/shared'
+import { getGeminiModelCapability, type GeminiThinkingLevel } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'

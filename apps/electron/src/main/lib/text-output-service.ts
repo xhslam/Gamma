@@ -1,7 +1,7 @@
 /**
  * 文本输出服务
  *
- * 语音输入完成后优先写入 Proma 输入框，否则尝试写入当前光标位置。
+ * 语音输入完成后优先写入 Gamma 输入框，否则尝试写入当前光标位置。
  */
 
 import { BrowserWindow, clipboard } from 'electron'
@@ -14,23 +14,23 @@ import type {
   VoiceDictationSettings,
   VoiceDictationTextEvent,
 } from '../../types'
-import { getMainWindow } from '../index'
+import { getMainWindow } from './main-window-store'
 import { pasteTextAtCurrentCursor } from './text-insertion-service'
 import { VoiceDictationOutputContextStore } from './voice-dictation-output-context'
 import { VoiceDictationTextDeliveryTracker } from './voice-dictation-text-delivery'
 
-let targetWasPromaInput = false
+let targetWasGammaInput = false
 let activePreviewSessionId: string | null = null
 let closedPreviewSessionId: string | null = null
 const voiceDictationOutputContexts = new VoiceDictationOutputContextStore()
 const voiceDictationTextDeliveries = new VoiceDictationTextDeliveryTracker()
 const TEXT_DELIVERY_ACK_TIMEOUT_MS = 750
 
-/** 在显示语音浮窗前记录目标是否为 Proma 主窗口。 */
-export function captureVoiceDictationTarget(forcePromaInput?: boolean): boolean {
+/** 在显示语音浮窗前记录目标是否为 Gamma 主窗口。 */
+export function captureVoiceDictationTarget(forceGammaInput?: boolean): boolean {
   const mainWindow = getMainWindow()
-  targetWasPromaInput = forcePromaInput ?? BrowserWindow.getFocusedWindow() === mainWindow
-  return targetWasPromaInput
+  targetWasGammaInput = forceGammaInput ?? BrowserWindow.getFocusedWindow() === mainWindow
+  return targetWasGammaInput
 }
 
 /** 在主进程创建本次听写的冻结输出上下文。 */
@@ -46,9 +46,9 @@ export function releaseVoiceDictationOutputContext(contextId?: string): void {
   voiceDictationOutputContexts.release(contextId)
 }
 
-function shouldWriteToPromaInput(settings: VoiceDictationSettings): boolean {
-  return settings.outputMode === 'proma-input' ||
-    (settings.outputMode === 'auto' && targetWasPromaInput)
+function shouldWriteToGammaInput(settings: VoiceDictationSettings): boolean {
+  return settings.outputMode === 'gamma-input' ||
+    (settings.outputMode === 'auto' && targetWasGammaInput)
 }
 
 function resolveVoiceDictationOutputContext(
@@ -59,7 +59,7 @@ function resolveVoiceDictationOutputContext(
 
   // 兼容尚未携带输出上下文 ID 的旧渲染进程。
   return {
-    routeToPromaInput: shouldWriteToPromaInput(settings),
+    routeToGammaInput: shouldWriteToGammaInput(settings),
     outputMode: settings.outputMode,
   }
 }
@@ -85,7 +85,7 @@ export function acknowledgeVoiceDictationTextDelivery(sessionId: string, deliver
 }
 
 /**
- * 将 ASR 的最新完整结果预览到 Proma 输入框。
+ * 将 ASR 的最新完整结果预览到 Gamma 输入框。
  * 外部应用只在结束时一次性写入，避免连续粘贴打断用户输入。
  */
 export function previewVoiceDictationText(
@@ -94,7 +94,7 @@ export function previewVoiceDictationText(
 ): void {
   const text = input.text.trim()
   const outputContext = resolveVoiceDictationOutputContext(input.outputContextId, settings)
-  if (!text || !outputContext?.routeToPromaInput) return
+  if (!text || !outputContext?.routeToGammaInput) return
   if (input.sessionId === closedPreviewSessionId) return
   if (activePreviewSessionId && activePreviewSessionId !== input.sessionId) return
   activePreviewSessionId = input.sessionId
@@ -105,7 +105,7 @@ export function previewVoiceDictationText(
   })
 }
 
-/** 取消录音时撤销尚未提交到 Proma 输入框的临时组合文本。 */
+/** 取消录音时撤销尚未提交到 Gamma 输入框的临时组合文本。 */
 export function clearVoiceDictationPreview(
   sessionId: string,
   targetInputId?: string | null,
@@ -137,8 +137,8 @@ export async function commitVoiceDictationText(
     }
 
     const hasActivePreview = activePreviewSessionId === input.sessionId
-    const shouldSendToPromaInput = hasActivePreview || outputContext.routeToPromaInput
-    if (shouldSendToPromaInput) {
+    const shouldSendToGammaInput = hasActivePreview || outputContext.routeToGammaInput
+    if (shouldSendToGammaInput) {
       const delivered = await sendTextEventAndAwaitDelivery({
         sessionId: input.sessionId,
         text: trimmed,
@@ -150,11 +150,11 @@ export async function commitVoiceDictationText(
         return { mode: 'clipboard', success: false, message: '听写会话已取消，未输出文本' }
       }
       if (delivered) {
-        return { mode: 'proma-input', success: true, message: '已写入 Proma 输入框' }
+        return { mode: 'gamma-input', success: true, message: '已写入 Gamma 输入框' }
       }
 
       clipboard.writeText(trimmed)
-      return { mode: 'clipboard', success: true, message: 'Proma 输入框未确认接收，已复制到剪贴板' }
+      return { mode: 'clipboard', success: true, message: 'Gamma 输入框未确认接收，已复制到剪贴板' }
     }
 
     if (outputContext.outputMode === 'auto') {

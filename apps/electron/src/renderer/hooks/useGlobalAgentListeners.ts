@@ -80,8 +80,8 @@ import {
 } from '@/atoms/preview-atoms'
 import type { NotificationSoundType } from '@/types/settings'
 import { toast } from 'sonner'
-import type { AgentStreamEvent, AgentStreamCompletePayload, AgentEvent, AgentStreamPayload, AgentAssistantDelta, AgentAssistantDeltaPayload, AgentStreamErrorPayload, SDKAssistantMessage, SDKMessage, SDKUserMessage, SDKSystemMessage, PromaEvent, AgentSessionMeta, ProviderType, SDKContentBlock, SDKUserContentBlock } from '@proma/shared'
-import { inferContextWindow } from '@proma/shared'
+import type { AgentStreamEvent, AgentStreamCompletePayload, AgentEvent, AgentStreamPayload, AgentAssistantDelta, AgentAssistantDeltaPayload, AgentStreamErrorPayload, SDKAssistantMessage, SDKMessage, SDKUserMessage, SDKSystemMessage, GammaEvent, AgentSessionMeta, ProviderType, SDKContentBlock, SDKUserContentBlock } from '@gamma/shared'
+import { inferContextWindow } from '@gamma/shared'
 import {
   buildExternalAgentRunActivation,
   createExternalAgentRunUserMessage,
@@ -259,7 +259,7 @@ function payloadToLegacyEvents(payload: AgentStreamPayload): AgentEvent[] {
   // sdk_delta 的文本和 thinking 已直接写入 liveMessages；只保留工具启动控制状态，
   // 避免每个 token 都触发第二份 AgentStreamState 更新和渲染路径。
   if (payload.kind === 'sdk_delta') return payload.delta.deltas.flatMap(deltaToLegacyControlEvents)
-  if (payload.kind === 'proma_event') {
+  if (payload.kind === 'gamma_event') {
     const evt = payload.event
     switch (evt.type) {
       case 'permission_request':
@@ -652,7 +652,7 @@ export function useGlobalAgentListeners(): void {
             message: { content: [{ type: "text", text: status.rawUserMessage ?? status.userMessage }] },
             parent_tool_use_id: null,
             _createdAt: status.startedAt,
-            _promaLiveRunStartedAt: status.startedAt,
+            _gammaLiveRunStartedAt: status.startedAt,
           } as unknown as SDKMessage
           const map = new Map(prev)
           map.set(status.sessionId, [...current, optimisticMessage])
@@ -688,7 +688,7 @@ export function useGlobalAgentListeners(): void {
       return sessions.find((s) => s.id === sessionId)?.title ?? '未命名会话'
     }
 
-    const activateExternalAgentRun = (event: Extract<PromaEvent, { type: 'external_run_started' }>): void => {
+    const activateExternalAgentRun = (event: Extract<GammaEvent, { type: 'external_run_started' }>): void => {
       const applyActivation = (sessions: AgentSessionMeta[]): void => {
         const currentStreamState = store.get(agentStreamingStatesAtom).get(event.sessionId)
         if (!shouldActivateExternalAgentRun(currentStreamState, event.startedAt, event.runGeneration)) {
@@ -934,7 +934,7 @@ export function useGlobalAgentListeners(): void {
       })
     }
 
-    const openPlanDocumentPreview = (sessionId: string, planDocument: NonNullable<import('@proma/shared').ExitPlanModeRequest['planDocument']>): void => {
+    const openPlanDocumentPreview = (sessionId: string, planDocument: NonNullable<import('@gamma/shared').ExitPlanModeRequest['planDocument']>): void => {
       const planPreview: PreviewFile = {
         filePath: planDocument.filePath,
         previewOnly: true,
@@ -967,7 +967,7 @@ export function useGlobalAgentListeners(): void {
       })
     }
 
-    const queueExitPlanRequest = (request: import('@proma/shared').ExitPlanModeRequest): boolean => {
+    const queueExitPlanRequest = (request: import('@gamma/shared').ExitPlanModeRequest): boolean => {
       if (resolvedExitPlanRequestIds.has(request.requestId)) return false
       let inserted = false
       store.set(allPendingExitPlanRequestsAtom, (prev) => {
@@ -1193,11 +1193,11 @@ export function useGlobalAgentListeners(): void {
 
         unstable_batchedUpdates(() => {
 
-        if (payload.kind === 'proma_event' && payload.event.type === 'external_run_started') {
+        if (payload.kind === 'gamma_event' && payload.event.type === 'external_run_started') {
           activateExternalAgentRun(payload.event)
         }
 
-        const runStartedEvent = payload.kind === 'proma_event' && payload.event.type === 'run_started'
+        const runStartedEvent = payload.kind === 'gamma_event' && payload.event.type === 'run_started'
           ? payload.event
           : null
         if (runStartedEvent) {
@@ -1239,7 +1239,7 @@ export function useGlobalAgentListeners(): void {
         }
 
         // 自动任务会话被用户接管（毕业）：向用户提示，后续定时运行将新建独立会话
-        if (payload.kind === 'proma_event' && payload.event.type === 'automation_graduated') {
+        if (payload.kind === 'gamma_event' && payload.event.type === 'automation_graduated') {
           toast('已接管自动任务会话，后续定时运行将创建新会话。', { duration: 3000 })
           window.electronAPI.listAgentSessions()
             .then((sessions) => store.set(agentSessionsAtom, (prev) => mergeFetchedAgentSessions(prev, sessions)))
@@ -1277,21 +1277,21 @@ export function useGlobalAgentListeners(): void {
             const existingIndex = current.findIndex((message) => {
               const record = message as unknown as Record<string, unknown>
               if (record.uuid !== deltaPayload.uuid) return false
-              return deltaRunStartedAt == null || record._promaLiveRunStartedAt === deltaRunStartedAt
+              return deltaRunStartedAt == null || record._gammaLiveRunStartedAt === deltaRunStartedAt
             })
             const existing = existingIndex >= 0 && current[existingIndex]?.type === 'assistant'
               ? current[existingIndex] as SDKAssistantMessage
               : createAssistantDeltaPreview(deltaPayload, {
                 ...(modelId ? { _channelModelId: modelId } : {}),
                 ...(provider ? { _channelProvider: provider } : {}),
-                ...(deltaRunStartedAt != null ? { _promaLiveRunStartedAt: deltaRunStartedAt } : {}),
+                ...(deltaRunStartedAt != null ? { _gammaLiveRunStartedAt: deltaRunStartedAt } : {}),
               })
             const nextMessage = applyAssistantDeltasToPreview(existing, deltaPayload.deltas)
             // live-group-set 依赖 run 标记区分当前队列轮次；Delta 预览也必须携带它，
             // 否则 transcript 已有 assistant，但会被误判为非 live 并额外渲染 smooth fallback。
             const markedMessage = deltaRunStartedAt != null
-              && (nextMessage as unknown as Record<string, unknown>)._promaLiveRunStartedAt !== deltaRunStartedAt
-              ? { ...nextMessage, _promaLiveRunStartedAt: deltaRunStartedAt } as SDKAssistantMessage
+              && (nextMessage as unknown as Record<string, unknown>)._gammaLiveRunStartedAt !== deltaRunStartedAt
+              ? { ...nextMessage, _gammaLiveRunStartedAt: deltaRunStartedAt } as SDKAssistantMessage
               : nextMessage
             if (existingIndex >= 0) {
               const next = [...current]
@@ -1320,8 +1320,8 @@ export function useGlobalAgentListeners(): void {
         if (payload.kind === 'sdk_message') {
           const msgRecord = payload.message as Record<string, unknown>
           const currentRun = store.get(agentSessionStreamingStateAtomFamily(sessionId))
-          const messageRunGeneration = msgRecord._promaLiveRunGeneration
-          const messageRunStartedAt = msgRecord._promaLiveRunStartedAt
+          const messageRunGeneration = msgRecord._gammaLiveRunGeneration
+          const messageRunStartedAt = msgRecord._gammaLiveRunStartedAt
           // 与 Delta 相同地隔离运行代际。旧 run 的 SDK 消息可能在用户快速续跑后迟到，
           // 若直接写进 liveMessages，会把此前的 TaskUpdate 误显示在新任务中。
           if (
@@ -1363,9 +1363,9 @@ export function useGlobalAgentListeners(): void {
 
             // 队列自动派发会在上一轮实时消息尚未落盘刷新时开始下一轮。
             // 标记每条实时消息所属 run，渲染层即可把上一轮立即视为完成并自动收起过程块。
-            if (activeRunStartedAt != null && typeof msgRecord._promaLiveRunStartedAt !== 'number') {
+            if (activeRunStartedAt != null && typeof msgRecord._gammaLiveRunStartedAt !== 'number') {
               // 旧 EventBus 协议没有携带 run 标记时保留兼容；新协议已在主进程打标，不能覆盖。
-              msgRecord._promaLiveRunStartedAt = activeRunStartedAt
+              msgRecord._gammaLiveRunStartedAt = activeRunStartedAt
             }
 
             // 为 assistant 消息注入渠道信息，确保流式期间就绑定正确模型与 Agent SDK 窗口
@@ -1675,7 +1675,7 @@ export function useGlobalAgentListeners(): void {
           } else if (event.type === 'permission_mode_changed') {
             // 权限模式变更（如 Plan 模式退出后切换到完全自动）
             console.log(`[GlobalAgentListeners] 权限模式变更: ${event.mode}`)
-            store.set(agentPermissionModeMapAtom, (prev: Map<string, import('@proma/shared').PromaPermissionMode>) => {
+            store.set(agentPermissionModeMapAtom, (prev: Map<string, import('@gamma/shared').GammaPermissionMode>) => {
               const next = new Map(prev)
               next.set(sessionId, event.mode)
               return next

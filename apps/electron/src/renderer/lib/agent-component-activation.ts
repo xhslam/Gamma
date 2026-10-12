@@ -28,7 +28,7 @@ const PLANNING_GROUP_MUTATION_TOOLS = new Set([
 const PLANNING_REMINDER_CREATE_TOOL = 'mcp__planning__create_reminder'
 /** 仅受控 MCP 管理工具可触发展示；任意 mcp.json 文件写入仍不抢占用户工作区。 */
 const MCP_MANAGEMENT_MUTATION_TOOLS = new Set([
-  'proma_workspace_configure_mcp_server',
+  'gamma_workspace_configure_mcp_server',
 ])
 const FILE_MUTATION_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 const BASH_MUTATION_PATTERN = /(?:^|[;&|]\s*|\s)(?:rm|mv|mkdir|cp|touch|tee|sed\s+-i)\b|(?:>|>>)/

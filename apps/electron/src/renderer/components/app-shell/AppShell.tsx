@@ -10,17 +10,19 @@ import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { LeftSidebar } from './LeftSidebar'
 import { RightSidePanel } from './RightSidePanel'
+import { WorkspacePanels } from './WorkspacePanels'
 import { MainArea } from '@/components/tabs/MainArea'
 import { appModeAtom } from '@/atoms/app-mode'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
-import { clampRightPanelWidth, getRightPanelMaxWidth } from './right-panel-layout'
+import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { productivityToolsAtom } from '@/atoms/ui-preferences'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { WorkspaceMemoryChangeObserver } from '@/components/agent-skills/WorkspaceMemoryChangeObserver'
+import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleObserver'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
@@ -94,12 +96,9 @@ export function AppShell(): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
   const productivityTools = useAtomValue(productivityToolsAtom)
   React.useEffect(() => {
-    if (!productivityTools.obsidianEnabled && activeView === 'vault') setActiveView('conversations')
-
     const isEnabled = (tab: string): boolean => (
       (tab !== 'todos' || productivityTools.todosEnabled)
       && (tab !== 'calendar' || productivityTools.calendarEnabled)
-      && (tab !== 'vault' || productivityTools.obsidianEnabled)
     )
     setAgentSessionComponentOpenMap((previous) => {
       let changed = false
@@ -121,8 +120,8 @@ export function AppShell(): React.ReactElement {
       }
       return changed ? next : previous
     })
-  }, [activeView, productivityTools.calendarEnabled, productivityTools.obsidianEnabled, productivityTools.todosEnabled, setActiveView, setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
-  const showRightPanel = appMode === 'agent' && !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills'
+  }, [activeView, productivityTools.calendarEnabled, productivityTools.todosEnabled, setActiveView, setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
+  const showRightPanel = appMode === 'agent' && !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown'
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 左侧边栏可拖拽宽度
@@ -187,6 +186,7 @@ export function AppShell(): React.ReactElement {
   const setFileBrowserScrollTopMap = useSetAtom(fileBrowserScrollTopMapAtom)
   const setRightPanelSplitMap = useSetAtom(agentSidePanelSplitMapAtom)
   const [rightPanelLayout, setRightPanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
+  const workspaceSide = rightPanelLayout.workspaceSide === 'left' ? 'left' : 'right'
   const [viewportWidth, setViewportWidth] = React.useState(() => window.innerWidth)
   const dragging = React.useRef(false)
   const currentSessionIdRef = React.useRef(currentSessionId)
@@ -239,7 +239,7 @@ export function AppShell(): React.ReactElement {
 
   React.useEffect(() => {
     return () => rightPanelDragCleanup.current?.()
-  }, [currentSessionId])
+  }, [currentSessionId, workspaceSide])
 
   React.useEffect(() => {
     setRightPanelLayouts((previous) => pruneAgentSidePanelLayouts(previous, agentSessions, currentSessionId ?? undefined))
@@ -290,7 +290,7 @@ export function AppShell(): React.ReactElement {
     let cancelDrag: () => void
 
     const applyWidth = () => {
-      const requestedWidth = startWidth + startX - latestClientX
+      const requestedWidth = getWorkspaceResizeWidth(startWidth, startX, latestClientX, workspaceSide)
       const normalMaximumWidth = getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth)
       const shouldCollapseSidebar = canAutoCollapseSidebarForRightPanel && requestedWidth > normalMaximumWidth
       const nextSidebarCollapsed = sidebarCollapsedDuringDrag || shouldCollapseSidebar
@@ -353,7 +353,23 @@ export function AppShell(): React.ReactElement {
     rightPanelDragCleanup.current = cancelDrag
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
-  }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, clampedLeftSidebarWidth, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelLayout.hasOpenedWideWorkspace, rightPanelMinimumWidth, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth])
+  }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, clampedLeftSidebarWidth, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelLayout.hasOpenedWideWorkspace, rightPanelMinimumWidth, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth, workspaceSide])
+
+  const rightPanelMaximumWidth = getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
+  const handleResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!currentSessionId || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const step = event.shiftKey ? 48 : 24
+    const requestedWidth = event.key === 'Home'
+      ? rightPanelMinimumWidth
+      : event.key === 'End'
+        ? rightPanelMaximumWidth
+        : getWorkspaceResizeWidth(displayedRightPanelWidth, 0, event.key === 'ArrowLeft' ? -step : step, workspaceSide)
+    const width = clampRightPanelWidth(requestedWidth, viewportWidth, rightPanelMinimumWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
+    setRightPanelLayout(previous => usesWidePanelLayout || isExpandedRightWorkspace
+      ? { ...previous, widePanelWidthOverride: width }
+      : { ...previous, width })
+  }, [canUseCollapsedSidebarSpace, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelMaximumWidth, rightPanelMinimumWidth, setRightPanelLayout, usesWidePanelLayout, viewportWidth, workspaceSide])
 
   return (
     <>
@@ -379,33 +395,23 @@ export function AppShell(): React.ReactElement {
             </div>
             <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
 
-            {/* 中间容器：relative z-[60] 使其在 z-50 拖动区域之上 */}
-            <div className="flex-1 min-w-0 relative z-[60]">
-              {/* 主内容区域（TabBar + TabContent） */}
-              <MainArea />
-              {/* 全局 Toast 固定在 Agent 历史主区右上角，不进入右侧原生浏览器面板。 */}
-              <Toaster position="top-right" offset={{ top: 58, right: 12 }} className="agent-history-toaster" />
-            </div>
-
-            {/* 右侧边栏：Agent 文件面板 */}
-            {showRightPanel && (
-              <div
-                className="relative z-[60] flex flex-shrink-0 items-stretch crt-sidebar"
-              >
-                <div aria-hidden="true" className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-px bg-border/80 dark:bg-border/70" />
-                {/* 拖拽手柄 */}
-                {isPanelOpen && (
-                  <div
-                    className={cn(
-                      'absolute left-0 top-0 bottom-0 w-[8px] -translate-x-1/2 cursor-col-resize active:bg-primary/50 transition-colors z-20'
-                    )}
-                    onMouseDown={handleMouseDown}
-                  />
-                )}
-                <RightSidePanel width={displayedRightPanelWidth} />
-              </div>
-            )}
+            <WorkspacePanels
+              workspaceSide={workspaceSide}
+              workspaceOpen={isPanelOpen}
+              workspaceWidth={displayedRightPanelWidth}
+              minimumWidth={rightPanelMinimumWidth}
+              maximumWidth={rightPanelMaximumWidth}
+              onResizeStart={handleMouseDown}
+              onResizeKeyDown={handleResizeKeyDown}
+              agent={<>
+                <MainArea />
+                {/* Toast 始终跟随 Agent 主区，避开原生浏览器页面。 */}
+                <Toaster position="top-right" offset={{ top: 58, right: 12 }} className="agent-history-toaster" />
+              </>}
+              workspace={showRightPanel ? <RightSidePanel width={displayedRightPanelWidth} /> : null}
+            />
         </div>
+        <TerminalLifecycleObserver />
         {currentWorkspace && <WorkspaceMemoryChangeObserver workspaceSlug={currentWorkspace.slug} />}
         {settingsOpen && (
           <div className="absolute inset-0 z-[60]">

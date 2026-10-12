@@ -308,12 +308,6 @@ export function GeneralSettings(): React.ReactElement {
             onCheckedChange={(checked) => { void handleProductivityToolsChange({ calendarEnabled: checked }) }}
           />
           <SettingsToggle
-            label="Obsidian"
-            description="显示 Obsidian 入口，并允许 Agent 使用已配置的 Vault"
-            checked={productivityTools.obsidianEnabled}
-            onCheckedChange={(checked) => { void handleProductivityToolsChange({ obsidianEnabled: checked }) }}
-          />
-          <SettingsToggle
             label="桌面通知"
             description="Agent 完成任务或需要操作时发送通知"
             checked={notificationsEnabled}
@@ -345,7 +339,7 @@ export function GeneralSettings(): React.ReactElement {
               <Volume2 className="mt-0.5 size-3.5 shrink-0" />
               <div className="min-w-0">
                 <p>音效与卡片插画来自 UI SFX，采用 CC0 公共领域许可。</p>
-                <p className="mt-0.5">Proma 非常喜欢这个音效库，并特别还原了一部分 UI SFX 的设计风格，推荐大家访问和使用他们的产品。</p>
+                <p className="mt-0.5">Gamma 非常喜欢这个音效库，并特别还原了一部分 UI SFX 的设计风格，推荐大家访问和使用他们的产品。</p>
               </div>
             </div>
             <a
@@ -425,7 +419,7 @@ export function GeneralSettings(): React.ReactElement {
           )}
           <SettingsToggle
             label="Git/PR 标识"
-            description="Agent 代你提交 commit 或创建 PR 时，附加 Made-with: Proma 与官网链接，便于推广；可随时关闭"
+            description="Agent 代你提交 commit 或创建 PR 时，附加 Made-with: Gamma 与官网链接，便于推广；可随时关闭"
             checked={gitAttributionEnabled}
             onCheckedChange={(checked) => {
               void handleGitAttributionChange(checked)

@@ -1,6 +1,6 @@
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 
-export const INSERT_AGENT_INPUT_QUOTE_EVENT = 'proma:insert-agent-input-quote'
+export const INSERT_AGENT_INPUT_QUOTE_EVENT = 'gamma:insert-agent-input-quote'
 
 interface InsertAgentInputQuoteDetail {
   sessionId: string

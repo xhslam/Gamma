@@ -8,7 +8,7 @@
  */
 
 import { app, nativeImage } from 'electron'
-import { getMainWindow } from '../index'
+import { getMainWindow } from './main-window-store'
 
 function createBadgeOverlay(count: number) {
   const label = count > 99 ? '99+' : String(count)

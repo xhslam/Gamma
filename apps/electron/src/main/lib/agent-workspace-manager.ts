@@ -2,8 +2,8 @@
  * Agent 工作区管理器
  *
  * 负责 Agent 工作区的 CRUD 操作。
- * - 工作区索引：~/.proma/agent-workspaces.json（轻量元数据）
- * - 工作区目录：~/.proma/agent-workspaces/{slug}/（Agent 的 cwd）
+ * - 工作区索引：~/.gamma/agent-workspaces.json（轻量元数据）
+ * - 工作区目录：~/.gamma/agent-workspaces/{slug}/（Agent 的 cwd）
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, cpSync, mkdirSync, statSync, lstatSync, openSync, readSync, closeSync, realpathSync } from 'node:fs'
@@ -13,6 +13,7 @@ import { writeExistingSkillFile } from './skill-file-write'
 import { rmSyncWithRetry, renameIfDestinationAbsentWithRetry, renameWithRetry } from './fs-retry'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { writeJsonFileAtomic, readJsonFileSafe, writeTextFileAtomic } from './safe-file'
+import { GAMMA_COACH_SKILL_SLUG, LEGACY_COACH_SKILL_SLUG, migrateLegacyCoachSkillDirectory } from './legacy-skill-renames'
 import { randomUUID } from 'node:crypto'
 import { join, resolve, relative, isAbsolute, dirname, basename } from 'node:path'
 import {
@@ -31,8 +32,8 @@ import {
 import { findAllGitRoots, normalizeGitRoot } from './git-diff-service'
 import { listBuiltinMcpServers } from './builtin-mcp/catalog'
 import { RESERVED_BUILTIN_KEYS } from './builtin-mcp/baseline'
-import { inferMcpTransportType, normalizeMcpTransportType } from '@proma/shared'
-import type { AgentWorkspace, CreateAgentWorkspaceInput, WorkspaceMcpConfig, SkillMeta, SkillImportSource, OtherWorkspaceSkillsGroup, WorkspaceCapabilities, SkillFileNode, SkillFileContent, WorkspaceMemorySummary, BulkImportSkillItemResult, BulkImportSkillsResult, BulkImportWorkspaceSelection } from '@proma/shared'
+import { inferMcpTransportType, normalizeMcpTransportType } from '@gamma/shared'
+import type { AgentWorkspace, CreateAgentWorkspaceInput, WorkspaceMcpConfig, SkillMeta, SkillImportSource, OtherWorkspaceSkillsGroup, WorkspaceCapabilities, SkillFileNode, SkillFileContent, WorkspaceMemorySummary, BulkImportSkillItemResult, BulkImportSkillsResult, BulkImportWorkspaceSelection } from '@gamma/shared'
 
 interface AgentWorkspacesIndex {
   version: number
@@ -228,13 +229,13 @@ export function getAgentWorkspaceBySlug(slug: string): AgentWorkspace | undefine
 
 /**
  * 返回项目文件根。本地目录项目直接使用用户选择的目录；空白项目继续
- * 使用 Proma 托管的 workspace-files/，以保持历史项目完全兼容。
+ * 使用 Gamma 托管的 workspace-files/，以保持历史项目完全兼容。
  */
 export function getProjectFilesPath(workspaceSlug: string): string {
   return getAgentWorkspaceBySlug(workspaceSlug)?.projectRootPath ?? getWorkspaceFilesDir(workspaceSlug)
 }
 
-/** 将 ~/.proma/default-skills/ 的内容逐个复制到工作区 skills/ 目录 */
+/** 将 ~/.gamma/default-skills/ 的内容逐个复制到工作区 skills/ 目录 */
 function copyDefaultSkills(workspaceSlug: string, options: { throwOnError?: boolean } = {}): void {
   const defaultDir = getDefaultSkillsDir()
   const targetDir = getWorkspaceSkillsDir(workspaceSlug)
@@ -247,7 +248,7 @@ function copyDefaultSkills(workspaceSlug: string, options: { throwOnError?: bool
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name)) continue
+      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name) || entry.name === LEGACY_COACH_SKILL_SLUG) continue
       const source = join(defaultDir, entry.name)
       const target = join(targetDir, entry.name)
       try {
@@ -540,7 +541,7 @@ export function upgradeDefaultSkillsInWorkspaces(): void {
   try {
     const entries = readdirSync(defaultDir, { withFileTypes: true })
     for (const entry of entries) {
-      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name)) continue
+      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name) || entry.name === LEGACY_COACH_SKILL_SLUG) continue
       const sourcePath = join(defaultDir, entry.name)
       defaultSkills.set(entry.name, {
         version: parseSkillVersion(sourcePath),
@@ -559,8 +560,14 @@ export function upgradeDefaultSkillsInWorkspaces(): void {
 
     const activeDir = getWorkspaceSkillsDir(workspace.slug)
     const inactiveDir = getInactiveSkillsDir(workspace.slug)
+    const coachMigrations = [
+      migrateLegacyCoachSkillDirectory(activeDir, { conflictingParentDirs: [inactiveDir] }),
+      migrateLegacyCoachSkillDirectory(inactiveDir, { conflictingParentDirs: [activeDir] }),
+    ]
 
     for (const [slug, info] of defaultSkills) {
+      // 未解决的改名冲突保留双方内容；失败时也不把旧 inactive Skill 自动启用。
+      if (slug === GAMMA_COACH_SKILL_SLUG && coachMigrations.some((result) => result.status === 'conflict' || result.status === 'invalid' || result.status === 'failed')) continue
       const activePath = join(activeDir, slug)
       const inactivePath = join(inactiveDir, slug)
 
@@ -874,14 +881,14 @@ function scanSkillsInDir(dir: string, enabled: boolean): SkillMeta[] {
   return skills
 }
 
-/** 获取默认 Skills 的 slug 列表（来自 ~/.proma/default-skills/） */
+/** 获取默认 Skills 的 slug 列表（来自 ~/.gamma/default-skills/） */
 export function getDefaultSkillSlugs(): string[] {
   const dir = getDefaultSkillsDir()
   if (!existsSync(dir)) return []
 
   try {
     return readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() && entry.name !== LEGACY_COACH_SKILL_SLUG)
       .map((entry) => entry.name)
   } catch {
     return []
@@ -1227,7 +1234,7 @@ function isRegularDirectory(path: string): boolean {
 }
 
 /**
- * 将 Proma 受管工作区的旧指令文件安全地迁移到 AGENTS.md。
+ * 将 Gamma 受管工作区的旧指令文件安全地迁移到 AGENTS.md。
  *
  * 迁移按工作区独立且幂等执行：绝不合并或覆盖内容不同的双文件，
  * 确保升级过程中每条既有规则始终至少保留一份完整副本。
@@ -1863,8 +1870,8 @@ function isNewerVersion(a: string, b: string): boolean {
 interface WorkspaceConfig {
   attachedDirectories?: string[]
   attachedFiles?: string[]
-  worktreeRepos?: import('@proma/shared').WorkspaceWorktreeRepo[]
-  /** CLI integrations disabled only for Proma in this workspace; third-party CLI credentials stay untouched. */
+  worktreeRepos?: import('@gamma/shared').WorkspaceWorktreeRepo[]
+  /** CLI integrations disabled only for Gamma in this workspace; third-party CLI credentials stay untouched. */
   disabledCliIntegrationIds?: string[]
   /** User consent for Agent-initiated maintenance of the two AGENTS.md files. */
   projectKnowledgeMaintenanceApproved?: boolean
@@ -1923,13 +1930,13 @@ function writeWorkspaceConfig(workspaceSlug: string, config: WorkspaceConfig): v
   writeJsonFileAtomic(configPath, config)
 }
 
-/** IDs of CLI integrations that are intentionally disabled only for Proma in this workspace. */
+/** IDs of CLI integrations that are intentionally disabled only for Gamma in this workspace. */
 export function getDisabledCliIntegrationIds(workspaceSlug: string): Set<string> {
   return new Set(readWorkspaceConfig(workspaceSlug).disabledCliIntegrationIds ?? [])
 }
 
 /**
- * Changes Proma's permission to use a CLI integration without invoking third-party logout,
+ * Changes Gamma's permission to use a CLI integration without invoking third-party logout,
  * credential deletion, or token revocation.
  */
 export function setCliIntegrationEnabled(workspaceSlug: string, id: string, enabled: boolean): void {
@@ -2054,11 +2061,11 @@ export function detachWorkspaceFile(workspaceSlug: string, filePath: string): st
  * 静默找不到 worktree）。同时保留 config 中仍然存在的手动配置项（如不在附加
  * 目录内的额外仓库），并自动过滤掉路径已不存在的陈旧条目。
  */
-export async function getWorktreeRepos(workspaceSlug: string): Promise<import('@proma/shared').WorkspaceWorktreeRepo[]> {
+export async function getWorktreeRepos(workspaceSlug: string): Promise<import('@gamma/shared').WorkspaceWorktreeRepo[]> {
   const config = readWorkspaceConfig(workspaceSlug)
 
   // repoPath 归一化后去重
-  const byPath = new Map<string, import('@proma/shared').WorkspaceWorktreeRepo>()
+  const byPath = new Map<string, import('@gamma/shared').WorkspaceWorktreeRepo>()
 
   // 1. 从附加目录自动探测 git 仓库根
   const attachedDirs = config.attachedDirectories ?? []
@@ -2092,7 +2099,7 @@ export async function getWorktreeRepos(workspaceSlug: string): Promise<import('@
   return Array.from(byPath.values()).sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
 }
 
-export function addWorktreeRepo(workspaceSlug: string, repo: import('@proma/shared').WorkspaceWorktreeRepo): import('@proma/shared').WorkspaceWorktreeRepo[] {
+export function addWorktreeRepo(workspaceSlug: string, repo: import('@gamma/shared').WorkspaceWorktreeRepo): import('@gamma/shared').WorkspaceWorktreeRepo[] {
   const config = readWorkspaceConfig(workspaceSlug)
   const existing = config.worktreeRepos ?? []
 
@@ -2106,7 +2113,7 @@ export function addWorktreeRepo(workspaceSlug: string, repo: import('@proma/shar
   return updated
 }
 
-export function removeWorktreeRepo(workspaceSlug: string, repoPath: string): import('@proma/shared').WorkspaceWorktreeRepo[] {
+export function removeWorktreeRepo(workspaceSlug: string, repoPath: string): import('@gamma/shared').WorkspaceWorktreeRepo[] {
   const config = readWorkspaceConfig(workspaceSlug)
   const existing = config.worktreeRepos ?? []
   const updated = existing.filter((r) => r.repoPath !== repoPath)

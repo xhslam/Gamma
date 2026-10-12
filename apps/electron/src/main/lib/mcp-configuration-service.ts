@@ -5,7 +5,7 @@
  * MCP handshake + listTools 验证，并且仅在验证成功后写入 enabled=true。
  */
 
-import type { McpServerEntry, McpTransportType, WorkspaceMcpConfig } from '@proma/shared'
+import type { McpServerEntry, McpTransportType, WorkspaceMcpConfig } from '@gamma/shared'
 import { getWorkspaceMcpConfig, saveWorkspaceMcpConfig } from './agent-workspace-manager'
 import {
   buildWorkspaceMcpEntry,

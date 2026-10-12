@@ -26,7 +26,7 @@ import { PreviewOpenButton } from './tool-result-renderers/preview-open-button'
 import { getTaskGetStatusLabel, parseTaskGetResult, type ParsedTaskGetResult } from './tool-result-renderers/task-get-result'
 import { parseTaskListResult, type ParsedTaskListItem } from './tool-result-renderers/task-list-result'
 import { formatDuration } from './AgentMessages'
-import { useSmoothStream } from '@proma/ui'
+import { useSmoothStream } from '@gamma/ui'
 import type {
   SDKContentBlock,
   SDKMessage,
@@ -36,7 +36,7 @@ import type {
   SDKUserMessage,
   SDKToolResultBlock,
   SDKSystemMessage,
-} from '@proma/shared'
+} from '@gamma/shared'
 
 // ===== useToolResult Hook =====
 

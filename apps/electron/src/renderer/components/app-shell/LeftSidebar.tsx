@@ -11,7 +11,7 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, CirclePlus, Trash2, Pencil, PanelLeft, PanelRight, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, CirclePlus, Trash2, Pencil, PanelLeft, PanelRight, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ModeSwitcher } from './ModeSwitcher'
@@ -108,7 +108,6 @@ import { productivityToolsAtom, sessionHoverPreviewEnabledAtom } from '@/atoms/u
 import { CollapsedWorkspacePopover } from '@/components/agent/CollapsedWorkspacePopover'
 import { CollapsedToolsPopover, type CollapsedToolItem } from '@/components/agent/CollapsedToolsPopover'
 import { CollapsedSessionRail, type RailRecentItem } from '@/components/agent/CollapsedSessionRail'
-import { ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
@@ -170,7 +169,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import type { ConversationMeta, AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities } from '@proma/shared'
+import type { ConversationMeta, AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities } from '@gamma/shared'
 
 function formatAutomationCount(count: number): string {
   return count > 99 ? '99+' : String(count)
@@ -346,8 +345,8 @@ const PROJECT_SESSION_RECENT_WINDOW_MS = 3 * 86_400_000
 const PROJECT_SESSION_EXPAND_STEP = 10
 const SESSION_QUICK_SWITCH_HINT_DELAY_MS = 1000
 const SESSION_QUICK_SWITCH_LIMIT = 9
-const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'proma:session-quick-switch-keydown'
-const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'proma:session-quick-switch-keyup'
+const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'gamma:session-quick-switch-keydown'
+const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'gamma:session-quick-switch-keyup'
 
 const ACTIVE_SESSION_STATUSES: ReadonlySet<SessionIndicatorStatus> = new Set([
   'blocked',
@@ -1025,14 +1024,13 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     openWorkspaceComponent(component)
   }, [currentAgentSessionId, mode, openWorkspaceComponent, setAutomationForm, setActiveView, setPlanningTab])
 
-  /** Obsidian 在 Chat 中占用主内容区，在有 Agent 会话时复用右侧项目级工作区。 */
-  const handleOpenVault = React.useCallback((): void => {
+  const handleOpenMarkdown = React.useCallback((): void => {
     if (mode !== 'agent' || !currentAgentSessionId) {
-      setActiveView('vault')
+      setActiveView('markdown')
       return
     }
     setActiveView('conversations')
-    openWorkspaceComponent('vault')
+    openWorkspaceComponent('markdown')
   }, [currentAgentSessionId, mode, openWorkspaceComponent, setActiveView])
 
   const handleOpenCapabilityComponent = React.useCallback((component: 'skills' | 'mcp' | 'memory'): void => {
@@ -2468,7 +2466,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         <AlertDialogHeader>
           <AlertDialogTitle>确认删除项目</AlertDialogTitle>
           <AlertDialogDescription>
-            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Proma 中保存的会话、自动任务、MCP、Skills 与 Proma 工作区配置；空白项目的 Proma 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
+            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Gamma 中保存的会话、自动任务、MCP、Skills 与 Gamma 工作区配置；空白项目的 Gamma 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -3139,19 +3137,20 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
   // ===== 折叠状态：精简图标视图 =====
   if (sidebarCollapsed) {
-    const hasActiveCollapsedTool = [
+    const hasActiveCollapsedTool = activeView === 'markdown' || [
       ...(productivityTools.todosEnabled ? ["todos"] : []),
       ...(productivityTools.calendarEnabled ? ["calendar"] : []),
       "automations",
+      "markdown",
       "skills",
       "mcp",
       "memory",
-      ...(productivityTools.obsidianEnabled ? ["vault"] : []),
     ].some((component) =>
       isWorkspaceComponentActive(component as WorkspaceComponentTab),
     );
 
     const collapsedToolItems: CollapsedToolItem[] = [
+      { label: "Markdown", icon: <BookOpen size={16} />, active: activeView === "markdown" || isWorkspaceComponentActive("markdown"), onClick: handleOpenMarkdown },
       ...(productivityTools.todosEnabled ? [{
         label: "Todo",
         icon: <ListTodo size={16} />,
@@ -3163,12 +3162,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         icon: <CalendarDays size={16} />,
         active: isWorkspaceComponentActive("calendar"),
         onClick: () => handleOpenPlanningComponent("calendar"),
-      }] : []),
-      ...(productivityTools.obsidianEnabled ? [{
-        label: "Obsidian",
-        icon: <ObsidianIcon size={16} />,
-        active: isWorkspaceComponentActive("vault"),
-        onClick: handleOpenVault,
       }] : []),
       ...(mode === "agent" ? [{
         label: "项目记忆",
@@ -3524,6 +3517,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
       {/* 项目级组件：每一行直接打开对应的右侧工作区 Tab。 */}
       <div className="space-y-0.5 px-3 pb-0.5 pt-2">
+        <WorkspaceComponentSidebarEntry label="Markdown" icon={<BookOpen size={16} />} active={activeView === 'markdown' || isWorkspaceComponentActive('markdown')} onClick={handleOpenMarkdown} />
         {productivityTools.todosEnabled && (
           <WorkspaceComponentSidebarEntry
             label="Todo"
@@ -3538,14 +3532,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             icon={<CalendarDays size={16} />}
             active={isWorkspaceComponentActive('calendar')}
             onClick={() => handleOpenPlanningComponent('calendar')}
-          />
-        )}
-        {productivityTools.obsidianEnabled && (
-          <WorkspaceComponentSidebarEntry
-            label="Obsidian"
-            icon={<ObsidianIcon size={16} />}
-            active={mode === 'chat' ? activeView === 'vault' : isWorkspaceComponentActive('vault')}
-            onClick={handleOpenVault}
           />
         )}
       </div>

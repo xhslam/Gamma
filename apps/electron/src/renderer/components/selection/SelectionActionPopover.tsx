@@ -65,6 +65,6 @@ export function SelectionActionPopover({
     </div>
   )
 
-  // 预览与 Vault 均位于 overflow/transform 容器内；挂到 body 才不会被裁切或压在右侧工作区下层。
+  // 预览位于 overflow/transform 容器内；挂到 body 才不会被裁切或压在右侧工作区下层。
   return createPortal(content, document.body)
 }

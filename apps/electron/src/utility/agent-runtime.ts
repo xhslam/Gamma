@@ -10,7 +10,7 @@ import {
   type AgentRuntimeRequest,
   type AgentRuntimeResponse,
   type AgentRuntimeState,
-} from '@proma/shared'
+} from '@gamma/shared'
 import { PiAgentAdapter, type PiAgentQueryOptions } from '../main/lib/adapters/pi-agent-adapter'
 import { getParentRequestTimeoutMs } from './agent-runtime-request-timeout'
 
@@ -58,7 +58,7 @@ if (!parentPort) {
 parentPort.on('message', (event) => {
   const value = event?.data as Record<string, unknown> | undefined
   const transfer = value?.data && typeof value.data === 'object' ? value.data as Record<string, unknown> : value
-  if (!transfer || transfer.type !== 'proma-agent-runtime-port') return
+  if (!transfer || transfer.type !== 'gamma-agent-runtime-port') return
   const port = event.ports?.[0] ?? value?.port as MessagePortLike | undefined
   if (transfer.protocolVersion !== AGENT_RUNTIME_PROTOCOL_VERSION || !port) {
     console.error('[AgentRuntime] invalid MessagePort bootstrap message')

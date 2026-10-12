@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useAtomValue } from 'jotai'
+import { agentSidePanelLayoutAtomFamily } from '@/atoms/agent-atoms'
 import { nextBrowserLayoutRevision } from './browser-layout-revision'
 
 // 每次 publish（包括卸载隐藏）分配全局单调 revision。旧 slot 的 IPC 即使晚到，
@@ -9,6 +11,7 @@ import { nextBrowserLayoutRevision } from './browser-layout-revision'
 
 export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: string }): React.ReactElement {
   const ref = React.useRef<HTMLDivElement>(null)
+  const workspaceSide = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)).workspaceSide === 'left' ? 'left' : 'right'
 
   React.useLayoutEffect(() => {
     const element = ref.current
@@ -55,7 +58,8 @@ export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: st
       if (frame) cancelAnimationFrame(frame)
       void setLayout({ sessionId, tabId, revision: nextBrowserLayoutRevision(), visible: false, preserveSessionOnHide: false, bounds: { x: 0, y: 0, width: 0, height: 0 } })
     }
-  }, [sessionId, tabId])
+    // 交换位置可能只改变坐标而不改变尺寸，ResizeObserver 无法捕获这次移动。
+  }, [sessionId, tabId, workspaceSide])
 
   return <div ref={ref} className="flex-1 min-h-0 bg-muted/15 titlebar-no-drag" aria-label="受管浏览器页面" />
 }

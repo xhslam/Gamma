@@ -1,0 +1,46 @@
+{
+  "image": [
+    "png",
+    "jpg",
+    "jpeg",
+    "jfif",
+    "gif",
+    "webp",
+    "svg",
+    "bmp",
+    "ico",
+    "avif",
+    "apng",
+    "heic",
+    "heif",
+    "tiff",
+    "tif"
+  ],
+  "video": [
+    "mp4",
+    "webm",
+    "mov",
+    "avi",
+    "mkv",
+    "m4v",
+    "ogv",
+    "mpeg",
+    "mpg",
+    "wmv",
+    "flv",
+    "3gp"
+  ],
+  "audio": [
+    "mp3",
+    "m4a",
+    "ogg",
+    "oga",
+    "wav",
+    "flac",
+    "aac",
+    "opus",
+    "weba",
+    "aiff",
+    "wma"
+  ]
+}

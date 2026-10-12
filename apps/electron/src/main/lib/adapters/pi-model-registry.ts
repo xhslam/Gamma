@@ -1,7 +1,7 @@
 /**
  * Pi 模型注册与渠道兼容层。
  *
- * Pi SDK 需要把 Proma 渠道临时注册成 runtime provider；这里集中处理
+ * Pi SDK 需要把 Gamma 渠道临时注册成 runtime provider；这里集中处理
  * ProviderType 到 Pi API 协议、baseUrl、认证头和模型 catalog 默认值的映射。
  */
 
@@ -26,17 +26,23 @@ import {
   type ReasoningCapability,
   type ReasoningTransport,
   type ProviderType,
-} from '@proma/shared'
+} from '@gamma/shared'
 import {
-  getPromaUserAgent,
+  getGammaUserAgent,
   normalizeAnthropicBaseUrlForSdk,
   normalizeOpenAIBaseUrlForSdk,
   resolveAnthropicMessagesUrl,
-} from '@proma/core'
+} from '@gamma/core'
 import type { Api, KnownProvider, Model } from '@earendil-works/pi-ai/compat'
 import type { PiAgentQueryOptions } from './pi-agent-adapter'
 import { rememberXaiOAuthCredentials, refreshXaiOAuthCredentialsSerial } from '../xai-oauth-credentials'
 import { supportsPiDeveloperRole } from './pi-provider-compat'
+import { CodexModelStore } from './pi-codex-model-store'
+import {
+  createPiRequestProxyDispatcher,
+  installPiRequestProxyFetch,
+  runWithManagedPiRequestProxy,
+} from './pi-request-proxy'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 type PiAiCompat = typeof import('@earendil-works/pi-ai/compat')
@@ -141,7 +147,7 @@ function compilePiReasoningCapabilities(
 }
 
 /**
- * Proma re-registers every non-OAuth channel as an ephemeral Pi provider. Preserve
+ * Gamma re-registers every non-OAuth channel as an ephemeral Pi provider. Preserve
  * only this protocol-safe catalog flag: current Claude models require adaptive
  * thinking, while copying the complete catalog compat object could leak unrelated
  * tool/sampling behaviour across provider protocols.
@@ -336,7 +342,7 @@ function createXaiRuntimeCredentialStore(
 
 /**
  * Pi 0.85.0 已在 catalog 中原生声明 experimental vision 变体。
- * 常规 Flash 的视觉能力仍由 Proma 已验证的渠道契约兜底，不改变实际模型 ID、协议或推理参数。
+ * 常规 Flash 的视觉能力仍由 Gamma 已验证的渠道契约兜底，不改变实际模型 ID、协议或推理参数。
  */
 const DEEPSEEK_V4_FLASH_VISION_MODEL_IDS = new Set([
   'deepseek-v4-flash',
@@ -751,7 +757,7 @@ export function normalizePiBaseUrl(baseUrl: string | undefined, provider: Provid
   return normalizedBaseUrl
 }
 
-export function requiresPromaUserAgent(provider: ProviderType): boolean {
+export function requiresRegisteredUserAgent(provider: ProviderType): boolean {
   return provider === 'kimi-coding'
     || provider === 'xiaomi-token-plan'
     || provider === 'qwen-token-plan'
@@ -760,7 +766,7 @@ export function requiresPromaUserAgent(provider: ProviderType): boolean {
 }
 
 function usesBearerOnlyAnthropicAuth(provider: ProviderType): boolean {
-  return requiresPromaUserAgent(provider) || provider === 'minimax' || provider === 'qwen-anthropic'
+  return requiresRegisteredUserAgent(provider) || provider === 'minimax' || provider === 'qwen-anthropic'
 }
 
 export function buildPiRequestHeaders(provider: ProviderType, apiKey: string): PiRequestHeaders | undefined {
@@ -770,8 +776,8 @@ export function buildPiRequestHeaders(provider: ProviderType, apiKey: string): P
     Authorization: `Bearer ${apiKey}`,
   }
 
-  if (requiresPromaUserAgent(provider)) {
-    headers['User-Agent'] = getPromaUserAgent()
+  if (requiresRegisteredUserAgent(provider)) {
+    headers['User-Agent'] = getGammaUserAgent(undefined, provider)
   }
 
   return headers
@@ -857,9 +863,13 @@ function isSupportedCodexModel(model: Pick<PiCatalogModel, 'id'>): boolean {
     && !UNSUPPORTED_CODEX_MODEL_PREFIXES.some((prefix) => modelId === prefix || modelId.startsWith(`${prefix}-`))
 }
 
+/** 能力查询与会话恢复共用受管目录，避免在线新模型在 UI 中退回思考开关。 */
 export async function getCodexCatalogModels(): Promise<PiCatalogModel[]> {
   const { getModels } = await loadPiAiCompat()
-  return mergeCodexModels(getModels('openai-codex')).filter(isSupportedCodexModel)
+  const cached = await new CodexModelStore().read('openai-codex')
+  const models = new Map<string, PiCatalogModel>(getModels('openai-codex').map((model) => [model.id, model]))
+  for (const model of cached?.models ?? []) models.set(model.id, model)
+  return mergeCodexModels([...models.values()]).filter(isSupportedCodexModel)
 }
 
 /**
@@ -868,8 +878,8 @@ export async function getCodexCatalogModels(): Promise<PiCatalogModel[]> {
  * openai-codex 是 Pi SDK 的内置 KnownProvider：模型目录、baseUrl 和
  * `openai-codex-responses` 协议全部内置，无需（也不能）手工构造 models 或 baseUrl。
  * Pi 0.80.10 将它声明为 OAuth-only provider；runtime API key 不会参与其认证解析。
- * 因此将 Proma 已刷新过的完整凭据放入一次性内存 OAuth credential store，
- * 按真实 expires 刷新并回写 Proma，避免读写全局 ~/.pi 认证文件。
+ * 因此将 Gamma 已刷新过的完整凭据放入一次性内存 OAuth credential store，
+ * 按真实 expires 刷新并回写 Gamma，避免读写全局 ~/.pi 认证文件。
  */
 export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
   if (!input.codexOAuthCredentials) {
@@ -881,16 +891,17 @@ export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
       input.codexOAuthCredentials,
       input.onCodexOAuthCredentialsRefreshed,
     ),
+    modelsPath: null,
+    modelsStore: new CodexModelStore(),
     allowModelNetwork: false,
   })
 
   const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
-  const runtimeModels = modelRuntime.getModels('openai-codex').filter(isSupportedCodexModel)
-  const codexModels = await getCodexCatalogModels()
+  const runtimeModels = mergeCodexModels(modelRuntime.getModels('openai-codex')).filter(isSupportedCodexModel)
+  // ModelRuntime 已通过同一 store 恢复目录，不再独立读取默认缓存或混入另一份目录。
   const model = resolvedModelId
-    ? findCatalogModelById(codexModels, resolvedModelId)
-      ?? runtimeModels.find((candidate) => candidate.id === resolvedModelId)
-      ?? createCodexAstraFamilyModel(codexModels, resolvedModelId)
+    ? findCatalogModelById(runtimeModels, resolvedModelId)
+      ?? createCodexAstraFamilyModel(runtimeModels, resolvedModelId)
     : runtimeModels[0]
 
   if (!model) {
@@ -902,20 +913,45 @@ export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
   return { modelRuntime, model }
 }
 
-/**
- * List Codex models through Pi's availability abstraction. Codex currently uses
- * Pi's catalog, while a future provider-level subscription filter will be honored automatically.
- */
+/** 在线刷新仅针对 Codex；超时或失败时沿用 Pi 恢复的缓存和 Gamma 补充目录。 */
+export async function refreshCodexModels(
+  modelRuntime: Pick<Awaited<ReturnType<PiSdk['ModelRuntime']['create']>>, 'refresh' | 'getAvailable'>,
+): Promise<PiCatalogModel[]> {
+  const result = await modelRuntime.refresh({
+    providers: ['openai-codex'],
+    allowNetwork: process.env.PI_OFFLINE === undefined,
+    force: true,
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (result.aborted || result.errors.has('openai-codex')) {
+    console.warn('[Codex 模型] 在线目录刷新失败，使用缓存或内置目录')
+  }
+  const available = await modelRuntime.getAvailable('openai-codex')
+  // 无可用认证时不能凭补充目录制造「可用模型」。
+  if (available.length === 0) return []
+  return mergeCodexModels(available).filter(isSupportedCodexModel)
+}
+
+/** 使用 Pi 在线目录检测模型，保持 OAuth 认证和请求代理的隔离边界。 */
 export async function listCodexModels(
   credentials: CodexOAuthCredentials,
+  proxyUrl?: string,
 ): Promise<{ id: string; name: string }[]> {
   const sdk = await import('@earendil-works/pi-coding-agent')
-  const modelRuntime = await sdk.ModelRuntime.create({
-    credentials: createCodexRuntimeCredentialStore(credentials),
-    allowModelNetwork: false,
-  })
-  return (await modelRuntime.getAvailable('openai-codex'))
-    .filter(isSupportedCodexModel)
+  installPiRequestProxyFetch()
+  const models = await runWithManagedPiRequestProxy(
+    createPiRequestProxyDispatcher({ proxyUrl }),
+    async () => {
+      const modelRuntime = await sdk.ModelRuntime.create({
+        credentials: createCodexRuntimeCredentialStore(credentials),
+        modelsPath: null,
+        modelsStore: new CodexModelStore(),
+        allowModelNetwork: false,
+      })
+      return refreshCodexModels(modelRuntime)
+    },
+  )
+  return models
     .map((model) => ({ id: model.id, name: model.name }))
 }
 
@@ -1013,7 +1049,7 @@ export async function buildModel(sdk: PiSdk, input: PiAgentQueryOptions) {
   if (input.provider === 'github-copilot') {
     return buildGithubCopilotModel(sdk, input)
   }
-  const providerName = `proma-${input.provider}-${input.sessionId}`
+  const providerName = `gamma-${input.provider}-${input.sessionId}`
   const resolvedApiKey = resolvePiApiKey(input.provider, input.apiKey)
   // pi runtime 统一剥离历史 `[1m]` 后缀：无论上游从哪条路径传入，注册与查找都用干净 ID。
   const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)

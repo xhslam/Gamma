@@ -20,10 +20,10 @@ import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { app } from 'electron'
-import type { AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentSessionMeta, AgentActiveSessionSnapshot, CodexOAuthCredentials, GithubCopilotOAuthCredentials, XaiOAuthCredentials, TypedError, SDKMessage, SDKAssistantMessage, AgentStreamPayload, AgentAssistantDeltaPayload, RewindSessionResult, SkillActivation } from '@proma/shared'
+import type { AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentSessionMeta, AgentActiveSessionSnapshot, CodexOAuthCredentials, GithubCopilotOAuthCredentials, XaiOAuthCredentials, TypedError, SDKMessage, SDKAssistantMessage, AgentStreamPayload, AgentAssistantDeltaPayload, RewindSessionResult, SkillActivation } from '@gamma/shared'
 import {
-  PROMA_DEFAULT_PERMISSION_MODE,
-  PROMA_PERMISSION_MODE_CONFIG,
+  GAMMA_DEFAULT_PERMISSION_MODE,
+  GAMMA_PERMISSION_MODE_CONFIG,
   THINKING_SIGNATURE_ERROR_CODE,
   THINKING_SIGNATURE_ERROR_MESSAGE,
   THINKING_SIGNATURE_ERROR_TITLE,
@@ -35,8 +35,8 @@ import {
   resolveReasoningProfile,
   collectSkillActivations,
   mergeSkillActivations,
-} from '@proma/shared'
-import type { PromaPermissionMode, AskUserRequest, ExitPlanModeRequest, SDKSystemMessage } from '@proma/shared'
+} from '@gamma/shared'
+import type { GammaPermissionMode, AskUserRequest, ExitPlanModeRequest, SDKSystemMessage } from '@gamma/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { getMainRepoRoot } from './git-diff-service'
 import { getPiAssistantErrorDetails, hasPiAssistantTextContent, stripPiAssistantError } from './adapters/pi-message-adapter'
@@ -46,7 +46,7 @@ import { isSessionNotFoundError } from './error-patterns'
 import { AgentEventBus } from './agent-event-bus'
 import { isStaleActiveQueueError } from './agent-queue-routing'
 import { decryptApiKey, getChannelById, listChannels, persistCodexOAuthCredentials, persistGithubCopilotOAuthCredentials, persistXaiOAuthCredentials, resolveChannelRuntimeApiKey, resolveCodexOAuthCredentials, resolveGithubCopilotOAuthCredentials, resolveXaiOAuthCredentials } from './channel-manager'
-import { getAdapter, fetchTitle } from '@proma/core'
+import { getAdapter, fetchTitle } from '@gamma/core'
 import pkg from '../../../package.json' with { type: 'json' }
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
@@ -59,7 +59,7 @@ import { getRuntimeStatus } from './runtime-init'
 import { getSettings } from './settings-service'
 import { buildSystemPrompt, buildDynamicContext } from './agent-prompt-builder'
 import { resolveProjectInstructions } from './project-instruction-resolver'
-import { combinePromaInstructionFiles } from './adapters/pi-resource-loader-overrides'
+import { combineGammaInstructionFiles } from './adapters/pi-resource-loader-overrides'
 import { MAX_CONTEXT_MESSAGES, buildContextPrompt, buildRecoveryPrompt, buildReferencedSessionsPrompt } from './agent-session-context-prompt'
 import { buildReferencedPlanningPrompt } from './planning-reference-context'
 import { permissionService } from './agent-permission-service'
@@ -71,7 +71,6 @@ import { validateToolInput } from './agent-tool-input-validator'
 import { isSessionPlanMarkdownPath } from './agent-plan-file-policy'
 import { estimateTokenCount, WRITE_CONTENT_TOKEN_THRESHOLD } from './agent-tool-token-estimator'
 import { buildPiBuiltinTools } from './adapters/pi-builtin-tools'
-import { getAgentVaultRoots, getVaultUserContext } from './vault-service'
 import { buildPiMcpTools } from './adapters/pi-mcp-tools'
 import { buildAgentRuntimeEnv, type AgentRuntimeEnv } from './agent-runtime-env'
 import { isVisibleRunMessage } from './agent-run-message-visibility'
@@ -81,7 +80,6 @@ import { generateCodexTitle } from './adapters/pi-codex-title-generator'
 import { createFallbackTitle, sanitizeGeneratedTitle, TITLE_PROMPT } from './title-generation'
 import { claimWorkspaceMemoryRefreshOpportunity } from './agent-memory-refresh-service'
 import { browserController } from './browser-controller'
-import { resolveRuntimeAdditionalDirectories } from './agent-orchestrator-vault-access'
 
 // ===== 类型定义 =====
 
@@ -196,7 +194,7 @@ function buildPiAdditionalDirectoriesPrompt(directories: string[]): string {
   return `
 
 <attached_directories>
-这些目录已由 Proma 授权给当前会话，和当前工作目录同属于用户允许访问的范围。
+这些目录已由 Gamma 授权给当前会话，和当前工作目录同属于用户允许访问的范围。
 如需读取或修改这些目录中的内容，请直接使用绝对路径，不要先复制到当前工作目录。
 ${directoryLines}
 </attached_directories>`
@@ -206,7 +204,7 @@ const LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE = 'local_project_root_unavailable'
 
 function createLocalProjectRootUnavailableError(projectRootPath: string, status?: string): Error {
   const error = new Error(
-    `本地项目根目录不可用: 本地项目根目录不存在或无法访问：${projectRootPath}。请在 Proma 中重新选择项目文件夹。`,
+    `本地项目根目录不可用: 本地项目根目录不存在或无法访问：${projectRootPath}。请在 Gamma 中重新选择项目文件夹。`,
   ) as Error & { code?: string; details?: string[] }
   error.code = LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE
   error.details = status ? [`目录状态: ${status}`] : undefined
@@ -233,7 +231,7 @@ export class AgentOrchestrator {
   private stoppedBeforeRunSessions = new Set<string>()
 
   /** 运行中会话的当前权限模式（支持运行时动态切换） */
-  private sessionPermissionModes = new Map<string, PromaPermissionMode>()
+  private sessionPermissionModes = new Map<string, GammaPermissionMode>()
 
   constructor(adapter: AgentProviderAdapter, eventBus: AgentEventBus) {
     this.adapter = adapter
@@ -320,7 +318,7 @@ export class AgentOrchestrator {
 
     // 渠道信息在异常路径也要用于判断是否应用自定义渠道本地兜底，因此提前解析；
     // 同时保留 listChannels 自身的错误边界：解析失败时按“无渠道”处理并返回 null。
-    let channel: import('@proma/shared').Channel | undefined
+    let channel: import('@gamma/shared').Channel | undefined
     try {
       channel = listChannels().find((c) => c.id === channelId)
     } catch (error) {
@@ -578,7 +576,6 @@ export class AgentOrchestrator {
     userMessage: string,
     createdAt = Date.now(),
     uuid?: string,
-    vaultFocus?: import('@proma/shared').VaultFocusAttribution,
   ): string {
     const persistedUuid = uuid ?? randomUUID()
     const userSDKMsg: SDKMessage = {
@@ -589,7 +586,6 @@ export class AgentOrchestrator {
       },
       parent_tool_use_id: null,
       _createdAt: createdAt,
-      ...(vaultFocus ? { _vaultFocus: vaultFocus } : {}),
     } as unknown as SDKMessage
     appendSDKMessages(sessionId, [userSDKMsg])
     return persistedUuid
@@ -684,8 +680,6 @@ export class AgentOrchestrator {
     extensions: { piCustomTools?: ToolDefinition[] } = {},
   ): Promise<void> {
     const { sessionId, userMessage, rawUserMessage, userMessageUuid, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid } = input
-    // Capture the focus once per turn. Later UI focus changes must not rewrite this reply's attribution.
-    const initialVaultFocus = getVaultUserContext(sessionId)
     const streamStartedAt = input.startedAt ?? Date.now()
     let userMessagePersisted = false
     let initialUserMessageUuid: string | undefined
@@ -713,11 +707,6 @@ export class AgentOrchestrator {
         rawUserMessage ?? userMessage,
         Date.now(),
         userMessageUuid,
-        initialVaultFocus ? {
-          displayName: initialVaultFocus.displayName,
-          rootPath: initialVaultFocus.rootPath,
-          focus: initialVaultFocus.focus,
-        } : undefined,
       )
       userMessagePersisted = true
     }
@@ -826,7 +815,7 @@ export class AgentOrchestrator {
         reportPreflightError({
           code: 'local_project_root_unavailable',
           title: '本地项目根目录不可用',
-          message: `本地项目根目录不存在或无法访问：${workspace.projectRootPath}。请在 Proma 中重新选择项目文件夹。`,
+          message: `本地项目根目录不存在或无法访问：${workspace.projectRootPath}。请在 Gamma 中重新选择项目文件夹。`,
           details: [`目录状态: ${projectRootStatus}`],
           actions: [],
           canRetry: false,
@@ -836,7 +825,7 @@ export class AgentOrchestrator {
     }
 
     // Windows 缺少 Git Bash / WSL 时仍允许启动 Pi Agent。
-    // Pi adapter 会移除 Bash 工具并注入基础模式说明；文件工具、对话和本地 Proma 工具不受影响。
+    // Pi adapter 会移除 Bash 工具并注入基础模式说明；文件工具、对话和本地 Gamma 工具不受影响。
 
     // 1. 获取渠道信息并解密 API Key
     const channel = getChannelById(channelId)
@@ -974,7 +963,7 @@ export class AgentOrchestrator {
     // 4. 读取已有的 SDK session ID（用于 resume）
     let existingSdkSessionId = sessionMeta?.sdkSessionId
 
-    console.log(`[Agent 编排] Resume 状态: sdkSessionId=${existingSdkSessionId || '无'}, proma sessionId=${sessionId}`)
+    console.log(`[Agent 编排] Resume 状态: sdkSessionId=${existingSdkSessionId || '无'}, gamma sessionId=${sessionId}`)
 
     // 5. 状态初始化
     const accumulatedMessages: SDKMessage[] = []
@@ -994,7 +983,7 @@ export class AgentOrchestrator {
     let capturedSdkSessionId = existingSdkSessionId
     let agentCwd: string | undefined
     let workspaceSlug: string | undefined
-    let workspace: import('@proma/shared').AgentWorkspace | undefined
+    let workspace: import('@gamma/shared').AgentWorkspace | undefined
 
     try {
       console.log(`[Agent 编排] 启动 Pi runtime — 模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`)
@@ -1021,8 +1010,8 @@ export class AgentOrchestrator {
         agentCwd = resolveAgentCwd(ws, sessionId, sessionMeta?.agentCwdMode, activeWorktree) ?? homedir()
         workspaceSlug = ws.slug
         workspace = ws
-        runtimeEnv.env.PROMA_WORKSPACE_DIR = getAgentWorkspacePath(ws.slug)
-        runtimeEnv.env.PROMA_WORKSPACE_SLUG = ws.slug
+        runtimeEnv.env.GAMMA_WORKSPACE_DIR = getAgentWorkspacePath(ws.slug)
+        runtimeEnv.env.GAMMA_WORKSPACE_SLUG = ws.slug
         const cwdKind = activeWorktree ? `worktree ${activeWorktree.branch}` : getAgentCwdMode(sessionMeta)
         console.log(`[Agent 编排] 使用 ${cwdKind} cwd: ${agentCwd} (${ws.name}/${sessionId})`)
 
@@ -1039,23 +1028,19 @@ export class AgentOrchestrator {
 
       // 必须与 runtime 接收的附加目录保持一致；视觉助手据此限制允许外发的图片路径。
       const productivityTools = appSettings.productivityTools
-      const vaultUserContext = productivityTools.obsidianEnabled ? getVaultUserContext(sessionId) : null
       const attachedDirectories = collectAttachedDirectories({
         extraDirs: additionalDirectories,
         sessionMeta,
         workspaceSlug,
       })
-      const allAdditionalDirectories = resolveRuntimeAdditionalDirectories(
-        attachedDirectories,
-        productivityTools.obsidianEnabled ? getAgentVaultRoots() : [],
-      )
+      const allAdditionalDirectories = [...new Set(attachedDirectories.map((dir) => dir.trim()).filter(Boolean))]
       const browserAllowedRoots = [...new Set([
         workspaceId ? agentCwd : undefined,
         workspaceSlug ? getProjectFilesPath(workspaceSlug) : undefined,
         ...allAdditionalDirectories,
       ].filter((root): root is string => typeof root === 'string' && root.length > 0))]
       // 原因：listSessions({ dir }) 基于 cwd 路径哈希查找，但 session 级别的 cwd
-      // （如 ~/.proma/agent-workspaces/workspace-xxx/sessionId）与 SDK 内部存储的路径哈希可能不匹配，
+      // （如 ~/.gamma/agent-workspaces/workspace-xxx/sessionId）与 SDK 内部存储的路径哈希可能不匹配，
       // 导致 listSessions 始终返回 0 个会话，误杀有效的 resume。
       // SDK 本身会优雅处理无效的 resume ID（回退为新会话），无需预验证。
       if (existingSdkSessionId) {
@@ -1075,7 +1060,7 @@ export class AgentOrchestrator {
         workspaceSlug,
         agentCwd,
         allowedRoots: browserAllowedRoots,
-        permissionMode: permissionModeOverride ?? sessionMeta?.permissionMode ?? PROMA_DEFAULT_PERMISSION_MODE,
+        permissionMode: permissionModeOverride ?? sessionMeta?.permissionMode ?? GAMMA_DEFAULT_PERMISSION_MODE,
         triggeredBy: input.triggeredBy,
         windowsShellAvailable: process.platform !== 'win32' || runtimeEnv.shellKind != null,
         lastWindowsTerminalProfile: appSettings.lastWindowsTerminalProfile,
@@ -1086,7 +1071,7 @@ export class AgentOrchestrator {
 
       // 合并外部注入的自定义 MCP 服务器（如飞书群聊工具）
 
-      // Proma 主进程连接用户 MCP server，并转换为 Pi custom tools。
+      // Gamma 主进程连接用户 MCP server，并转换为 Pi custom tools。
       if (Object.keys(mcpServers).length > 0) {
         try {
           piMcpTools = await buildPiMcpTools(mcpServers)
@@ -1101,7 +1086,6 @@ export class AgentOrchestrator {
         workspaceSlug,
         agentCwd,
         userBrowserContext: browserController.getUserContext(sessionId),
-        userVaultContext: vaultUserContext,
       })
       // 11.5 注入 mention 引用指令（Skill/MCP/会话）— 仅影响 prompt，不影响持久化
       let enrichedMessage = userMessage
@@ -1114,7 +1098,7 @@ export class AgentOrchestrator {
         const toolLines: string[] = ['用户在消息中明确引用了以下工具，请在本次回复中主动调用：']
         for (const slug of mentionedSkills ?? []) {
           const qualifiedName = workspaceSlug
-            ? `proma-workspace-${workspaceSlug}:${slug}`
+            ? `gamma-workspace-${workspaceSlug}:${slug}`
             : slug
           toolLines.push(`- Skill: ${qualifiedName}（请立即调用此 Skill）`)
         }
@@ -1151,27 +1135,27 @@ export class AgentOrchestrator {
 
       // 12. 读取应用设置并确定权限模式
       // 权限模式只属于当前 session；新会话默认完全自动模式。
-      const initialPermissionMode: PromaPermissionMode = permissionModeOverride
-        ?? PROMA_DEFAULT_PERMISSION_MODE
+      const initialPermissionMode: GammaPermissionMode = permissionModeOverride
+        ?? GAMMA_DEFAULT_PERMISSION_MODE
       // 注册到 Map，支持运行中动态切换
       this.sessionPermissionModes.set(sessionId, initialPermissionMode)
       console.log(`[Agent 编排] 权限模式: ${initialPermissionMode}${permissionModeOverride ? '（外部覆盖）' : ''}`)
 
       const emitPlanModeChanged = (active: boolean, source: 'initial' | 'tool' | 'permission'): void => {
         this.eventBus.emit(sessionId, {
-          kind: 'proma_event',
+          kind: 'gamma_event',
           event: { type: 'plan_mode_changed', sessionId, active, source },
         })
       }
 
       // 当初始模式为 plan 时，通知渲染进程展示计划模式 UI（如「Agent 正在规划」横幅）
       if (initialPermissionMode === 'plan') {
-        this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'enter_plan_mode', sessionId } })
+        this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'enter_plan_mode', sessionId } })
         emitPlanModeChanged(true, 'initial')
       }
 
       /** 读取当前会话的实时权限模式（支持运行中切换） */
-      const getPermissionMode = (): PromaPermissionMode =>
+      const getPermissionMode = (): GammaPermissionMode =>
         this.sessionPermissionModes.get(sessionId) ?? initialPermissionMode
 
       // 计划工件只允许来自当前会话的工作台 plan/ 目录；ExitPlanMode 服务会做 realpath + 哈希复核。
@@ -1183,7 +1167,7 @@ export class AgentOrchestrator {
         )
         return sessionContextDirectory ? join(sessionContextDirectory, 'plan') : undefined
       })()
-      // 计划目录由 Proma 创建，确保后续路径策略不需要为首次写入放宽符号链接校验。
+      // 计划目录由 Gamma 创建，确保后续路径策略不需要为首次写入放宽符号链接校验。
       // 运行中切换到 Plan 模式时，也会在首次写入前调用此函数。
       const ensureSessionPlanDirectory = (): boolean => {
         if (!sessionPlanDirectory) return false
@@ -1204,7 +1188,7 @@ export class AgentOrchestrator {
           toolInput,
           signal,
           (request: ExitPlanModeRequest) => {
-            this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'exit_plan_mode_request', request } })
+            this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'exit_plan_mode_request', request } })
           },
           { planDirectory: sessionPlanDirectory },
         )
@@ -1260,6 +1244,7 @@ export class AgentOrchestrator {
       // Plan 模式下允许的只读工具（不包含 Write/Edit/Bash 等写操作）
       const PLAN_MODE_ALLOWED_TOOLS = new Set([
         'Read', 'Glob', 'Grep',
+        'WebSearch', 'WebFetch',
         'TodoRead', 'TaskOutput',
         'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet',
         'ListMcpResourcesTool', 'ReadMcpResourceTool',
@@ -1358,7 +1343,7 @@ export class AgentOrchestrator {
           ensureSessionPlanDirectory()
           planModeEntered = true
           emitPlanModeChanged(true, 'tool')
-          this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'enter_plan_mode', sessionId } })
+          this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'enter_plan_mode', sessionId } })
           return { behavior: 'allow' as const, updatedInput: input }
         }
 
@@ -1367,7 +1352,7 @@ export class AgentOrchestrator {
           return askUserService.handleAskUserQuestion(
             sessionId, input, options.signal,
             (request: AskUserRequest) => {
-              this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'ask_user_request', request } })
+              this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'ask_user_request', request } })
             },
           )
         }
@@ -1386,7 +1371,7 @@ export class AgentOrchestrator {
         if (toolName === 'BrowserUpload') {
           if (currentMode === 'plan') return { behavior: 'deny' as const, message: '计划模式下不能选择网页上传文件，请在计划获批后执行。' }
           return permissionService.requestSingleApproval(sessionId, toolName, input, options, (request) => {
-            this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'permission_request', request } })
+            this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'permission_request', request } })
           })
         }
 
@@ -1420,11 +1405,11 @@ export class AgentOrchestrator {
         }
         if (planningDeletionPermission === 'require-single-approval') {
           return permissionService.requestSingleApproval(sessionId, toolName, input, options, (request) => {
-            this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'permission_request', request } })
+            this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'permission_request', request } })
           })
         }
 
-        // Pi 的原生 PowerShell 尚未具备 Proma Bash 等价的命令级安全分类和白名单。
+        // Pi 的原生 PowerShell 尚未具备 Gamma Bash 等价的命令级安全分类和白名单。
         // 在需确认的权限模式中，每条命令都必须显示并单次确认；bypassPermissions
         // 则遵从其既有语义，允许用户显式跳过所有工具确认。
         if (toolName === 'PowerShell' && currentMode !== 'bypassPermissions') {
@@ -1435,7 +1420,7 @@ export class AgentOrchestrator {
               : { behavior: 'deny' as const, message: '计划模式下只允许只读 PowerShell 探索命令，请在计划审批通过后再执行写操作' }
           }
           return permissionService.requestSingleApproval(sessionId, toolName, input, options, (request) => {
-            this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'permission_request', request } })
+            this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'permission_request', request } })
           })
         }
 
@@ -1519,7 +1504,7 @@ export class AgentOrchestrator {
             }
           })()
         : undefined
-      const instructionFiles = combinePromaInstructionFiles(
+      const instructionFiles = combineGammaInstructionFiles(
         managedWorkspaceInstructionFile,
         projectInstructions?.sources.map(({ path, content }) => ({ path, content })) ?? [],
       )
@@ -1591,7 +1576,7 @@ export class AgentOrchestrator {
         // `[1m]` 是 SDK 内部上下文变体，不应泄漏到标题生成或用户可见的模型名。
         resolvedModel = model.replace(/\[1m\]$/i, '')
         console.log(`[Agent 编排] SDK 确认模型: ${resolvedModel}`)
-        this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'model_resolved', model: resolvedModel } })
+        this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'model_resolved', model: resolvedModel } })
       }
       const handleContextWindow = (cw: number): void => {
         const inferredWindow = inferContextWindow(modelId)
@@ -1600,7 +1585,7 @@ export class AgentOrchestrator {
         // result 消息里的真实 contextWindow 透传到 renderer，
         // 覆盖流式过程中按模型名推断的 fallback 值（智谱等端点会把 [1m] 等后缀剥掉，导致 fallback 不准）
         this.eventBus.emit(sessionId, {
-          kind: 'proma_event',
+          kind: 'gamma_event',
           event: { type: 'context_window', contextWindow },
         })
       }
@@ -1691,7 +1676,7 @@ export class AgentOrchestrator {
         onContextWindow: handleContextWindow,
         retryRunStartedAt: streamStartedAt,
         onRetry: (retry) => {
-          this.eventBus.emit(sessionId, { kind: 'proma_event', event: { type: 'retry', ...retry } })
+          this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'retry', ...retry } })
         },
       }
 
@@ -1711,8 +1696,8 @@ export class AgentOrchestrator {
           kind: 'sdk_message',
           message: {
             ...(message as Record<string, unknown>),
-            _promaLiveRunStartedAt: streamStartedAt,
-            _promaLiveRunGeneration: runGeneration,
+            _gammaLiveRunStartedAt: streamStartedAt,
+            _gammaLiveRunGeneration: runGeneration,
           } as unknown as SDKMessage,
         })
       }
@@ -1860,7 +1845,7 @@ export class AgentOrchestrator {
                 }
 
                 // Thinking signature 不兼容：通常由跨模型 resume 触发。
-                // 先自动清除 SDK resume 关系，改用 Proma 已持久化上下文重跑一次；再失败才展示用户提示。
+                // 先自动清除 SDK resume 关系，改用 Gamma 已持久化上下文重跑一次；再失败才展示用户提示。
                 if (
                   typedError.code === THINKING_SIGNATURE_ERROR_CODE &&
                   wasResuming
@@ -1883,7 +1868,7 @@ export class AgentOrchestrator {
                 }
 
                 // 上下文过长：旧 SDK session 已经处于不可继续的超限状态。
-                // 自动清除 resume 指针，改用 Proma 最近历史回填重跑一次；用于飞书/自动任务等无人值守入口自恢复。
+                // 自动清除 resume 指针，改用 Gamma 最近历史回填重跑一次；用于飞书/自动任务等无人值守入口自恢复。
                 if (
                   typedError.code === 'prompt_too_long' &&
                   wasResuming
@@ -2133,7 +2118,7 @@ export class AgentOrchestrator {
             continue  // 进入下一次 retry 循环
           }
 
-          // 上下文过长：清除超限 resume 指针，用 Proma 历史回填自动恢复一次。
+          // 上下文过长：清除超限 resume 指针，用 Gamma 历史回填自动恢复一次。
           if (catchLooksPromptTooLong && wasResuming) {
             existingSdkSessionId = undefined
             capturedSdkSessionId = undefined
@@ -2333,14 +2318,14 @@ export class AgentOrchestrator {
   /**
    * 运行中动态切换会话的权限模式
    *
-   * 同时更新 Proma 侧（canUseTool 闭包读取的 Map）和 SDK 侧（query.setPermissionMode）。
+   * 同时更新 Gamma 侧（canUseTool 闭包读取的 Map）和 SDK 侧（query.setPermissionMode）。
    * 典型场景：用户在 Agent 运行中通过 PermissionModeSelector 切换模式。
    */
-  async updateSessionPermissionMode(sessionId: string, mode: PromaPermissionMode): Promise<void> {
+  async updateSessionPermissionMode(sessionId: string, mode: GammaPermissionMode): Promise<void> {
     if (!this.activeSessions.has(sessionId)) return
     this.sessionPermissionModes.set(sessionId, mode)
     this.eventBus.emit(sessionId, {
-      kind: 'proma_event',
+      kind: 'gamma_event',
       event: { type: 'plan_mode_changed', sessionId, active: mode === 'plan', source: 'permission' },
     })
     // 同步通知 SDK 侧
@@ -2438,11 +2423,10 @@ export class AgentOrchestrator {
       : undefined
 
     const userBrowserContext = browserController.getUserContext(sessionId)
-    const userVaultContext = getVaultUserContext(sessionId)
     // 运行中的 Agent 收到队列消息时也必须看到用户刚刚主动打开的页面。
     // 未打开浏览器时保持既有消息形态，避免给每条插队消息重复注入无关环境块。
-    let enrichedText = userBrowserContext || userVaultContext
-      ? `${buildDynamicContext({ userBrowserContext, userVaultContext })}\n\n${text}`
+    let enrichedText = userBrowserContext
+      ? `${buildDynamicContext({ userBrowserContext })}\n\n${text}`
       : text
     const referencedSessionsBlock = buildReferencedSessionsPrompt(sessionId, mentionedSessionIds, workspaceSlug)
     if (referencedSessionsBlock) {
@@ -2452,7 +2436,7 @@ export class AgentOrchestrator {
       const toolLines: string[] = ['用户在消息中明确引用了以下工具，请在本次回复中主动调用：']
       for (const slug of mentionedSkills ?? []) {
         const qualifiedName = workspaceSlug
-          ? `proma-workspace-${workspaceSlug}:${slug}`
+          ? `gamma-workspace-${workspaceSlug}:${slug}`
           : slug
         toolLines.push(`- Skill: ${qualifiedName}（请立即调用此 Skill）`)
       }
@@ -2504,13 +2488,6 @@ export class AgentOrchestrator {
         },
         parent_tool_use_id: null,
         _createdAt: Date.now(),
-        ...(userVaultContext ? {
-          _vaultFocus: {
-            displayName: userVaultContext.displayName,
-            rootPath: userVaultContext.rootPath,
-            focus: userVaultContext.focus,
-          },
-        } : {}),
       } as unknown as SDKMessage
       appendSDKMessages(sessionId, [persistMsg])
       this.flushPendingUserSkillActivations(sessionId, uuid)

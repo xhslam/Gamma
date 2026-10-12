@@ -2,14 +2,16 @@
  * 应用设置服务
  *
  * 管理应用设置（主题模式等）的读写。
- * 存储在 ~/.proma/settings.json
+ * 存储在 ~/.gamma/settings.json
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
+import { writeJsonFileAtomic } from './safe-file'
+import { normalizeAppIconVariant } from '../../types/app-icons'
 import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings } from '../../types'
-import type { AgentIslandSettings, AppSettings } from '../../types'
-import { getTerminalProfilesForPlatform, isTerminalProfile } from '@proma/shared'
+import type { AgentIslandSettings, AppSettings, UpdateAppSettings } from '../../types'
+import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@gamma/shared'
 
 function sanitizeAgentIslandSettings(input: unknown): AgentIslandSettings | undefined {
   if (!input || typeof input !== 'object') return undefined
@@ -45,6 +47,8 @@ export function getSettings(): AppSettings {
       agentThinking: { type: 'adaptive' },
       gitAttributionEnabled: true,
       productivityTools: normalizeProductivityToolsSettings(undefined),
+      appIconVariant: 'default',
+      markdownEditor: normalizeMarkdownEditorPreferences(undefined),
     }
   }
 
@@ -88,6 +92,8 @@ export function getSettings(): AppSettings {
       gitAttributionEnabled: settings.gitAttributionEnabled ?? true,
       // 缺省全部开启：老配置文件不会因升级意外隐藏生产力工具。
       productivityTools: normalizeProductivityToolsSettings(data.productivityTools),
+      appIconVariant: normalizeAppIconVariant(data.appIconVariant),
+      markdownEditor: normalizeMarkdownEditorPreferences(data.markdownEditor),
       // 仅保留 macOS 原生 Island 开关；清理旧非原生 surface 的持久化残留字段。
       agentIsland: sanitizeAgentIslandSettings(data.agentIsland),
     }
@@ -106,6 +112,8 @@ export function getSettings(): AppSettings {
       agentThinking: { type: 'adaptive' },
       gitAttributionEnabled: true,
       productivityTools: normalizeProductivityToolsSettings(undefined),
+      appIconVariant: 'default',
+      markdownEditor: normalizeMarkdownEditorPreferences(undefined),
     }
   }
 }
@@ -115,11 +123,13 @@ export function getSettings(): AppSettings {
  *
  * 合并更新字段并写入文件。
  */
-export function updateSettings(updates: Partial<AppSettings>): AppSettings {
+export function updateSettings(updates: UpdateAppSettings): AppSettings {
   const current = getSettings()
   const updated: AppSettings = {
     ...current,
     ...updates,
+    appIconVariant: normalizeAppIconVariant(updates.appIconVariant ?? current.appIconVariant),
+    markdownEditor: mergeMarkdownEditorPreferences(current.markdownEditor, updates.markdownEditor),
     // 仅保留 macOS 原生 Island 开关，避免旧非原生 surface 字段被继续回写。
     agentIsland: updates.agentIsland === undefined
       ? sanitizeAgentIslandSettings(current.agentIsland)
@@ -131,7 +141,7 @@ export function updateSettings(updates: Partial<AppSettings>): AppSettings {
   const filePath = getSettingsPath()
 
   try {
-    writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf-8')
+    writeJsonFileAtomic(filePath, updated)
     console.log('[设置] 已更新 keys:', Object.keys(updates).join(', '))
   } catch (error) {
     console.error('[设置] 写入失败:', error)

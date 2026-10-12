@@ -3,7 +3,7 @@ import type {
   PlanningNativeSyncPermission,
   PlanningNativeSyncStatus,
   PlanningNativeSyncTarget,
-} from '@proma/shared'
+} from '@gamma/shared'
 import { callMacEventKitNativeAddon, subscribeMacEventKitNativeChanges } from './mac-eventkit-native-addon'
 
 type NativePermissionResponse = {
@@ -95,10 +95,10 @@ export async function listPlanningNativeConnectionTargets(entity: PlanningNative
 
 export interface PlanningNativeSyncItem {
   targetId: string
-  /** Proma UUID；仅用于新建项目的 crash-recovery marker，不覆盖用户已有 URL。 */
+  /** Gamma UUID；仅用于新建项目的 crash-recovery marker，不覆盖用户已有 URL。 */
   identity: string
   calendarItemIdentifier?: string
-  /** 仅用户在冲突中明确选择“保留 Proma”后才允许 locator 缺失时重建。 */
+  /** 仅用户在冲突中明确选择“保留 Gamma”后才允许 locator 缺失时重建。 */
   allowRecreate?: boolean
   title: string
   notes?: string
@@ -115,6 +115,8 @@ export interface PlanningNativeSyncItem {
 export interface PlanningNativeExternalItem {
   calendarItemIdentifier: string
   calendarItemExternalIdentifier?: string
+  /** addon 仅从 Gamma 或兼容的旧版 marker 解析 UUID。 */
+  gammaIdentity?: string
   title: string
   notes?: string
   startAt?: number
@@ -141,7 +143,7 @@ export async function listPlanningNativeConnectionItems(entity: PlanningNativeSy
   return callMacEventKitNativeAddon<PlanningNativeExternalItem[]>('listItems', entity, { targetId, ...range })
 }
 
-/** 按 Proma 已保存 locator 精确确认删除，不把有界 Calendar 查询误判成完整快照。 */
+/** 按 Gamma 已保存 locator 精确确认删除，不把有界 Calendar 查询误判成完整快照。 */
 export async function listPlanningNativeConnectionItemsByIdentifier(entity: PlanningNativeSyncEntity, targetId: string, calendarItemIdentifiers: string[]): Promise<PlanningNativeExternalItem[]> {
   if (calendarItemIdentifiers.length === 0 || !eventKitSupported()) return []
   const permission = await getPermission(entity)
@@ -160,7 +162,7 @@ export async function upsertPlanningNativeSyncItem(entity: PlanningNativeSyncEnt
   return callMacEventKitNativeAddon<PlanningNativeSyncIdentifiers>('upsert', entity, item)
 }
 
-/** 删除必须带受管目标和 Proma marker；locator 缺失时 native addon 可恢复定位，避免崩溃留下孤儿项。 */
+/** 删除必须带受管目标和 Gamma marker；locator 缺失时 native addon 可恢复定位，避免崩溃留下孤儿项。 */
 export async function removePlanningNativeSyncItem(entity: PlanningNativeSyncEntity, item: Pick<PlanningNativeSyncItem, 'targetId' | 'identity' | 'calendarItemIdentifier' | 'startAt'>): Promise<void> {
   if (!eventKitSupported()) return
   await callMacEventKitNativeAddon<Record<string, never>>('remove', entity, item)

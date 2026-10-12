@@ -1,8 +1,8 @@
 {
-  "name": "@proma/shared",
-  "version": "0.1.73",
+  "name": "@gamma/shared",
+  "version": "0.1.82",
   "license": "AGPL-3.0-only",
-  "description": "Shared types, configs and utilities for proma",
+  "description": "Shared types, configs and utilities for gamma",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

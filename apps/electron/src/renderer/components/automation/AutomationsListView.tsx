@@ -25,7 +25,7 @@ import {
   automationToDraft,
   createEmptyDraft,
 } from '@/atoms/automation-atoms'
-import type { Automation } from '@proma/shared'
+import type { Automation } from '@gamma/shared'
 
 /** 把调度配置格式化为可读文案 */
 function formatSchedule(a: Automation): string {
@@ -304,7 +304,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }): React.ReactElement 
         <div className="text-[16px] font-medium text-foreground/85">暂无定时任务</div>
         <div className="text-[13px] text-foreground/50 leading-relaxed max-w-md">
           定时任务可以让 AI 周期性地执行某项任务，如每天总结新邮件、每小时检查 GitHub 仓库等。
-          也可以在对话中用「以后每隔 X 分钟…」让 Proma 自动识别并创建。
+          也可以在对话中用「以后每隔 X 分钟…」让 Gamma 自动识别并创建。
         </div>
       </div>
       <button

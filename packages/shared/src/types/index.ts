@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for proma
+ * Shared type definitions for gamma
  */
 
 // Placeholder types - will be expanded as needed
@@ -66,5 +66,4 @@ export * from './planning'
 // Agent 灵动岛相关类型
 export * from './agent-island'
 
-// 用户授权的 Markdown Vault 相关类型
-export * from './vault'
+export * from './markdown-workspace'

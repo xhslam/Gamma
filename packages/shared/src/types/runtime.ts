@@ -228,7 +228,7 @@ export interface FileAccessOptions {
   unrestricted?: boolean
 }
 
-/** 已授权本地文件的 proma-file URL */
+/** 已授权本地文件的 gamma-file URL */
 export interface ResolvedFileUrl {
   url: string
 }
@@ -388,6 +388,8 @@ export interface ShellEnvResult {
  * IPC 通道名称常量
  */
 export const IPC_CHANNELS = {
+  /** VMark 模块化 Markdown 工作区（主进程 grant 授权）。 */
+  MARKDOWN_WORKSPACE: 'markdown-workspace:request',
   /** 获取运行时状态 */
   GET_RUNTIME_STATUS: 'runtime:get-status',
   /** 重新初始化运行时（用户安装完 Git/Node 后触发） */

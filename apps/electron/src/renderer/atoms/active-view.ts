@@ -5,12 +5,12 @@
  * - conversations: 对话视图（Chat/Agent 模式内容）
  * - planning: 任务、日程与定时任务统一视图
  * - agent-skills: Agent 技能（Skills/MCP）全屏管理视图
- * - vault: Chat 模式下独立显示的 Obsidian Vault 视图
+ * - markdown: Markdown 工作区视图
  */
 
 import { atom } from 'jotai'
 
-export type ActiveView = 'conversations' | 'planning' | 'agent-skills' | 'vault'
+export type ActiveView = 'conversations' | 'planning' | 'agent-skills' | 'markdown'
 export type AgentSkillsCapabilityTab = 'skills' | 'mcp' | 'memory'
 
 /** 当前活跃视图（不持久化，每次启动默认显示对话） */

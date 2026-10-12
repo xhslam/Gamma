@@ -1,9 +1,9 @@
 /**
- * 读取 Proma 会话 JSONL → SDKMessage[]
+ * 读取 Gamma 会话 JSONL → SDKMessage[]
  *
  * 逻辑迁移自 apps/electron 主进程 agent-session-manager.ts 的
  * getAgentSessionSDKMessages / convertLegacyMessage，作为唯一真源由
- * Electron 主进程与 proma CLI 共用。旧扁平格式（AgentMessage，带 role 字段）
+ * Electron 主进程与 gamma CLI 共用。旧扁平格式（AgentMessage，带 role 字段）
  * 在此统一归一为近似 SDKMessage，下游无需再区分「格式 A / 格式 B」。
  */
 /**
@@ -11,9 +11,9 @@
  *
  * 注意：本文件刻意不 import 'node:fs'，以便被 Electron 渲染层（浏览器环境）
  * 经主 barrel 引入。需要从磁盘读取的 readSessionMessages 在 './read-fs' 中，
- * 仅通过 '@proma/session-core/node' 子路径暴露给 Node 侧（CLI / 主进程）。
+ * 仅通过 '@gamma/session-core/node' 子路径暴露给 Node 侧（CLI / 主进程）。
  */
-import type { AgentMessage, SDKMessage } from '@proma/shared'
+import type { AgentMessage, SDKMessage } from '@gamma/shared'
 
 /**
  * 将旧的 AgentMessage 转换为近似的 SDKMessage（向后兼容）。

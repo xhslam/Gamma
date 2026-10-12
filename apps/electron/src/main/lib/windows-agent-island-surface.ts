@@ -2,7 +2,7 @@ import type {
   AgentIslandInteractionKind,
   AgentIslandPhase,
   NativeAgentIslandSnapshot,
-} from '@proma/shared'
+} from '@gamma/shared'
 import type { NotificationSoundType } from '../../types'
 import { getSettings } from './settings-service'
 

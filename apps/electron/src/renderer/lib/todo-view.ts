@@ -1,4 +1,4 @@
-import type { TodoStatus } from '@proma/shared'
+import type { TodoStatus } from '@gamma/shared'
 
 export type TodoListView = 'all' | 'today' | 'upcoming' | 'completed' | `group:${string}`
 

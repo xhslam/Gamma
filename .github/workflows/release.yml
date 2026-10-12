@@ -45,7 +45,7 @@ jobs:
 
       # 准备当前 runner 架构的 OfficeCLI 资源
       - name: 准备 OfficeCLI（macOS arm64）
-        run: bun run --filter='@proma/electron' prepare:officecli
+        run: bun run --filter='@gamma/electron' prepare:officecli
 
       # macOS 代码签名准备
       - name: 导入 macOS 签名证书
@@ -77,8 +77,8 @@ jobs:
       - name: 准备运行时依赖
         shell: bash
         run: |
-          bun run --filter='@proma/electron' sync:runtime-deps
-          bun run --filter='@proma/electron' rebuild:node-pty
+          bun run --filter='@gamma/electron' sync:runtime-deps
+          bun run --filter='@gamma/electron' rebuild:node-pty
 
       # 打包并发布到 GitHub Releases
       - name: 打包并发布 (macOS)
@@ -126,7 +126,7 @@ jobs:
 
       # 准备当前 runner 架构的 OfficeCLI 资源
       - name: 准备 OfficeCLI（macOS x64）
-        run: bun run --filter='@proma/electron' prepare:officecli
+        run: bun run --filter='@gamma/electron' prepare:officecli
 
       # macOS 代码签名准备
       - name: 导入 macOS 签名证书
@@ -158,8 +158,8 @@ jobs:
       - name: 准备运行时依赖
         shell: bash
         run: |
-          bun run --filter='@proma/electron' sync:runtime-deps
-          bun run --filter='@proma/electron' rebuild:node-pty
+          bun run --filter='@gamma/electron' sync:runtime-deps
+          bun run --filter='@gamma/electron' rebuild:node-pty
 
       # 打包并发布到 GitHub Releases
       - name: 打包并发布 (macOS x64)
@@ -347,7 +347,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: 准备 OfficeCLI（Linux x64）
-        run: bun run --filter='@proma/electron' prepare:officecli
+        run: bun run --filter='@gamma/electron' prepare:officecli
 
       - name: 构建 Electron 应用
         run: bun run electron:build
@@ -355,8 +355,8 @@ jobs:
       - name: 准备运行时依赖
         shell: bash
         run: |
-          bun run --filter='@proma/electron' sync:runtime-deps
-          bun run --filter='@proma/electron' rebuild:node-pty
+          bun run --filter='@gamma/electron' sync:runtime-deps
+          bun run --filter='@gamma/electron' rebuild:node-pty
 
       - name: 打包并发布 (Linux x64)
         env:
@@ -387,7 +387,7 @@ jobs:
 
       # 准备当前 runner 架构的 OfficeCLI 资源
       - name: 准备 OfficeCLI（Windows x64）
-        run: bun run --filter='@proma/electron' prepare:officecli
+        run: bun run --filter='@gamma/electron' prepare:officecli
 
       - name: 构建 Electron 应用
         run: bun run electron:build
@@ -396,8 +396,8 @@ jobs:
       - name: 准备运行时依赖
         shell: bash
         run: |
-          bun run --filter='@proma/electron' sync:runtime-deps
-          bun run --filter='@proma/electron' rebuild:node-pty
+          bun run --filter='@gamma/electron' sync:runtime-deps
+          bun run --filter='@gamma/electron' rebuild:node-pty
 
       - name: 打包并发布 (Windows)
         env:

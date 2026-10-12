@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { ProviderType } from '@proma/shared'
+import type { ProviderType } from '@gamma/shared'
 import { AnthropicAdapter } from './anthropic-adapter.ts'
-import { setPromaVersion } from './user-agent.ts'
+import { setGammaVersion } from './user-agent.ts'
 
 function buildRequest(provider: ProviderType, apiKey = 'test-key') {
   const adapter = new AnthropicAdapter(provider)
@@ -32,8 +32,8 @@ describe('AnthropicAdapter headers', () => {
     expect(request.headers['User-Agent']).toBeUndefined()
   })
 
-  test('xiaomi token plan keeps bearer authentication with Proma User-Agent', () => {
-    setPromaVersion('9.9.9')
+  test('xiaomi token plan keeps bearer authentication with registered legacy User-Agent', () => {
+    setGammaVersion('9.9.9')
 
     const request = buildRequest('xiaomi-token-plan')
 
@@ -42,8 +42,8 @@ describe('AnthropicAdapter headers', () => {
     expect(request.headers['api-key']).toBeUndefined()
   })
 
-  test('qwen token plan uses the complete Anthropic endpoint with bearer authentication and Proma User-Agent', () => {
-    setPromaVersion('9.9.9')
+  test('qwen token plan uses the complete Anthropic endpoint with bearer authentication and registered legacy User-Agent', () => {
+    setGammaVersion('9.9.9')
 
     const request = buildRequest('qwen-token-plan')
 
@@ -54,7 +54,7 @@ describe('AnthropicAdapter headers', () => {
   })
 
   test('zhipu team plan uses apiKey from JSON for model calls', () => {
-    setPromaVersion('9.9.9')
+    setGammaVersion('9.9.9')
 
     const request = buildRequest(
       'zhipu-coding-team',

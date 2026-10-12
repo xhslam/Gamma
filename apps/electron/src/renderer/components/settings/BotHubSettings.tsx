@@ -18,12 +18,12 @@ import { SlackSettings } from './SlackSettings'
 import { DingTalkSettings } from './DingTalkSettings'
 import { WeChatSettings } from './WeChatSettings'
 import { BotDefaultSettings } from './BotDefaultSettings'
-import { PromaLogoSettings } from './PromaLogoSettings'
+import { GammaLogoSettings } from './GammaLogoSettings'
 import feishuLogo from '@/assets/bots/feishu.png'
 import dingtalkLogo from '@/assets/bots/dingding.png'
 import slackLogo from '@/assets/bots/slack.png'
 import wechatLogo from '@/assets/bots/wechat.png'
-import promaLogo from '@/assets/models/proma.png'
+import gammaLogo from '@/assets/models/gamma.png'
 
 // ===== 类型 =====
 
@@ -77,7 +77,7 @@ const PLATFORMS: readonly BotPlatformDef[] = [
   {
     id: 'logos',
     name: '品牌素材',
-    iconSrc: promaLogo,
+    iconSrc: gammaLogo,
     iconBgClass: 'bg-muted',
   },
 ] as const
@@ -184,7 +184,7 @@ function renderPlatformPanel(id: BotPlatformId): React.ReactElement {
     case 'defaults':
       return <BotDefaultSettings />
     case 'logos':
-      return <PromaLogoSettings />
+      return <GammaLogoSettings />
   }
 }
 

@@ -1,20 +1,20 @@
 {
-  "name": "@proma/cli",
-  "version": "0.1.0",
+  "name": "@gamma/cli",
+  "version": "0.1.1",
   "license": "AGPL-3.0-only",
-  "description": "proma — Proma 命令行工具。面向有限上下文的 Agent 消费者，提供会话的渐进式读取（list / info / outline / search / export）。",
+  "description": "gamma — Gamma 命令行工具。面向有限上下文的 Agent 消费者，提供会话的渐进式读取（list / info / outline / search / export）。",
   "type": "module",
   "bin": {
-    "proma": "./src/index.ts"
+    "gamma": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "bun build --compile --outfile dist/proma src/index.ts",
+    "build": "bun build --compile --outfile dist/gamma src/index.ts",
     "start": "bun src/index.ts"
   },
   "dependencies": {
-    "@proma/session-core": "workspace:*",
-    "@proma/shared": "workspace:*"
+    "@gamma/session-core": "workspace:*",
+    "@gamma/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

@@ -78,7 +78,7 @@ export async function updateSessionHoverPreviewEnabled(enabled: boolean): Promis
   }
 }
 
-/** 更新 Todo、日程与 Obsidian 的通用可用性设置。 */
+/** 更新 Todo 与日程的通用可用性设置。 */
 export async function updateProductivityTools(settings: ProductivityToolsSettings): Promise<void> {
   try {
     await window.electronAPI.updateSettings({ productivityTools: settings })

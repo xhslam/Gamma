@@ -10,9 +10,9 @@ import { createHash } from 'node:crypto'
 import { constants, existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs'
 import { lstat, open, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'path'
-import type { ChangedFileEntry, UnstagedChangesResult, UntrackedFileEntry } from '@proma/shared'
-import { normalizePathForCompare } from '@proma/shared'
-import type { ChangeSource, ChangedFileStatus } from '@proma/shared'
+import type { ChangedFileEntry, UnstagedChangesResult, UntrackedFileEntry } from '@gamma/shared'
+import { normalizePathForCompare } from '@gamma/shared'
+import type { ChangeSource, ChangedFileStatus } from '@gamma/shared'
 
 /** 大文件读取上限：超过则跳过，避免 IPC 序列化撑爆内存 */
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
@@ -866,7 +866,7 @@ async function getGitCommonDir(somePath: string): Promise<string | null> {
  * 对于 worktree，git 的公共目录（--git-common-dir）始终指向主仓库的 .git，
  * 因此其父目录即主仓库根。普通仓库返回自身根目录。非 git 路径返回 null。
  *
- * 用于安全校验：worktree 常被放在主仓库之外（如 ~/proma-dev/worktrees/xxx），
+ * 用于安全校验：worktree 常被放在主仓库之外（如 ~/gamma-dev/worktrees/xxx），
  * 直接判定其路径会越界；改为校验它回溯到的主仓库是否已授权。
  */
 export async function getMainRepoRoot(somePath: string): Promise<string | null> {
@@ -883,9 +883,9 @@ export async function getMainRepoRoot(somePath: string): Promise<string | null> 
  * 会话目录可能是包含多个仓库的父目录。不能只使用第一个发现的仓库，否则前面的
  * 普通仓库会遮蔽后面真正拥有 linked worktree 的仓库。
  */
-export async function listWorktrees(repoPath: string): Promise<import('@proma/shared').WorktreeInfo[]> {
+export async function listWorktrees(repoPath: string): Promise<import('@gamma/shared').WorktreeInfo[]> {
   const roots = await findAllGitRoots(repoPath)
-  const worktreesByPath = new Map<string, import('@proma/shared').WorktreeInfo>()
+  const worktreesByPath = new Map<string, import('@gamma/shared').WorktreeInfo>()
 
   for (const root of roots) {
     const output = await runGitCommand(['worktree', 'list', '--porcelain'], root, { quiet: true })
@@ -940,7 +940,7 @@ export async function listWorktrees(repoPath: string): Promise<import('@proma/sh
 export async function getWorktreeChanges(
   worktreePath: string,
   baseBranch: string = 'origin/main',
-): Promise<import('@proma/shared').UnstagedChangesResult> {
+): Promise<import('@gamma/shared').UnstagedChangesResult> {
   if (!existsSync(worktreePath)) {
     return { isGitRepo: false, files: [], untrackedFiles: [], gitRootNames: [] }
   }
@@ -956,8 +956,8 @@ export async function getWorktreeChanges(
   const fetchKey = await getGitCommonDir(gitRoot) ?? gitRoot
   await refreshWorktreeRemote(fetchKey, gitRoot)
 
-  const allFiles: import('@proma/shared').ChangedFileEntry[] = []
-  const fileMap = new Map<string, import('@proma/shared').ChangedFileEntry>()
+  const allFiles: import('@gamma/shared').ChangedFileEntry[] = []
+  const fileMap = new Map<string, import('@gamma/shared').ChangedFileEntry>()
 
   // 1. 已 commit 但未合并的改动: git diff baseBranch...HEAD
   const committedStatus = await runGitCommand(['diff', `${baseBranch}...HEAD`, '--name-status'], gitRoot)
@@ -969,7 +969,7 @@ export async function getWorktreeChanges(
       const simpleMatch = line.match(/^([MDAT])\t(.+)$/)
       const renameMatch = line.match(/^([RC])\d*\t([^\t]+)\t(.+)$/)
 
-      let status: import('@proma/shared').ChangedFileStatus
+      let status: import('@gamma/shared').ChangedFileStatus
       let filePath: string
 
       if (simpleMatch) {
@@ -985,7 +985,7 @@ export async function getWorktreeChanges(
 
       if (!shouldDisplayChangedFile(filePath)) continue
       const stats = committedStats.get(filePath) ?? { additions: 0, deletions: 0 }
-      const entry: import('@proma/shared').ChangedFileEntry = {
+      const entry: import('@gamma/shared').ChangedFileEntry = {
         filePath,
         status,
         additions: stats.additions,
@@ -1007,7 +1007,7 @@ export async function getWorktreeChanges(
       const simpleMatch = line.match(/^([MDAT])\t(.+)$/)
       const renameMatch = line.match(/^([RC])\d*\t([^\t]+)\t(.+)$/)
 
-      let status: import('@proma/shared').ChangedFileStatus
+      let status: import('@gamma/shared').ChangedFileStatus
       let filePath: string
 
       if (simpleMatch) {

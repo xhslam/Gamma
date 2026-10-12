@@ -1,4 +1,4 @@
-import type { ProviderType } from '@proma/shared'
+import type { ProviderType } from '@gamma/shared'
 
 /**
  * 某些 OpenAI 兼容接口只接受 system、user、assistant 和 tool 角色。
@@ -8,5 +8,5 @@ import type { ProviderType } from '@proma/shared'
  * system 角色。原生 OpenAI 渠道仍可使用 developer。
  */
 export function supportsPiDeveloperRole(provider: ProviderType): boolean {
-  return provider !== 'doubao' && provider !== 'doubao-api' && provider !== 'qwen' && provider !== 'custom'
+  return provider !== 'doubao-api' && provider !== 'qwen' && provider !== 'custom'
 }

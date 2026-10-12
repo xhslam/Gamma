@@ -4,7 +4,7 @@ import {
   resolveReasoningProfile,
   type AgentThinkingLevel,
   type ReasoningProfile,
-} from '@proma/shared'
+} from '@gamma/shared'
 
 type ProviderPayload = Record<string, unknown>
 
@@ -49,7 +49,7 @@ export function injectOpenAIReasoningLevel(
 
   const existingReasoning = isReasoningPayload(payload.reasoning) ? payload.reasoning : {}
   // ChatGPT Codex OAuth does not accept reasoning.mode. Responses channels likewise
-  // do not expose it in Proma, so remove any upstream mode before dispatching.
+  // do not expose it in Gamma, so remove any upstream mode before dispatching.
   const { mode: _unsupportedReasoningMode, ...reasoningWithoutMode } = existingReasoning
   const reasoning = {
     ...reasoningWithoutMode,

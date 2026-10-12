@@ -1,12 +1,12 @@
 /**
- * proma session outline — turn 级地图。每 turn 一行的结构概览，
+ * gamma session outline — turn 级地图。每 turn 一行的结构概览，
  * 让 Agent 先看地图再决定读哪段，避免全量读正文。
  */
 import { register } from '../registry'
 import { resolveSession } from '../sessions'
 import { emitJson, emitText, errorLine, EXIT_OK, EXIT_ERROR, UsageError } from '../output'
-import { readSessionMessages } from '@proma/session-core/node'
-import { groupIntoTurns, toTranscript, outline, formatOutlineLine, selectTurns } from '@proma/session-core'
+import { readSessionMessages } from '@gamma/session-core/node'
+import { groupIntoTurns, toTranscript, outline, formatOutlineLine, selectTurns } from '@gamma/session-core'
 import { numFlag } from '../args'
 
 register({

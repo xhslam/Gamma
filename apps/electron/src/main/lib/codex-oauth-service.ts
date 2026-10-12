@@ -12,7 +12,7 @@
  */
 
 import { shell } from 'electron'
-import type { CodexOAuthCredentials, CodexOAuthDeviceCode, CodexOAuthLoginMethod } from '@proma/shared'
+import type { CodexOAuthCredentials, CodexOAuthDeviceCode, CodexOAuthLoginMethod } from '@gamma/shared'
 import { runWithOAuthProxyScope } from './oauth-proxy-scope'
 /** Pi 0.80.10 将 OAuth 流程收敛到 ModelRuntime。保持动态 import，避免 Electron 主包将 Pi runtime 内联。 */
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
@@ -27,7 +27,7 @@ function loadPiSdk(): Promise<PiSdk> {
 type OAuthCredential = { type: 'oauth'; access: string; refresh: string; expires: number; [key: string]: unknown }
 
 /**
- * Pi 的 ModelRuntime 只要求 CredentialStore 的结构契约。OAuth 凭据仍由 Proma
+ * Pi 的 ModelRuntime 只要求 CredentialStore 的结构契约。OAuth 凭据仍由 Gamma
  * channel-manager 加密持久化；这里使用内存 store，避免 Pi 写入自己的 ~/.pi 配置。
  */
 function createEphemeralCredentialStore(initial?: OAuthCredential) {
@@ -64,7 +64,7 @@ let activeLoginAbort: AbortController | undefined
 
 /**
  * 注意：Pi 0.80.10 的公开 OAuth API 不再接收 fetch 注入。依赖升级补丁会把
- * Proma 的代理 fetch 重新接回该流程；本 service 只负责与公开 ModelRuntime 交互。
+ * Gamma 的代理 fetch 重新接回该流程；本 service 只负责与公开 ModelRuntime 交互。
  */
 
 export interface CodexLoginCallbacks {
