@@ -18,3 +18,13 @@ describe('Given 可位于两侧的展示工作区', () => {
     }
   })
 })
+
+describe('Given 完全收起且零宽度的左侧导航', () => {
+  test('When 工作区占用释放空间 Then 不再扣除图标栏宽度并保留 Agent 最小宽度', () => {
+    for (const side of ['left', 'right'] as const) {
+      const width = getWorkspaceResizeWidth(460, 0, side === 'left' ? 10_000 : -10_000, side)
+      expect(clampRightPanelWidth(width, 900, 360, 0, true)).toBe(900 - MIN_MAIN_AREA_WIDTH)
+      expect(clampRightPanelWidth(width, 300, 360, 0, true)).toBe(0)
+    }
+  })
+})

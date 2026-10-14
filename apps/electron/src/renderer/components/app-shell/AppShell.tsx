@@ -9,12 +9,13 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { LeftSidebar } from './LeftSidebar'
+import { CollapsedSidebarHeader } from './CollapsedSidebarHeader'
 import { RightSidePanel } from './RightSidePanel'
 import { WorkspacePanels } from './WorkspacePanels'
 import { MainArea } from '@/components/tabs/MainArea'
 import { appModeAtom } from '@/atoms/app-mode'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
-import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
+import { LEFT_SIDEBAR_WIDTH } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
@@ -39,7 +40,6 @@ const MIN_TODO_PANEL_WIDTH = 600
 // 两个 Pane 需要各自保留约 320px 内容区及中间分隔条。
 const MIN_SPLIT_PANEL_WIDTH = 720
 const EXPANDED_WORKSPACE_DEFAULT_VIEWPORT_RATIO = 2 / 5
-const COLLAPSED_LEFT_SIDEBAR_WIDTH = 60
 
 function isExpandedWorkspaceTab(tab: string | undefined): boolean {
   return Boolean(
@@ -63,13 +63,6 @@ function getRightPanelMinWidth(isTodoTab: boolean, isExpandedWorkspace: boolean)
     : isExpandedWorkspace
       ? MIN_EXPANDED_WORKSPACE_PANEL_WIDTH
       : MIN_RIGHT_PANEL_WIDTH
-}
-
-const MIN_LEFT_SIDEBAR_WIDTH = 240
-const MAX_LEFT_SIDEBAR_WIDTH = 420
-
-function clampLeftSidebarWidth(width: number): number {
-  return Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.min(MAX_LEFT_SIDEBAR_WIDTH, width))
 }
 
 export function AppShell(): React.ReactElement {
@@ -124,60 +117,8 @@ export function AppShell(): React.ReactElement {
   const showRightPanel = appMode === 'agent' && !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown'
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
-  // 左侧边栏可拖拽宽度
-  const [leftSidebarWidth, setLeftSidebarWidth] = useAtom(leftSidebarWidthAtom)
+  // 左侧栏展开宽度固定；折叠状态仍由按钮、快捷键和右侧工作区布局控制。
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
-  const leftDragging = React.useRef(false)
-  const [isDraggingLeftSidebar, setIsDraggingLeftSidebar] = React.useState(false)
-  const clampedLeftSidebarWidth = clampLeftSidebarWidth(leftSidebarWidth)
-
-  React.useEffect(() => {
-    if (clampedLeftSidebarWidth !== leftSidebarWidth) {
-      setLeftSidebarWidth(clampedLeftSidebarWidth)
-    }
-  }, [clampedLeftSidebarWidth, leftSidebarWidth, setLeftSidebarWidth])
-
-  const handleLeftSidebarMouseDown = React.useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    leftDragging.current = true
-    setIsDraggingLeftSidebar(true)
-    const startX = e.clientX
-    const startWidth = clampedLeftSidebarWidth
-    // 记录最新光标位置，rAF 回调读取它而非调度时捕获的旧事件，避免快拖时坐标滞后
-    let latestClientX = startX
-    let rafId = 0
-
-    const applyWidth = () => {
-      const delta = latestClientX - startX
-      setLeftSidebarWidth(clampLeftSidebarWidth(startWidth + delta))
-    }
-
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!leftDragging.current) return
-      latestClientX = ev.clientX
-      if (rafId) return
-      rafId = requestAnimationFrame(() => {
-        rafId = 0
-        applyWidth()
-      })
-    }
-
-    const onMouseUp = () => {
-      leftDragging.current = false
-      setIsDraggingLeftSidebar(false)
-      if (rafId) {
-        cancelAnimationFrame(rafId)
-        rafId = 0
-      }
-      // 补一次最终 flush，保证落点停在光标实际位置而非上一帧
-      applyWidth()
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
-
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [clampedLeftSidebarWidth, setLeftSidebarWidth])
 
   // 右侧工作区可拖拽到应用视口的 3/5；每个 Session 恢复自己的普通与宽视图布局。
   const agentSessions = useAtomValue(agentSessionsAtom)
@@ -202,9 +143,8 @@ export function AppShell(): React.ReactElement {
   const rightPanelMinimumWidth = activeRightPanelSplit
     ? MIN_SPLIT_PANEL_WIDTH
     : ordinaryRightPanelMinimumWidth
-  const leftSidebarContentWidth = sidebarCollapsed ? COLLAPSED_LEFT_SIDEBAR_WIDTH : clampedLeftSidebarWidth
-  // 经典界面已移除，侧栏始终只占内容宽度与分隔线。
-  const leftSidebarOccupiedWidth = leftSidebarContentWidth + 1
+  // 收起时不保留图标栏或分隔线，释放全部左侧空间。
+  const leftSidebarOccupiedWidth = sidebarCollapsed ? 0 : LEFT_SIDEBAR_WIDTH + 1
   // 右侧面板是完整的工作区：不论当前为文件、改动或扩展 Tab，继续向左拖拽时
   // 都应能收起左侧 Sidebar，并使用释放出的全部宽度；主区域仍由 MIN_MAIN_AREA_WIDTH 兜底。
   const canUseCollapsedSidebarSpace = sidebarCollapsed
@@ -294,8 +234,7 @@ export function AppShell(): React.ReactElement {
       const normalMaximumWidth = getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth)
       const shouldCollapseSidebar = canAutoCollapseSidebarForRightPanel && requestedWidth > normalMaximumWidth
       const nextSidebarCollapsed = sidebarCollapsedDuringDrag || shouldCollapseSidebar
-      const nextLeftSidebarContentWidth = nextSidebarCollapsed ? COLLAPSED_LEFT_SIDEBAR_WIDTH : clampedLeftSidebarWidth
-      const nextLeftSidebarOccupiedWidth = nextLeftSidebarContentWidth + 1
+      const nextLeftSidebarOccupiedWidth = nextSidebarCollapsed ? 0 : LEFT_SIDEBAR_WIDTH + 1
       const allowFullAvailableWidth = nextSidebarCollapsed && (
         activeRightPanelSplit !== null || isExpandedRightWorkspace || rightPanelLayout.hasOpenedWideWorkspace
       )
@@ -353,7 +292,7 @@ export function AppShell(): React.ReactElement {
     rightPanelDragCleanup.current = cancelDrag
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
-  }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, clampedLeftSidebarWidth, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelLayout.hasOpenedWideWorkspace, rightPanelMinimumWidth, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth, workspaceSide])
+  }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelLayout.hasOpenedWideWorkspace, rightPanelMinimumWidth, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth, workspaceSide])
 
   const rightPanelMaximumWidth = getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
   const handleResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -380,36 +319,32 @@ export function AppShell(): React.ReactElement {
           ref={appContentRef}
           className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
         >
-            {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
-            <div className="relative z-[60] crt-sidebar">
-              <LeftSidebar width={clampedLeftSidebarWidth} noTransition={isDraggingLeftSidebar} />
-              {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
-              {!sidebarCollapsed && (
-                <div
-                  className={cn(
-                    'absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
-                  )}
-                  onMouseDown={handleLeftSidebarMouseDown}
-                />
-              )}
+            {/* 保持挂载以保留快捷键和搜索，收起时不占布局空间。 */}
+            <div className={cn('relative z-[60] crt-sidebar', sidebarCollapsed && 'hidden')}>
+              <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
             </div>
-            <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
+            {!sidebarCollapsed && (
+              <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
+            )}
 
-            <WorkspacePanels
-              workspaceSide={workspaceSide}
-              workspaceOpen={isPanelOpen}
-              workspaceWidth={displayedRightPanelWidth}
-              minimumWidth={rightPanelMinimumWidth}
-              maximumWidth={rightPanelMaximumWidth}
-              onResizeStart={handleMouseDown}
-              onResizeKeyDown={handleResizeKeyDown}
-              agent={<>
-                <MainArea />
-                {/* Toast 始终跟随 Agent 主区，避开原生浏览器页面。 */}
-                <Toaster position="top-right" offset={{ top: 58, right: 12 }} className="agent-history-toaster" />
-              </>}
-              workspace={showRightPanel ? <RightSidePanel width={displayedRightPanelWidth} /> : null}
-            />
+            <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+              {sidebarCollapsed && <CollapsedSidebarHeader />}
+              <WorkspacePanels
+                workspaceSide={workspaceSide}
+                workspaceOpen={isPanelOpen}
+                workspaceWidth={displayedRightPanelWidth}
+                minimumWidth={rightPanelMinimumWidth}
+                maximumWidth={rightPanelMaximumWidth}
+                onResizeStart={handleMouseDown}
+                onResizeKeyDown={handleResizeKeyDown}
+                agent={<>
+                  <MainArea />
+                  {/* Toast 始终跟随 Agent 主区，避开原生浏览器页面。 */}
+                  <Toaster position="top-right" offset={{ top: 58, right: 12 }} className="agent-history-toaster" />
+                </>}
+                workspace={showRightPanel ? <RightSidePanel width={displayedRightPanelWidth} /> : null}
+              />
+            </div>
         </div>
         <TerminalLifecycleObserver />
         {currentWorkspace && <WorkspaceMemoryChangeObserver workspaceSlug={currentWorkspace.slug} />}

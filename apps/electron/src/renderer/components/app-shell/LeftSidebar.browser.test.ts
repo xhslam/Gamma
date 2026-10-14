@@ -10,6 +10,43 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
+  test('When 在窄侧栏显示长标题、委派计数与快捷键提示 Then 会话保持紧凑单行且操作不溢出', async () => {
+    const results = await renderer.run<Array<{ height: number; aligned: boolean; fits: boolean; truncated: boolean }>>(`
+      const api = window.leftSidebarRegression, results = [];
+      for (const dark of [false, true]) {
+        for (const width of [240, 256]) {
+          const now = Date.now(), fixture = await api.mount({ dark, width, agents: [
+            { id: 'parent', title: '这是一段需要截断的很长会话标题用于检查侧栏布局', workspaceId: 'project-a', createdAt: now, updatedAt: now },
+            { id: 'child', title: '核对引用来源', workspaceId: 'project-a', parentSessionId: 'parent', sourceDelegationId: 'delegation', rootSessionId: 'parent', createdAt: now, updatedAt: now },
+          ] });
+          const row = fixture.row('parent');
+          for (const hints of [false, true]) {
+            const sidebar = document.querySelector('.gamma-sidebar');
+            sidebar.setAttribute('data-session-switch-hints', String(hints));
+            row.setAttribute('data-quick-switch-label', '1');
+            await api.delay();
+            const bounds = row.getBoundingClientRect();
+            const title = [...row.querySelectorAll('span')].find(span => span.textContent.startsWith('这是一段'));
+            const titleBounds = title.getBoundingClientRect(), actions = row.querySelector('.session-item-actions').getBoundingClientRect();
+            results.push({ height: bounds.height,
+              aligned: Math.abs(titleBounds.top + titleBounds.height / 2 - actions.top - actions.height / 2) < 2,
+              fits: row.scrollWidth <= row.clientWidth && actions.right <= bounds.right && titleBounds.width > 0,
+              truncated: title.scrollWidth > title.clientWidth });
+          }
+          fixture.root.unmount(); await api.delay();
+        }
+      }
+      return results;
+    `)
+    expect(results).toHaveLength(8)
+    for (const result of results) {
+      expect(result.height).toBeLessThanOrEqual(36)
+      expect(result.aligned).toBe(true)
+      expect(result.fits).toBe(true)
+      expect(result.truncated).toBe(true)
+    }
+  }, 30_000)
+
   test('When 在已有 Agent 会话点击工作区导航 Then 各入口打开既有组件并保持会话与项目', async () => {
     const result = await renderer.run<{
       brand: string; titleFits: boolean; labels: string[]; states: Array<{ label: string; tab: string; current: string }>
@@ -95,28 +132,47 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result.fallback.slice(1).map(({ planning }) => planning)).toEqual(['todos', 'calendar', 'automations'])
   }, 30_000)
 
-  test('When 收起侧栏并打开工具 Then 工作区导航和设置、更新、搜索仍可达', async () => {
+  test('When 收起侧栏 Then 不保留图标栏，顶部展开后导航与全局操作恢复', async () => {
     const result = await renderer.run<{
-      collapsedWidth: number; focusableTools: boolean; tab: string; settings: boolean; update: boolean; search: boolean; expanded: boolean
+      absent: boolean; contentLeft: number; top: boolean; expanded: boolean; tab: string; settings: boolean; search: boolean
     }>(`
-      const api = window.leftSidebarRegression, fixture = await api.mount({ update: { status: 'downloaded', version: '1.2.3' } });
+      const api = window.leftSidebarRegression, fixture = await api.mount();
       fixture.button('收起侧边栏').click(); await api.until(() => fixture.button('展开侧边栏'));
-      const collapsedWidth = document.querySelector('.gamma-sidebar').getBoundingClientRect().width;
-      const tools = fixture.button('工作区工具'); tools.focus();
-      const triggerFocused = document.activeElement === tools;
-      tools.click();
-      await api.until(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Todo'));
-      const todo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Todo');
-      const focusableTools = triggerFocused && tools.tabIndex === 0 && todo.tabIndex === 0; todo.click();
-      await api.until(() => fixture.state().workspaceTab === 'todos'); const tab = fixture.state().workspaceTab;
+      const absent = !document.querySelector('.gamma-sidebar') && !fixture.button('工作区工具') && !fixture.row('parent');
+      const contentLeft = document.querySelector('[data-testid="fixture-content"]').getBoundingClientRect().left;
+      const header = document.querySelector('[data-testid="collapsed-sidebar-header"]');
+      const top = header.getBoundingClientRect().top === 0 && header.textContent.includes('整理研究资料');
+      fixture.button('展开侧边栏').focus(); fixture.button('展开侧边栏').click();
+      await api.until(() => fixture.button('收起侧边栏'));
+      const expanded = !fixture.state().collapsed && document.querySelector('.gamma-sidebar').getBoundingClientRect().width === 256;
+      fixture.button('Todo').click(); await api.until(() => fixture.state().workspaceTab === 'todos');
+      const tab = fixture.state().workspaceTab;
       fixture.button('打开设置').click(); await api.until(() => fixture.state().settings); const settings = fixture.state().settings;
-      fixture.closeSettings(); fixture.button('立即重启更新 v1.2.3').click(); await api.until(() => fixture.state().settingsTab === 'about');
-      const update = fixture.state().settings && fixture.state().settingsTab === 'about'; fixture.closeSettings();
-      fixture.button('展开侧边栏').click(); await api.until(() => fixture.button('收起侧边栏')); const expanded = !fixture.state().collapsed;
-      fixture.button('搜索').click(); await api.until(() => fixture.state().search); const search = fixture.state().search;
-      fixture.root.unmount(); return { collapsedWidth, focusableTools, tab, settings, update, search, expanded };
+      fixture.closeSettings(); fixture.button('搜索').click(); await api.until(() => fixture.state().search); const search = fixture.state().search;
+      fixture.root.unmount(); return { absent, contentLeft, top, expanded, tab, settings, search };
     `)
-    expect(result).toEqual({ collapsedWidth: 60, focusableTools: true, tab: 'todos', settings: true, update: true, search: true, expanded: true })
+    expect(result).toEqual({ absent: true, contentLeft: 0, top: true, expanded: true, tab: 'todos', settings: true, search: true })
+  }, 30_000)
+
+  test('When 空会话或长标题在浅深色与两种模式下收起 Then 顶栏单行不溢出且展开入口可聚焦', async () => {
+    const results = await renderer.run<Array<{ absent: boolean; fits: boolean; focusable: boolean; height: number; fallback: boolean }>>(`
+      const api = window.leftSidebarRegression, results = [], now = Date.now();
+      for (const mode of ['agent', 'chat']) for (const dark of [false, true]) for (const empty of [false, true]) {
+        const fixture = await api.mount({ mode, dark, collapsed: true,
+          agents: empty ? [] : [{ id: 'parent', title: '很长的会话标题'.repeat(100), workspaceId: 'project-a', createdAt: now, updatedAt: now }],
+          chats: empty ? [] : [{ id: 'chat-a', title: '当前会话', createdAt: now, updatedAt: now }],
+        });
+        const header = document.querySelector('[data-testid="collapsed-sidebar-header"]');
+        fixture.button('展开侧边栏').focus();
+        results.push({ absent: !document.querySelector('.gamma-sidebar'), fits: header.scrollWidth <= header.clientWidth,
+          focusable: document.activeElement === fixture.button('展开侧边栏'), height: header.getBoundingClientRect().height,
+          fallback: !empty || header.textContent.includes('Gamma') });
+        fixture.root.unmount(); await api.delay();
+      }
+      return results;
+    `)
+    expect(results).toHaveLength(8)
+    for (const result of results) expect(result).toEqual({ absent: true, fits: true, focusable: true, height: 44, fallback: true })
   }, 30_000)
 
   test('When 空列表或超长名称在 200px 浅深色侧栏展示 Then 操作入口可见且容器不会横向溢出', async () => {
