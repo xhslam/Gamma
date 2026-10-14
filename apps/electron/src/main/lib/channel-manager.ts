@@ -101,7 +101,7 @@ const QWEN_TOKEN_PLAN_PRESET_MODELS: ChannelModel[] = [
 ]
 /**
  * 一次性模型候选更新。每个更新使用独立 ID，避免新增模型时重新加入用户已删除的旧候选。
- * 更新独立于 config schema version，商业版等更高版本配置也能安全收到 OSS 新模型。
+ * 更新独立于 config schema version，不同版本配置也能安全收到新模型。
  */
 const PRESET_MODEL_CANDIDATE_UPDATES: readonly {
   id: string
@@ -912,7 +912,7 @@ export async function testChannel(channelId: string): Promise<ChannelTestResult>
       case 'google':
         return await testGoogle(channel.baseUrl, apiKey, proxyUrl)
       default:
-        return { success: false, message: `不支持的供应商: ${provider}。你可能过去使用的是 Gamma 商业版，请重新下载商业版覆盖安装，当前版本为开源版本。` }
+        return { success: false, message: `不支持的供应商: ${provider}。该供应商在当前版本中不可用，请检查是否需要更新或重新配置渠道。` }
     }
   } catch (error) {
     return normalizeRequestError(error)

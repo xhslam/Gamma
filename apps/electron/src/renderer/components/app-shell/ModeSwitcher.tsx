@@ -1,5 +1,5 @@
 /**
- * ModeSwitcher - Chat/Agent 模式切换（带滑动指示器）
+ * ModeSwitcher - Chat/Agent 工作模式切换
  *
  * 切换模式时自动恢复上一次在该模式下查看的对话/会话：
  * 1. 优先恢复上次选中的对话 ID
@@ -68,31 +68,27 @@ export function ModeSwitcher(): React.ReactElement {
   }, [mode, restoreSession])
 
   return (
-    <div className="pt-2 titlebar-drag-region select-none">
-      <div
-        className="relative flex rounded-xl p-1 titlebar-drag-region mode-switcher-track sidebar-control-surface"
-      >
-        {/* 滑动背景指示器 */}
-        <div
-          className={cn(
-            'mode-slider pointer-events-none absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
-            mode === 'agent' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        />
+    <div className="select-none titlebar-no-drag">
+      <div role="group" aria-label="工作模式" className="flex items-center">
         {modes.map(({ value, label, icon }) => (
           <button
             key={value}
             type="button"
+            aria-pressed={mode === value}
             onClick={() => handleModeSwitch(value)}
             className={cn(
-              'mode-btn titlebar-no-drag relative z-[1] h-8 flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-0 text-sm font-medium transition-colors duration-200 select-none',
+              'gamma-mode-button relative flex h-9 items-center gap-2 px-3 text-[13px] transition-colors duration-150',
               mode === value
-                ? 'mode-btn-selected text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'font-medium text-foreground'
+                : 'text-foreground/45 hover:text-foreground/70'
             )}
           >
             {icon}
             {label}
+            {/* CoWork 式底部选中指示线 */}
+            {mode === value && (
+              <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-foreground/80" />
+            )}
           </button>
         ))}
       </div>

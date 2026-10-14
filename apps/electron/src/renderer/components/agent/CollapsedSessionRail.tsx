@@ -87,15 +87,15 @@ function RailRecentButton({
       onMouseEnter={preview.handleMouseEnter}
       onMouseLeave={preview.handleMouseLeave}
       className={cn(
-        'relative size-10 flex items-center justify-center overflow-hidden rounded-[12px] transition-colors titlebar-no-drag focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'relative size-10 flex items-center justify-center overflow-hidden rounded-md transition-colors titlebar-no-drag focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         item.active
-          ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+          ? 'bg-foreground/[0.07] text-foreground'
           : 'text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/80'
       )}
     >
       <span
         className={cn(
-          'absolute inset-y-0 left-0 w-0 border-l-[3px] rounded-l-[12px] pointer-events-none',
+          'absolute inset-y-0 left-0 w-0 border-l-[3px] rounded-l-md pointer-events-none',
           RAIL_STATUS_CLASS[item.status]
         )}
       />

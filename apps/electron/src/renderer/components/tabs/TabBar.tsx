@@ -10,7 +10,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
-import { HelpCircle, Keyboard, Globe, PanelRight } from 'lucide-react'
+import { Keyboard, Globe, PanelRight } from 'lucide-react'
 import {
   tabsAtom,
   activeTabIdAtom,
@@ -40,7 +40,6 @@ import { getTabBarActionLayout } from './tab-bar-action-layout'
 import { useCloseTab } from '@/hooks/useCloseTab'
 import { cn } from '@/lib/utils'
 import { shortcutGuideOpenAtom } from '@/atoms/shortcut-guide'
-import { faqDialogOpenAtom } from '@/atoms/faq-dialog'
 import { browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
 // 浏览器入口对所有 Agent 会话开放；来源限制由主进程浏览器策略处理。
 
@@ -227,7 +226,6 @@ function TabBarInner({
   // 若右侧关闭按钮样式变化，这里需同步调整。
   const [isPanelOpen, setSidePanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
   const setShortcutGuideOpen = useSetAtom(shortcutGuideOpenAtom)
-  const setFaqDialogOpen = useSetAtom(faqDialogOpenAtom)
   const activeTab = React.useMemo(() => tabs.find((t) => t.id === activeTabId), [tabs, activeTabId])
   const agentSessions = useAtomValue(agentSessionsAtom)
   const activeAgentSession = activeTab?.type === 'agent'
@@ -268,10 +266,6 @@ function TabBarInner({
   const openShortcutGuide = React.useCallback(() => {
     setShortcutGuideOpen(true)
   }, [setShortcutGuideOpen])
-
-  const openFaqDialog = React.useCallback(() => {
-    setFaqDialogOpen(true)
-  }, [setFaqDialogOpen])
 
   // 滚动容器 ref
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -449,7 +443,6 @@ function TabBarInner({
         hasMinimizedBrowser={hasMinimizedBrowser}
         onOpenBrowser={openBrowser}
         onOpen={openShortcutGuide}
-        onOpenFaq={openFaqDialog}
       />
 
       {/* 打开文件面板按钮：与文件面板打开时的 PanelRightClose 同坐标，避免开/关之间按钮位置跳变。
@@ -467,14 +460,12 @@ function ShortcutGuideButton({
   hasMinimizedBrowser,
   onOpenBrowser,
   onOpen,
-  onOpenFaq,
 }: {
   positionClassName: string
   showBrowserButton: boolean
   hasMinimizedBrowser: boolean
   onOpenBrowser: () => void
   onOpen: () => void
-  onOpenFaq: () => void
 }): React.ReactElement {
   return (
     <div
@@ -483,25 +474,6 @@ function ShortcutGuideButton({
         positionClassName,
       )}
     >
-      {/* FAQ 快捷按钮（在快捷键地图左边） */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onOpenFaq}
-          >
-            <HelpCircle className="size-3.5" />
-            <span className="sr-only">查看常见问题</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>查看常见问题</p>
-        </TooltipContent>
-      </Tooltip>
-
       {showBrowserButton && (
         <Tooltip>
           <TooltipTrigger asChild>

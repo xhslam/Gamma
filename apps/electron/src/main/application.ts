@@ -238,7 +238,6 @@ async function recoverEnabledSlackBots(): Promise<void> {
 }
 
 let mainWindow: BrowserWindow | null = null
-let startupSplashWindow: BrowserWindow | null = null
 
 const DEFAULT_MAIN_WINDOW_WIDTH = 1400
 const DEFAULT_MAIN_WINDOW_HEIGHT = 900
@@ -267,59 +266,6 @@ function getInitialMainWindowBounds(
   }
 
   return getVisibleMainWindowBounds(savedState)
-}
-
-/**
- * 原生启动页不依赖 Renderer bundle 或运行时检测，避免冷启动期间出现空白窗口。
- * dev 由 build:resources 复制到 dist/resources；打包版由 electron-builder extraResources 提供。
- */
-function getStartupSplashPath(): string {
-  const resourcesDir = app.isPackaged ? process.resourcesPath : join(__dirname, 'resources')
-  return join(resourcesDir, 'startup-splash', 'index.html')
-}
-
-function dismissStartupSplash(): void {
-  if (startupSplashWindow && !startupSplashWindow.isDestroyed()) {
-    startupSplashWindow.destroy()
-  }
-  startupSplashWindow = null
-}
-
-function createStartupSplashWindow(): void {
-  if (startupSplashWindow && !startupSplashWindow.isDestroyed()) return
-
-  const savedState = getSettings().mainWindowState
-  const initialBounds = getInitialMainWindowBounds(savedState)
-
-  startupSplashWindow = new BrowserWindow({
-    ...initialBounds,
-    show: false,
-    frame: false,
-    resizable: false,
-    skipTaskbar: true,
-    backgroundColor: '#1b3f2d',
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  })
-
-  const splash = startupSplashWindow
-  splash.setMenuBarVisibility(false)
-  splash.once('ready-to-show', () => {
-    if (splash.isDestroyed()) return
-    // 与主窗口使用相同的默认策略，首次启动时也不会出现窗口尺寸跳变。
-    if (savedState?.isMaximized ?? true) splash.maximize()
-    splash.show()
-  })
-  splash.once('closed', () => {
-    if (startupSplashWindow === splash) startupSplashWindow = null
-  })
-  splash.loadFile(getStartupSplashPath()).catch((error) => {
-    console.warn('[启动] 原生启动页加载失败，将继续启动主窗口:', error)
-    dismissStartupSplash()
-  })
 }
 
 /** 获取主窗口实例（供其他模块使用） */
@@ -473,13 +419,12 @@ function createWindow(): void {
       : mainWindow.loadFile(rendererPath)
   }
 
-  // 主 Renderer 无法加载或崩溃时，不能让启动页无限停留；优先有限次数自动恢复。
+  // 主 Renderer 无法加载或崩溃时，优先有限次数自动恢复，再显示可重试的错误页。
   let hasShownRendererFailure = false
   let rendererRecoveryAttempts: number[] = []
   const showRendererFailure = (reason: string): void => {
     if (!mainWindow || mainWindow.isDestroyed()) return
 
-    dismissStartupSplash()
     if (hasShownRendererFailure) {
       mainWindow.show()
       return
@@ -558,8 +503,7 @@ function createWindow(): void {
     if (process.platform === 'darwin' && app.dock) {
       app.dock.show()
     }
-    // 仅在主窗口首帧已完成合成后移除原生启动页，避免冷启动时的空白与闪屏。
-    dismissStartupSplash()
+    // 等主窗口首帧完成合成后直接显示工作区，避免提前显示空白窗口。
     mainWindow?.show()
   })
 
@@ -675,9 +619,6 @@ app.whenReady().then(bootstrap).catch(handleBootstrapFailure)
 async function bootstrap(): Promise<void> {
   // 初始化 Gamma 版本号（供 User-Agent 等全局标识使用）
   setGammaVersion(app.getVersion())
-
-  // 先显示不依赖 Renderer 的静态启动页；运行时检测耗时不会再变成用户可见的空白。
-  createStartupSplashWindow()
 
   // 注册自定义协议 gamma-file:// 用于内联预览本地文件。
   // 协议只接受主进程签发的 opaque token，不解析 renderer 提供的绝对路径。

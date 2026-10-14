@@ -27,6 +27,7 @@ import { VersionHistory } from './VersionHistory'
 declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
+/** 实际发布源仓库；修改会影响用户下载更新，不属于品牌清理范围。 */
 const GITHUB_RELEASES_URL = 'https://github.com/proma-ai/Proma/releases'
 
 /** 更新状态卡片 */
@@ -493,7 +494,7 @@ export function AboutSettings(): React.ReactElement {
         </SettingsRow>
         <SettingsRow
           label="开源协议"
-          description="社区版基于 AGPL-3.0 开源，商业授权请联系 erlichliu@gmail.com"
+          description="基于 AGPL-3.0 开源"
         >
           <a
             href="https://www.gnu.org/licenses/agpl-3.0.html"
@@ -506,12 +507,12 @@ export function AboutSettings(): React.ReactElement {
         </SettingsRow>
         <SettingsRow label="项目地址">
           <a
-            href="https://github.com/proma-ai/Proma.git"
+            href="https://github.com/xhslam/Gamma"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-primary hover:underline"
           >
-            github.com/proma-ai/Proma
+            github.com/xhslam/Gamma
           </a>
         </SettingsRow>
       </SettingsCard>

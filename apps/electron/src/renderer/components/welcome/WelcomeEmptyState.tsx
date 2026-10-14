@@ -1,20 +1,17 @@
 /**
- * WelcomeEmptyState — 对话/会话空状态引导
+ * WelcomeEmptyState — 对话/会话空状态
  *
  * 在没有会话时展示：
  * 1. 个性化时段问候
- * 2. 平台感知的小 Tips
- * 3. Chat/Agent 模式切换 Tab
+ * 2. Chat/Agent 模式切换
  */
 
 import * as React from 'react'
 import { useAtomValue, useAtom } from 'jotai'
-import { Lightbulb, MessageSquare, Bot } from 'lucide-react'
+import { MessageSquare, Bot } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { appModeAtom, type AppMode } from '@/atoms/app-mode'
-import { themeStyleAtom } from '@/atoms/theme'
-import { getRandomTip, getPlatform, type Tip } from '@/lib/tips'
 
 /** 根据小时返回时段问候 */
 function getGreeting(hour: number): string {
@@ -33,17 +30,10 @@ const MODE_CONFIG: Record<AppMode, { icon: React.ReactNode; label: string }> = {
 export function WelcomeEmptyState(): React.ReactElement {
   const userProfile = useAtomValue(userProfileAtom)
   const [mode, setMode] = useAtom(appModeAtom)
-  const themeStyle = useAtomValue(themeStyleAtom)
-
-  // 稳定的随机 Tip（组件挂载时选一条）
-  const [tip] = React.useState<Tip>(() => getRandomTip(getPlatform()))
 
   const hour = new Date().getHours()
   const greeting = getGreeting(hour)
   const displayName = userProfile.userName || '用户'
-
-  // 森息晨光主题下选中按钮使用主色
-  const selectedColor = themeStyle === 'forest-light' ? '#4a7858' : undefined
 
   /** 切换模式：仅切换模式，不创建新会话 */
   const handleModeSwitch = React.useCallback((targetMode: AppMode): void => {
@@ -54,38 +44,26 @@ export function WelcomeEmptyState(): React.ReactElement {
   return (
     <div className="welcome-empty-state flex h-full flex-col items-center justify-center gap-6 px-4">
       {/* 问候语 */}
-      <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
+      <h1 className="max-w-xl break-words text-center text-3xl font-medium tracking-tight text-foreground">
         {displayName}，{greeting}
       </h1>
 
-      {/* Tips */}
-      <div className="flex items-center gap-2.5 rounded-full bg-muted/50 px-4 py-2 text-[13px] text-muted-foreground">
-        <Lightbulb size={14} className="flex-shrink-0 text-amber-500/80" />
-        <span>{tip.text}</span>
-      </div>
-
-      {/* 模式切换 Tab */}
-      <div className="relative flex rounded-xl bg-muted/60 p-1">
-        {/* 滑动背景指示器 */}
-        <div
-          className={cn(
-            'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
-            mode === 'agent' ? 'translate-x-0' : 'translate-x-full',
-          )}
-        />
+      {/* 空状态只呈现模式选择，不附加推广和随机操作引导。 */}
+      <div role="group" aria-label="选择工作模式" className="flex items-center gap-2">
         {(['agent', 'chat'] as const).map((m) => {
           const config = MODE_CONFIG[m]
           const isSelected = mode === m
           return (
             <button
               key={m}
+              type="button"
+              aria-pressed={isSelected}
               onClick={() => handleModeSwitch(m)}
-              style={isSelected && selectedColor ? { color: selectedColor } : undefined}
               className={cn(
-                'relative z-[1] flex items-center gap-1.5 rounded-lg px-5 py-1.5 text-[13px] font-medium transition-colors duration-200',
+                'gamma-mode-button flex items-center gap-2 rounded-md px-4 py-2 text-sm transition-colors duration-150',
                 isSelected
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'bg-foreground/[0.07] font-medium text-foreground'
+                  : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground',
               )}
             >
               {config.icon}

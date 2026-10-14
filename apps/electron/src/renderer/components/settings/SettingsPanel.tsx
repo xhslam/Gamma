@@ -19,7 +19,6 @@ import {
   Globe,
   BookOpen,
   Bot,
-  GraduationCap,
   ArrowLeft,
   Keyboard,
   Mic,
@@ -64,7 +63,6 @@ import { ShortcutSettings } from "./ShortcutSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { MigrationSettings } from "./MigrationSettings";
 import { StorageSettings } from "./StorageSettings";
-import { OnboardingSettings } from "./OnboardingSettings";
 import { useOpenSession } from '@/hooks/useOpenSession'
 
 /** 设置 Tab 定义 */
@@ -93,11 +91,6 @@ const SHORTCUTS_TAB: TabItem = {
   label: "快捷键管理",
   icon: <Keyboard size={16} />,
 };
-const ONBOARDING_TAB: TabItem = {
-  id: "onboarding",
-  label: "Gamma 新手引导",
-  icon: <GraduationCap size={16} />,
-};
 const VOICE_INPUT_TAB: TabItem = {
   id: "voice-input",
   label: "语音输入",
@@ -109,7 +102,6 @@ const TAIL_TABS: TabItem[] = [
   { id: "storage", label: "磁盘管理", icon: <HardDrive size={16} /> },
   { id: "appearance", label: "外观设置", icon: <Palette size={16} /> },
   { id: "markdown-editor", label: "文档设置", icon: <BookOpen size={16} /> },
-  ONBOARDING_TAB,
   { id: "about", label: "关于/更新", icon: <Info size={16} /> },
 ];
 
@@ -142,8 +134,6 @@ function renderTabContent(tab: SettingsTab): React.ReactElement {
       return <MigrationSettings />;
     case "storage":
       return <StorageSettings />;
-    case "onboarding":
-      return <OnboardingSettings />;
     default:
       return <GeneralSettings />;
   }
