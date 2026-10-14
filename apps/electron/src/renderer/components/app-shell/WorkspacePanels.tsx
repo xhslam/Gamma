@@ -17,11 +17,11 @@ interface WorkspacePanelsProps {
 /** 通过稳定的 key 移动面板，保留编辑草稿与浏览器实例；DOM 顺序同时跟随视觉顺序。 */
 export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, onResizeStart, onResizeKeyDown }: WorkspacePanelsProps): React.ReactElement {
   const panes = [
-    <div key="agent" data-workspace-pane="agent" className="flex-1 min-w-0 relative z-[60]">{agent}</div>,
+    <div key="agent" data-workspace-pane="agent" className="relative z-[60] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{agent}</div>,
   ]
   if (workspace !== null) {
     const workspacePane = (
-      <div key="workspace" data-workspace-pane="workspace" data-workspace-side={workspaceSide} className="relative z-[60] flex flex-shrink-0 items-stretch crt-sidebar">
+      <div key="workspace" data-workspace-pane="workspace" data-workspace-side={workspaceSide} className="relative z-[60] flex min-h-0 flex-shrink-0 items-stretch crt-sidebar">
         <div aria-hidden="true" className={cn('pointer-events-none absolute top-0 bottom-0 z-10 w-px bg-border/80 dark:bg-border/70', workspaceSide === 'left' ? 'right-0' : 'left-0')} />
         {workspaceOpen && (
           <div
@@ -44,5 +44,7 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
     if (workspaceSide === 'left') panes.unshift(workspacePane)
     else panes.push(workspacePane)
   }
-  return <div className="flex min-w-0 flex-1 items-stretch" data-testid="agent-workspace-layout">{panes}</div>
+  // 列布局中的 flex 子项必须允许纵向收缩；面板再通过 flex 传递剩余高度，
+  // 否则 h-full 子树会按长内容计算高度，挤出输入框并使内部滚动失效。
+  return <div className="flex min-h-0 min-w-0 flex-1 items-stretch" data-testid="agent-workspace-layout">{panes}</div>
 }
