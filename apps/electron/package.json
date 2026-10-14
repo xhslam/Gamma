@@ -1,6 +1,6 @@
 {
   "name": "@gamma/electron",
-  "version": "0.19.79",
+  "version": "0.19.80",
   "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
@@ -197,5 +197,5 @@
     "extends": "electron-builder.yml"
   },
   "gamma": {},
-  "homepage": "https://github.com/proma-ai/Proma"
+  "homepage": "https://github.com/xhslam/Gamma"
 }

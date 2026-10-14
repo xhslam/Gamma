@@ -1,4 +1,4 @@
-import { Menu, shell, BrowserWindow } from 'electron'
+import { Menu, BrowserWindow } from 'electron'
 
 export function createApplicationMenu(): Menu {
   const isMac = process.platform === 'darwin'
@@ -135,20 +135,6 @@ export function createApplicationMenu(): Menu {
               { role: 'window' as const, label: '窗口' },
             ]
           : [{ role: 'close' as const, label: '关闭' }]),
-      ],
-    },
-
-    // 帮助菜单
-    {
-      label: '帮助',
-      role: 'help' as const,
-      submenu: [
-        {
-          label: '了解更多',
-          click: async () => {
-            await shell.openExternal('https://github.com/proma-ai/Proma')
-          },
-        },
       ],
     },
   ]

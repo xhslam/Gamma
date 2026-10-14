@@ -137,7 +137,7 @@ body {
     --dialog: 0 0% 100%;
     --dialog-foreground: 0 0% 3.9%;
     --content-area: 0 0% 100%;            /* 主内容区域背景 */
-    --sidebar-surface: 60 14.3% 98.6%;    /* 默认浅色侧栏：RGB 252/252/251 */
+    --sidebar-surface: 40 18% 96%;       /* 默认侧栏使用柔和纸色，内容区保持独立层级。 */
     --tabbar-surface: 60 14.3% 98.6%;     /* 默认浅色未选中 Tab 背景：RGB 252/252/251 */
     --tab-indicator: var(--primary);       /* 顶部 Tab 选中条，默认跟随主色 */
     --sidebar-control-surface: 60 7% 93%;
@@ -183,7 +183,7 @@ body {
     --dialog: 0 0% 16%;                    /* 弹窗：比弹出层更亮 */
     --dialog-foreground: 0 0% 98%;
     --content-area: 0 0% 7%;              /* 主内容区域：最深，专注 */
-    --sidebar-surface: 0 0% 10%;
+    --sidebar-surface: 30 4% 11%;
     --tabbar-surface: 0 0% 10%;
     --tab-indicator: var(--primary);
     --sidebar-control-surface: 0 0% 17%;
@@ -587,6 +587,27 @@ body {
 
 .sidebar-control-surface:hover {
   background-color: hsl(var(--sidebar-control-surface-hover));
+}
+
+/* Gamma 的侧栏字标与交互层级；主题仍使用现有 token。 */
+.gamma-wordmark {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 500;
+}
+
+.gamma-sidebar button:focus-visible,
+.gamma-mode-button:focus-visible,
+.gamma-sidebar [role='button']:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gamma-sidebar,
+  .gamma-sidebar button,
+  .gamma-mode-button {
+    transition: none;
+  }
 }
 
 /* 当前工作区选中指示：纯三角，颜色跟随工作区文字色 */

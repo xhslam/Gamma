@@ -74,10 +74,11 @@ import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
 import { slackBotStatesAtom } from './atoms/slack-atoms'
 import { currentConversationIdAtom, channelsAtom, channelsLoadedAtom, selectedModelAtom } from './atoms/chat-atoms'
 import { appModeAtom } from './atoms/app-mode'
+import { channelFormDirtyAtom, settingsOpenAtom, settingsTabAtom } from './atoms/settings-tab'
 import type { FeishuBotBridgeState, FeishuBridgeState, DingTalkBotBridgeState, DingTalkBridgeState } from '@gamma/shared'
 import { Toaster } from './components/ui/sonner'
 import { toast } from 'sonner'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { diffCapabilities } from '@gamma/shared'
 import type { WorkspaceCapabilities } from '@gamma/shared'
 import { showCapabilityChangeToasts } from './lib/capabilities-toast'
@@ -338,6 +339,7 @@ function AgentSettingsInitializer(): null {
  * 订阅主进程推送的更新状态变化事件。
  */
 function UpdaterInitializer(): null {
+  const store = useStore()
   const setUpdateStatus = useSetAtom(updateStatusAtom)
   const updateStatus = useAtomValue(updateStatusAtom)
   const updateReminderSchedulerRef = useRef<UpdateReminderScheduler | null>(null)
@@ -379,10 +381,18 @@ function UpdaterInitializer(): null {
             <button
               type="button"
               className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.96]"
-              onClick={() => { void window.electronAPI.openExternal('https://proma.cool/changelog') }}
+              onClick={() => {
+                // 从更新提示进入设置也要保留尚未保存的渠道配置。
+                if (store.get(settingsOpenAtom) && store.get(settingsTabAtom) === 'channels' && store.get(channelFormDirtyAtom)) {
+                  toast.info('请先保存或取消当前渠道配置，再查看更新。')
+                  return
+                }
+                store.set(settingsTabAtom, 'about')
+                store.set(settingsOpenAtom, true)
+              }}
             >
               查看更新
-              <ArrowUpRight size={13} />
+              <ArrowRight size={13} />
             </button>
             <button
               type="button"
@@ -441,7 +451,7 @@ function UpdaterInitializer(): null {
       dismissible: false,
       unstyled: true,
     })
-  }, [])
+  }, [store])
 
   useEffect(() => {
     if (!updateReminderSchedulerRef.current) {

@@ -22,5 +22,5 @@ export const projectListHeightAtom = atomWithStorage<number>(
 /** 左侧边栏宽度（px），用户可拖拽调整，持久化到 localStorage */
 export const leftSidebarWidthAtom = atomWithStorage<number>(
   'gamma-left-sidebar-width',
-  240,
+  256,
 )
