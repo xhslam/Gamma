@@ -4,6 +4,8 @@ export const leftSidebarFixtureSource = `
   import { createRoot } from 'react-dom/client'
   import { Provider, createStore } from 'jotai'
   import { LeftSidebar } from '@/components/app-shell/LeftSidebar'
+  import { CollapsedSidebarHeader } from '@/components/app-shell/CollapsedSidebarHeader'
+  import { useAtomValue } from 'jotai'
   import { TooltipProvider } from '@/components/ui/tooltip'
   import { appModeAtom } from '@/atoms/app-mode'
   import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
@@ -45,6 +47,15 @@ export const leftSidebarFixtureSource = `
     { id: 'chat-b', title: '另一段对话', createdAt: now, updatedAt: now },
   ];
 
+  function Layout({ width }) {
+    const collapsed = useAtomValue(sidebarCollapsedAtom);
+    return React.createElement(React.Fragment, null,
+      React.createElement(LeftSidebar, { width, noTransition: true }),
+      React.createElement('main', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } },
+        collapsed ? React.createElement(CollapsedSidebarHeader) : null,
+        React.createElement('div', { 'data-testid': 'fixture-content', style: { flex: 1 } })));
+  }
+
   window.leftSidebarRegression = {
     until, delay,
     async mount(options = {}) {
@@ -81,8 +92,8 @@ export const leftSidebarFixtureSource = `
       store.set(tabsAtom, activeId ? [{ id: activeId, sessionId: activeId, type: mode, title: '当前会话' }] : []);
       store.set(activeTabIdAtom, activeId);
       root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null,
-        React.createElement(LeftSidebar, { width: options.width ?? 256, noTransition: true }))));
-      await until(() => document.querySelector('.gamma-sidebar'));
+        React.createElement(Layout, { width: options.width ?? 256 }))));
+      await until(() => document.querySelector(options.collapsed ? '[data-testid="collapsed-sidebar-header"]' : '.gamma-sidebar'));
       await delay(80);
       return {
         root, calls,
