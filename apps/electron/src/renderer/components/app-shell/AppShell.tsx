@@ -16,7 +16,7 @@ import { MainArea } from '@/components/tabs/MainArea'
 import { appModeAtom } from '@/atoms/app-mode'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { LEFT_SIDEBAR_WIDTH } from '@/atoms/sidebar-atoms'
-import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
+import { activeTabAtom, sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
@@ -67,6 +67,7 @@ function getRightPanelMinWidth(isTodoTab: boolean, isExpandedWorkspace: boolean)
 
 export function AppShell(): React.ReactElement {
   const appMode = useAtomValue(appModeAtom)
+  const activeTab = useAtomValue(activeTabAtom)
   const { workspaces, currentWorkspaceId } = useProjectActions()
   const currentWorkspace = workspaces.find((workspace) => workspace.id === currentWorkspaceId)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
@@ -122,6 +123,9 @@ export function AppShell(): React.ReactElement {
 
   // 右侧工作区可拖拽到应用视口的 3/5；每个 Session 恢复自己的普通与宽视图布局。
   const agentSessions = useAtomValue(agentSessionsAtom)
+  // Agent 自己的会话菜单与工作区标签共用第一行；其他页面保留通用展开入口。
+  const hasAgentSessionHeader = appMode === 'agent' && activeView === 'conversations'
+    && activeTab?.type === 'agent' && agentSessions.some((session) => session.id === activeTab.sessionId)
   const setRightPanelLayouts = useSetAtom(agentSidePanelLayoutMapAtom)
   const setFileBrowserExpandedPaths = useSetAtom(fileBrowserExpandedPathsAtom)
   const setFileBrowserScrollTopMap = useSetAtom(fileBrowserScrollTopMapAtom)
@@ -320,7 +324,7 @@ export function AppShell(): React.ReactElement {
           className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
         >
             {/* 保持挂载以保留快捷键和搜索，收起时不占布局空间。 */}
-            <div className={cn('relative z-[60] crt-sidebar', sidebarCollapsed && 'hidden')}>
+            <div className={cn('relative z-[60] min-h-0 shrink-0 crt-sidebar', sidebarCollapsed && 'hidden')}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
             </div>
             {!sidebarCollapsed && (
@@ -328,7 +332,7 @@ export function AppShell(): React.ReactElement {
             )}
 
             <div className="flex min-w-0 min-h-0 flex-1 flex-col">
-              {sidebarCollapsed && <CollapsedSidebarHeader />}
+              {sidebarCollapsed && !hasAgentSessionHeader && <CollapsedSidebarHeader />}
               <WorkspacePanels
                 workspaceSide={workspaceSide}
                 workspaceOpen={isPanelOpen}

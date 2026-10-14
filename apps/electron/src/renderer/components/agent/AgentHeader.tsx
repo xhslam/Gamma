@@ -8,7 +8,9 @@ import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Check, ChevronDown, PanelLeft, PanelRight, Pencil, Split, X } from 'lucide-react'
 import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, agentSidePanelLayoutAtomFamily, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
-import { tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
+import { sidebarCollapsedAtom, tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
+import { SidebarExpandButton } from '@/components/app-shell/CollapsedSidebarHeader'
+import { detectIsMac } from '@/lib/platform'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { cn } from '@/lib/utils'
 import {
@@ -31,10 +33,12 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
+  const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const workspaceSide = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)).workspaceSide === 'left' ? 'left' : 'right'
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const ownsWindowControls = sidebarCollapsed && (!isRightPanelOpen || workspaceSide === 'right')
 
   const explorationBranches = React.useMemo(() => sessions
     .filter((item) => item.explorationParentSessionId === sessionId && item.explorationSourceMessageId)
@@ -98,9 +102,14 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   }
 
   return (
-    <div className="relative z-[51] flex items-center gap-2 px-3 h-[48px]">
+    <div data-testid="agent-session-header" className={cn(
+      'relative z-[51] flex min-w-0 shrink-0 items-center gap-2 px-3',
+      sidebarCollapsed ? 'h-11' : 'h-[48px]',
+      ownsWindowControls && detectIsMac() && 'pl-20',
+    )}>
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}
       <div className="absolute inset-0 titlebar-drag-region pointer-events-none" />
+      {ownsWindowControls && <SidebarExpandButton />}
       {editing ? (
         <div className="flex items-center gap-1.5 flex-1 min-w-0 titlebar-no-drag">
           <input

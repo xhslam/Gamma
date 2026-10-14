@@ -8,6 +8,9 @@ import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { ArrowLeftRight, Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, MessageCircle, PanelLeft, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SidebarExpandButton } from '@/components/app-shell/CollapsedSidebarHeader'
+import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
+import { detectIsMac } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { getScrollLeftToRevealTab } from '@/lib/tab-visibility'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -93,9 +96,11 @@ export function DiffPanelTabBar({
   const unseenMap = useAtomValue(agentDiffUnseenChangesAtom)
   const setUnseenMap = useSetAtom(agentDiffUnseenChangesAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
+  const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const [layout, setLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
   const workspaceSide = layout.workspaceSide === 'left' ? 'left' : 'right'
   const workspaceSideLabel = workspaceSide === 'left' ? '左侧' : '右侧'
+  const ownsWindowControls = sidebarCollapsed && workspaceSide === 'left' && !!currentSessionId
   const swapFocusRef = React.useRef<HTMLButtonElement | null>(null)
   const unseenChanges = unseenMap.get(currentSessionId ?? '') ?? false
   const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
@@ -322,11 +327,12 @@ export function DiffPanelTabBar({
   }, [tabs, visibleTabs?.left, visibleTabs?.right])
 
   return (
-    <div ref={barRef} className="relative flex h-10 shrink-0 items-center border-b border-border/50 bg-content-area">
+    <div ref={barRef} className={cn('relative flex shrink-0 items-center border-b border-border/50 bg-content-area', sidebarCollapsed ? 'h-11' : 'h-10', ownsWindowControls && detectIsMac() && 'pl-20')}>
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
+      {ownsWindowControls && <SidebarExpandButton />}
       <div className="relative flex h-full min-w-0 flex-1 items-center titlebar-no-drag">
         <div className="relative flex min-w-0 flex-1 self-stretch">
-          <div ref={tabListRef} className="flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none" role="tablist" aria-label={`${workspaceSideLabel}工作区`}>
+          <div ref={tabListRef} className={cn('flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 scrollbar-none', sidebarCollapsed ? 'h-full py-1' : 'h-9 pt-1.5 pb-0.5')} role="tablist" aria-label={`${workspaceSideLabel}工作区`}>
           {orderedTabs.map((tab) => {
             const selected = activeTab === tab.id
             const isSplitView = visibleTabs?.left !== undefined && visibleTabs.right !== undefined

@@ -15,6 +15,7 @@ beforeAll(async () => {
     import { TooltipProvider } from '@/components/ui/tooltip'
     import { getWorkspaceResizeWidth, clampRightPanelWidth } from '@/components/app-shell/right-panel-layout'
     import { currentAgentSessionIdAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelOpenAtomFamily } from '@/atoms/agent-atoms'
+    import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
     import '@/styles/globals.css'
     document.head.insertAdjacentHTML('beforeend','<style>html,body,#root{height:100%;margin:0}#root{width:800px;height:500px;display:flex}</style>')
     const delay = (ms = 25) => new Promise(resolve => setTimeout(resolve, ms))
@@ -45,6 +46,8 @@ beforeAll(async () => {
           side:()=>store.get(agentSidePanelLayoutAtomFamily(store.get(currentAgentSessionIdAtom))).workspaceSide ?? 'right',
           width:()=>store.get(agentSidePanelLayoutAtomFamily(store.get(currentAgentSessionIdAtom))).width,
           switchSession:id=>store.set(currentAgentSessionIdAtom,id),
+          collapse:value=>store.set(sidebarCollapsedAtom,value),
+          collapsed:()=>store.get(sidebarCollapsedAtom),
           persisted:()=>JSON.parse(localStorage.getItem('gamma-agent-workspace-layout-by-session')),
           swap:()=>document.querySelector('[aria-label="交换 Agent 与工作区位置"]').click(),
           order:()=>[...document.querySelector('[data-testid="agent-workspace-layout"]').children].map(node=>node.dataset.workspacePane),
@@ -56,6 +59,33 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
+  test('When 收起侧栏并交换两侧工作区 Then 展开入口、唯一会话标题与文件标签在同一行且避开红绿灯', async () => {
+    const results = await renderer.run(`
+      const api=window.workspaceLayoutRegression,fixture=await api.mount(),results=[];
+      const draft=document.querySelector('[aria-label="agent草稿"]');draft.value='保留草稿';
+      fixture.collapse(true);await api.delay();
+      for(const side of ['right','left']) {
+        if(fixture.side()!==side){fixture.swap();await api.until(()=>fixture.side()===side);await api.delay();}
+        const button=document.querySelector('[aria-label="展开侧边栏"]');
+        const title=document.querySelector('[aria-label="会话菜单：会话A"]'),tabs=document.querySelector('[role="tablist"]');
+        const titleRect=title.getBoundingClientRect(),tabsRect=tabs.getBoundingClientRect();
+        results.push({oneButton:document.querySelectorAll('[aria-label="展开侧边栏"]').length===1,
+          oneTitle:document.querySelectorAll('[aria-label="会话菜单：会话A"]').length===1,
+          sameRow:Math.abs((titleRect.top+titleRect.bottom)/2-(tabsRect.top+tabsRect.bottom)/2)<4,
+          inset:!!button && button.getBoundingClientRect().left>=80,
+          leading:!!button && button.closest('[data-workspace-pane]').dataset.workspacePane===(side==='left'?'workspace':'agent'),
+          draftRetained:draft===document.querySelector('[aria-label="agent草稿"]')&&draft.value==='保留草稿'});
+      }
+      document.querySelector('[aria-label="展开侧边栏"]')?.click();await api.delay();
+      results.push({expanded:!fixture.collapsed()});
+      fixture.root.unmount();return results;
+    `)
+    expect(results).toEqual([
+      {oneButton:true,oneTitle:true,sameRow:true,inset:true,leading:true,draftRetained:true},
+      {oneButton:true,oneTitle:true,sameRow:true,inset:true,leading:true,draftRetained:true},
+      {expanded:true},
+    ])
+  }, 30_000)
   test('When 点击交换并再次交换 Then DOM顺序、焦点与原生浏览器坐标更新且草稿不重挂载', async () => {
     const result = await renderer.run<{ initial: string[]; swapped: string[]; restored: string[]; retained: boolean; focus: boolean; pressed: string; mounts: { agent: number; workspace: number }; browserMoved: boolean; width: number }>(`
       const api=window.workspaceLayoutRegression, fixture=await api.mount();const initial=fixture.order();

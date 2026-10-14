@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 
 /** 收起侧栏后仅保留一行标题与展开入口，不再占用左侧内容空间。 */
 export function CollapsedSidebarHeader(): React.ReactElement {
-  const setCollapsed = useSetAtom(sidebarCollapsedAtom)
   const activeTab = useAtomValue(activeTabAtom)
   const activeView = useAtomValue(activeViewAtom)
   const sessions = useAtomValue(agentSessionsAtom)
@@ -32,7 +31,17 @@ export function CollapsedSidebarHeader(): React.ReactElement {
         detectIsMac() ? 'pl-20' : 'pl-3',
       )}
     >
-      <Tooltip>
+      <SidebarExpandButton />
+      <span className="min-w-0 truncate text-sm font-medium text-foreground/85" title={title}>{title}</span>
+    </header>
+  )
+}
+
+/** 始终放在最左侧面板顶栏，避免与 macOS 原生红绿灯重叠。 */
+export function SidebarExpandButton(): React.ReactElement {
+  const setCollapsed = useSetAtom(sidebarCollapsedAtom)
+  return (
+    <Tooltip>
         <TooltipTrigger asChild>
           <Button
             type="button"
@@ -52,8 +61,6 @@ export function CollapsedSidebarHeader(): React.ReactElement {
             <ShortcutKeycaps shortcutId="toggle-sidebar" keycapClassName="h-5 min-w-5 px-1 text-[11px]" separatorClassName="text-[10px]" />
           </span>
         </TooltipContent>
-      </Tooltip>
-      <span className="min-w-0 truncate text-sm font-medium text-foreground/85" title={title}>{title}</span>
-    </header>
+    </Tooltip>
   )
 }

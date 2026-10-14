@@ -26,7 +26,7 @@ describe('Given 固定展开宽度的左侧导航', () => {
 
 describe('Given 完全收起的左侧导航', () => {
   test('When 收起 Then 顶部出现展开入口且侧栏不保留分隔线', () => {
-    expect(shellSource).toContain('{sidebarCollapsed && <CollapsedSidebarHeader />}')
+    expect(shellSource).toContain('{sidebarCollapsed && !hasAgentSessionHeader && <CollapsedSidebarHeader />}')
     expect(shellSource).toContain("sidebarCollapsed && 'hidden'")
     expect(shellSource).toContain('{!sidebarCollapsed && (')
     expect(shellSource).not.toContain('COLLAPSED_LEFT_SIDEBAR_WIDTH')
