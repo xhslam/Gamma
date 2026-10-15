@@ -1,7 +1,7 @@
 import type { RetryAttempt } from '@gamma/shared'
 
-/** 前 N 次 Pi native retry 不通知 UI，与 Claude runtime 的自动恢复体验保持一致。 */
-export const PI_RETRY_VISIBILITY_THRESHOLD = 5
+/** 从第一次 Pi native retry 起展示恢复状态，避免把网络故障伪装成执行中。 */
+export const PI_RETRY_VISIBILITY_THRESHOLD = 0
 
 /** 将 Pi native retry 与当前 renderer stream 绑定，拒绝迟到事件污染下一轮。 */
 export interface PiRetryEventContext {
@@ -85,14 +85,14 @@ function retryAttempt(event: PiNativeRetryDetails, timestamp: number, errorMessa
   }
 }
 
-/** Pi 0.84 只暴露连续失败段的 attempt；超过前五次才向 UI 展示重试生命周期。 */
+/** Pi 只暴露连续失败段的 attempt；每次恢复均向 UI 展示生命周期。 */
 function shouldExposePiRetry(event: PiNativeRetryDetails): boolean {
   return event.attempt > PI_RETRY_VISIBILITY_THRESHOLD
 }
 
 /**
  * 将 Pi native retry 生命周期转换为 Gamma UI 已识别的 retry 事件。
- * 前五次恢复的完整生命周期都会被过滤；若最终未恢复，终态 assistant error 仍会正常展示。
+ * 首次退避、恢复成功与最终失败均可见，迟到事件仍由 runStartedAt 隔离。
  */
 export function mapPiNativeRetryEvent(
   event: PiNativeRetryEvent,

@@ -82,6 +82,7 @@ import { PendingPromptSkillActivationTracker } from './pi-skill-activation-track
 import { GammaTaskProgressController, type GammaTaskItem } from './pi-task-progress'
 import { normalizePiToolResultDetails, serializePiToolResultPayload } from './pi-tool-result-json'
 import { createPiRetryTerminalGate, mapPiNativeRetryEvent } from './pi-retry-control'
+import { PI_MODEL_IDLE_TIMEOUT_MS, PI_MODEL_RETRY_SETTINGS, withPiStreamWatchdog } from './pi-stream-watchdog'
 import {
   closePiRequestProxyDispatcher,
   createPiRequestProxyDispatcher,
@@ -95,11 +96,6 @@ type BashToolOptions = import('@earendil-works/pi-coding-agent').BashToolOptions
 type PowerShellToolOptions = import('@earendil-works/pi-coding-agent').PowerShellToolOptions
 type SkillLoadResult = ReturnType<ResourceLoader['getSkills']>
 
-// Pi 0.86 将单次 agent retry 退避限制为 maxAgentDelayMs（默认 60 秒）。
-// Gamma 保持约十分钟的重试预算：1 + 2 + 4 + 8 + 16 + 32 + (8 × 60) = 543 秒。
-const PI_NATIVE_MAX_RETRIES = 14
-const PI_NATIVE_RETRY_BASE_DELAY_MS = 1_000
-const PI_NATIVE_MAX_DELAY_MS = 60_000
 const MAX_AUTOMATIC_COMPACTION_CONTINUATIONS = 20
 
 export function shouldMarkCompactionAfterCompletedTurn(
@@ -1410,7 +1406,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       requestProxyDispatcher = createPiRequestProxyDispatcher({
         proxyUrl: resolvePiHttpProxy(input),
         noProxy: getCaseInsensitiveRuntimeEnvValue(input.runtimeEnv?.env, 'NO_PROXY'),
-        httpIdleTimeoutMs: input.httpIdleTimeoutMs,
+        httpIdleTimeoutMs: input.httpIdleTimeoutMs ?? PI_MODEL_IDLE_TIMEOUT_MS,
       })
       const sdk = await import('@earendil-works/pi-coding-agent')
       const piAi = input.codexFastMode && input.provider === 'openai-codex'
@@ -1464,15 +1460,11 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         compaction: { enabled: true, reserveTokens: autoCompactionReserveTokens },
         // Pi 原生 retry 通过 agent.continue() 在同一 transcript 中恢复，能保留已完成的
         // tool_result；不能用外层重投原始 prompt 替代，否则会重复执行副作用工具。
-        retry: {
-          enabled: true,
-          maxRetries: PI_NATIVE_MAX_RETRIES,
-          baseDelayMs: PI_NATIVE_RETRY_BASE_DELAY_MS,
-          maxAgentDelayMs: PI_NATIVE_MAX_DELAY_MS,
-        },
+        retry: PI_MODEL_RETRY_SETTINGS,
         // Cache warming 会额外发送 provider 请求；在提供显式开关前不应静默增加消耗。
         cacheWarming: 'off',
         ...buildPiRemoteConnectionSettings(input),
+        httpIdleTimeoutMs: input.httpIdleTimeoutMs ?? PI_MODEL_IDLE_TIMEOUT_MS,
       })
       const openAIReasoningProfile = (input.provider === 'openai-codex' || input.provider === 'xai' || input.provider === 'openai-responses')
         ? resolveReasoningProfile({
@@ -1581,9 +1573,12 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       // 代理作用域必须只覆盖模型 provider stream：在整个 session.prompt() 链上设
       // AsyncLocalStorage 会把 MCP/产品工具等同一 Agent loop 中的 fetch 也错误地送进 Codex 代理。
       const providerStreamFn = session.agent.streamFunction
-      session.agent.streamFunction = (requestModel, context, options) => runWithPiRequestProxy(
-        requestProxyDispatcher,
-        () => providerStreamFn(requestModel, context, options),
+      session.agent.streamFunction = withPiStreamWatchdog(
+        (requestModel, context, options) => runWithPiRequestProxy(
+          requestProxyDispatcher,
+          () => providerStreamFn(requestModel, context, options),
+        ),
+        input.httpIdleTimeoutMs ?? PI_MODEL_IDLE_TIMEOUT_MS,
       )
       installRuntimeGuardHooks(session, runtimeGuard)
       installCurrentSessionCompactionHooks(session)
