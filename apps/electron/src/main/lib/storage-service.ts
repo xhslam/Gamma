@@ -18,7 +18,6 @@ import {
   getSdkConfigDir,
   getAgentWorkspacesDir,
   getAttachmentsDir,
-  getConversationsDir,
 } from './config-paths'
 import { listAgentSessions } from './agent-session-manager'
 import { listAgentWorkspaces } from './agent-workspace-manager'
@@ -29,7 +28,6 @@ export type StorageCategoryKey =
   | 'agent-sessions'
   | 'sdk-config'
   | 'workspaces'
-  | 'conversations'
   | 'attachments'
   | 'temp-files'
 
@@ -371,19 +369,6 @@ async function calcWorkspacesCategory(): Promise<StorageCategory> {
   }
 }
 
-async function calcConversationsCategory(): Promise<StorageCategory> {
-  const dir = getConversationsDir()
-  const { bytes, count } = await getDirSize(dir)
-  return {
-    label: '对话记录',
-    key: 'conversations',
-    bytes, count,
-    hasOrphans: false,
-    orphanBytes: 0, orphanCount: 0,
-    orphanItems: [], orphanItemsTruncated: false,
-  }
-}
-
 async function calcAttachmentsCategory(): Promise<StorageCategory> {
   const dir = getAttachmentsDir()
   const { bytes, count } = await getDirSize(dir)
@@ -420,7 +405,6 @@ export async function calculateStorageStats(): Promise<StorageStats> {
     calcAgentSessionsCategory(),
     calcSdkConfigCategory(),
     calcWorkspacesCategory(),
-    calcConversationsCategory(),
     calcAttachmentsCategory(),
     calcTempFilesCategory(),
   ])

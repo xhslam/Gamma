@@ -8,5 +8,5 @@
 
 import { atom } from 'jotai'
 
-/** 草稿会话 ID 集合（Chat + Agent 共用） */
+/** Agent 草稿会话 ID 集合 */
 export const draftSessionIdsAtom = atom<Set<string>>(new Set<string>())

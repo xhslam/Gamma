@@ -9,7 +9,7 @@ import {
 } from '@/atoms/agent-atoms'
 import { retainTerminalViews } from './TerminalTabContent'
 
-/** 必须与 AppShell 同生命周期，不能随 Agent 面板或 Chat/规划/Skills 页面切换卸载。 */
+/** 必须与 AppShell 同生命周期，不能随 Agent 面板或 设置/规划/Skills 页面切换卸载。 */
 export function TerminalLifecycleObserver(): null {
   const store = useStore()
   const tabs = useAtomValue(agentTerminalTabsAtom)

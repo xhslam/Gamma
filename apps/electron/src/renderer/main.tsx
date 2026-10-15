@@ -65,15 +65,11 @@ import {
   initializeMarkdownFontSize,
 } from './atoms/markdown-font-size'
 import { useGlobalAgentListeners } from './hooks/useGlobalAgentListeners'
-import { useGlobalChatListeners } from './hooks/useGlobalChatListeners'
 import { tabsAtom, activeTabIdAtom, getPersistableTabState } from './atoms/tab-atoms'
-import type { TabItem } from './atoms/tab-atoms'
-import { chatToolsAtom } from './atoms/chat-tool-atoms'
 import { feishuBotStatesAtom } from './atoms/feishu-atoms'
 import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
 import { slackBotStatesAtom } from './atoms/slack-atoms'
-import { currentConversationIdAtom, channelsAtom, channelsLoadedAtom, selectedModelAtom } from './atoms/chat-atoms'
-import { appModeAtom } from './atoms/app-mode'
+import { channelsAtom, channelsLoadedAtom } from './atoms/channel-atoms'
 import { channelFormDirtyAtom, settingsOpenAtom, settingsTabAtom } from './atoms/settings-tab'
 import type { FeishuBotBridgeState, FeishuBridgeState, DingTalkBotBridgeState, DingTalkBridgeState } from '@gamma/shared'
 import { Toaster } from './components/ui/sonner'
@@ -85,6 +81,7 @@ import { showCapabilityChangeToasts } from './lib/capabilities-toast'
 import { GlobalShortcuts } from './components/shortcuts/GlobalShortcuts'
 import { VoiceDictationApp } from './components/voice-dictation/VoiceDictationApp'
 import { TabSwitcher } from './components/tabs/TabSwitcher'
+import { restoreAgentOnlyTabState } from './lib/agent-only-state'
 import { GammaLogo } from './lib/model-logo'
 import { initShortcutRegistry, updateShortcutOverrides } from './lib/shortcut-registry'
 import { initializePerformanceMonitor } from './lib/performance-monitor'
@@ -207,13 +204,6 @@ function AgentSettingsInitializer(): null {
       setChannelsLoaded(true)
 
       const channelIds = new Set(channels.map((c) => c.id))
-
-      // 验证 Chat 模式的全局默认模型（localStorage 持久化的可能指向已删除渠道）
-      const chatModel = store.get(selectedModelAtom)
-      if (chatModel && !channelIds.has(chatModel.channelId)) {
-        console.warn('[AgentSettings] Chat selectedModel 指向已删除的渠道，清除')
-        store.set(selectedModelAtom, null)
-      }
 
       const selectedChannel = settings.agentChannelId
         ? channels.find((channel) => channel.id === settings.agentChannelId)
@@ -693,17 +683,6 @@ function MarkdownFontSizeInitializer(): null {
 }
 
 /**
- * Chat IPC 监听器初始化组件
- *
- * 全局挂载，永不销毁。确保 Chat 流式事件
- * 在页面切换时不丢失。
- */
-function ChatListenersInitializer(): null {
-  useGlobalChatListeners()
-  return null
-}
-
-/**
  * Agent IPC 监听器初始化组件
  *
  * 全局挂载，永不销毁。确保 Agent 流式事件、权限请求
@@ -711,35 +690,6 @@ function ChatListenersInitializer(): null {
  */
 function AgentListenersInitializer(): null {
   useGlobalAgentListeners()
-  return null
-}
-
-/**
- * Chat 工具初始化组件
- *
- * 启动时从主进程加载所有工具信息到 atom。
- * 订阅 chat-tools.json 文件变更通知，自动刷新工具列表。
- */
-function ChatToolInitializer(): null {
-  const setChatTools = useSetAtom(chatToolsAtom)
-
-  useEffect(() => {
-    window.electronAPI.getChatTools()
-      .then(setChatTools)
-      .catch((err: unknown) => console.error('[ChatToolInitializer] 加载工具列表失败:', err))
-  }, [setChatTools])
-
-  // 订阅自定义工具配置变更并静默刷新工具列表。
-  // 用户主动操作的反馈由各设置入口提供，避免文件监听产生重复 Toast。
-  useEffect(() => {
-    const cleanup = window.electronAPI.onCustomToolChanged(() => {
-      window.electronAPI.getChatTools()
-        .then(setChatTools)
-        .catch((err: unknown) => console.error('[ChatToolInitializer] 刷新工具列表失败:', err))
-    })
-    return cleanup
-  }, [setChatTools])
-
   return null
 }
 
@@ -782,7 +732,7 @@ function FeishuInitializer(): null {
 
     // 定期上报在场状态（5 秒间隔 + 焦点变化时即时上报）
     const reportPresence = (): void => {
-      const activeSessionId = store.get(currentAgentSessionIdAtom) ?? store.get(currentConversationIdAtom)
+      const activeSessionId = store.get(currentAgentSessionIdAtom)
       window.electronAPI.reportFeishuPresence({
         activeSessionId,
         lastInteractionAt: Date.now(),
@@ -874,23 +824,6 @@ function DingTalkInitializer(): null {
  * 旧版（分屏时代）持久化结构——仅用于向后兼容读取迁移。
  * 新版已扁平化为 { tabs, activeTabId }；旧版是 { tabs, splitLayout }。
  */
-interface LegacyTabStateWithSplitLayout {
-  splitLayout?: {
-    focusedPanelIndex?: number
-    panels?: Array<{ activeTabId?: string | null }>
-  }
-}
-
-/** 从旧版 splitLayout 结构中提取原焦点面板的 activeTabId */
-function extractLegacyActiveTabId(tabState: unknown): string | null {
-  if (!tabState || typeof tabState !== 'object') return null
-  const legacy = tabState as LegacyTabStateWithSplitLayout
-  const panels = legacy.splitLayout?.panels
-  if (!Array.isArray(panels) || panels.length === 0) return null
-  const focusedIndex = legacy.splitLayout?.focusedPanelIndex ?? 0
-  return panels[focusedIndex]?.activeTabId ?? panels[0]?.activeTabId ?? null
-}
-
 function TabStatePersistenceInitializer(): null {
   const store = useStore()
   const restoredRef = useRef(false)
@@ -898,9 +831,8 @@ function TabStatePersistenceInitializer(): null {
   // 启动恢复：读取 settings.tabState + 校验会话有效性
   useEffect(() => {
     const restore = async (): Promise<void> => {
-      const [settings, conversations, activeAgentSessions] = await Promise.all([
+      const [settings, activeAgentSessions] = await Promise.all([
         window.electronAPI.getSettings(),
-        window.electronAPI.listConversations(),
         window.electronAPI.listActiveAgentSessions(),
       ])
       const tabState = settings.tabState
@@ -916,58 +848,12 @@ function TabStatePersistenceInitializer(): null {
         : []
       const agentSessions = [...activeAgentSessions, ...archivedAgentSessions]
 
-      // 构建有效 sessionId 集合
-      const validSessionIds = new Set([
-        ...conversations.map((c) => c.id),
-        ...agentSessions.map((s) => s.id),
-      ])
+      const restored = restoreAgentOnlyTabState(tabState, new Set(agentSessions.map((session) => session.id)))
+      store.set(tabsAtom, restored.tabs)
+      store.set(activeTabIdAtom, restored.activeTabId)
+      store.set(currentAgentSessionIdAtom, restored.tabs[0]?.sessionId ?? null)
 
-      // 过滤 diff 类型 Tab（不持久化），同时过滤掉已被删除的会话
-      const validTabs = tabState.tabs.filter(
-        (t): t is TabItem =>
-          typeof t === 'object' &&
-          t !== null &&
-          'id' in t &&
-          'sessionId' in t &&
-          'type' in t &&
-          'title' in t &&
-          (t.type === 'chat' || t.type === 'agent') &&
-          validSessionIds.has(t.sessionId),
-      )
-      if (validTabs.length === 0) return
-
-      const validTabIds = new Set(validTabs.map((t) => t.id))
-
-      // 恢复 activeTabId（校验有效性）
-      let restoredActiveTabId: string | null = null
-      if (tabState.activeTabId && validTabIds.has(tabState.activeTabId)) {
-        restoredActiveTabId = tabState.activeTabId
-      } else {
-        // 向后兼容：从旧版 splitLayout 结构中恢复原焦点面板的 activeTabId
-        const legacyId = extractLegacyActiveTabId(tabState)
-        if (legacyId && validTabIds.has(legacyId)) {
-          restoredActiveTabId = legacyId
-        } else {
-          restoredActiveTabId = validTabs[0]?.id ?? null
-        }
-      }
-
-      const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
-      store.set(tabsAtom, activeTab ? [activeTab] : [])
-      store.set(activeTabIdAtom, restoredActiveTabId)
-
-      // 同步 appMode 和 currentSessionId
-      if (activeTab) {
-        if (activeTab.type === 'chat') {
-          store.set(appModeAtom, 'chat')
-          store.set(currentConversationIdAtom, activeTab.sessionId)
-        } else {
-          store.set(appModeAtom, 'agent')
-          store.set(currentAgentSessionIdAtom, activeTab.sessionId)
-        }
-      }
-
-      console.log(`[TabRestore] 已恢复当前会话入口，历史标签 ${validTabs.length} 个已收敛到左侧列表`)
+      console.log(`[TabRestore] 已恢复当前会话入口，历史标签 ${restored.tabs.length} 个已收敛到左侧列表`)
     }
 
     restore().catch((err) => console.error('[TabRestore] 恢复标签页失败:', err))
@@ -1085,9 +971,7 @@ if (isQuickTaskWindow) {
       <DockBadgeInitializer />
       <UiPreferencesInitializer />
       <MarkdownFontSizeInitializer />
-      <ChatListenersInitializer />
       <AgentListenersInitializer />
-      <ChatToolInitializer />
       <UpdaterInitializer />
       <AutomationInitializer />
       <PlanningInitializer />

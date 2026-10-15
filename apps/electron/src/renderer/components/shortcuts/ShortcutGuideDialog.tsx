@@ -42,7 +42,6 @@ const SHORTCUT_DISPLAY_ORDER: Record<ShortcutCategory, readonly string[]> = {
     'zoom-out',
     'reset-zoom',
     'open-settings',
-    'toggle-mode',
     'close-tab',
     'toggle-right-panel',
   ],
@@ -55,7 +54,6 @@ const SHORTCUT_DISPLAY_ORDER: Record<ShortcutCategory, readonly string[]> = {
     'toggle-preview-panel',
   ],
   edit: [
-    'clear-context',
     'stop-generation',
     'send-message',
     'insert-line-break',
@@ -195,7 +193,7 @@ export function ShortcutGuideDialog(): React.ReactElement {
       {
         id: 'send-message',
         name: '发送消息',
-        description: '在 Chat 或 Agent 输入框中发送当前内容',
+        description: '在 Agent 输入框中发送当前内容',
         accelerator: sendWithCmdEnter ? `${primaryModifier}+Enter` : 'Enter',
       },
       {

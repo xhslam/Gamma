@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Eye, ShieldCheck } from 'lucide-react'
 import type { VisionRelaySettings as VisionRelaySettingsValue } from '@/types/settings'
-import { ModelSelector } from '@/components/chat/ModelSelector'
+import { ModelSelector } from '@/components/model-selector/ModelSelector'
 import { Switch } from '@/components/ui/switch'
 import { SettingsCard, SettingsRow, SettingsSection } from './primitives'
 

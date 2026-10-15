@@ -6,17 +6,17 @@
  *
  * - 保存：base64 解码 → 写入文件
  * - 读取：文件 → base64 编码（用于 API 发送）
- * - 删除：单个文件或整个对话附件目录
+ * - 删除：单个附件文件
  * - 文件选择对话框：Electron dialog → 小文件读取为 base64，大文件返回本地路径引用
  */
 
-import { readFileSync, writeFileSync, unlinkSync, existsSync, rmSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, unlinkSync, existsSync, statSync } from 'node:fs'
 import { extname, basename, join, isAbsolute, normalize } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { dialog, BrowserWindow } from 'electron'
 import {
   getConfigDir,
-  getConversationAttachmentsDir,
+  getSessionAttachmentsDir,
   resolveAttachmentPath,
 } from './config-paths'
 import type {
@@ -144,7 +144,7 @@ export function saveAttachment(input: AttachmentSaveInput): AttachmentSaveResult
   }
 
   // 确保目录存在
-  const dir = getConversationAttachmentsDir(conversationId)
+  const dir = getSessionAttachmentsDir(conversationId)
 
   // 生成唯一文件名
   const ext = extname(filename) || '.bin'
@@ -216,26 +216,6 @@ export function deleteAttachment(localPath: string): void {
       console.log(`[附件服务] 已删除附件: ${localPath}`)
     } catch (error) {
       console.warn(`[附件服务] 删除附件失败: ${localPath}`, error)
-    }
-  }
-}
-
-/**
- * 删除对话的全部附件
- *
- * 删除整个 ~/.gamma/attachments/{conversationId}/ 目录。
- *
- * @param conversationId 对话 ID
- */
-export function deleteConversationAttachments(conversationId: string): void {
-  const dir = join(resolveAttachmentPath(''), conversationId)
-
-  if (existsSync(dir)) {
-    try {
-      rmSync(dir, { recursive: true, force: true })
-      console.log(`[附件服务] 已删除对话附件目录: ${conversationId}`)
-    } catch (error) {
-      console.warn(`[附件服务] 删除对话附件目录失败: ${conversationId}`, error)
     }
   }
 }

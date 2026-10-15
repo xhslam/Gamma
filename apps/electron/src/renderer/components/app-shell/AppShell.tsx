@@ -9,11 +9,11 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { LeftSidebar } from './LeftSidebar'
+import { SidebarTransition } from './SidebarTransition'
 import { CollapsedSidebarHeader } from './CollapsedSidebarHeader'
 import { RightSidePanel } from './RightSidePanel'
 import { WorkspacePanels } from './WorkspacePanels'
 import { MainArea } from '@/components/tabs/MainArea'
-import { appModeAtom } from '@/atoms/app-mode'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { LEFT_SIDEBAR_WIDTH } from '@/atoms/sidebar-atoms'
 import { activeTabAtom, sidebarCollapsedAtom } from '@/atoms/tab-atoms'
@@ -66,7 +66,6 @@ function getRightPanelMinWidth(isTodoTab: boolean, isExpandedWorkspace: boolean)
 }
 
 export function AppShell(): React.ReactElement {
-  const appMode = useAtomValue(appModeAtom)
   const activeTab = useAtomValue(activeTabAtom)
   const { workspaces, currentWorkspaceId } = useProjectActions()
   const currentWorkspace = workspaces.find((workspace) => workspace.id === currentWorkspaceId)
@@ -115,7 +114,7 @@ export function AppShell(): React.ReactElement {
       return changed ? next : previous
     })
   }, [activeView, productivityTools.calendarEnabled, productivityTools.todosEnabled, setActiveView, setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
-  const showRightPanel = appMode === 'agent' && !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown'
+  const showRightPanel = !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown'
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 左侧栏展开宽度固定；折叠状态仍由按钮、快捷键和右侧工作区布局控制。
@@ -124,7 +123,7 @@ export function AppShell(): React.ReactElement {
   // 右侧工作区可拖拽到应用视口的 3/5；每个 Session 恢复自己的普通与宽视图布局。
   const agentSessions = useAtomValue(agentSessionsAtom)
   // Agent 自己的会话菜单与工作区标签共用第一行；其他页面保留通用展开入口。
-  const hasAgentSessionHeader = appMode === 'agent' && activeView === 'conversations'
+  const hasAgentSessionHeader = activeView === 'conversations'
     && activeTab?.type === 'agent' && agentSessions.some((session) => session.id === activeTab.sessionId)
   const setRightPanelLayouts = useSetAtom(agentSidePanelLayoutMapAtom)
   const setFileBrowserExpandedPaths = useSetAtom(fileBrowserExpandedPathsAtom)
@@ -323,13 +322,9 @@ export function AppShell(): React.ReactElement {
           ref={appContentRef}
           className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
         >
-            {/* 保持挂载以保留快捷键和搜索，收起时不占布局空间。 */}
-            <div className={cn('relative z-[60] min-h-0 shrink-0 crt-sidebar', sidebarCollapsed && 'hidden')}>
+            <SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
-            </div>
-            {!sidebarCollapsed && (
-              <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
-            )}
+            </SidebarTransition>
 
             <div className="flex min-w-0 min-h-0 flex-1 flex-col">
               {sidebarCollapsed && !hasAgentSessionHeader && <CollapsedSidebarHeader />}

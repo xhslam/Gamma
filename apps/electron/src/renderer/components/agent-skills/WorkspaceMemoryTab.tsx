@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SettingsCard } from '@/components/settings/primitives'
 import { AgentActionHint } from '@/components/agent/AgentActionHint'
+import { AutomaticMemoryPanel } from './AutomaticMemoryPanel'
 import { WorkspaceMemoryChangeShelf } from './WorkspaceMemoryChangeShelf'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { agentPendingPromptAtom } from '@/atoms/agent-atoms'
@@ -441,11 +442,12 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
   }
 
   if (loading || !summary) {
-    return <div className="py-20 text-center text-sm text-muted-foreground">加载协作知识中...</div>
+    return <div className="space-y-4 overflow-y-auto"><AutomaticMemoryPanel key={workspaceSlug} workspaceSlug={workspaceSlug} /><div className="py-8 text-center text-sm text-muted-foreground">高级记忆文件尚未加载完成。</div></div>
   }
 
   return (
-    <div className={cn('flex flex-col gap-5', embedded && 'h-full min-h-0 gap-3')}>
+    <div className={cn('flex flex-col gap-5', embedded && 'h-full min-h-0 gap-3 overflow-y-auto')}>
+      <div className="shrink-0"><AutomaticMemoryPanel key={workspaceSlug} workspaceSlug={workspaceSlug} /></div>
       {embedded && (
         <div className="flex shrink-0 items-center gap-2 rounded-xl bg-muted/45 px-3 py-2">
           <Brain className="size-4 shrink-0 text-foreground/65" />
@@ -498,6 +500,7 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
         </div>
       </SettingsCard>}
 
+      <p className="text-xs text-muted-foreground">高级文件编辑（手写项目指令与长期记忆，不会自动迁移至分类记忆）</p>
       <div className={cn('grid min-h-[520px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]', embedded && 'min-h-0 flex-1 grid-cols-[180px_minmax(0,1fr)] gap-3')}>
         <SettingsCard divided={false} className="min-h-0 overflow-hidden">
           <div className="flex h-full min-h-0 flex-col">

@@ -6,8 +6,6 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom, useStore } from 'jotai'
-import { appModeAtom } from '@/atoms/app-mode'
-import { currentConversationIdAtom } from '@/atoms/chat-atoms'
 import {
   agentSessionsAtom,
   currentAgentSessionIdAtom,
@@ -23,8 +21,6 @@ export function useFocusAgentSessionInput(): FocusAgentSessionInput {
   const tabs = useAtomValue(tabsAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
-  const setAppMode = useSetAtom(appModeAtom)
-  const setCurrentConversationId = useSetAtom(currentConversationIdAtom)
   const setCurrentAgentSessionId = useSetAtom(currentAgentSessionIdAtom)
   const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
@@ -34,8 +30,7 @@ export function useFocusAgentSessionInput(): FocusAgentSessionInput {
     if (!agentTab) return false
 
     setActiveTabId(agentTab.id)
-    setAppMode('agent')
-    setCurrentConversationId(null)
+
     setCurrentAgentSessionId(sessionId)
     setUnviewedCompleted((prev) => {
       if (!prev.has(sessionId)) return prev
@@ -62,10 +57,8 @@ export function useFocusAgentSessionInput(): FocusAgentSessionInput {
   }, [
     agentSessions,
     setActiveTabId,
-    setAppMode,
     setCurrentAgentSessionId,
     setCurrentAgentWorkspaceId,
-    setCurrentConversationId,
     setUnviewedCompleted,
     store,
     tabs,

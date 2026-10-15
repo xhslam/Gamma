@@ -40,6 +40,21 @@ describe('Gamma 首次启动复制迁移', () => {
     expect(existsSync(paths.legacyConfigDirectory)).toBe(false)
   })
 
+  test('Given 已退役 Chat 历史与工具模板 When 品牌迁移 Then 原样复制且不改写历史路径或字段', () => {
+    const paths = fixture()
+    const retired = [
+      ['conversations.json', '{"_promaTrace":true,"path":"' + paths.legacyConfigDirectory + '/conversations/a.jsonl"}'],
+      ['conversations/a.jsonl', '{"_promaTrace":true,"localPath":"' + paths.legacyConfigDirectory + '/attachments/a/x.png"}\n'],
+      ['system-prompts.json', '{"_promaTrace":true,"prompt":"历史原文"}'],
+      ['chat-tools.json', '{"_promaTrace":true,"enabled":true}'],
+    ] as const
+    for (const [relativePath, text] of retired) write(join(paths.legacyConfigDirectory, relativePath), text)
+    prepare(paths).commit()
+    for (const [relativePath, text] of retired) {
+      expect(readFileSync(join(paths.configDirectory, relativePath), 'utf8')).toBe(text)
+      expect(readFileSync(join(paths.legacyConfigDirectory, relativePath), 'utf8')).toBe(text)
+    }
+  })
   test('Given 旧会话与受管路径 When 发布 Gamma 副本 Then 保留原文与旧文件并更新父会话和工作区路径', () => {
     const paths = fixture()
     const oldSession = join(paths.legacyConfigDirectory, 'agent-sessions', 'a', 'pi.jsonl')

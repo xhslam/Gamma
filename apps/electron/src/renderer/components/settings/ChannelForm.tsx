@@ -151,7 +151,7 @@ function getUrlInputLabel(provider: ProviderType): string {
 }
 
 function getUrlInputPlaceholder(provider: ProviderType): string {
-  if (provider === 'custom') return 'https://api.example.com/v2（Chat 按原样请求）'
+  if (provider === 'custom') return 'https://api.example.com/v2（辅助模型请求按原样发送）'
   if (provider === 'openai-responses') return 'https://api.example.com/v1/responses'
   if (provider === 'anthropic-compatible') return 'https://api.example.com/v1/messages'
   return 'https://api.example.com'
@@ -985,7 +985,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
           />
           {provider === 'custom' && (
             <div className="px-4 pb-3 text-xs text-muted-foreground">
-              用于 OpenAI Chat Completions 的自定义请求地址，Chat 会按原样发送请求。用于 Agent 时请选择 Pi；若服务提供 Anthropic Messages 端点，请选择「Anthropic 兼容格式」。
+              用于 OpenAI Chat Completions 辅助模型请求的自定义地址，按原样发送请求。Agent 主请求使用 Pi；若服务提供 Anthropic Messages 端点，请选择「Anthropic 兼容格式」。
             </div>
           )}
           <SettingsInput

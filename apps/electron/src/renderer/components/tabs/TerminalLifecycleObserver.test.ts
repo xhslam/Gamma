@@ -53,7 +53,7 @@ describe('全局终端生命周期监听', () => {
     expect((context.state.get('active-tabs') as Map<string, string>).get('s1')).toBe('files')
   })
 
-  test('Given AppShell 切换 Chat 或规划 When 右侧面板卸载 Then 全局 observer 不在 showRightPanel 条件内', () => {
+  test('Given AppShell 切换设置或规划 When 右侧面板卸载 Then 全局 observer 不在 showRightPanel 条件内', () => {
     const source = readFileSync(`${import.meta.dir}/../app-shell/AppShell.tsx`, 'utf8')
     expect(source).toContain('<TerminalLifecycleObserver />')
     expect(source).not.toContain('{showRightPanel && <TerminalLifecycleObserver')

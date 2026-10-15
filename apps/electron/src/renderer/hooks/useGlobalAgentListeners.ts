@@ -65,11 +65,10 @@ import {
   sendDesktopNotification,
   playNotificationSoundForType,
 } from '@/atoms/notifications'
-import { appModeAtom } from '@/atoms/app-mode'
 import { tabsAtom, activeTabIdAtom, activeSessionIdAtom, openTab, updateTabTitle } from '@/atoms/tab-atoms'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import { agentDiffUnseenChangesAtom, agentDiffUnseenFilesAtom } from '@/atoms/agent-atoms'
-import { channelsAtom } from '@/atoms/chat-atoms'
+import { channelsAtom } from '@/atoms/channel-atoms'
 import {
   getPreviewContentRefreshKey,
   previewContentRefreshVersionAtom,
@@ -673,7 +672,7 @@ export function useGlobalAgentListeners(): void {
       const result = openTab(tabs, { type: 'agent', sessionId, title: sessionTitle })
       store.set(tabsAtom, result.tabs)
       store.set(activeTabIdAtom, result.activeTabId)
-      store.set(appModeAtom, 'agent')
+
       store.set(currentAgentSessionIdAtom, sessionId)
       const sessions = store.get(agentSessionsAtom)
       const session = sessions.find((s) => s.id === sessionId)
@@ -1245,7 +1244,6 @@ export function useGlobalAgentListeners(): void {
             .then((sessions) => store.set(agentSessionsAtom, (prev) => mergeFetchedAgentSessions(prev, sessions)))
             .catch(console.error)
         }
-
 
         // 如果收到未知会话的事件（跨工作区场景），立即刷新会话列表
         const knownSessions = store.get(agentSessionsAtom)

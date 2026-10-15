@@ -1,0 +1,56 @@
+import * as React from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import type { AutomaticMemorySource } from '@gamma/shared'
+import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom } from '@/atoms/automatic-memory-atoms'
+import { useAutomaticMemoryChanges } from '@/hooks/useAutomaticMemoryChanges'
+import { selectAutomaticMemoryChanges } from '@/lib/automatic-memory-presentation'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AutomaticMemoryPanel } from './AutomaticMemoryPanel'
+
+interface AutomaticMemoryNoticeProps {
+  kind: AutomaticMemorySource['kind']
+  sessionId: string
+  workspaceSlug?: string
+}
+
+/** 消息区域的真实保存结果；只保留本次应用运行期最近 8 项，不假造历史保存卡片。 */
+export function AutomaticMemoryNotice({ kind, sessionId, workspaceSlug }: AutomaticMemoryNoticeProps): React.ReactElement | null {
+  useAutomaticMemoryChanges()
+  const changes = useAtomValue(automaticMemoryChangesAtom)
+  const navigate = useSetAtom(automaticMemoryNavigationAtom)
+  const [selected, setSelected] = React.useState<{ workspaceSlug: string; entryId: string } | null>(null)
+  React.useEffect(() => setSelected(null), [kind, sessionId, workspaceSlug])
+  const visible = selectAutomaticMemoryChanges(changes, kind, sessionId, workspaceSlug)
+  if (visible.length === 0) return null
+
+  return (
+    <section aria-label="本会话记忆保存结果" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-muted/30 p-3">
+      <p className="mb-1 text-xs text-muted-foreground">已保存到工作区记忆 · 本次运行期提示</p>
+      <div role="status" className="space-y-1">
+        {visible.map((change) => (
+          <button
+            type="button"
+            key={`${change.workspaceSlug}:${change.entryId}:${change.changedAt}:${change.source.messageId}`}
+            className="block w-full rounded-md p-1.5 text-left text-xs text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              const target = { workspaceSlug: change.workspaceSlug, entryId: change.entryId }
+              navigate(target)
+              setSelected(target)
+            }}
+          >
+            {change.action === 'added' ? '已记住' : '已更新'}：{change.title}{' '}
+            <span className="text-muted-foreground">· {new Date(change.changedAt).toLocaleTimeString()} · 查看</span>
+          </button>
+        ))}
+      </div>
+      <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null) }}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader><DialogTitle>工作区分类记忆</DialogTitle></DialogHeader>
+          {selected && (
+            <AutomaticMemoryPanel key={selected.workspaceSlug} workspaceSlug={selected.workspaceSlug} entryId={selected.entryId} />
+          )}
+        </DialogContent>
+      </Dialog>
+    </section>
+  )
+}

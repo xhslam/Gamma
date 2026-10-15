@@ -5,7 +5,7 @@
  * - 会话索引：~/.gamma/agent-sessions.json（轻量元数据）
  * - 消息存储：~/.gamma/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
  *
- * 照搬 conversation-manager.ts 的模式。
+ * 会话索引与消息使用独立 JSON/JSONL 文件持久化。
  */
 
 import { readFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, createReadStream, createWriteStream, statSync, type WriteStream } from 'node:fs'
@@ -45,7 +45,6 @@ import type {
   SessionWorkbenchLayout,
 } from '@gamma/shared'
 import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@gamma/shared'
-import { getConversationMessages } from './conversation-manager'
 // 旧格式 → SDKMessage 的转换逻辑下沉到 @gamma/session-core 作为唯一真源，避免主进程与渲染层各存一份。
 import { convertLegacyMessage } from '@gamma/session-core'
 import { assertEnabledModelForChannel } from './agent-model-selection'
@@ -802,44 +801,6 @@ export function moveSessionToWorkspace(sessionId: string, targetWorkspaceId: str
 
   console.log(`[Agent 会话] 已迁移会话及子会话到工作区: ${updatedRoot.title}（${movedCount} 个）→ ${targetWs.name}`)
   return updatedRoot
-}
-
-/**
- * 迁移 Chat 对话记录到 Agent 会话
- *
- * 读取 Chat 对话的消息，转换为 AgentMessage 格式，
- * 追加到目标 Agent 会话的 JSONL 文件中。
- *
- * 仅迁移 user 和 assistant 角色的消息文本内容，
- * 工具活动、推理、附件等 Chat 特有字段不迁移。
- */
-export function migrateChatToAgentSession(conversationId: string, agentSessionId: string): void {
-  const chatMessages = getConversationMessages(conversationId)
-
-  if (chatMessages.length === 0) {
-    console.log(`[Agent 会话] Chat 对话无消息，跳过迁移 (${conversationId})`)
-    return
-  }
-
-  let count = 0
-  for (const cm of chatMessages) {
-    // 仅迁移 user 和 assistant 消息
-    if (cm.role !== 'user' && cm.role !== 'assistant') continue
-    if (!cm.content.trim()) continue
-
-    const agentMsg: AgentMessage = {
-      id: randomUUID(),
-      role: cm.role,
-      content: cm.content,
-      createdAt: cm.createdAt,
-      model: cm.role === 'assistant' ? cm.model : undefined,
-    }
-
-    appendAgentMessage(agentSessionId, agentMsg)
-    count++
-  }
-
-  console.log(`[Agent 会话] 已迁移 ${count} 条消息到 Agent 会话 (${conversationId} → ${agentSessionId})`)
 }
 
 /**

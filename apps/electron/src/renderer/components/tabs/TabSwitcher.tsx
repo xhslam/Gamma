@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { useAtomValue, useSetAtom, useStore } from 'jotai'
-import type { AgentSessionMeta, ConversationMeta } from '@gamma/shared'
+import { buildTabSwitcherModel, type SwitchCandidate } from '@/lib/tab-switcher-model'
 import { cn } from '@/lib/utils'
 import {
   activeTabIdAtom,
@@ -20,14 +20,8 @@ import {
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { getInitialTabSwitchIndex, promoteTabMru } from '@/lib/tab-switching'
-import { appModeAtom } from '@/atoms/app-mode'
 import { activeViewAtom } from '@/atoms/active-view'
 import { automationFormAtom } from '@/atoms/automation-atoms'
-import {
-  conversationsAtom,
-  currentConversationIdAtom,
-  streamingConversationIdsAtom,
-} from '@/atoms/chat-atoms'
 import {
   agentSessionIndicatorMapAtom,
   agentSessionsAtom,
@@ -38,33 +32,7 @@ import {
 } from '@/atoms/agent-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
-import { Bot, GitBranch, MessageSquare } from 'lucide-react'
-
-type SwitchSectionId = 'collaboration' | 'recent'
-type SwitchCandidateType = 'chat' | 'agent'
-
-interface SwitchCandidate {
-  id: string
-  type: SwitchCandidateType
-  title: string
-  updatedAt: number
-  status: SessionIndicatorStatus
-  workspaceId?: string
-  workspaceName?: string
-  isDelegation?: boolean
-}
-
-interface SwitchSection {
-  id: SwitchSectionId
-  title: string
-  description: string
-  candidates: SwitchCandidate[]
-}
-
-interface SwitcherModel {
-  sections: SwitchSection[]
-  candidates: SwitchCandidate[]
-}
+import { Bot, GitBranch } from 'lucide-react'
 
 export function TabSwitcher(): ReactElement | null {
   const store = useStore()
@@ -77,19 +45,14 @@ export function TabSwitcher(): ReactElement | null {
   const tabMru = useAtomValue(tabMruAtom)
   const setTabMru = useSetAtom(tabMruAtom)
 
-  const conversations = useAtomValue(conversationsAtom)
-  const streamingConversationIds = useAtomValue(streamingConversationIdsAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
   const agentWorkspaces = useAtomValue(agentWorkspacesAtom)
   const agentIndicatorMap = useAtomValue(agentSessionIndicatorMapAtom)
   const unviewedCompletedIds = useAtomValue(unviewedCompletedSessionIdsAtom)
   const draftSessionIds = useAtomValue(draftSessionIdsAtom)
 
-  const appMode = useAtomValue(appModeAtom)
-  const setAppMode = useSetAtom(appModeAtom)
   const setActiveView = useSetAtom(activeViewAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
-  const setCurrentConversationId = useSetAtom(currentConversationIdAtom)
   const currentAgentSessionId = useAtomValue(currentAgentSessionIdAtom)
   const setCurrentAgentSessionId = useSetAtom(currentAgentSessionIdAtom)
   const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
@@ -102,116 +65,11 @@ export function TabSwitcher(): ReactElement | null {
   const initialMousePosRef = useRef({ x: 0, y: 0 })
   const listRef = useRef<HTMLDivElement>(null)
 
-  const switcherModel = useMemo<SwitcherModel>(() => {
-    const workspaceNameById = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
-    const buildAgentCandidate = (session: AgentSessionMeta): SwitchCandidate => {
-      const status = agentIndicatorMap.get(session.id)
-        ?? (unviewedCompletedIds.has(session.id) ? 'completed' : 'idle')
-      return {
-        id: session.id,
-        type: 'agent',
-        title: session.title || '新 Agent 会话',
-        updatedAt: session.updatedAt,
-        status,
-        workspaceId: session.workspaceId,
-        workspaceName: session.workspaceId ? workspaceNameById.get(session.workspaceId) : undefined,
-        isDelegation: !!session.sourceDelegationId,
-      }
-    }
+  const switcherModel = useMemo(() => buildTabSwitcherModel({
+    activeSessionId, agentIndicatorMap, agentSessions, agentWorkspaces,
+    draftSessionIds, tabMru, unviewedCompletedIds,
+  }), [activeSessionId, agentIndicatorMap, agentSessions, agentWorkspaces, draftSessionIds, tabMru, unviewedCompletedIds])
 
-    const chatCandidates = conversations
-      .filter((conversation) => !conversation.archived && !draftSessionIds.has(conversation.id))
-      .map((conversation: ConversationMeta): SwitchCandidate => ({
-        id: conversation.id,
-        type: 'chat',
-        title: conversation.title || '新对话',
-        updatedAt: conversation.updatedAt,
-        status: streamingConversationIds.has(conversation.id) ? 'running' : 'idle',
-      }))
-
-    const agentCandidates = agentSessions
-      .filter((session) => !session.archived && !session.isDraft && !draftSessionIds.has(session.id))
-      .map(buildAgentCandidate)
-
-    const allCandidates = [...chatCandidates, ...agentCandidates]
-
-    const candidateById = new Map(allCandidates.map((candidate) => [candidate.id, candidate]))
-    const activeAgentSession = activeSessionId
-      ? agentSessions.find((session) => session.id === activeSessionId)
-      : undefined
-    const relatedParentSessionId = activeAgentSession?.parentSessionId ?? activeAgentSession?.id
-    const relatedDelegationIds = new Set<string>()
-    if (activeAgentSession && relatedParentSessionId) {
-      relatedDelegationIds.add(relatedParentSessionId)
-      for (const session of agentSessions) {
-        if (session.parentSessionId === relatedParentSessionId) {
-          relatedDelegationIds.add(session.id)
-        }
-      }
-    }
-    const relatedCandidates = Array.from(relatedDelegationIds)
-      .map((id) => candidateById.get(id))
-      .filter((candidate): candidate is SwitchCandidate => !!candidate)
-      .sort((a, b) => {
-        if (a.id === relatedParentSessionId) return -1
-        if (b.id === relatedParentSessionId) return 1
-        return b.updatedAt - a.updatedAt
-      })
-    const shouldShowCollaborationSection = relatedCandidates.length > 1
-    const relatedCandidateIds = new Set(
-      shouldShowCollaborationSection ? relatedCandidates.map((candidate) => candidate.id) : [],
-    )
-
-    // 按 MRU 排序：在 MRU 列表中的按 MRU 顺序，不在的按 updatedAt 追加到末尾
-    const mruIndex = new Map(tabMru.map((id, i) => [id, i]))
-    const recentCandidates = allCandidates
-      .filter((candidate) => !relatedCandidateIds.has(candidate.id))
-    recentCandidates.sort((a, b) => {
-      const ai = mruIndex.get(a.id)
-      const bi = mruIndex.get(b.id)
-      if (ai !== undefined && bi !== undefined) return ai - bi
-      if (ai !== undefined) return -1
-      if (bi !== undefined) return 1
-      return b.updatedAt - a.updatedAt
-    })
-
-    const sections: SwitchSection[] = []
-    if (shouldShowCollaborationSection) {
-      sections.push({
-        id: 'collaboration',
-        title: '当前协作',
-        description: '父会话与子会话',
-        candidates: relatedCandidates,
-      })
-    }
-    if (recentCandidates.length > 0) {
-      sections.push({
-        id: 'recent',
-        title: '最近访问',
-        description: '按访问顺序排列',
-        candidates: recentCandidates,
-      })
-    }
-
-    const orderedCandidates = sections.flatMap((section) => section.candidates)
-
-    return {
-      sections,
-      candidates: orderedCandidates,
-    }
-  }, [
-    activeSessionId,
-    agentIndicatorMap,
-    agentSessions,
-    agentWorkspaces,
-    conversations,
-    draftSessionIds,
-    streamingConversationIds,
-    tabMru,
-    unviewedCompletedIds,
-  ])
-
-  // Refs 用于事件回调中读取最新值，避免全局键盘监听闭包过期。
   const isOpenRef = useRef(false)
   const selectedIndexRef = useRef(0)
   const activeSessionIdRef = useRef<string | null>(activeSessionId)
@@ -250,13 +108,11 @@ export function TabSwitcher(): ReactElement | null {
       setActiveView('conversations')
 
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
-      const restore = candidate.type === 'agent'
-        ? buildOpenTabRestore(
-            candidate.id,
-            store.get(sessionViewStateMapAtom),
-            store.get(previewFileMapAtom),
-          )
-        : undefined
+      const restore = buildOpenTabRestore(
+        candidate.id,
+        store.get(sessionViewStateMapAtom),
+        store.get(previewFileMapAtom),
+      )
       const nextTab = openTab(tabsRef.current, {
         type: candidate.type,
         sessionId: candidate.id,
@@ -273,16 +129,7 @@ export function TabSwitcher(): ReactElement | null {
         return next
       })
 
-      if (candidate.type === 'chat') {
-        setAppMode('chat')
-        setCurrentConversationId(candidate.id)
-        setCurrentAgentSessionId(null)
-        return
-      }
-
-      setAppMode('agent')
       setCurrentAgentSessionId(candidate.id)
-      setCurrentConversationId(null)
 
       setUnviewedCompleted((prev) => {
         if (!prev.has(candidate.id)) return prev
@@ -299,15 +146,12 @@ export function TabSwitcher(): ReactElement | null {
       }
     },
     [
-      appMode,
       currentAgentSessionId,
       setActiveTabId,
       setActiveView,
-      setAppMode,
       setAutomationForm,
       setCurrentAgentSessionId,
       setCurrentAgentWorkspaceId,
-      setCurrentConversationId,
       setTabMru,
       setTabs,
       setUnviewedCompleted,
@@ -532,15 +376,10 @@ function SwitcherCandidateRow({
             <GitBranch className="size-2.5" />
             子会话
           </>
-        ) : candidate.type === 'agent' ? (
+        ) : (
           <>
             <Bot className="size-2.5" />
             Agent
-          </>
-        ) : (
-          <>
-            <MessageSquare className="size-2.5" />
-            Chat
           </>
         )}
       </span>

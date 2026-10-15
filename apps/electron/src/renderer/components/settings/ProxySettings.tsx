@@ -2,7 +2,7 @@
  * ProxySettings - 代理配置页
  *
  * 全局代理配置，支持系统代理自动检测和手动配置。
- * 所有 AI API 请求（Chat + Agent）都会使用这里的代理配置。
+ * Agent 及辅助模型请求都会使用这里的代理配置。
  */
 
 import * as React from 'react'
@@ -79,7 +79,7 @@ export function ProxySettings(): React.ReactElement {
       {/* 代理开关 */}
       <SettingsSection
         title="代理配置"
-        description="配置后所有 AI API 请求（Chat + Agent）将通过代理发送"
+        description="配置后Agent 及辅助模型请求将通过代理发送"
       >
         <SettingsCard>
           <SettingsToggle

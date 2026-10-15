@@ -80,6 +80,7 @@ import { generateCodexTitle } from './adapters/pi-codex-title-generator'
 import { createFallbackTitle, sanitizeGeneratedTitle, TITLE_PROMPT } from './title-generation'
 import { claimWorkspaceMemoryRefreshOpportunity } from './agent-memory-refresh-service'
 import { browserController } from './browser-controller'
+import { enqueueAutomaticMemory, recallAutomaticMemory, getAutomaticMemoryRuntimeGuidance } from './automatic-memory-service'
 
 // ===== 类型定义 =====
 
@@ -1118,7 +1119,18 @@ export class AgentOrchestrator {
         console.log(`[Agent 编排] 注入 referenced_planning: ${mentionedTodoIds?.length ?? 0} todos, ${mentionedCalendarEventIds?.length ?? 0} calendar events`)
       }
 
-      const contextualMessage = [dynamicCtx, enrichedMessage].filter(Boolean).join('\n\n')
+      const memoryContext = recallAutomaticMemory(workspaceSlug, rawUserMessage ?? userMessage)
+      const contextualMessage = [dynamicCtx, memoryContext, enrichedMessage].filter(Boolean).join('\n\n')
+      // 仅消费新落盘的前台用户输入；重试、压缩、自动化和外部触发均不重复生成画像。
+      if (workspaceSlug && initialUserMessageUuid && userMessagePersisted && !automationContext && !input.triggeredBy && userMessage.trim() !== '/compact') {
+        const memoryWorkspaceSlug = workspaceSlug
+        enqueueAutomaticMemory({
+          workspaceSlug: memoryWorkspaceSlug,
+          source: { kind: 'agent', sessionId, messageId: initialUserMessageUuid, createdAt: streamStartedAt },
+          userText: rawUserMessage ?? userMessage, channelId, modelId: selectedModelId,
+          isSourceAvailable: () => !isAgentSessionDeleting(sessionId) && getAgentSessionMeta(sessionId)?.workspaceId === workspaceId,
+        })
+      }
 
       const isCompactCommand = userMessage.trim() === '/compact'
       const finalPrompt = isCompactCommand
@@ -1534,7 +1546,8 @@ export class AgentOrchestrator {
         productivityTools,
         memoryGuidance,
         memoryRefreshOpportunity,
-      }) + (automationContext ? `\n\n## 定时任务执行上下文\n\n${automationContext}` : '')
+      }) + getAutomaticMemoryRuntimeGuidance(workspaceSlug)
+        + (automationContext ? `\n\n## 定时任务执行上下文\n\n${automationContext}` : '')
       const startAutoTitleGeneration = (): void => {
         if (titleGenerationStarted) return
         titleGenerationStarted = true
@@ -2455,6 +2468,8 @@ export class AgentOrchestrator {
       enrichedText = `${referencedPlanningBlock}\n\n${enrichedText}`
     }
 
+    const queueMemoryContext = recallAutomaticMemory(workspaceSlug, rawText ?? text)
+    if (queueMemoryContext) enrichedText = `${queueMemoryContext}\n\n${enrichedText}`
     const uuid = presetUuid || randomUUID()
 
     // 防重记录
@@ -2491,6 +2506,14 @@ export class AgentOrchestrator {
       } as unknown as SDKMessage
       appendSDKMessages(sessionId, [persistMsg])
       this.flushPendingUserSkillActivations(sessionId, uuid)
+      if (workspaceSlug && meta?.channelId && meta.modelId) {
+        enqueueAutomaticMemory({
+          workspaceSlug,
+          source: { kind: 'agent', sessionId, messageId: uuid, createdAt: Date.now() },
+          userText: rawText ?? text, channelId: meta.channelId, modelId: meta.modelId,
+          isSourceAvailable: () => !isAgentSessionDeleting(sessionId) && getAgentSessionMeta(sessionId)?.workspaceId === meta.workspaceId,
+        })
+      }
     } catch (error) {
       uuids.delete(uuid)
       this.clearPendingUserSkillActivations(sessionId, uuid)

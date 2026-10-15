@@ -6,7 +6,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { ArrowLeftRight, Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, MessageCircle, PanelLeft, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X, BookOpen } from 'lucide-react'
+import { ArrowLeftRight, Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, PanelLeft, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SidebarExpandButton } from '@/components/app-shell/CollapsedSidebarHeader'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
@@ -60,7 +60,6 @@ interface DiffPanelTabBarProps {
   onOpenTerminal?: () => void
   onOpenWorkspaceComponent?: (component: WorkspaceComponentTab) => void
   productivityTools?: ProductivityToolsSettings
-  onOpenChat?: () => void
   /** 仅当前右侧 Tab 需要的紧凑动作，渲染于标签列表之后，不影响内容区布局。 */
   activeTabAction?: React.ReactNode
   visibleTabs?: Partial<Record<RightWorkspacePane, AgentSidePanelTab>>
@@ -83,7 +82,6 @@ export function DiffPanelTabBar({
   onOpenTerminal,
   onOpenWorkspaceComponent,
   productivityTools = { todosEnabled: true, calendarEnabled: true },
-  onOpenChat,
   activeTabAction,
   visibleTabs,
   focusedPane,
@@ -551,15 +549,6 @@ export function DiffPanelTabBar({
                 <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('memory')}>
                   <Brain className="size-3.5" />
                   打开项目记忆
-                </DropdownMenuItem>
-              </>
-            )}
-            {onOpenChat && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onOpenChat}>
-                  <MessageCircle className="size-3.5" />
-                  打开问答
                 </DropdownMenuItem>
               </>
             )}
