@@ -1,8 +1,8 @@
-import type { AgentSessionMeta, AgentWorkspace, ConversationMeta } from '@gamma/shared'
+import type { AgentSessionMeta, AgentWorkspace } from '@gamma/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 
 export type SwitchSectionId = 'collaboration' | 'recent'
-export type SwitchCandidateType = 'chat' | 'agent'
+export type SwitchCandidateType = 'agent'
 
 export interface SwitchCandidate {
   id: string
@@ -32,15 +32,13 @@ export interface BuildTabSwitcherModelInput {
   agentIndicatorMap: ReadonlyMap<string, SessionIndicatorStatus>
   agentSessions: readonly AgentSessionMeta[]
   agentWorkspaces: readonly AgentWorkspace[]
-  conversations: readonly ConversationMeta[]
   draftSessionIds: ReadonlySet<string>
-  streamingConversationIds: ReadonlySet<string>
   tabMru: readonly string[]
   unviewedCompletedIds: ReadonlySet<string>
 }
 
 /**
- * 构建 Ctrl+Tab 的候选模型。候选只来自 Chat 与 Agent 会话，
+ * 构建 Ctrl+Tab 的候选模型。候选只来自 Agent 会话，
  * 不读取顶部 Tab，因此旧 Scratch Pad 不可能作为切换候选复活。
  */
 export function buildTabSwitcherModel({
@@ -48,9 +46,7 @@ export function buildTabSwitcherModel({
   agentIndicatorMap,
   agentSessions,
   agentWorkspaces,
-  conversations,
   draftSessionIds,
-  streamingConversationIds,
   tabMru,
   unviewedCompletedIds,
 }: BuildTabSwitcherModelInput): SwitcherModel {
@@ -70,21 +66,11 @@ export function buildTabSwitcherModel({
     }
   }
 
-  const chatCandidates = conversations
-    .filter((conversation) => !conversation.archived && !draftSessionIds.has(conversation.id))
-    .map((conversation): SwitchCandidate => ({
-      id: conversation.id,
-      type: 'chat',
-      title: conversation.title || '新对话',
-      updatedAt: conversation.updatedAt,
-      status: streamingConversationIds.has(conversation.id) ? 'running' : 'idle',
-    }))
-
   const agentCandidates = agentSessions
     .filter((session) => !session.archived && !session.isDraft && !draftSessionIds.has(session.id))
     .map(buildAgentCandidate)
 
-  const allCandidates = [...chatCandidates, ...agentCandidates]
+  const allCandidates = agentCandidates
   const candidateById = new Map(allCandidates.map((candidate) => [candidate.id, candidate]))
   const activeAgentSession = activeSessionId
     ? agentSessions.find((session) => session.id === activeSessionId)

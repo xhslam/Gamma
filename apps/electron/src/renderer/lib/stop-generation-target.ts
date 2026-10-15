@@ -1,6 +1,5 @@
 export type StopGenerationTarget =
   | { kind: 'agent'; sessionId: string }
-  | { kind: 'chat'; sessionId: string }
 
 interface SessionTabLike {
   type: string
@@ -9,12 +8,12 @@ interface SessionTabLike {
 
 let lastInteractedStopTarget: StopGenerationTarget | null = null
 
-/** Records the Agent or Chat view that most recently received focus or a click. */
+/** 记录最近获得焦点或点击的 Agent 视图。 */
 export function rememberStopGenerationTarget(target: StopGenerationTarget): void {
   lastInteractedStopTarget = target
 }
 
-/** Returns the Agent or Chat view where the user's input cursor or last click is. */
+/** 返回当前输入光标或最近点击所在的 Agent 视图。 */
 export function getLastInteractedStopTarget(): StopGenerationTarget | null {
   return lastInteractedStopTarget
 }
@@ -45,7 +44,7 @@ export function resolveStopGenerationTarget(
 ): StopGenerationTarget | null {
   if (!activeTab) return null
 
-  if (activeTab.type === 'agent') {
+  if (activeTab.type === 'agent' || activeTab.type === 'preview') {
     const delegatedChildSessionId = activeAgentSidePanelTab === 'delegation'
       && activeDelegation?.type === 'agent'
       ? activeDelegation.sessionId
@@ -55,10 +54,6 @@ export function resolveStopGenerationTarget(
       kind: 'agent',
       sessionId: delegatedChildSessionId || activeTab.sessionId,
     }
-  }
-
-  if (activeTab.type === 'chat') {
-    return { kind: 'chat', sessionId: activeTab.sessionId }
   }
 
   return null
@@ -71,7 +66,7 @@ export function getStopGenerationTarget(event: Event): StopGenerationTarget | nu
 
   const candidate = detail as Partial<StopGenerationTarget>
   if (
-    (candidate.kind !== 'agent' && candidate.kind !== 'chat')
+    (candidate.kind !== 'agent')
     || typeof candidate.sessionId !== 'string'
     || candidate.sessionId.length === 0
   ) {

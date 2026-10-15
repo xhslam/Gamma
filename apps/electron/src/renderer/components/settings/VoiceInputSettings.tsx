@@ -265,7 +265,7 @@ export function VoiceInputSettings(): React.ReactElement {
           />
           <SettingsSelect
             label="输出方式"
-            description="默认写入当前光标位置；如果唤起时 Gamma 是当前激活窗口，会写入当前 Chat 或 Agent 输入框。自动粘贴失败时会保留到剪贴板。"
+            description="默认写入当前光标位置；如果唤起时 Gamma 是当前激活窗口，会写入当前 Agent 输入框。自动粘贴失败时会保留到剪贴板。"
             value={settings.outputMode}
             onValueChange={(outputMode) => update({ outputMode: outputMode as VoiceDictationSettings['outputMode'] })}
             options={OUTPUT_OPTIONS}

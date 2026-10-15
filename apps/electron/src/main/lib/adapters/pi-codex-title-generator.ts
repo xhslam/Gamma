@@ -32,6 +32,8 @@ export interface CodexTitleGenerationInput {
   proxyUrl?: string
   signal?: AbortSignal
   onCredentialsRefreshed?: (credentials: CodexOAuthCredentials) => void | Promise<void>
+  /** 受控短文本任务可调整输出预算；标题仍默认40 tokens。 */
+  maxOutputTokens?: number
 }
 
 export interface CodexTitleRuntime {
@@ -99,6 +101,7 @@ export async function completeCodexTitleRequest(
   environment: CodexTitleRequestEnvironment,
   signal?: AbortSignal,
   transport: CodexTitleTransport = 'auto',
+  maxOutputTokens = TITLE_MAX_OUTPUT_TOKENS,
 ): Promise<string | null> {
   try {
     environment.installRequestProxyFetch()
@@ -113,7 +116,7 @@ export async function completeCodexTitleRequest(
         sessionId: randomUUID(),
         transport,
         ...(signal && { signal }),
-        maxTokens: TITLE_MAX_OUTPUT_TOKENS,
+        maxTokens: Math.min(4096, Math.max(1, Math.trunc(maxOutputTokens))),
         timeoutMs: TITLE_REQUEST_TIMEOUT_MS,
         maxRetries: 0,
         // Codex Responses 仅接受 concise/detailed/auto；省略 summary 让 Pi 使用
@@ -164,5 +167,6 @@ export async function generateCodexTitle(input: CodexTitleGenerationInput): Prom
     },
     input.signal,
     connection.transport,
+    input.maxOutputTokens,
   )
 }

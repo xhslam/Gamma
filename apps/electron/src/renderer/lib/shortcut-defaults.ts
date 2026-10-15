@@ -62,8 +62,8 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   },
   {
     id: 'new-session',
-    name: '新建对话',
-    description: '根据当前模式创建 Chat 对话或 Agent 会话',
+    name: '新建任务',
+    description: '创建新的 Agent 会话',
     defaultMac: 'Cmd+N',
     defaultWin: 'Ctrl+N',
     category: 'app',
@@ -105,17 +105,9 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     readonly: true,
   },
   {
-    id: 'toggle-mode',
-    name: '切换模式',
-    description: '在 Chat 和 Agent 模式之间切换',
-    defaultMac: 'Cmd+Shift+M',
-    defaultWin: 'Ctrl+Shift+M',
-    category: 'app',
-  },
-  {
     id: 'global-search',
     name: '全局搜索',
-    description: '搜索对话和会话',
+    description: '搜索 Agent 会话',
     defaultMac: 'Cmd+Shift+F',
     defaultWin: 'Ctrl+Shift+F',
     category: 'navigation',
@@ -159,14 +151,6 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
 
   // 编辑级
   {
-    id: 'clear-context',
-    name: '清除上下文',
-    description: '清除当前对话的上下文',
-    defaultMac: 'Cmd+K',
-    defaultWin: 'Ctrl+K',
-    category: 'edit',
-  },
-  {
     id: 'stop-generation',
     name: '停止 Agent',
     description: '中断当前 AI 响应',
@@ -177,7 +161,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   {
     id: 'close-tab',
     name: '关闭当前标签',
-    description: '关闭当前 Chat 标签页，或 Agent 右侧组件、预览、浏览器和终端标签',
+    description: '关闭当前 Agent 会话，或右侧组件、预览、浏览器和终端标签',
     defaultMac: 'Cmd+W',
     defaultWin: 'Ctrl+W',
     category: 'app',

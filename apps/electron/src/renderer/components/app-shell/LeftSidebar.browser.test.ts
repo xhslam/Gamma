@@ -102,34 +102,14 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     })
   }, 30_000)
 
-  test('When 从 Agent 切换 Chat 并选择对话 Then 选中状态、会话操作和无宿主导航继续可用', async () => {
-    const result = await renderer.run<{
-      pressed: string; selected: string; activeTab: string; actions: boolean; primary: boolean
-      fallback: Array<{ label: string; view: string; planning: string }>
-    }>(`
+  test('When 渲染 Agent-only 导航 Then 无模式栏且新建任务保持可用', async () => {
+    const result = await renderer.run<{ modeBar: boolean; newTask: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      const chatButton = [...document.querySelectorAll('[role="group"][aria-label="工作模式"] button')].find(button => button.textContent.trim() === 'Chat');
-      chatButton.click(); await api.until(() => fixture.state().mode === 'chat' && fixture.row('chat-b'));
-      const pressed = chatButton.getAttribute('aria-pressed'), primary = !!fixture.button('新建对话');
-      const actions = !!fixture.row('chat-b').querySelector('[aria-label="更多会话操作"]');
-      fixture.row('chat-b').click(); await api.until(() => fixture.state().chat === 'chat-b');
-      const selected = fixture.state().chat, activeTab = fixture.state().activeTab, fallback = [];
-      for (const label of ['Markdown','Todo','日程','定时任务']) {
-        fixture.button(label).click(); await api.delay(); const state = fixture.state();
-        fallback.push({ label, view: state.view, planning: state.planning });
-      }
-      fixture.root.unmount(); return { pressed, selected, activeTab, actions, primary, fallback };
+      const modeBar = !!document.querySelector('[aria-label="工作模式"]');
+      const newTask = !!fixture.button('新建任务');
+      fixture.root.unmount(); return { modeBar, newTask };
     `)
-    expect(result.pressed).toBe('true')
-    expect(result.selected).toBe('chat-b')
-    expect(result.activeTab).toBe('chat-b')
-    expect(result.actions).toBe(true)
-    expect(result.primary).toBe(true)
-    expect(result.fallback.map(({ label, view }) => ({ label, view }))).toEqual([
-      { label: 'Markdown', view: 'markdown' }, { label: 'Todo', view: 'planning' },
-      { label: '日程', view: 'planning' }, { label: '定时任务', view: 'planning' },
-    ])
-    expect(result.fallback.slice(1).map(({ planning }) => planning)).toEqual(['todos', 'calendar', 'automations'])
+    expect(result).toEqual({ modeBar: false, newTask: true })
   }, 30_000)
 
   test('When 收起侧栏 Then 不保留图标栏，顶部展开后导航与全局操作恢复', async () => {
@@ -137,14 +117,18 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       absent: boolean; contentLeft: number; top: boolean; expanded: boolean; tab: string; settings: boolean; search: boolean
     }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      fixture.button('收起侧边栏').click(); await api.until(() => fixture.button('展开侧边栏'));
-      const absent = !document.querySelector('.gamma-sidebar') && !fixture.button('工作区工具') && !fixture.row('parent');
-      const contentLeft = document.querySelector('[data-testid="fixture-content"]').getBoundingClientRect().left;
+      fixture.button('收起侧边栏').click();
+      await api.until(() => fixture.button('展开侧边栏'));
+      await api.until(() => Math.round(document.querySelector('[data-testid="fixture-content"]').getBoundingClientRect().left) === 0);
+      const sidebarContainer = document.querySelector('.crt-sidebar');
+      const absent = !sidebarContainer || sidebarContainer.getBoundingClientRect().width === 0;
+      const contentLeft = Math.round(document.querySelector('[data-testid="fixture-content"]').getBoundingClientRect().left);
       const header = document.querySelector('[data-testid="collapsed-sidebar-header"]');
       const top = header.getBoundingClientRect().top === 0 && header.textContent.includes('整理研究资料');
       fixture.button('展开侧边栏').focus(); fixture.button('展开侧边栏').click();
       await api.until(() => fixture.button('收起侧边栏'));
-      const expanded = !fixture.state().collapsed && document.querySelector('.gamma-sidebar').getBoundingClientRect().width === 256;
+      await api.until(() => Math.round(document.querySelector('.gamma-sidebar')?.getBoundingClientRect().width ?? 0) === 256);
+      const expanded = !fixture.state().collapsed && Math.round(document.querySelector('.gamma-sidebar').getBoundingClientRect().width) === 256;
       fixture.button('Todo').click(); await api.until(() => fixture.state().workspaceTab === 'todos');
       const tab = fixture.state().workspaceTab;
       fixture.button('打开设置').click(); await api.until(() => fixture.state().settings); const settings = fixture.state().settings;
@@ -154,34 +138,34 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result).toEqual({ absent: true, contentLeft: 0, top: true, expanded: true, tab: 'todos', settings: true, search: true })
   }, 30_000)
 
-  test('When 空会话或长标题在浅深色与两种模式下收起 Then 顶栏单行不溢出且展开入口可聚焦', async () => {
+  test('When 空会话或长标题在浅深色下收起 Then 顶栏单行不溢出且展开入口可聚焦', async () => {
     const results = await renderer.run<Array<{ absent: boolean; fits: boolean; focusable: boolean; height: number; fallback: boolean }>>(`
       const api = window.leftSidebarRegression, results = [], now = Date.now();
-      for (const mode of ['agent', 'chat']) for (const dark of [false, true]) for (const empty of [false, true]) {
-        const fixture = await api.mount({ mode, dark, collapsed: true,
+      for (const dark of [false, true]) for (const empty of [false, true]) {
+        const fixture = await api.mount({ dark, collapsed: true,
           agents: empty ? [] : [{ id: 'parent', title: '很长的会话标题'.repeat(100), workspaceId: 'project-a', createdAt: now, updatedAt: now }],
-          chats: empty ? [] : [{ id: 'chat-a', title: '当前会话', createdAt: now, updatedAt: now }],
         });
         const header = document.querySelector('[data-testid="collapsed-sidebar-header"]');
         fixture.button('展开侧边栏').focus();
-        results.push({ absent: !document.querySelector('.gamma-sidebar'), fits: header.scrollWidth <= header.clientWidth,
+        const sidebarContainer = document.querySelector('.crt-sidebar');
+        const absent = !sidebarContainer || sidebarContainer.getBoundingClientRect().width === 0;
+        results.push({ absent, fits: header.scrollWidth <= header.clientWidth,
           focusable: document.activeElement === fixture.button('展开侧边栏'), height: header.getBoundingClientRect().height,
           fallback: !empty || header.textContent.includes('Gamma') });
         fixture.root.unmount(); await api.delay();
       }
       return results;
     `)
-    expect(results).toHaveLength(8)
+    expect(results).toHaveLength(4)
     for (const result of results) expect(result).toEqual({ absent: true, fits: true, focusable: true, height: 44, fallback: true })
   }, 30_000)
 
   test('When 空列表或超长名称在 200px 浅深色侧栏展示 Then 操作入口可见且容器不会横向溢出', async () => {
-    const results = await renderer.run<Array<{ mode: string; dark: boolean; empty: boolean; width: number; overflow: string[]; controls: boolean }>>(`
+    const results = await renderer.run<Array<{ dark: boolean; empty: boolean; width: number; overflow: string[]; controls: boolean }>>(`
       const api = window.leftSidebarRegression, results = [], now = Date.now(), long = '极长的项目与会话名称'.repeat(40);
-      for (const mode of ['agent','chat']) for (const dark of [false,true]) for (const empty of [false,true]) {
-        const fixture = await api.mount({ mode, dark, width: 200, userName: long,
+      for (const dark of [false,true]) for (const empty of [false,true]) {
+        const fixture = await api.mount({ dark, width: 200, userName: long,
           agents: empty ? [] : [{ id: 'long-agent', title: long, workspaceId: 'long-project', createdAt: now, updatedAt: now }],
-          chats: empty ? [] : [{ id: 'long-chat', title: long, createdAt: now, updatedAt: now }],
           workspaces: [{ id: 'long-project', name: long, slug: 'long-project', createdAt: now, updatedAt: now }],
           update: { status: 'available', version: '1.2.3' },
         });
@@ -189,12 +173,12 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         const overflow = [sidebar, ...sidebar.querySelectorAll('nav, [data-session-switch-id], [class*="overflow-y-auto"]')]
           .filter(node => node.scrollWidth > node.clientWidth + 1)
           .map(node => node.getAttribute('aria-label') || node.dataset.sessionSwitchId || node.className);
-        const controls = !!fixture.button(mode === 'agent' ? '新建任务' : '新建对话') && !!fixture.button('搜索') && !!fixture.button('打开设置');
-        results.push({ mode, dark, empty, width: sidebar.getBoundingClientRect().width, overflow, controls }); fixture.root.unmount();
+        const controls = !!fixture.button('新建任务') && !!fixture.button('搜索') && !!fixture.button('打开设置');
+        results.push({ dark, empty, width: sidebar.getBoundingClientRect().width, overflow, controls }); fixture.root.unmount();
       }
       return results;
     `)
-    expect(results).toHaveLength(8)
+    expect(results).toHaveLength(4)
     for (const result of results) {
       expect(result.width).toBe(200)
       expect(result.overflow).toEqual([])

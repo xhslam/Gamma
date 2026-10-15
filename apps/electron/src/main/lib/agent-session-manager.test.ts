@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
 
@@ -605,5 +605,30 @@ describe('Agent 会话删除墓碑', () => {
 
     expect(manager.getAgentSessionMeta(id)).toBeUndefined()
     expect(existsSync(join(tempHome, '.gamma', 'agent-sessions', `${id}.jsonl`))).toBe(false)
+  })
+})
+
+
+describe('Agent-only 历史数据边界', () => {
+  test('Given 磁盘仍有 Chat 历史 When 列出并自动归档 Agent Then 历史 Chat 与附件逐字节保留且不暴露迁移入口', () => {
+    const configDir = join(tempHome, '.gamma')
+    const conversationsDir = join(configDir, 'conversations')
+    const attachmentsDir = join(configDir, 'attachments', 'legacy-chat')
+    mkdirSync(conversationsDir, { recursive: true })
+    mkdirSync(attachmentsDir, { recursive: true })
+    const sentinels = [
+      { path: join(configDir, 'conversations.json'), value: '{"conversations":[{"id":"legacy-chat","updatedAt":0}]}' },
+      { path: join(conversationsDir, 'legacy-chat.jsonl'), value: '{"role":"user","content":"历史内容"}\n' },
+      { path: join(configDir, 'chat-tools.json'), value: '{"tools":[]}' },
+      { path: join(configDir, 'system-prompts.json'), value: '{"prompts":[]}' },
+      { path: join(attachmentsDir, 'legacy.txt'), value: '历史附件' },
+    ]
+    for (const item of sentinels) writeFileSync(item.path, item.value, 'utf-8')
+    writeAgentSessionsIndex([{ id: 'agent-only-archive', title: 'Agent', workspaceId: 'workspace-a', createdAt: 0, updatedAt: 0 }])
+
+    expect(manager.listAgentSessions().map((session) => session.id)).toEqual(['agent-only-archive'])
+    expect(manager.autoArchiveAgentSessions(1)).toBe(1)
+    expect('migrateChatToAgentSession' in manager).toBe(false)
+    for (const item of sentinels) expect(readFileSync(item.path, 'utf-8')).toBe(item.value)
   })
 })

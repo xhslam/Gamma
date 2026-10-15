@@ -10,15 +10,14 @@ import { createPortal } from 'react-dom'
 import { useAtom, useAtomValue } from 'jotai'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, Bot, Loader2, MessageSquare } from 'lucide-react'
-import { UserAvatar } from '@/components/chat/UserAvatar'
+import { AlertTriangle, Bot, Loader2 } from 'lucide-react'
+import { UserAvatar } from '@/components/session/UserAvatar'
 import { tabMinimapCacheAtom, type TabMinimapItem } from '@/atoms/tab-atoms'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { getModelLogo, resolveModelProvider } from '@/lib/model-logo'
-import { channelsAtom } from '@/atoms/chat-atoms'
+import { channelsAtom } from '@/atoms/channel-atoms'
 import { cn } from '@/lib/utils'
 import type {
-  ChatMessage,
   SDKAssistantMessage,
   SDKContentBlock,
   SDKMessage,
@@ -28,7 +27,7 @@ import type {
 } from '@gamma/shared'
 import { getSDKCompactStatus } from '@gamma/shared'
 
-export type SessionMiniMapType = 'chat' | 'agent'
+export type SessionMiniMapType = 'agent'
 
 export interface SessionMiniMapTarget {
   type: SessionMiniMapType
@@ -178,18 +177,6 @@ function sdkBlockText(block: SDKContentBlock | SDKUserContentBlock): string {
     return block.is_error ? '工具结果出错' : '工具返回结果'
   }
   return ''
-}
-
-function buildChatMinimapItems(messages: ChatMessage[], userAvatar?: string): TabMinimapItem[] {
-  return messages
-    .map((message) => ({
-      id: message.id,
-      role: message.role === 'user' ? 'user' as const : message.role === 'assistant' ? 'assistant' as const : 'status' as const,
-      preview: normalizePreviewText(message.content).slice(0, 220),
-      avatar: message.role === 'user' ? userAvatar : undefined,
-      model: message.model,
-    }))
-    .filter((item) => item.preview.length > 0)
 }
 
 function buildAgentMinimapItems(messages: SDKMessage[], userAvatar?: string): TabMinimapItem[] {
@@ -351,9 +338,7 @@ function ItemIcon({ item, type }: { item: TabMinimapItem; type: SessionMiniMapTy
   if (item.role === 'status') {
     return <AlertTriangle className="size-4 shrink-0 mt-0.5 text-muted-foreground/60" />
   }
-  return type === 'chat'
-    ? <MessageSquare className="size-4 shrink-0 mt-0.5 text-muted-foreground/60" />
-    : <Bot className="size-4 shrink-0 mt-0.5 text-muted-foreground/60" />
+  return <Bot className="size-4 shrink-0 mt-0.5 text-muted-foreground/60" />
 }
 
 export function SessionMiniMapPopover(props: SessionMiniMapPopoverProps): React.ReactElement | null {
@@ -398,9 +383,7 @@ function SessionMiniMapPopoverContent({
 
     const load = async (): Promise<void> => {
       try {
-        const nextItems = target.type === 'chat'
-          ? buildChatMinimapItems(await window.electronAPI.getConversationMessages(target.sessionId), userProfile.avatar)
-          : buildAgentMinimapItems(await window.electronAPI.getAgentSessionSDKMessages(target.sessionId), userProfile.avatar)
+        const nextItems = buildAgentMinimapItems(await window.electronAPI.getAgentSessionSDKMessages(target.sessionId), userProfile.avatar)
         if (cancelled) return
         setItems(nextItems)
         setCache((prev) => {

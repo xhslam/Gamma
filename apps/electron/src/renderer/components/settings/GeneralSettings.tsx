@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select'
-import { UserAvatar } from '../chat/UserAvatar'
+import { UserAvatar } from '@/components/session/UserAvatar'
 import { userProfileAtom } from '@/atoms/user-profile'
 import {
   notificationsEnabledAtom,

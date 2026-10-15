@@ -2,7 +2,7 @@
  * Active View Atom - 主内容区视图状态
  *
  * 控制 MainArea 显示的内容：
- * - conversations: 对话视图（Chat/Agent 模式内容）
+ * - conversations: Agent 会话视图
  * - planning: 任务、日程与定时任务统一视图
  * - agent-skills: Agent 技能（Skills/MCP）全屏管理视图
  * - markdown: Markdown 工作区视图

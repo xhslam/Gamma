@@ -13,7 +13,7 @@ import { PROVIDER_LABELS } from '@gamma/shared'
 import type { Channel } from '@gamma/shared'
 import { getChannelLogo } from '@/lib/model-logo'
 import { agentChannelIdAtom, agentModelIdAtom } from '@/atoms/agent-atoms'
-import { channelsAtom } from '@/atoms/chat-atoms'
+import { channelsAtom } from '@/atoms/channel-atoms'
 import { SettingsSection, SettingsCard, SettingsRow } from './primitives'
 import {
   AlertDialog,

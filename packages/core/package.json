@@ -1,6 +1,6 @@
 {
   "name": "@gamma/core",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "license": "AGPL-3.0-only",
   "description": "gamma core types,storage and core logic with agents",
   "type": "module",

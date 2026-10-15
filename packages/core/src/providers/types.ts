@@ -6,7 +6,7 @@
  * core 层不依赖 Electron / Node fs，通过注入函数访问平台能力。
  */
 
-import type { AgentThinkingLevel, ChatMessage, FileAttachment, ProviderType } from '@gamma/shared'
+import type { AgentThinkingLevel, FileAttachment, ProviderType } from '@gamma/shared'
 
 // ===== 图片附件数据 =====
 
@@ -198,6 +198,14 @@ export interface ProviderRequest {
   body: string
 }
 
+/** 供应商协议所需的中性消息，不包含产品会话 ID、时间或 UI 状态。 */
+export interface ProviderMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  reasoning?: string
+  attachments?: FileAttachment[]
+}
+
 // ===== 请求输入 =====
 
 /** 流式请求的输入参数 */
@@ -209,7 +217,7 @@ export interface StreamRequestInput {
   /** 模型 ID */
   modelId: string
   /** 经过裁剪的历史消息（不含当前用户消息） */
-  history: ChatMessage[]
+  history: ProviderMessage[]
   /** 当前用户消息文本 */
   userMessage: string
   /** 系统提示词 */

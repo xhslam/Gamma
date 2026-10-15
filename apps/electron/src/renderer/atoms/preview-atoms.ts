@@ -115,7 +115,7 @@ export interface QuotedSelection {
 }
 
 /**
- * 每会话的单条外置选区引用（兼容 Chat 与输入框尚未挂载时的回退）。
+ * 每会话的单条外置选区引用（兼容 Agent 输入框尚未挂载时的回退）。
  * Agent 主输入框的多条引用由 RichTextInput 内联 chip 持久化在草稿中。
  */
 export const quotedSelectionMapAtom = atom<Map<string, QuotedSelection>>(new Map())

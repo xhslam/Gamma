@@ -64,6 +64,20 @@ describe('Codex OAuth 标题生成', () => {
     expect(environment.closed).toBe(dispatcher)
   })
 
+  test('Given 自动记忆JSON抽取 When请求更大输出预算 Then保持标题默认不变并限制最大4096', async () => {
+    let received: OpenAICodexResponsesOptions | undefined
+    const runtime: CodexTitleRuntime = {
+      async complete(_model, _context, options) {
+        received = options
+        return { content: [{ type: 'text', text: '{"memories":[]}' }], stopReason: 'stop' }
+      },
+    }
+    await completeCodexTitleRequest(runtime, model, '提取记忆', createEnvironment(), undefined, 'sse', 2048)
+    expect(received?.maxTokens).toBe(2048)
+    expect(received?.transport).toBe('sse')
+    await completeCodexTitleRequest(runtime, model, '提取记忆', createEnvironment(), undefined, 'auto', 99999)
+    expect(received?.maxTokens).toBe(4096)
+  })
   test('Given Codex request failure When completing title Then still closes its proxy', async () => {
     const runtime: CodexTitleRuntime = {
       async complete() { throw new Error('quota exceeded') },

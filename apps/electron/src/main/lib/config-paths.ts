@@ -68,43 +68,6 @@ export function getChannelsPath(): string {
 }
 
 /**
- * 获取对话索引文件路径
- *
- * @returns ~/.gamma/conversations.json
- */
-export function getConversationsIndexPath(): string {
-  return join(getConfigDir(), 'conversations.json')
-}
-
-/**
- * 获取对话消息目录路径
- *
- * 如果目录不存在则自动创建。
- *
- * @returns ~/.gamma/conversations/
- */
-export function getConversationsDir(): string {
-  const dir = join(getConfigDir(), 'conversations')
-
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-    console.log(`[配置] 已创建对话目录: ${dir}`)
-  }
-
-  return dir
-}
-
-/**
- * 获取指定对话的消息文件路径
- *
- * @param id 对话 ID
- * @returns ~/.gamma/conversations/{id}.jsonl
- */
-export function getConversationMessagesPath(id: string): string {
-  return join(getConversationsDir(), `${id}.jsonl`)
-}
-
-/**
  * 获取附件存储根目录
  *
  * 如果目录不存在则自动创建。
@@ -123,14 +86,14 @@ export function getAttachmentsDir(): string {
 }
 
 /**
- * 获取指定对话的附件目录
+ * 获取指定会话的附件目录
  *
  * 如果目录不存在则自动创建。
  *
  * @param conversationId 对话 ID
  * @returns ~/.gamma/attachments/{conversationId}/
  */
-export function getConversationAttachmentsDir(conversationId: string): string {
+export function getSessionAttachmentsDir(conversationId: string): string {
   const dir = join(getAttachmentsDir(), conversationId)
 
   if (!existsSync(dir)) {
@@ -188,24 +151,6 @@ export function getUserProfilePath(): string {
  */
 export function getProxySettingsPath(): string {
   return join(getConfigDir(), 'proxy-settings.json')
-}
-
-/**
- * 获取系统提示词配置文件路径
- *
- * @returns ~/.gamma/system-prompts.json
- */
-export function getSystemPromptsPath(): string {
-  return join(getConfigDir(), 'system-prompts.json')
-}
-
-/**
- * 获取 Chat 工具配置文件路径
- *
- * @returns ~/.gamma/chat-tools.json
- */
-export function getChatToolsConfigPath(): string {
-  return join(getConfigDir(), 'chat-tools.json')
 }
 
 /**

@@ -18,6 +18,7 @@ import { groupSessionFileChanges, arePathsEqual } from '@/lib/session-file-chang
 import { detectIsWindows } from '@/lib/platform'
 import type { SessionFileChange } from '@/lib/session-file-changes'
 import { buildDiffFileTree } from './diff-file-tree'
+import { getDiffProjectTitle } from './diff-project-title'
 import type { DiffFileTreeNode } from './diff-file-tree'
 import { collectDiffChangeSources, DIFF_CHANGE_SOURCE_CONFIG } from './diff-change-sources'
 
@@ -49,6 +50,9 @@ interface FileGroup {
 interface DiffChangesListProps {
   /** Git 仓库根目录 */
   dirPath: string
+  /** 项目显示名称与真实目录路径分离。 */
+  projectName?: string
+  projectRootPath?: string
   /** 当前 Agent 会话 ID，用于主进程路径授权 */
   sessionId: string
   /** 会话工作目录（用于 badge 计算） */
@@ -81,6 +85,8 @@ interface DiffChangesListProps {
 
 export const DiffChangesList = React.memo(function DiffChangesList({
   dirPath,
+  projectName,
+  projectRootPath,
   sessionPath,
   sessionId,
   workspaceFilesPath,
@@ -256,7 +262,7 @@ export const DiffChangesList = React.memo(function DiffChangesList({
     }
     const result: FileGroup[] = [...groups.entries()].map(([gitRoot, groupFiles]) => ({
       gitRoot,
-      dirName: gitRoot ? gitRoot.split('/').pop() || gitRoot : '/',
+      dirName: getDiffProjectTitle(gitRoot, projectRootPath, projectName, detectIsWindows()),
       sources: collectDiffChangeSources(groupFiles),
       fileCount: groupFiles.length,
       totalAdditions: groupFiles.reduce((sum, file) => sum + file.additions, 0),
@@ -264,7 +270,7 @@ export const DiffChangesList = React.memo(function DiffChangesList({
       tree: buildDiffFileTree(groupFiles),
     }))
     return { fileGroups: result, matchedFilesCount: filteredFiles.length }
-  }, [files, untrackedFiles, searchQuery])
+  }, [files, untrackedFiles, searchQuery, projectRootPath, projectName])
 
   const isEmpty = fileGroups.length === 0
   const hasAnyChanges = files.length > 0 || untrackedFiles.length > 0

@@ -30,7 +30,7 @@ describe('OpenAIResponsesAdapter', () => {
       baseUrl: 'https://api.openai.com/v1',
       apiKey: 'sk-test',
       modelId: 'gpt-5.1',
-      history: [{ id: 'm1', role: 'assistant', content: '历史回复', createdAt: 1 }],
+      history: [{ role: 'assistant', content: '历史回复' }],
       userMessage: '你好',
       systemMessage: '你是 Gamma',
       readImageAttachments: () => [],

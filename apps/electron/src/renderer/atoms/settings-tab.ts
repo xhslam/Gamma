@@ -10,9 +10,8 @@
  */
 
 import { atom } from 'jotai'
-import type { TabType } from './tab-atoms'
 
-export type SettingsTab = 'general' | 'channels' | 'vision-relay' | 'proxy' | 'appearance' | 'markdown-editor' | 'about' | 'prompts' | 'bots' | 'shortcuts' | 'voice-input' | 'migration' | 'storage'
+export type SettingsTab = 'general' | 'channels' | 'vision-relay' | 'proxy' | 'appearance' | 'markdown-editor' | 'about' | 'bots' | 'shortcuts' | 'voice-input' | 'migration' | 'storage'
 
 /** 当前设置标签页（不持久化，每次打开设置默认显示渠道） */
 export const settingsTabAtom = atom<SettingsTab>('channels')
@@ -31,7 +30,7 @@ export const settingsCloseRequestedAtom = atom(false)
  * 渠道表单有未保存内容时，SettingsPanel 确认放弃后再执行该导航。
  */
 export interface SettingsSessionNavigation {
-  type: TabType
+  type: 'agent'
   sessionId: string
   title: string
   /** 导航经设置脏表单确认并真正执行后提交的调用方 intent。 */

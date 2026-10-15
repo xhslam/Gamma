@@ -142,7 +142,7 @@ function isOwnedMetadataFile(path: string, root: string): boolean {
   const segments = relative(root, path).split(sep)
   if (!/\.json(?:l)?(?:\.bak|\.tmp)?$/.test(segments.at(-1) ?? '')) return false
   if (segments.length === 1) return true
-  if (['agent-sessions', 'conversations', 'sdk-config'].includes(segments[0]!)) return true
+  if (['agent-sessions', 'sdk-config'].includes(segments[0]!)) return true
   return segments[0] === 'agent-workspaces' && segments.length === 3 && /^(?:mcp|config)\.json(?:\.bak|\.tmp)?$/.test(segments[2]!)
 }
 
@@ -150,9 +150,12 @@ function migrateCopiedMetadata(root: string, sourceRoot: string, targetRoot: str
   const visit = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name)
+      const relativePath = relative(root, path).split(sep)
+      // 已退役的 Chat 历史仅原样复制，不解析、改写或检查其内部路径。
+      if (relativePath[0] === 'conversations' || relativePath.length === 1 && /^(?:conversations|system-prompts|chat-tools)\.json(?:\.bak|\.tmp)?$/.test(entry.name)) continue
       if (entry.isSymbolicLink()) {
         const segments = relative(root, path).split(sep)
-        if (isOwnedMetadataFile(path, root) || ['agent-sessions', 'conversations', 'sdk-config'].includes(segments[0]!) || segments[0] === 'agent-workspaces' && segments.length <= 2) {
+        if (isOwnedMetadataFile(path, root) || ['agent-sessions', 'sdk-config'].includes(segments[0]!) || segments[0] === 'agent-workspaces' && segments.length <= 2) {
           throw new Error('应用配置或会话元数据含符号链接，迁移已停止；旧数据和外部文件均未改动。请先将这些元数据整理为普通文件。')
         }
         const original = readlinkSync(path)
@@ -161,7 +164,7 @@ function migrateCopiedMetadata(root: string, sourceRoot: string, targetRoot: str
       } else if (entry.isDirectory()) {
         // 用户文件、Skills、记忆正文和外部项目不参与元数据扫描。
         const first = relative(root, path).split(sep)[0]
-        if (['agent-sessions', 'conversations', 'sdk-config', 'agent-workspaces'].includes(first!)) visit(path)
+        if (['agent-sessions', 'sdk-config', 'agent-workspaces'].includes(first!)) visit(path)
       } else if (entry.isFile() && isOwnedMetadataFile(path, root)) {
         const original = readFileSync(path, 'utf-8')
         if (/\.jsonl(?:\.bak|\.tmp)?$/.test(path)) {

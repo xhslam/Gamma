@@ -7,9 +7,7 @@ export const leftSidebarFixtureSource = `
   import { CollapsedSidebarHeader } from '@/components/app-shell/CollapsedSidebarHeader'
   import { useAtomValue } from 'jotai'
   import { TooltipProvider } from '@/components/ui/tooltip'
-  import { appModeAtom } from '@/atoms/app-mode'
   import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
-  import { conversationsAtom, currentConversationIdAtom } from '@/atoms/chat-atoms'
   import {
     agentSessionsAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom,
     agentWorkspacesAtom, agentDiffPanelTabAtom, agentSideDelegationMapAtom,
@@ -21,6 +19,7 @@ export const leftSidebarFixtureSource = `
   import { updateStatusAtom } from '@/atoms/updater'
   import { planningTabAtom } from '@/atoms/planning-atoms'
   import { productivityToolsAtom } from '@/atoms/ui-preferences'
+  import { SidebarTransition } from '@/components/app-shell/SidebarTransition'
   import '@/styles/globals.css'
 
   document.head.insertAdjacentHTML('beforeend', '<style>html,body,#root{height:100%;margin:0}#root{display:flex;height:100vh}</style>');
@@ -42,15 +41,12 @@ export const leftSidebarFixtureSource = `
     { id: 'child', title: '核对引用来源', workspaceId: 'project-a', parentSessionId: 'parent', sourceDelegationId: 'delegation', rootSessionId: 'parent', createdAt: now, updatedAt: now },
     { id: 'other', title: '检查第二个项目', workspaceId: 'project-b', createdAt: now, updatedAt: now },
   ];
-  const chats = [
-    { id: 'chat-a', title: '产品想法', createdAt: now, updatedAt: now },
-    { id: 'chat-b', title: '另一段对话', createdAt: now, updatedAt: now },
-  ];
 
-  function Layout({ width }) {
+  function Layout({ width = 256 }) {
     const collapsed = useAtomValue(sidebarCollapsedAtom);
     return React.createElement(React.Fragment, null,
-      React.createElement(LeftSidebar, { width, noTransition: true }),
+      React.createElement(SidebarTransition, { collapsed, width },
+        React.createElement(LeftSidebar, { width, noTransition: true })),
       React.createElement('main', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } },
         collapsed ? React.createElement(CollapsedSidebarHeader) : null,
         React.createElement('div', { 'data-testid': 'fixture-content', style: { flex: 1 } })));
@@ -62,34 +58,28 @@ export const leftSidebarFixtureSource = `
       localStorage.clear();
       document.documentElement.classList.toggle('dark', !!options.dark);
       const store = createStore(), root = createRoot(document.getElementById('root')), calls = [];
-      const fixtureAgents = options.agents ?? agents, fixtureChats = options.chats ?? chats;
+      const fixtureAgents = options.agents ?? agents;
       const fixtureWorkspaces = options.workspaces ?? workspaces;
       const activeAgent = options.activeAgent === undefined ? (fixtureAgents[0]?.id ?? null) : options.activeAgent;
-      const activeChat = options.activeChat === undefined ? (fixtureChats[0]?.id ?? null) : options.activeChat;
-      const mode = options.mode ?? 'agent';
       const profile = { userName: options.userName ?? 'Gamma 用户', avatar: '🌱' };
       window.electronAPI = {
         listActiveAgentSessions: async () => fixtureAgents.filter(session => !session.archived),
         countArchivedAgentSessions: async () => fixtureAgents.filter(session => session.archived).length,
         listArchivedAgentSessions: async () => fixtureAgents.filter(session => session.archived),
-        listConversations: async () => fixtureChats,
         getUserProfile: async () => profile,
         getWorkspaceCapabilities: async () => ({ mcpServers: [], skills: [] }),
         updateSettings: async settings => { calls.push(settings); },
       };
-      store.set(appModeAtom, mode);
-      store.set(conversationsAtom, fixtureChats);
       store.set(agentSessionsAtom, fixtureAgents);
       store.set(agentWorkspacesAtom, fixtureWorkspaces);
       store.set(currentAgentWorkspaceIdAtom, fixtureWorkspaces[0]?.id ?? '');
       store.set(currentAgentSessionIdAtom, activeAgent);
-      store.set(currentConversationIdAtom, activeChat);
       store.set(sidebarCollapsedAtom, !!options.collapsed);
       store.set(productivityToolsAtom, { todosEnabled: true, calendarEnabled: true });
       store.set(updateStatusAtom, options.update ?? { status: 'idle' });
       store.set(activeViewAtom, 'conversations');
-      const activeId = mode === 'agent' ? activeAgent : activeChat;
-      store.set(tabsAtom, activeId ? [{ id: activeId, sessionId: activeId, type: mode, title: '当前会话' }] : []);
+      const activeId = activeAgent;
+      store.set(tabsAtom, activeId ? [{ id: activeId, sessionId: activeId, type: 'agent', title: '当前会话' }] : []);
       store.set(activeTabIdAtom, activeId);
       root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null,
         React.createElement(Layout, { width: options.width ?? 256 }))));
@@ -100,7 +90,7 @@ export const leftSidebarFixtureSource = `
         button: label => document.querySelector('button[aria-label="' + label + '"]'),
         row: id => document.querySelector('[data-session-switch-id="' + id + '"]'),
         state: () => ({
-          mode: store.get(appModeAtom), agent: store.get(currentAgentSessionIdAtom), chat: store.get(currentConversationIdAtom),
+          agent: store.get(currentAgentSessionIdAtom),
           workspace: store.get(currentAgentWorkspaceIdAtom), activeTab: store.get(activeTabIdAtom),
           view: store.get(activeViewAtom), planning: store.get(planningTabAtom), capability: store.get(agentSkillsTabAtom),
           workspaceTab: store.get(agentDiffPanelTabAtom).get(store.get(currentAgentSessionIdAtom)),

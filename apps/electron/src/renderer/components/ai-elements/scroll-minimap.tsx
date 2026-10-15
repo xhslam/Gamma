@@ -14,9 +14,9 @@ import remarkGfm from 'remark-gfm'
 import { AlertTriangle, Search } from 'lucide-react'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { Input } from '@/components/ui/input'
-import { UserAvatar } from '@/components/chat/UserAvatar'
+import { UserAvatar } from '@/components/session/UserAvatar'
 import { getModelLogo, resolveModelProvider } from '@/lib/model-logo'
-import { channelsAtom } from '@/atoms/chat-atoms'
+import { channelsAtom } from '@/atoms/channel-atoms'
 import { useShortcut } from '@/hooks/useShortcut'
 import { cn } from '@/lib/utils'
 import { MAX_SEARCH_QUERY_SOURCE_LENGTH } from '@gamma/shared'
@@ -34,7 +34,7 @@ export interface MinimapItem {
 interface ScrollMinimapProps {
   /** 用于显示位置与未搜索状态预览的轻量条目 */
   items: MinimapItem[]
-  /** 独立搜索数据源；Chat 可在主进程查完整 JSONL，Agent 可查结构化内存快照 */
+  /** 独立搜索数据源；Agent 使用结构化内存快照 */
   searchMessages?: SessionMessageSearch
   /** 搜索结果尚未渲染时，调用方可先补载历史 */
   onRevealSearchResult?: (messageId: string) => Promise<boolean | void> | boolean | void

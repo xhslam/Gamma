@@ -82,7 +82,7 @@ function RailRecentButton({
     <button
       ref={preview.setAnchorRef}
       type="button"
-      aria-label={`打开${item.type === 'agent' ? 'Agent 会话' : 'Chat 对话'}：${item.title}`}
+      aria-label={`打开Agent 会话：${item.title}`}
       onClick={() => onSelect(item)}
       onMouseEnter={preview.handleMouseEnter}
       onMouseLeave={preview.handleMouseLeave}
@@ -126,7 +126,7 @@ function RailRecentButton({
       ) : (
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right">{item.type === 'agent' ? 'Agent' : 'Chat'} · {item.title}</TooltipContent>
+          <TooltipContent side="right">Agent · {item.title}</TooltipContent>
         </Tooltip>
       )}
       <SessionMiniMapPopover

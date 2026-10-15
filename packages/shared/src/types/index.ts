@@ -18,8 +18,10 @@ export * from './channel'
 // 代理配置相关类型
 export * from './proxy'
 
-// Chat 相关类型
-export * from './chat'
+// 会话附件与消息检索公共类型
+export * from './attachment'
+export * from './session-search'
+export * from './automatic-memory'
 
 // Agent 相关类型
 export * from './agent'
@@ -39,12 +41,6 @@ export * from './installer'
 
 // GitHub Release 相关类型
 export * from './github'
-
-// 系统提示词相关类型
-export * from './system-prompt'
-
-// Chat 工具（function calling）相关类型
-export * from './chat-tool'
 
 // 飞书集成相关类型
 export * from './feishu'

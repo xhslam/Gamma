@@ -1,9 +1,11 @@
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
+import { useAutomaticMemoryChanges } from '@/hooks/useAutomaticMemoryChanges'
 import { workspaceMemoryChangesAtom } from '@/atoms/memory-change-atoms'
 
 /** Keeps the selected workspace observed even while its right file panel is closed. */
 export function WorkspaceMemoryChangeObserver({ workspaceSlug }: { workspaceSlug: string }): null {
+  useAutomaticMemoryChanges()
   const setUpdatesByWorkspace = useSetAtom(workspaceMemoryChangesAtom)
 
   React.useEffect(() => {

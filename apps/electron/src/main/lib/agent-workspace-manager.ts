@@ -13,6 +13,7 @@ import { writeExistingSkillFile } from './skill-file-write'
 import { rmSyncWithRetry, renameIfDestinationAbsentWithRetry, renameWithRetry } from './fs-retry'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { writeJsonFileAtomic, readJsonFileSafe, writeTextFileAtomic } from './safe-file'
+import { assertPublicMemoryFilePath } from './automatic-memory-file-policy'
 import { GAMMA_COACH_SKILL_SLUG, LEGACY_COACH_SKILL_SLUG, migrateLegacyCoachSkillDirectory } from './legacy-skill-renames'
 import { randomUUID } from 'node:crypto'
 import { join, resolve, relative, isAbsolute, dirname, basename } from 'node:path'
@@ -1434,6 +1435,7 @@ function resolveAutoMemoryFilePath(memoryDir: string, relativePath: string): str
   }
   const normalized = relativePath.replace(/\\/g, '/')
   const resolved = resolve(memoryDir, normalized)
+  assertPublicMemoryFilePath(memoryDir, resolved)
   const rel = relative(memoryDir, resolved)
   if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
     throw new Error('非法路径：禁止访问 auto memory 目录外')
@@ -1449,6 +1451,7 @@ function resolveAutoMemoryFilePath(memoryDir: string, relativePath: string): str
   }
   if (existsSync(probe)) {
     const realProbe = realpathSync(probe)
+    assertPublicMemoryFilePath(memoryRealDir, realProbe)
     const realRel = relative(memoryRealDir, realProbe)
     if (realRel.startsWith('..') || isAbsolute(realRel)) {
       throw new Error('非法路径：禁止通过软链接访问 auto memory 目录外')

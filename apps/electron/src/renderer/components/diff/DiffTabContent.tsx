@@ -14,10 +14,8 @@ import { toast } from 'sonner'
 import type { FilePreviewMetadata } from '@gamma/shared'
 import { cn } from '@/lib/utils'
 import {
-  agentDiffPanelTabAtom,
   agentDiffViewModeAtom,
   agentDiffRefreshVersionAtom,
-  agentSidePanelOpenAtomFamily,
 } from '@/atoms/agent-atoms'
 import { resolvedThemeAtom } from '@/atoms/theme'
 import {
@@ -27,13 +25,7 @@ import {
   previewResolvedPathAtom,
   quotedSelectionMapAtom,
 } from '@/atoms/preview-atoms'
-import {
-  agentSideChatMapAtom,
-  conversationsAtom,
-  conversationDraftsAtom,
-  conversationQuotedSelectionMapAtom,
-  selectedModelAtom,
-} from '@/atoms/chat-atoms'
+
 import { markdownTocOpenAtom } from '@/atoms/markdown-toc'
 import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
 import { useShortcut } from '@/hooks/useShortcut'
@@ -53,8 +45,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PIERRE_FILE_CSS } from '@/components/agent/tool-result-renderers/pierre-styles'
 import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
-import { focusChatInput } from '@/components/chat/focus-chat-input'
-import { getOrCreateSideChat } from '@/lib/side-chat'
 import { insertAgentInputQuote } from '@/lib/agent-input-quote'
 import { SELECTION_ACTION_POPOVER_SELECTOR } from '@/lib/quoted-selection'
 import { copyTextToClipboard } from '@/lib/clipboard'
@@ -408,15 +398,6 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   // ===== 选中文本引用（Quoted Selection）=====
 
   const setQuotedSelectionMap = useSetAtom(quotedSelectionMapAtom)
-  const selectedChatModel = useAtomValue(selectedModelAtom)
-  const conversations = useAtomValue(conversationsAtom)
-  const sideChatMap = useAtomValue(agentSideChatMapAtom)
-  const setConversations = useSetAtom(conversationsAtom)
-  const setConversationDrafts = useSetAtom(conversationDraftsAtom)
-  const setChatQuotedSelectionMap = useSetAtom(conversationQuotedSelectionMapAtom)
-  const setSideChatMap = useSetAtom(agentSideChatMapAtom)
-  const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId))
-  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const focusAgentSessionInput = useFocusAgentSessionInput()
   const [previewSelection, setPreviewSelection] = React.useState<PreviewTextSelection | null>(null)
   const filePathRef = React.useRef(filePath)
@@ -424,7 +405,6 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   const shadowRootsRef = React.useRef<Set<ShadowRoot>>(new Set())
   const pointerSelectingRef = React.useRef(false)
   const captureTimerRef = React.useRef<number | null>(null)
-  const openSelectionChatPendingRef = React.useRef(false)
   /** 当前正在展示的截断 toast id；选中回落到上限内或选区消失时主动 dismiss */
   const lastToastIdRef = React.useRef<string | null>(null)
 
@@ -1467,66 +1447,6 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
     focusAgentSessionInput(sessionId)
   }, [clearPreviewSelection, focusAgentSessionInput, previewSelection, sessionId, setQuotedSelectionMap])
 
-  const handleOpenSelectionChat = React.useCallback(async (): Promise<void> => {
-    if (!previewSelection || openSelectionChatPendingRef.current) return
-
-    const quote = {
-      text: previewSelection.text,
-      filePath: previewSelection.filePath,
-      sourceType: 'file' as const,
-      sourceLabel: previewSelection.filePath,
-      capturedAt: Date.now(),
-    }
-    const activeConversationId = sideChatMap.get(sessionId) ?? null
-    // 右侧已绑定有效 Chat 时始终复用，避免因激活 Tab 状态短暂不同步而重复创建会话。
-    if (activeConversationId) {
-      setChatQuotedSelectionMap((previous) => new Map(previous).set(activeConversationId, quote))
-      setSidePanelOpen(true)
-      setSidePanelTabMap((previous) => new Map(previous).set(sessionId, 'chat'))
-      window.getSelection()?.removeAllRanges()
-      clearPreviewSelection()
-      focusChatInput(activeConversationId)
-      return
-    }
-
-    openSelectionChatPendingRef.current = true
-    try {
-      const conversation = await getOrCreateSideChat(sessionId, () => window.electronAPI.createConversation(
-        '预览选区问答',
-        selectedChatModel?.modelId,
-        selectedChatModel?.channelId,
-      ))
-      setConversations((prev) => prev.some((item) => item.id === conversation.id) ? prev : [conversation, ...prev])
-      setConversationDrafts((prev) => new Map(prev).set(conversation.id, '我的问题：'))
-      setSideChatMap((prev) => new Map(prev).set(sessionId, conversation.id))
-      setSidePanelOpen(true)
-      setSidePanelTabMap((prev) => new Map(prev).set(sessionId, 'chat'))
-      setChatQuotedSelectionMap((previous) => new Map(previous).set(conversation.id, quote))
-      window.getSelection()?.removeAllRanges()
-      clearPreviewSelection()
-      focusChatInput(conversation.id)
-    } catch (error) {
-      console.error('[DiffTabContent] 打开预览选区聊天标签失败:', error)
-      toast.error('打开右侧问答失败')
-    } finally {
-      openSelectionChatPendingRef.current = false
-    }
-  }, [
-    clearPreviewSelection,
-    conversations,
-    previewSelection,
-    selectedChatModel,
-    sessionId,
-    setConversationDrafts,
-    setConversations,
-    setChatQuotedSelectionMap,
-    setQuotedSelectionMap,
-    setSideChatMap,
-    setSidePanelOpen,
-    setSidePanelTabMap,
-    sideChatMap,
-  ])
-
   // persistRef 始终持有最新 persistMarkdownDraft，供 setTimeout / unmount cleanup 调用。
   // 用 effect 而非渲染期赋值，避免 React 19 严格模式下并发渲染中途读到中间态。
   React.useEffect(() => {
@@ -2044,7 +1964,6 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
             x={previewSelection.x}
             y={previewSelection.y}
             onAddToAgent={handleAddSelectionToAgent}
-            onOpenChat={handleOpenSelectionChat}
           />
         )}
       </div>

@@ -4,6 +4,7 @@ import { LEFT_SIDEBAR_WIDTH } from '../../atoms/sidebar-atoms'
 
 const shellSource = readFileSync(new URL('./AppShell.tsx', import.meta.url), 'utf8')
 const atomSource = readFileSync(new URL('../../atoms/sidebar-atoms.ts', import.meta.url), 'utf8')
+const sidebarSource = readFileSync(new URL('./LeftSidebar.tsx', import.meta.url), 'utf8')
 
 describe('Given 固定展开宽度的左侧导航', () => {
   test('When 渲染展开侧栏 Then 使用 256px 且不读取历史拖拽宽度', () => {
@@ -25,10 +26,14 @@ describe('Given 固定展开宽度的左侧导航', () => {
 })
 
 describe('Given 完全收起的左侧导航', () => {
+  test('When 开始收起 Then 导航内容不提前卸载，保留离场动画', () => {
+    expect(sidebarSource).not.toContain('if (sidebarCollapsed) {')
+  })
+
   test('When 收起 Then 顶部出现展开入口且侧栏不保留分隔线', () => {
     expect(shellSource).toContain('{sidebarCollapsed && !hasAgentSessionHeader && <CollapsedSidebarHeader />}')
-    expect(shellSource).toContain("sidebarCollapsed && 'hidden'")
-    expect(shellSource).toContain('{!sidebarCollapsed && (')
+    expect(shellSource).toContain('<SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>')
+    expect(shellSource).not.toContain("sidebarCollapsed && 'hidden'")
     expect(shellSource).not.toContain('COLLAPSED_LEFT_SIDEBAR_WIDTH')
   })
 })
