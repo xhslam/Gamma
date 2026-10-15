@@ -2,10 +2,12 @@
  * AskUserBanner — Agent AskUserQuestion 交互式问答横幅
  *
  * 多问题用顶部 Tab 切换，选项竖向排列。
- * 键盘：↑↓ 选择选项，Enter 确认当前问题（最后一题提交，否则翻页）。
+ * 键盘：聚焦选项后 ↑↓ 导航，Enter/Space 选择；自定义输入 Enter 提交。
  */
 
 import * as React from 'react'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
+import { handleBannerNavigation } from '@/lib/agent-control-keyboard'
 import { useAtom, useSetAtom } from 'jotai'
 import { Send, X } from 'lucide-react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
@@ -60,14 +62,9 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
   const answers = requestDraft?.answers ?? createInitialDraft(questions).answers
   const isLastTab = activeTab >= questions.length - 1
 
-  // ===== Refs：确保 keydown handler 始终读取最新值，消除闭包过期问题 =====
-  const activeTabRef = React.useRef(activeTab)
-  activeTabRef.current = activeTab
-  const questionsRef = React.useRef(questions)
-  questionsRef.current = questions
-  const focusedOptIdxRef = React.useRef(focusedOptIdx)
-  focusedOptIdxRef.current = focusedOptIdx
-  const submitRef = React.useRef<(() => void) | null>(null)
+  const submittingRef = React.useRef(false)
+  const composingRef = React.useRef(false)
+  const [submissionError, setSubmissionError] = React.useState<{ requestId: string; message: string } | null>(null)
   const autoAdvanceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearAutoAdvanceTimer = React.useCallback((): void => {
@@ -91,55 +88,6 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
       return map
     })
   }, [request?.requestId, questions, clearAutoAdvanceTimer, setDrafts])
-
-  // 键盘导航：只在 requestId 变化时重建 handler，内部通过 ref 读取最新值
-  React.useEffect(() => {
-    if (!request || questions.length === 0) return
-
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      const curTab = activeTabRef.current
-      const qs = questionsRef.current
-      const curFocusIdx = focusedOptIdxRef.current
-      const q = qs[curTab]
-      if (!q) return
-      const itemCount = q.options.length + 1
-      const lastTab = curTab >= qs.length - 1
-
-      // 自由文本输入框内：仅 Enter 生效（输入法组合中跳过）
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-          e.preventDefault()
-          if (lastTab) submitRef.current?.()
-          else setActiveTabByState((prev) => prev + 1)
-        }
-        return
-      }
-
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        const nextIdx = curFocusIdx === -1
-          ? (e.key === 'ArrowDown' ? 0 : itemCount - 1)
-          : e.key === 'ArrowDown'
-            ? (curFocusIdx + 1) % itemCount
-            : (curFocusIdx - 1 + itemCount) % itemCount
-        setFocusedOptIdxByState(nextIdx)
-        // 移动焦点同时选中
-        if (nextIdx < q.options.length) {
-          const opt = q.options[nextIdx]
-          if (opt) toggleOptionByState(curTab, q, opt.label)
-        } else {
-          toggleCustomByState(curTab)
-        }
-      } else if (e.key === 'Enter' && !e.isComposing) {
-        e.preventDefault()
-        if (lastTab) submitRef.current?.()
-        else setActiveTabByState((prev) => prev + 1)
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [request?.requestId])
 
   /** 关闭问题 & 终止 Agent */
   const handleDismiss = (): void => {
@@ -231,8 +179,10 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
   }
 
   const handleSubmit = async (): Promise<void> => {
-    if (submitting) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
+    setSubmissionError(null)
     try {
       const answersRecord: Record<string, string> = {}
       for (let i = 0; i < questions.length; i++) {
@@ -258,12 +208,12 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
       clearDrafts([request.requestId])
     } catch (error) {
       console.error('[AskUserBanner] 响应失败:', error)
+      setSubmissionError({ requestId: request.requestId, message: '回答提交失败，已保留答案，请重试。' })
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
-
-  submitRef.current = handleSubmit
 
   const hasValidAnswers = questions.some((_, idx) => {
     const a = getAnswer(idx)
@@ -278,7 +228,14 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
   }
 
   return (
-    <div className="ask-user-banner mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+    <div
+      role="region"
+      aria-label="Agent 问答"
+      aria-busy={submitting}
+      onCompositionStart={() => { composingRef.current = true }}
+      onCompositionEnd={() => { composingRef.current = false }}
+      onKeyDownCapture={(event) => handleBannerNavigation(event, composingRef.current)}
+      className="ask-user-banner mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
       {/* 头部 + Tab 栏 */}
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2">
@@ -292,6 +249,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
               className="size-5 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
               onClick={handleDismiss}
               title="关闭并终止 Agent"
+              aria-label="关闭并终止 Agent"
             >
               <X className="size-3.5" />
             </button>
@@ -346,6 +304,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
               }, 150)
             }
           }}
+          onFocusOption={setFocusedOptIdxByState}
           onToggleCustom={() => toggleCustomByState(activeTab)}
           onCustomTextChange={(text) => updateAnswers((prev) => {
             const map = new Map(prev)
@@ -357,10 +316,11 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
         />
       </div>
 
+      {submissionError?.requestId === request.requestId && <p role="alert" className="px-4 pb-2 text-xs text-destructive">{submissionError.message}</p>}
       {/* 底部 */}
       <div className="flex items-center justify-end gap-1.5 px-4 pb-3">
         <span className="text-[10px] text-muted-foreground/40 mr-auto">
-          ↑↓ 选择 · Enter {isLastTab ? '确认' : '下一个'}
+          聚焦选项后 ↑↓ 导航 · Enter 选择
         </span>
         {isLastTab && (
           <Button
@@ -408,6 +368,7 @@ function QuestionCard({
   focusedIndex,
   showBadge,
   onToggleOption,
+  onFocusOption,
   onToggleCustom,
   onCustomTextChange,
   onSubmit,
@@ -418,6 +379,7 @@ function QuestionCard({
   focusedIndex: number
   showBadge: boolean
   onToggleOption: (label: string) => void
+  onFocusOption: (index: number) => void
   onToggleCustom: () => void
   onCustomTextChange: (text: string) => void
   onSubmit: () => void
@@ -550,13 +512,16 @@ function QuestionCard({
               key={option.label}
               type="button"
               className={`
-                flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all outline-none text-left
+                flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring text-left
                 ${isSelected
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'bg-muted/50 text-foreground/80 hover:bg-muted'
                 }
                 ${isFocused ? 'ring-2 ring-primary/50 ring-offset-1 ring-offset-card' : ''}
               `}
+              data-banner-option=""
+              aria-pressed={isSelected}
+              onFocus={() => onFocusOption(idx)}
               onClick={() => onToggleOption(option.label)}
             >
               <span className={`text-[10px] shrink-0 ${isSelected ? 'text-primary-foreground/60' : 'text-muted-foreground/50'}`}>
@@ -576,13 +541,16 @@ function QuestionCard({
         <button
           type="button"
           className={`
-            flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all outline-none text-left
+            flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring text-left
             ${answer.showCustom
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'bg-muted/50 text-foreground/80 hover:bg-muted'
             }
             ${focusedIndex === optionCount ? 'ring-2 ring-primary/50 ring-offset-1 ring-offset-card' : ''}
           `}
+          data-banner-option=""
+          aria-pressed={answer.showCustom}
+          onFocus={() => onFocusOption(optionCount)}
           onClick={onToggleCustom}
         >
           <span className={`text-[10px] shrink-0 ${answer.showCustom ? 'text-primary-foreground/60' : 'text-muted-foreground/50'}`}>
@@ -604,9 +572,9 @@ function QuestionCard({
             onChange={(e) => onCustomTextChange(e.target.value)}
             onFocus={() => setLastFocusedVoiceInputId(voiceInputIdRef.current)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (e.key === 'Enter' && !e.shiftKey && !isImeKeyboardEvent(e.nativeEvent)) {
                 e.preventDefault()
-                e.stopPropagation() // 阻止冒泡到 document handler，避免重复触发 setActiveTab
+                e.stopPropagation() // 自定义输入只提交一次，不触发祖先快捷键。
                 onSubmit()
               }
             }}

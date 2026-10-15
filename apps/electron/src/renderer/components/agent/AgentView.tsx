@@ -13,6 +13,7 @@
  * 布局：AgentHeader | AgentMessages | AgentInput + 可选 FileBrowser 侧面板
  */
 
+import { getAgentSendRecoveryState, isAgentDraftUnchanged } from '@/lib/agent-send-draft-recovery'
 import * as React from 'react'
 import { unstable_batchedUpdates } from 'react-dom'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
@@ -138,7 +139,7 @@ import {
   isSessionReferenceDrag,
   type InsertSessionReferenceMentionDetail,
 } from '@/lib/session-reference-drag'
-import { buildQuotedSelectionBlock, expandAgentHistoryQuoteMentions } from '@/lib/quoted-selection'
+import { buildQuotedSelectionBlock, expandAgentHistoryQuoteMentions, serializeQuotedSelectionMention } from '@/lib/quoted-selection'
 import { INSERT_AGENT_INPUT_QUOTE_EVENT, type InsertAgentInputQuoteDetail } from '@/lib/agent-input-quote'
 import { createClipboardPendingFile, createClipboardTextDraft, makeUniqueAttachmentName } from '@/lib/clipboard-text-attachment'
 import { copyTextToClipboard } from '@/lib/clipboard'
@@ -558,19 +559,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   }, [sessionId, setQuotedSelectionMap])
 
   /** 消费当前引用选区，用于把引用快照固定到本次发送/队列消息中 */
-  const consumeQuotedSelection = React.useCallback((): QuotedSelection | null => {
-    const quotedSelection = store.get(quotedSelectionMapAtom).get(sessionId) ?? null
-    if (!quotedSelection) return null
-
-    const capturedAt = quotedSelection.capturedAt
-    store.set(quotedSelectionMapAtom, (prev) => {
-      const m = new Map(prev)
-      const current = m.get(sessionId)
-      if (current && current.capturedAt === capturedAt) m.delete(sessionId)
-      return m
-    })
-    return quotedSelection
-  }, [sessionId, store])
 
   const suggestionsMap = useAtomValue(agentPromptSuggestionsAtom)
   const suggestion = suggestionsMap.get(sessionId) ?? null
@@ -687,6 +675,22 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const [workspaceFilesPath, setWorkspaceFilesPath] = React.useState<string | null>(null)
   const [isDragOver, setIsDragOver] = React.useState(false)
   const [errorCopied, setErrorCopied] = React.useState(false)
+
+  const recoveryState = getAgentSendRecoveryState(store)
+  const sendGuardRef = React.useRef(recoveryState.guard)
+  const draftEditVersionsRef = React.useRef(recoveryState.draftEditVersions)
+  const activeComposerSessionRef = React.useRef<string | null>(sessionId)
+  activeComposerSessionRef.current = sessionId
+  React.useLayoutEffect(() => {
+    activeComposerSessionRef.current = sessionId
+    return () => {
+      if (activeComposerSessionRef.current === sessionId) activeComposerSessionRef.current = null
+    }
+  }, [sessionId])
+  const handleDraftEdit = React.useCallback(() => {
+    const versions = draftEditVersionsRef.current
+    versions.set(sessionId, (versions.get(sessionId) ?? 0) + 1)
+  }, [sessionId])
 
   // pendingFiles ref（供 addFilesAsAttachments 读取最新列表，避免闭包旧值）
   const pendingFilesRef = React.useRef(pendingFiles)
@@ -988,6 +992,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     // 切会话时优先命中内存缓存，因此乐观插入的用户消息也要同步写入缓存，
     // 否则“发送后立刻切走再切回”会短暂回退到旧消息数组。
     // 本地乐观消息优先于正在进行中的旧 IPC 快照。
+    if (activeComposerSessionRef.current !== sessionId) {
+      setMessagesCache((prev) => setSessionMessagesCache(prev, sessionId, [...(prev.get(sessionId) ?? []), message]))
+      return
+    }
     messagesMutationVersionRef.current += 1
     const next = [...persistedSDKMessagesRef.current, message]
     persistedSDKMessagesRef.current = next
@@ -999,6 +1007,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     store.set(liveMessagesMapAtom, (prev) => {
       const map = new Map(prev)
       const current = map.get(sessionId) ?? []
+      const uuid = (message as SDKMessageRecord).uuid
+      if (uuid && current.some((entry) => (entry as SDKMessageRecord).uuid === uuid)) return prev
       map.set(sessionId, [...current, message])
       return map
     })
@@ -1359,7 +1369,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       if (f.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(f.previewUrl)
       window.__pendingAgentFileData?.delete(f.id)
     }
-    setPendingFiles([])
+    const sentIds = new Set(files.map((file) => file.id))
+    setPendingFiles((previous) => previous.filter((file) => !sentIds.has(file.id)))
 
     return {
       referenceBlock: `<attached_files>\n${refs}\n</attached_files>\n\n`,
@@ -1375,16 +1386,21 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
   const restoreQueuedAttachmentsToPending = React.useCallback((attachments?: AgentQueuedAttachment[]): void => {
     if (!attachments || attachments.length === 0) return
-    setPendingFiles((prev) => [
-      ...prev,
-      ...attachments.map((attachment) => ({
-        id: `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    setPendingFiles((prev) => {
+      const paths = new Set(prev.map((file) => file.sourcePath))
+      const recovered = attachments.filter((attachment) => {
+        if (paths.has(attachment.targetPath)) return false
+        paths.add(attachment.targetPath)
+        return true
+      }).map((attachment) => ({
+        id: crypto.randomUUID(),
         filename: attachment.filename,
         mediaType: attachment.mediaType,
         size: attachment.size,
         sourcePath: attachment.targetPath,
-      })),
-    ])
+      }))
+      return recovered.length ? [...prev, ...recovered] : prev
+    })
   }, [setPendingFiles])
 
   /** 将 File 对象列表添加为待发送附件 */
@@ -1993,6 +2009,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
   /** 发送消息 */
   const handleSend = React.useCallback(async (overrideText?: string, fromEditor = false): Promise<void> => {
+    if (sendGuardRef.current.isPending(sessionId)) return
+    if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
     const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
     const text = (overrideText ?? currentDraft).trim()
     // 如果输入为空但有建议，使用建议内容
@@ -2013,250 +2031,341 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       })
       return
     }
-    const additionalDirectoriesForRun = createBaseAdditionalDirectories()
+    const requestId = sendGuardRef.current.begin(sessionId)
+    if (!requestId) return
+    const readCheckpoint = () => ({
+      text: store.get(agentSessionDraftsAtom).get(sessionId) ?? '',
+      html: store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? '',
+      editVersion: draftEditVersionsRef.current.get(sessionId) ?? 0,
+      syncVersion: store.get(agentSessionDraftSyncVersionsAtom).get(sessionId) ?? 0,
+    })
+    const originalDraft = readCheckpoint()
+    let expectedDraft = originalDraft
+    let cleared = false
+    let accepted = false
+    let queuedMessageId: string | undefined
+    let sentStartedAt: number | undefined
+    let optimisticMessage: SDKMessage | undefined
+    let savedAttachments: AgentQueuedAttachment[] | undefined
+    const originalQuote = store.get(quotedSelectionMapAtom).get(sessionId) ?? null
+    let quoteConsumed = false
+    let recoveryApplied = false
+    const consumeCapturedQuote = (): QuotedSelection | null => {
+      if (!originalQuote) return null
+      store.set(quotedSelectionMapAtom, (previous) => {
+        if (previous.get(sessionId) !== originalQuote) return previous
+        const next = new Map(previous)
+        next.delete(sessionId)
+        return next
+      })
+      quoteConsumed = true
+      return originalQuote
+    }
+    const clearSubmittedDraft = (): void => {
+      if ((overrideText === undefined || fromEditor) && isAgentDraftUnchanged(originalDraft, readCheckpoint())) {
+        setInputContent('')
+        setInputHtmlContent('')
+        cleared = true
+        expectedDraft = readCheckpoint()
+      }
+    }
+    const recoverDraft = (append: boolean): void => {
+      if (recoveryApplied) return
+      recoveryApplied = true
+      if (append && activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
+      const current = readCheckpoint()
+      const isSuggestionSend = overrideText !== undefined && !fromEditor
+      const failedText = isSuggestionSend ? effectiveText : originalDraft.text || effectiveText
+      const currentQuote = store.get(quotedSelectionMapAtom).get(sessionId)
+      // 正文、富文本、附件与外置引用属于同一次失败快照，必须一起恢复。
+      // 新草稿存在时只能由显式动作走到这里，不能提前污染它的发送上下文。
+      restoreQueuedAttachmentsToPending(savedAttachments)
+      if (quoteConsumed && originalQuote && !currentQuote) {
+        setQuotedSelectionMap((previous) => {
+          if (previous.has(sessionId)) return previous
+          const next = new Map(previous)
+          next.set(sessionId, originalQuote)
+          return next
+        })
+      }
+      // 单独引用槽位已被新选区占用时，旧选区变为可编辑的内联 chip，不能覆盖新选区。
+      const quoteMarker = quoteConsumed && originalQuote && currentQuote && currentQuote !== originalQuote
+        ? serializeQuotedSelectionMention(originalQuote) || buildQuotedSelectionBlock(originalQuote)
+        : ''
+      const textToRestore = quoteMarker ? `${failedText}\n\n${quoteMarker}` : failedText
+      const htmlToRestore = ((!isSuggestionSend && originalDraft.html) || queuedTextToParagraphHtml(failedText))
+        + (quoteMarker ? queuedTextToParagraphHtml(quoteMarker) : '')
+      setInputHtmlContent(append && current.text
+        ? `${current.html || queuedTextToParagraphHtml(current.text)}${htmlToRestore}`
+        : htmlToRestore)
+      setInputContent(append && current.text ? `${current.text}\n\n${textToRestore}` : textToRestore)
+    }
+    // 真实 started 事件可能先于 IPC 返回；已被主进程接受的请求绝不能回滚成未发送。
+    const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
+      if (status.sessionId === sessionId && status.messageId === queuedMessageId) accepted = true
+    })
+    const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
+      if (event.sessionId !== sessionId) return
+      if (event.payload.kind === 'gamma_event' && event.payload.event.type === 'run_started'
+        && event.payload.event.startedAt === sentStartedAt) accepted = true
+      if (queuedMessageId && event.payload.kind === 'sdk_message'
+        && (event.payload.message as SDKMessageRecord).uuid === queuedMessageId) accepted = true
+    })
+    try {
+      const additionalDirectoriesForRun = createBaseAdditionalDirectories()
 
-    if (streaming) {
-      // Agent 正在输出时，用户消息默认进入 Gamma 托管队列，不打断当前 turn。
+      if (streaming) {
+        // Agent 正在输出时，用户消息默认进入 Gamma 托管队列，不打断当前 turn。
+        const attachmentContext = pendingFilesSnapshot.length > 0
+          ? await preparePendingFilesForSend(pendingFilesSnapshot, additionalDirectoriesForRun)
+          : null
+        if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
+
+        savedAttachments = attachmentContext?.attachments
+        const quotedSelection = consumeCapturedQuote()
+        const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
+          ? {
+              fileReferenceBlock: attachmentContext.referenceBlock,
+              attachments: attachmentContext.attachments,
+              additionalDirectories: attachmentContext.additionalDirectories,
+            }
+          : undefined)
+        const quotedSelectionBlock = quotedSelection
+          ? buildQuotedSelectionBlock(quotedSelection)
+          : ''
+        const payload = buildQueuedMessageSendPayload(message, quotedSelectionBlock)
+        const queuedInput: AgentDeferredQueueMessageInput & { dispatch: 'after_current' } = {
+          queueMessageId: message.id,
+          sessionId,
+          userMessage: payload.sdkText,
+          rawUserMessage: payload.rawText,
+          channelId: agentChannelId,
+          modelId: agentModelId || undefined,
+          workspaceId: currentWorkspaceId || undefined,
+          additionalDirectories: message.additionalDirectories,
+          permissionModeOverride: permissionMode,
+          dispatch: 'after_current',
+          mentionedSkills: payload.mentions.mentionedSkills,
+          mentionedMcpServers: payload.mentions.mentionedMcpServers,
+          mentionedSessionIds: payload.mentions.mentionedSessionIds,
+          mentionedTodoIds: payload.mentions.mentionedTodoIds,
+          mentionedCalendarEventIds: payload.mentions.mentionedCalendarEventIds,
+        }
+        setQueuedMessages((prev) => [...prev, message])
+        queuedMessageId = message.id
+        clearSubmittedDraft()
+        const result = await window.electronAPI.submitOrEnqueueAgentMessage(queuedInput)
+        accepted = true
+        if (result.disposition === 'started') {
+          setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
+        }
+        // 入队后消息会出现在队列 UI 中，用户可见；不再弹 toast 打扰。
+        setPromptSuggestions((prev) => {
+          if (!prev.has(sessionId) || prev.get(sessionId) !== suggestion) return prev
+          const map = new Map(prev)
+          map.delete(sessionId)
+          return map
+        })
+
+        return
+      }
+
+      if (backgroundWaiting) {
+        // 软空闲态没有活跃输出，直接注入，无需中断。
+        const attachmentContext = pendingFilesSnapshot.length > 0
+          ? await preparePendingFilesForSend(pendingFilesSnapshot, additionalDirectoriesForRun)
+          : null
+        if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
+
+        savedAttachments = attachmentContext?.attachments
+        const quotedSelection = consumeCapturedQuote()
+        const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
+          ? {
+              fileReferenceBlock: attachmentContext.referenceBlock,
+              attachments: attachmentContext.attachments,
+              additionalDirectories: attachmentContext.additionalDirectories,
+            }
+          : undefined)
+        clearSubmittedDraft()
+        setPromptSuggestions((prev) => {
+          if (!prev.has(sessionId) || prev.get(sessionId) !== suggestion) return prev
+          const map = new Map(prev)
+          map.delete(sessionId)
+          return map
+        })
+        queuedMessageId = message.id
+        await sendPlainTextAgentMessage(message)
+        accepted = true
+        return
+      }
+
+      // 清除当前会话的错误消息
+      setAgentStreamErrors((prev) => {
+        if (!prev.has(sessionId)) return prev
+        const map = new Map(prev)
+        map.delete(sessionId)
+        return map
+      })
+
+      // 1. 如果有 pending 文件，先保存到 session 目录
       const attachmentContext = pendingFilesSnapshot.length > 0
         ? await preparePendingFilesForSend(pendingFilesSnapshot, additionalDirectoriesForRun)
         : null
       if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
+      setPromptSuggestions((prev) => {
+        if (!prev.has(sessionId) || prev.get(sessionId) !== suggestion) return prev
+        const map = new Map(prev)
+        map.delete(sessionId)
+        return map
+      })
+      let fileReferences = attachmentContext?.referenceBlock ?? ''
 
-      const quotedSelection = consumeQuotedSelection()
-      const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
-        ? {
-            fileReferenceBlock: attachmentContext.referenceBlock,
-            attachments: attachmentContext.attachments,
-            additionalDirectories: attachmentContext.additionalDirectories,
-          }
-        : undefined)
-      const quotedSelectionBlock = quotedSelection
-        ? buildQuotedSelectionBlock(quotedSelection)
-        : ''
-      const payload = buildQueuedMessageSendPayload(message, quotedSelectionBlock)
-      const queuedInput: AgentDeferredQueueMessageInput & { dispatch: 'after_current' } = {
-        queueMessageId: message.id,
+      // 构建引用选中文本：内联 XML 拼入 prompt，对话框不展示（parseAttachedFiles 剥离）
+      savedAttachments = attachmentContext?.attachments
+      const quotedSelection = consumeCapturedQuote()
+      if (quotedSelection) {
+        fileReferences = fileReferences + buildQuotedSelectionBlock(quotedSelection)
+      }
+
+      // 2. 构建最终消息
+      const finalMessage = fileReferences + expandAgentHistoryQuoteMentions(effectiveText)
+      const mentions = parseQueuedMessageMentions(effectiveText)
+      // Agent 侧使用解码后的 SDK 文本（@file 路径还原为真实路径，Agent 可读取）；
+      // 历史 quote marker 仅在此刻展开为精确上下文，草稿本身始终保持可编辑 chip。
+      const sdkMessage = fileReferences + expandAgentHistoryQuoteMentions(mentions.cleanedText)
+
+      // 清除打断状态（上一轮的打断标记不再显示）
+      store.set(stoppedByUserSessionsAtom, (prev: Set<string>) => {
+        if (!prev.has(sessionId)) return prev
+        const next = new Set(prev)
+        next.delete(sessionId)
+        return next
+      })
+
+      // 取消 draft 标记，让会话出现在侧边栏。主进程会在实际启动时持久化清除
+      // isDraft；这里先乐观更新，避免 IPC 往返期间仍被侧栏过滤。
+      setDraftSessionIds((prev: Set<string>) => {
+        if (!prev.has(sessionId)) return prev
+        const next = new Set(prev)
+        next.delete(sessionId)
+        return next
+      })
+      setAgentSessions((prev) => prev.map((session) => (
+        session.id === sessionId && session.isDraft ? { ...session, isDraft: false } : session
+      )))
+
+      // 初始化流式状态（startedAt 由渲染进程生成，传递给主进程原样回传，确保竞态保护使用同一个值）
+      const streamStartedAt = Date.now()
+      sentStartedAt = streamStartedAt
+      setStreamingStates((prev) => {
+        const map = new Map(prev)
+        const existing = prev.get(sessionId)
+        map.set(sessionId, {
+          running: true,
+          model: agentModelId || undefined,
+          startedAt: streamStartedAt,
+          inputTokens: existing?.inputTokens,
+          contextWindow: resolveRunContextWindow(agentModelId || undefined, existing?.contextWindow),
+        })
+        return map
+      })
+
+      // 乐观更新：SDKMessage 格式的用户消息（Phase 4）
+      const tempUserSDKMsg: SDKMessage = {
+        type: 'user',
+        message: {
+          content: [{ type: 'text', text: finalMessage }],
+        },
+        parent_tool_use_id: null,
+        _createdAt: Date.now(),
+      } as unknown as SDKMessage
+      optimisticMessage = tempUserSDKMsg
+      appendOptimisticPersistedMessage(tempUserSDKMsg)
+
+      const input: AgentSendInput = {
         sessionId,
-        userMessage: payload.sdkText,
-        rawUserMessage: payload.rawText,
+        userMessage: sdkMessage,
+        rawUserMessage: finalMessage,
         channelId: agentChannelId,
         modelId: agentModelId || undefined,
         workspaceId: currentWorkspaceId || undefined,
-        additionalDirectories: message.additionalDirectories,
-        permissionModeOverride: permissionMode,
-        dispatch: 'after_current',
-        mentionedSkills: payload.mentions.mentionedSkills,
-        mentionedMcpServers: payload.mentions.mentionedMcpServers,
-        mentionedSessionIds: payload.mentions.mentionedSessionIds,
-        mentionedTodoIds: payload.mentions.mentionedTodoIds,
-        mentionedCalendarEventIds: payload.mentions.mentionedCalendarEventIds,
-      }
-      setQueuedMessages((prev) => [...prev, message])
-      void window.electronAPI.submitOrEnqueueAgentMessage(queuedInput)
-        .then((result) => {
-          if (result.disposition === 'started') {
-            // 主进程可在 IPC 返回前已发送 started；无论两者先后都幂等清除本地投影。
-            setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
-          }
-        })
-        .catch((error) => {
-          console.error('[AgentView] 主进程消息提交失败:', error)
-          setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
-          restoreQueuedAttachmentsToPending(message.attachments)
-          if (quotedSelection) {
-            setQuotedSelectionMap((prev) => {
-              const map = new Map(prev)
-              map.set(sessionId, quotedSelection)
-              return map
-            })
-          }
-          toast.error('消息加入队列失败', { description: String(error) })
-        })
-      // 入队后消息会出现在队列 UI 中，用户可见；不再弹 toast 打扰。
-      if (overrideText === undefined || fromEditor) {
-        setInputContent('')
-        setInputHtmlContent('')
-      }
-      setPromptSuggestions((prev) => {
-        if (!prev.has(sessionId)) return prev
-        const map = new Map(prev)
-        map.delete(sessionId)
-        return map
-      })
-
-      return
-    }
-
-    if (backgroundWaiting) {
-      // 软空闲态没有活跃输出，直接注入，无需中断。
-      const attachmentContext = pendingFilesSnapshot.length > 0
-        ? await preparePendingFilesForSend(pendingFilesSnapshot, additionalDirectoriesForRun)
-        : null
-      if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
-
-      const quotedSelection = consumeQuotedSelection()
-      const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
-        ? {
-            fileReferenceBlock: attachmentContext.referenceBlock,
-            attachments: attachmentContext.attachments,
-            additionalDirectories: attachmentContext.additionalDirectories,
-          }
-        : undefined)
-      if (overrideText === undefined || fromEditor) {
-        setInputContent('')
-        setInputHtmlContent('')
-      }
-      setPromptSuggestions((prev) => {
-        if (!prev.has(sessionId)) return prev
-        const map = new Map(prev)
-        map.delete(sessionId)
-        return map
-      })
-      sendPlainTextAgentMessage(message).catch((error) => {
-        console.error('[AgentView] 追加消息失败:', error)
-        toast.error('追加消息失败', { description: String(error) })
-        // 回滚：恢复输入框内容和建议，避免用户输入丢失
-        setInputContent(effectiveText)
-        setInputHtmlContent('')
-        setPromptSuggestions((prev) => {
-          const map = new Map(prev)
-          if (suggestion) {
-            map.set(sessionId, suggestion)
-          } else {
-            map.delete(sessionId)
-          }
-          return map
-        })
-        const failedQuotedSelection = message.quotedSelection
-        if (failedQuotedSelection) {
-          setQuotedSelectionMap((prev) => {
-            const map = new Map(prev)
-            map.set(sessionId, failedQuotedSelection)
-            return map
-          })
-        }
-        restoreQueuedAttachmentsToPending(message.attachments)
-      })
-      return
-    }
-
-    // 清除当前会话的错误消息
-    setAgentStreamErrors((prev) => {
-      if (!prev.has(sessionId)) return prev
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-
-    // 清除当前会话的提示建议
-    setPromptSuggestions((prev) => {
-      if (!prev.has(sessionId)) return prev
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-
-    // 1. 如果有 pending 文件，先保存到 session 目录
-    const attachmentContext = pendingFilesSnapshot.length > 0
-      ? await preparePendingFilesForSend(pendingFilesSnapshot, additionalDirectoriesForRun)
-      : null
-    if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
-    let fileReferences = attachmentContext?.referenceBlock ?? ''
-
-    // 构建引用选中文本：内联 XML 拼入 prompt，对话框不展示（parseAttachedFiles 剥离）
-    const quotedSelection = consumeQuotedSelection()
-    if (quotedSelection) {
-      fileReferences = fileReferences + buildQuotedSelectionBlock(quotedSelection)
-    }
-
-    // 2. 构建最终消息
-    const finalMessage = fileReferences + expandAgentHistoryQuoteMentions(effectiveText)
-    const mentions = parseQueuedMessageMentions(effectiveText)
-    // Agent 侧使用解码后的 SDK 文本（@file 路径还原为真实路径，Agent 可读取）；
-    // 历史 quote marker 仅在此刻展开为精确上下文，草稿本身始终保持可编辑 chip。
-    const sdkMessage = fileReferences + expandAgentHistoryQuoteMentions(mentions.cleanedText)
-
-    // 清除打断状态（上一轮的打断标记不再显示）
-    store.set(stoppedByUserSessionsAtom, (prev: Set<string>) => {
-      if (!prev.has(sessionId)) return prev
-      const next = new Set(prev)
-      next.delete(sessionId)
-      return next
-    })
-
-    // 取消 draft 标记，让会话出现在侧边栏。主进程会在实际启动时持久化清除
-    // isDraft；这里先乐观更新，避免 IPC 往返期间仍被侧栏过滤。
-    setDraftSessionIds((prev: Set<string>) => {
-      if (!prev.has(sessionId)) return prev
-      const next = new Set(prev)
-      next.delete(sessionId)
-      return next
-    })
-    setAgentSessions((prev) => prev.map((session) => (
-      session.id === sessionId && session.isDraft ? { ...session, isDraft: false } : session
-    )))
-
-    // 初始化流式状态（startedAt 由渲染进程生成，传递给主进程原样回传，确保竞态保护使用同一个值）
-    const streamStartedAt = Date.now()
-    setStreamingStates((prev) => {
-      const map = new Map(prev)
-      const existing = prev.get(sessionId)
-      map.set(sessionId, {
-        running: true,
-        model: agentModelId || undefined,
         startedAt: streamStartedAt,
-        inputTokens: existing?.inputTokens,
-        contextWindow: resolveRunContextWindow(agentModelId || undefined, existing?.contextWindow),
+        permissionModeOverride: permissionMode,
+        ...(additionalDirectoriesForRun.size > 0 && { additionalDirectories: Array.from(additionalDirectoriesForRun) }),
+        ...(mentions.mentionedSkills.length > 0 && { mentionedSkills: mentions.mentionedSkills }),
+        ...(mentions.mentionedMcpServers.length > 0 && { mentionedMcpServers: mentions.mentionedMcpServers }),
+        ...(mentions.mentionedSessionIds.length > 0 && { mentionedSessionIds: mentions.mentionedSessionIds }),
+        ...(mentions.mentionedTodoIds.length > 0 && { mentionedTodoIds: mentions.mentionedTodoIds }),
+        ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
+      }
+
+      // 清空输入框（仅当发送的是用户自己输入的内容，而非推荐建议时）。
+      // Enter 路径会显式传入已刷新的编辑器内容，因此也应清空。
+      clearSubmittedDraft()
+
+      await window.electronAPI.sendAgentMessage(input)
+      accepted = true
+    } catch (error) {
+      console.error('[AgentView] 消息提交失败:', error)
+      if (!accepted && (queuedMessageId || sentStartedAt !== undefined)) {
+        // IPC 响应失败不等于主进程未接管：也核对权威快照，覆盖 started 事件晚到/丢失。
+        const [queued, active, history] = await Promise.all([
+          queuedMessageId ? window.electronAPI.getQueuedAgentMessages(sessionId).catch(() => []) : Promise.resolve([]),
+          sentStartedAt !== undefined ? window.electronAPI.listActiveAgentSessionSnapshots().catch(() => []) : Promise.resolve([]),
+          queuedMessageId ? window.electronAPI.getAgentSessionSDKMessages(sessionId).catch(() => []) : Promise.resolve([]),
+        ])
+        accepted = accepted || queued.some(({ input }) => input.queueMessageId === queuedMessageId)
+          || active.some((run) => run.sessionId === sessionId && run.startedAt === sentStartedAt)
+          || (!!queuedMessageId && [...history, ...(store.get(liveMessagesMapAtom).get(sessionId) ?? [])]
+            .some((message) => (message as SDKMessageRecord).uuid === queuedMessageId))
+      }
+      if (accepted) {
+        toast.info('消息已被 Agent 接收', { description: '提交响应异常，请以会话中的实际运行结果为准。' })
+        return
+      }
+      if (queuedMessageId) setQueuedMessages((prev) => removeQueuedMessage(prev, queuedMessageId!))
+      if (sentStartedAt !== undefined) {
+        setStreamingStates((prev) => {
+          const current = prev.get(sessionId)
+          // 不重置其他请求或真实 run_started 已确认的运行态。
+          if (!current || current.startedAt !== sentStartedAt || current.runGeneration != null) return prev
+          const next = new Map(prev)
+          next.set(sessionId, { ...current, running: false })
+          return next
+        })
+      }
+      if (optimisticMessage) {
+        const failedMessage = optimisticMessage
+        setMessagesCache((previous) => {
+          const current = previous.get(sessionId)
+          if (!current?.includes(failedMessage)) return previous
+          return setSessionMessagesCache(previous, sessionId, current.filter((message) => message !== failedMessage))
+        })
+        if (activeComposerSessionRef.current === sessionId) {
+          messagesMutationVersionRef.current += 1
+          persistedSDKMessagesRef.current = persistedSDKMessagesRef.current.filter((message) => message !== failedMessage)
+          setPersistedSDKMessages(persistedSDKMessagesRef.current)
+        }
+      }
+      const canRestore = cleared && isAgentDraftUnchanged(expectedDraft, readCheckpoint())
+        && store.get(agentPendingFilesAtomFamily(sessionId)).length === 0
+        && !store.get(quotedSelectionMapAtom).has(sessionId)
+      if (canRestore) recoverDraft(false)
+      toast.error('消息发送失败', {
+        description: `${String(error)}${canRestore ? '；草稿已恢复。' : '；当前草稿已保留。'}`,
+        duration: canRestore ? 15_000 : Infinity,
+        ...(!canRestore && (cleared || savedAttachments?.length || quoteConsumed || (overrideText !== undefined && !fromEditor)
+          || !isAgentDraftUnchanged(originalDraft, readCheckpoint())
+          || (quoteConsumed && originalQuote && store.get(quotedSelectionMapAtom).get(sessionId) !== originalQuote))
+          ? { action: { label: '追加失败草稿', onClick: () => recoverDraft(true) } }
+          : {}),
       })
-      return map
-    })
-
-    // 乐观更新：SDKMessage 格式的用户消息（Phase 4）
-    const tempUserSDKMsg: SDKMessage = {
-      type: 'user',
-      message: {
-        content: [{ type: 'text', text: finalMessage }],
-      },
-      parent_tool_use_id: null,
-      _createdAt: Date.now(),
-    } as unknown as SDKMessage
-    appendOptimisticPersistedMessage(tempUserSDKMsg)
-
-    const input: AgentSendInput = {
-      sessionId,
-      userMessage: sdkMessage,
-      rawUserMessage: finalMessage,
-      channelId: agentChannelId,
-      modelId: agentModelId || undefined,
-      workspaceId: currentWorkspaceId || undefined,
-      startedAt: streamStartedAt,
-      permissionModeOverride: permissionMode,
-      ...(additionalDirectoriesForRun.size > 0 && { additionalDirectories: Array.from(additionalDirectoriesForRun) }),
-      ...(mentions.mentionedSkills.length > 0 && { mentionedSkills: mentions.mentionedSkills }),
-      ...(mentions.mentionedMcpServers.length > 0 && { mentionedMcpServers: mentions.mentionedMcpServers }),
-      ...(mentions.mentionedSessionIds.length > 0 && { mentionedSessionIds: mentions.mentionedSessionIds }),
-      ...(mentions.mentionedTodoIds.length > 0 && { mentionedTodoIds: mentions.mentionedTodoIds }),
-      ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
+    } finally {
+      unsubscribeQueue()
+      unsubscribeStream()
+      sendGuardRef.current.finish(sessionId, requestId)
     }
-
-    // 清空输入框（仅当发送的是用户自己输入的内容，而非推荐建议时）。
-    // Enter 路径会显式传入已刷新的编辑器内容，因此也应清空。
-    if (overrideText === undefined || fromEditor) {
-      setInputContent('')
-      setInputHtmlContent('')
-    }
-
-    window.electronAPI.sendAgentMessage(input).catch((error) => {
-      console.error('[AgentView] 发送消息失败:', error)
-      setStreamingStates((prev) => {
-        const current = prev.get(sessionId)
-        if (!current) return prev
-        const map = new Map(prev)
-        map.set(sessionId, { ...current, running: false })
-        return map
-      })
-    })
-  }, [createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, consumeQuotedSelection, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping])
+  }, [setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping])
 
   /** 停止生成。异常流未发出终态时，允许再次下发幂等的 abort 请求。 */
   const handleStop = React.useCallback((): void => {
@@ -3000,7 +3109,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         <div className="px-2.5 pb-2.5 md:px-[18px] md:pb-[18px]" data-input-mode="agent">
           <div
             className={cn(
-              'rounded-[17px] border-[0.5px] border-border bg-background/70 backdrop-blur-sm transition-all duration-200',
+              'gamma-composer bg-background/70 backdrop-blur-sm',
               (isPlanMode || isPermissionPlanMode) && !isDragOver && 'plan-mode-border',
               isDragOver && 'border-[2px] border-dashed border-primary bg-primary/[0.03]'
             )}
@@ -3100,6 +3209,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               ref={richTextInputRef}
               sessionId={sessionId}
               onInputActivity={handleInputActivity}
+              onDraftEdit={handleDraftEdit}
               draftSyncDelayMs={300}
               onSubmit={handleSend}
               onPasteFiles={handlePasteFiles}

@@ -293,6 +293,11 @@ interface MessagePathResolutionContext {
 const BasePathsContext = React.createContext<MessagePathResolutionContext | undefined>(undefined)
 const AgentHistoryQuoteClickContext = React.createContext<((quote: QuotedSelection) => void) | undefined>(undefined)
 
+/** 工具审批和路径解析同样以消息所属会话隔离，不能借用当前激活 Tab。 */
+export function useMessageSessionId(): string | undefined {
+  return React.useContext(BasePathsContext)?.sessionId
+}
+
 /** 提供会话与附加目录候选给所有内嵌的 MessageResponse。 */
 export function BasePathsProvider({ basePaths, sessionId, children }: MessagePathResolutionContext & { children: React.ReactNode }): React.ReactElement {
   const value = React.useMemo(() => ({ basePaths, sessionId }), [basePaths, sessionId])

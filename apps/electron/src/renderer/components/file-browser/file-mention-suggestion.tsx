@@ -6,6 +6,8 @@
  * 弹窗底部锚定在光标上方，展开文件夹时向上生长。
  */
 
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
+import { bindMentionCombobox, type MentionComboboxBinding } from '@/lib/mention-combobox'
 import type React from 'react'
 import { ReactRenderer } from '@tiptap/react'
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion'
@@ -91,6 +93,7 @@ export function createFileMentionSuggestion(
     render: () => {
       let renderer: ReactRenderer<FileMentionRef> | null = null
       let popup: HTMLDivElement | null = null
+      let combobox: MentionComboboxBinding | null = null
       let resizeObserver: ResizeObserver | null = null
       let latestClientRect: (() => DOMRect | null) | null | undefined = null
       let blurHandler: (() => void) | null = null
@@ -109,10 +112,13 @@ export function createFileMentionSuggestion(
       function createRenderer(props: SuggestionProps<FileIndexEntry>) {
         const { sessionEntries, workspaceEntries } = splitEntries(props.items)
         const selectItem = (item: MentionSelection) => {
+          if (!isSuggestionTriggerPresent(props.editor, props.range, '@')) return
           props.command({ id: resolveFileMentionPath(item, workspacePathRef.current), label: item.name })
         }
         renderer = new ReactRenderer(FileMentionList, {
           props: {
+            listId: combobox?.listId,
+            onActiveDescendantChange: combobox?.onActiveDescendantChange,
             sessionEntries,
             workspaceEntries,
             onSelect: selectItem,
@@ -127,6 +133,8 @@ export function createFileMentionSuggestion(
       }
 
       function cleanup() {
+        combobox?.dispose()
+        combobox = null
         queryLoader.cancel()
         if (blurHandler && editorRef) {
           editorRef.view.dom.removeEventListener('blur', blurHandler, true)
@@ -145,6 +153,9 @@ export function createFileMentionSuggestion(
       }
 
       return {
+        onBeforeUpdate(props) {
+          combobox?.setLoading(props.loading)
+        },
         onStart(props) {
           // TipTap 3.29 会在 items() 异步读取前以未登记的空数组调用 onStart。
           // 仅拒绝已知的旧请求，不能用 isLatest() 拒绝该初始生命周期，否则弹窗永远不会创建。
@@ -172,6 +183,8 @@ export function createFileMentionSuggestion(
           mentionActiveRef.current = true
           if (mentionItemCountRef) mentionItemCountRef.current = props.items.length
           editorRef = props.editor
+          combobox = bindMentionCombobox(props.editor.view.dom, 'tree')
+          combobox.setLoading(props.loading)
 
           try {
             latestClientRect = props.clientRect
@@ -201,6 +214,7 @@ export function createFileMentionSuggestion(
         },
 
         onUpdate(props) {
+          if (!isSuggestionTriggerPresent(props.editor, props.range, '@')) return
           if (!requestGuard.isLatest(props.items)) {
             return
           }
@@ -209,9 +223,13 @@ export function createFileMentionSuggestion(
 
           const { sessionEntries, workspaceEntries } = splitEntries(props.items)
           const selectItem = (item: MentionSelection) => {
+            if (!isSuggestionTriggerPresent(props.editor, props.range, '@')) return
             props.command({ id: resolveFileMentionPath(item, workspacePathRef.current), label: item.name })
           }
+          combobox?.setLoading(false)
+          const activeCombobox = combobox
           renderer?.updateProps({
+            onActiveDescendantChange: (id: string | undefined) => activeCombobox?.onActiveDescendantChange(id),
             sessionEntries,
             workspaceEntries,
             onSelect: selectItem,
@@ -220,6 +238,7 @@ export function createFileMentionSuggestion(
         },
 
         onKeyDown(props) {
+          if (isImeKeyboardEvent(props.event, props.view.composing)) return false
           // 记录 Esc 关闭时的触发片段文本与位置，onStart/onExit 据此判断同一片段
           if (props.event.key === 'Escape') {
             suppressedTrigger = {
@@ -229,8 +248,9 @@ export function createFileMentionSuggestion(
           }
           if (renderer?.ref) {
             return renderer.ref.onKeyDown({ event: props.event })
+              || props.event.key === 'Enter' || props.event.key === 'Tab'
           }
-          return false
+          return props.event.key === 'Enter' || props.event.key === 'Tab'
         },
 
         onExit(props) {

@@ -103,7 +103,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
 
   return (
     <div data-testid="agent-session-header" className={cn(
-      'relative z-[51] flex min-w-0 shrink-0 items-center gap-2 px-3',
+      'gamma-ui relative z-[51] flex min-w-0 shrink-0 items-center gap-2 px-3',
       sidebarCollapsed ? 'h-11' : 'h-[48px]',
       ownsWindowControls && detectIsMac() && 'pl-20',
     )}>
@@ -169,7 +169,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
             >
               <Split className="size-3.5" />
               <span className="hidden sm:inline">探索</span>
-              {explorationBranches.length > 1 && <span className="tabular-nums">{explorationBranches.length}</span>}
+              <span className="ui-numeric tabular-nums">{explorationBranches.length}</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent

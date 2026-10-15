@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { attachScrollFade } from './scroll-fade'
 
 interface SidebarScrollBoundaryProps {
   /** 唯一直接 DOM 子元素必须是列表的原生滚动容器。 */
@@ -24,6 +25,10 @@ export function SidebarScrollBoundary({ children }: SidebarScrollBoundaryProps):
 
   // 挂载、切换内容及列表缩短后同步实际位置，不重置用户的滚动位置。
   React.useLayoutEffect(syncScrollState)
+  React.useLayoutEffect(() => {
+    const element = rootRef.current?.firstElementChild
+    if (element instanceof HTMLElement) return attachScrollFade(element, { fadeSize: 16 })
+  }, [children])
 
   const handleScrollCapture = React.useCallback((event: React.UIEvent<HTMLDivElement>): void => {
     // 忽略会话行内预览等嵌套滚动，虚拟列表的直接根节点就是滚动容器。

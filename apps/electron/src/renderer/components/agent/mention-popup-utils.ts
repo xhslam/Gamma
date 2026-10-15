@@ -31,6 +31,10 @@ export function isSuggestionTriggerPresent(
   const { from, to } = range
   const docSize = editor.state.doc.content.size
   if (from < 0 || to <= from || to > docSize) return false
+  // 查询返回前用户可能只移动了光标而没有删除触发符；旧 range 仍有 @，
+  // 但不再属于当前输入位置，不能复活旧弹窗或替换其他片段。
+  const selection = editor.state.selection
+  if (!selection.empty || selection.from !== to) return false
   return editor.state.doc.textBetween(from, to, '', '').startsWith(char)
 }
 

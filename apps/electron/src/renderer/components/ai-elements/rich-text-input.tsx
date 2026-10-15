@@ -28,6 +28,7 @@ import Mention from '@tiptap/extension-mention'
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
 import { lowlight } from '@/lib/lowlight'
 import {
   hasRichClipboardMarkup,
@@ -141,6 +142,8 @@ interface RichTextInputProps {
   onChange: (markdown: string) => void
   /** 轻量通知，用于立即更新依赖输入内容的本地控件状态，不序列化整篇文档。 */
   onInputActivity?: (hasContent: boolean) => void
+  /** 只通知实际文档编辑，不含受控草稿的外部同步。 */
+  onDraftEdit?: () => void
   /** 草稿同步的停顿时间；省略时保留按帧同步的既有交互语义。 */
   draftSyncDelayMs?: number
   /** 提交回调（Enter 键）；传入值可避免草稿同步尚未提交时发送旧内容。 */
@@ -214,6 +217,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   value,
   onChange,
   onInputActivity,
+  onDraftEdit,
   draftSyncDelayMs = 0,
   onSubmit,
   onPasteFiles,
@@ -263,6 +267,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   // 跟踪 IME 输入状态（中文输入法等）
   const isComposingRef = useRef(false)
   // 保持轻量输入状态回调引用最新，避免每次按键重建 TipTap 编辑器。
+  const onDraftEditRef = useRef(onDraftEdit)
+  onDraftEditRef.current = onDraftEdit
   const onInputActivityRef = useRef(onInputActivity)
   onInputActivityRef.current = onInputActivity
   // 保持 onSubmit 引用最新
@@ -363,6 +369,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
 
   const forwardSessionQuickSwitchKeyEvent = useCallback((event: React.KeyboardEvent<HTMLDivElement>, type: 'keydown' | 'keyup'): void => {
     const nativeEvent = event.nativeEvent
+    if (isImeKeyboardEvent(nativeEvent, isComposingRef.current)) return
     if (!shouldForwardSessionQuickSwitchEvent(nativeEvent, isMac)) return
     window.dispatchEvent(new CustomEvent(
       type === 'keydown' ? SESSION_QUICK_SWITCH_KEYDOWN_EVENT : SESSION_QUICK_SWITCH_KEYUP_EVENT,
@@ -716,7 +723,11 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       },
       // 监听 IME 输入状态
       handleDOMEvents: {
-        keydown: (_view, event) => handleAgentHistoryQuoteKeyDown(event),
+        // DOM handler 返回 true 只跳过 ProseMirror 快捷键，不 preventDefault：
+        // 原生 IME 仍能提交候选，StarterKit 的 Enter 则不会提前拆段/关闭建议。
+        keydown: (view, event) => isImeKeyboardEvent(event, isComposingRef.current || view.composing)
+          ? true
+          : handleAgentHistoryQuoteKeyDown(event),
         focus: () => {
           setLastFocusedVoiceInputId(inputIdRef.current)
           return false
@@ -813,6 +824,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
         return false
       },
       handleKeyDown: (view, event) => {
+        if (isImeKeyboardEvent(event, isComposingRef.current || view.composing)) return false
         // macOS 上 Cmd+B/S 被全局快捷键占用，用 Ctrl+B/S 作为格式化替代键
         // 纯文本模式下跳过，避免无效操作且不吃事件
         if (richTextEnabledRef.current) {
@@ -847,7 +859,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           }
 
           // 检查是否正在输入中文（IME 组合输入）
-          if (isComposingRef.current || event.isComposing) {
+          if (isImeKeyboardEvent(event, isComposingRef.current || view.composing)) {
             return false
           }
 
@@ -928,6 +940,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       },
     },
     onUpdate: ({ editor: ed }) => {
+      onDraftEditRef.current?.()
       onInputActivityRef.current?.(!ed.isEmpty)
       scheduleDraftSync(ed)
     },

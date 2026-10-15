@@ -15,22 +15,35 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ArrowDownIcon } from 'lucide-react'
 import type { ComponentProps } from 'react'
-import { useCallback } from 'react'
+import { createContext, useCallback, useContext, useLayoutEffect } from 'react'
 import { StickToBottom, useStickToBottomContext } from 'use-stick-to-bottom'
+import { useConversationScrollPolicy } from '@/hooks/useConversationScrollPolicy'
+import { attachScrollFade } from '@/components/ui/scroll-fade'
+import { CONVERSATION_JUMP_DISTANCE } from '@/lib/conversation-scroll-policy'
+
+const ConversationDistanceContext = createContext(0)
+
+export function useConversationJumpVisible(): boolean {
+  return useContext(ConversationDistanceContext) > CONVERSATION_JUMP_DISTANCE
+}
 
 // ===== Conversation 根容器 =====
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>
 
-export function Conversation({ className, ...props }: ConversationProps): React.ReactElement {
+export function Conversation({ className, children, initial = 'instant', resize = 'instant', targetScrollTop, mass, damping, stiffness, instance, ...props }: ConversationProps): React.ReactElement {
+  const policy = useConversationScrollPolicy({ initial, resize, targetScrollTop, mass, damping, stiffness })
   return (
-    <StickToBottom
-      className={cn('relative min-h-0 flex-1 overflow-y-hidden scrollbar-none', className)}
-      initial="instant"
-      resize="smooth"
-      role="log"
-      {...props}
-    />
+    <ConversationDistanceContext.Provider value={policy.distance}>
+      <StickToBottom
+        className={cn('relative min-h-0 flex-1 overflow-y-hidden scrollbar-none', className)}
+        instance={instance ?? policy.instance}
+        role="log"
+        {...props}
+      >
+        {children}
+      </StickToBottom>
+    </ConversationDistanceContext.Provider>
   )
 }
 
@@ -39,6 +52,13 @@ export function Conversation({ className, ...props }: ConversationProps): React.
 export type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>
 
 export function ConversationContent({ className, ...props }: ConversationContentProps): React.ReactElement {
+  const { scrollRef } = useStickToBottomContext()
+  useLayoutEffect(() => {
+    const element = scrollRef.current
+    if (!element) return
+    // 仅消息视口羽化，输入框、迷你地图和覆盖层保持清晰。
+    return attachScrollFade(element, { fadeSize: 24 })
+  }, [scrollRef])
   return (
     <StickToBottom.Content
       className={cn('flex flex-col gap-1 py-4 px-8', className)}
@@ -94,13 +114,14 @@ export function ConversationScrollButton({
   className,
   ...props
 }: ConversationScrollButtonProps): React.ReactElement | null {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext()
+  const { scrollToBottom } = useStickToBottomContext()
+  const distance = useContext(ConversationDistanceContext)
 
   const handleScrollToBottom = useCallback(() => {
-    scrollToBottom()
+    void scrollToBottom(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
   }, [scrollToBottom])
 
-  if (isAtBottom) return null
+  if (distance <= CONVERSATION_JUMP_DISTANCE) return null
 
   return (
     <Button
@@ -110,6 +131,8 @@ export function ConversationScrollButton({
         className
       )}
       onClick={handleScrollToBottom}
+      aria-label="跳至最新消息"
+      title="跳至最新消息"
       type="button"
       variant="ghost"
       {...props}

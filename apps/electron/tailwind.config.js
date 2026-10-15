@@ -18,6 +18,12 @@ export default {
   theme: {
     extend: {
       colors: {
+        surface: {
+          0: 'hsl(var(--surface-0) / <alpha-value>)',
+          1: 'hsl(var(--surface-1) / <alpha-value>)',
+          2: 'hsl(var(--surface-2) / <alpha-value>)',
+          3: 'hsl(var(--surface-3) / <alpha-value>)',
+        },
         border: 'hsl(var(--border) / <alpha-value>)',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -80,6 +86,10 @@ export default {
       // ===== 圆角：覆写 shadcn 标准三档，全部由 --radius 派生 =====
       // 改一处 --radius 即可整站统一调圆角节奏，无需 grep 替换 300+ 处 rounded-*
       borderRadius: {
+        input: 'var(--radius-input)',
+        message: 'var(--radius-message)',
+        dialog: 'var(--radius-dialog)',
+        control: 'var(--radius-control)',
         sm: 'calc(var(--radius) - 4px)',
         DEFAULT: 'calc(var(--radius) - 2px)',
         md: 'calc(var(--radius) - 2px)',

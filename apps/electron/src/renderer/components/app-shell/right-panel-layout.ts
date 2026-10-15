@@ -13,6 +13,8 @@ export function getRightPanelMaxWidth(
   leftSidebarOccupiedWidth: number,
   allowFullAvailableWidth = false,
 ): number {
+  viewportWidth = Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0
+  leftSidebarOccupiedWidth = Number.isFinite(leftSidebarOccupiedWidth) ? Math.max(0, leftSidebarOccupiedWidth) : 0
   const availableWidth = viewportWidth - leftSidebarOccupiedWidth - MIN_MAIN_AREA_WIDTH
   return Math.max(
     0,
@@ -37,6 +39,9 @@ export function clampRightPanelWidth(
     leftSidebarOccupiedWidth,
     allowFullAvailableWidth,
   )
+  width = Number.isFinite(width) ? width : minimumWidth
+  minimumWidth = Number.isFinite(minimumWidth) ? Math.max(0, minimumWidth) : 0
+  if (!Number.isFinite(width)) width = minimumWidth
   const effectiveMinimumWidth = Math.min(minimumWidth, maximumWidth)
   return Math.max(effectiveMinimumWidth, Math.min(maximumWidth, width))
 }
