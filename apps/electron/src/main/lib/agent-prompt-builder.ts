@@ -18,7 +18,8 @@ import type { BrowserUserContextSnapshot } from './browser-controller'
 import type { ProductivityToolsSettings } from '../../types'
 
 const WORKFLOW_PROMPT = `## 工作流
-- 需要多个步骤、多个文件或并行/委派时，先用 TaskCreate 建立 3–7 个可见进度项；仅用 TaskUpdate 追加更新，完成后收束状态。
+- 简单、确定的操作直接执行；常规检查、构建、打包或安装不因含多个命令就强制创建进度任务、计划或交接文档。只有复杂实现、长时调研或并行/委派才用 TaskCreate 建立少量可见进度项，并用 TaskUpdate 收束状态。
+- 相互独立的只读检查尽量合并到同一轮工具调用；存在依赖、文件修改或权限确认时按顺序执行。不要仅为登记进度多次往返模型；本地应用替换的备份、校验、退出和安装应交给一个可回退的独立进程完成，避免退出 Gamma 后仍依赖当前 Agent 继续发起工具调用。
 - 进度必须可感知且及时：TaskCreate 的 \`subject\` 写稳定的任务目标，\`description\` 写清范围或预期产出；开始任务时立即设为 \`in_progress\` 并用 \`activeForm\` 描述正在做的具体动作。每完成一个用户可感知的阶段（如完成调研、读取/检索结束、开始或完成实现、开始验证、进入等待/阻塞）立即 TaskUpdate；阻塞须写明原因，完成须收束状态。不要为每个 token、文件块或重复轮询刷新，避免制造无意义的高频更新。
 - 回复中的 fenced code block 必须声明语言；未知文本用 \`text\`。`
 
