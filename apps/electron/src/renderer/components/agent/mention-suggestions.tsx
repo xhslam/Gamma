@@ -5,6 +5,8 @@
  * 通过 MentionSuggestionConfig 注入差异部分（触发字符、数据获取、行渲染）。
  */
 
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
+import { bindMentionCombobox, type MentionComboboxBinding } from '@/lib/mention-combobox'
 import type React from 'react'
 import { ReactRenderer } from '@tiptap/react'
 import type { SuggestionOptions } from '@tiptap/suggestion'
@@ -91,10 +93,13 @@ function createMentionSuggestion<T>(
     render: () => {
       let renderer: ReactRenderer<MentionListRef> | null = null
       let popup: HTMLDivElement | null = null
+      let combobox: MentionComboboxBinding | null = null
       let blurHandler: (() => void) | null = null
       let editorDom: HTMLElement | null = null
 
       function cleanup() {
+        combobox?.dispose()
+        combobox = null
         queryLoader.cancel()
         if (blurHandler && editorDom) {
           editorDom.removeEventListener('blur', blurHandler, true)
@@ -110,6 +115,9 @@ function createMentionSuggestion<T>(
       }
 
       return {
+        onBeforeUpdate(props) {
+          combobox?.setLoading(props.loading)
+        },
         onStart(props) {
           // TipTap 3.29 会在 items() 异步读取前以未登记的空数组调用 onStart。
           // 仅拒绝已知的旧请求，不能用 isLatest() 拒绝该初始生命周期，否则弹窗永远不会创建。
@@ -136,17 +144,22 @@ function createMentionSuggestion<T>(
           mentionActiveRef.current = true
           mentionItemCountRef.current = props.items.length
           editorDom = props.editor.view.dom
+          combobox = bindMentionCombobox(editorDom, 'listbox')
+          combobox.setLoading(props.loading)
           renderer = new ReactRenderer(MentionList, {
             props: {
+              listId: combobox.listId,
+              onActiveDescendantChange: combobox.onActiveDescendantChange,
               items: props.items,
               emptyText: config.emptyText,
               headerLabel: config.headerLabel,
               keyExtractor: config.keyExtractor,
               renderItem: config.renderItem,
               onSelect: (item: T) => {
+                if (!isSuggestionTriggerPresent(props.editor, props.range, config.char)) return
                 const cmd = config.toCommand(item)
+                // Mention 默认 command 已按 range 插入尾部空格，无需再次插入。
                 props.command({ ...cmd, mentionSuggestionChar: config.char })
-                props.editor.chain().insertContent(' ').run()
               },
             },
             editor: props.editor,
@@ -165,23 +178,28 @@ function createMentionSuggestion<T>(
         },
 
         onUpdate(props) {
+          if (!isSuggestionTriggerPresent(props.editor, props.range, config.char)) return
           // 仅允许最新异步请求更新弹窗。
           if (!requestGuard.isLatest(props.items)) {
             return
           }
           mentionItemCountRef.current = props.items.length
+          combobox?.setLoading(false)
+          const activeCombobox = combobox
           renderer?.updateProps({
+            onActiveDescendantChange: (id: string | undefined) => activeCombobox?.onActiveDescendantChange(id),
             items: props.items,
             onSelect: (item: T) => {
+              if (!isSuggestionTriggerPresent(props.editor, props.range, config.char)) return
               const cmd = config.toCommand(item)
               props.command({ ...cmd, mentionSuggestionChar: config.char })
-              props.editor.chain().insertContent(' ').run()
             },
           })
           positionPopup(popup, props.clientRect?.())
         },
 
         onKeyDown(props) {
+          if (isImeKeyboardEvent(props.event, props.view.composing)) return false
           // 记录 Esc 关闭时的触发片段文本与位置，onStart/onExit 据此判断同一片段
           if (props.event.key === 'Escape') {
             suppressedTrigger = {
@@ -189,7 +207,8 @@ function createMentionSuggestion<T>(
               text: props.view.state.doc.textBetween(props.range.from, props.range.to, '', ''),
             }
           }
-          return renderer?.ref?.onKeyDown({ event: props.event }) ?? false
+          return renderer?.ref?.onKeyDown({ event: props.event })
+            || props.event.key === 'Enter' || props.event.key === 'Tab'
         },
 
         onExit(props) {

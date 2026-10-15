@@ -570,3 +570,7 @@ export function formatElapsed(seconds: number): string {
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}m ${remainingSeconds}s`
 }
+
+// SDK 工具卡片与权限横幅共用事实驱动的状态展示，不能以非流式等同执行成功。
+export { getToolExecutionPresentation } from '@/lib/tool-execution-presentation'
+export type { ToolExecutionEvidence, ToolExecutionPresentation, ToolExecutionStatus } from '@/lib/tool-execution-presentation'

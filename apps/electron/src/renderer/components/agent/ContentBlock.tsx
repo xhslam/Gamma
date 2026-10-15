@@ -18,8 +18,10 @@ import {
   MessageSquareText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { MessageResponse } from '@/components/ai-elements/message'
-import { getToolIcon, extractFilePath } from './tool-utils'
+import { MessageResponse, useMessageSessionId } from '@/components/ai-elements/message'
+import { useAtomValue } from 'jotai'
+import { allPendingPermissionRequestsAtom } from '@/atoms/agent-atoms'
+import { getToolIcon, extractFilePath, getToolExecutionPresentation } from './tool-utils'
 import { getToolPhrase, getToolResultSummary, shouldShowToolKindLabel } from './tool-phrase'
 import { ToolResultRenderer } from './tool-result-renderers'
 import { PreviewOpenButton } from './tool-result-renderers/preview-open-button'
@@ -362,12 +364,28 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
   const isCompleted = toolResult !== null
   const resultSummary = getToolResultSummary(block.name, resultText, isError)
 
-  // 运行中显示进行时短语，完成或非流式（已终止）显示完成态短语
-  const displayLabel = (isCompleted || !isStreaming) ? phrase.label : phrase.loadingLabel
+  // 终态只来自按 tool_use_id 关联的真实结果；停止流式不代表工具成功。
+  const messageSessionId = useMessageSessionId()
+  const pendingPermissions = useAtomValue(allPendingPermissionRequestsAtom)
+  const pendingApproval = messageSessionId !== undefined && pendingPermissions.get(messageSessionId)
+    ?.some((request) => request.toolUseId === block.id)
+  const presentation = getToolExecutionPresentation({ result: toolResult, isStreaming, approval: pendingApproval ? 'pending' : undefined })
+  const displayLabel = presentation.status === 'running' ? phrase.loadingLabel : phrase.label
+  const statusBadge = (
+    <span
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      data-tool-execution-status={presentation.status}
+      className={cn('shrink-0 text-[11px] tabular-nums', presentation.tone === 'error' ? 'text-destructive/80' : presentation.tone === 'active' ? 'text-primary/80' : 'text-muted-foreground/65')}
+    >
+      {presentation.label}
+    </span>
+  )
   const filePath = extractFilePath(block.input)
   const isPreviewable = (
     (block.name === 'Read' || block.name === 'Edit' || block.name === 'Write') &&
-    isCompleted &&
+    presentation.status === 'success' &&
     filePath
   )
 
@@ -403,9 +421,9 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
           />
 
           {/* 状态指示：仅流式中的未完成工具才显示 spinner */}
-          {!isCompleted && isStreaming ? (
+          {presentation.status === 'running' ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin text-primary/60" />
-          ) : isError ? (
+          ) : presentation.status === 'error' ? (
             <XCircle className="size-3.5 shrink-0 text-destructive/70" />
           ) : null}
 
@@ -417,6 +435,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             </>
           )}
           <span className="min-w-0 flex-1 truncate text-[14px] text-muted-foreground">{displayLabel}</span>
+          {statusBadge}
           {childToolCount > 0 && !childrenExpanded && (
             <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/55">
               {childToolCount} 项工具
@@ -483,9 +502,9 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
           className="group inline-flex max-w-full min-w-0 items-center gap-2 rounded-md py-1 text-left transition-[background-color,opacity] hover:bg-muted/40 hover:opacity-90"
           onClick={() => setExpanded(!expanded)}
         >
-          {!isCompleted && isStreaming ? (
+          {presentation.status === 'running' ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin text-primary/60" />
-          ) : isError ? (
+          ) : presentation.status === 'error' ? (
             <XCircle className="size-3.5 shrink-0 text-destructive/70" />
           ) : null}
 
@@ -500,6 +519,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             'min-w-0 max-w-[60%] truncate text-[14px]',
             dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground',
           )}>{displayLabel}</span>
+          {statusBadge}
 
           {resultSummary && (
             <span className={cn(
@@ -510,7 +530,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             </span>
           )}
 
-          {phrase.diffStats && (isCompleted || !isStreaming) && (
+          {phrase.diffStats && presentation.status === 'success' && (
             <span className="shrink-0 font-mono text-[12px] tabular-nums">
               {phrase.diffStats.additions > 0 && (
                 <span className="text-emerald-600 dark:text-emerald-400">+{phrase.diffStats.additions}</span>

@@ -13,7 +13,9 @@
  */
 
 import * as React from 'react'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
 import { cn } from '@/lib/utils'
+import { attachScrollFade } from '@/components/ui/scroll-fade'
 import type { FileIndexEntry } from '@gamma/shared'
 import { FileTypeIcon } from './FileTypeIcon'
 import { ChevronRight } from 'lucide-react'
@@ -63,6 +65,8 @@ export interface FileTreeNode {
 // ===== Props & Ref =====
 
 export interface FileMentionListProps {
+  listId?: string
+  onActiveDescendantChange?: (id: string | undefined) => void
   sessionEntries: FileIndexEntry[]
   workspaceEntries: FileIndexEntry[]
   onSelect: (item: Pick<FileIndexEntry, 'name' | 'path' | 'type' | 'source'>) => void
@@ -167,7 +171,9 @@ function getTreeNodeStateKey(node: Pick<FileTreeNode, 'source' | 'treePath'>): s
 // ===== 组件 =====
 
 export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListProps>(
-  function FileMentionList({ sessionEntries, workspaceEntries, onSelect, onBack, embedded = false }, ref) {
+  function FileMentionList({ sessionEntries, workspaceEntries, onSelect, onBack, embedded = false, listId, onActiveDescendantChange }, ref) {
+    const generatedId = React.useId()
+    const id = listId ?? `file-mention-${generatedId}`
     // 构建一棵连续树；项目与会话来源只通过 badge 区分，不形成两个列表。
     const tree = React.useMemo(
       () => buildFileMentionTree([...workspaceEntries, ...sessionEntries]),
@@ -195,6 +201,10 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
     const totalItems = visibleNodes.length
     const [selectedIndex, setSelectedIndex] = React.useState(0)
     const containerRef = React.useRef<HTMLDivElement>(null)
+
+    React.useLayoutEffect(() => {
+      if (containerRef.current) return attachScrollFade(containerRef.current, { fadeSize: 12 })
+    }, [totalItems > 0])
 
     React.useEffect(() => {
       setSelectedIndex((prev) => (totalItems > 0 ? Math.min(prev, totalItems - 1) : 0))
@@ -239,9 +249,16 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
       [],
     )
 
+    React.useEffect(() => {
+      onActiveDescendantChange?.(totalItems > 0 ? `${id}-option-${selectedIndex}` : undefined)
+      return () => onActiveDescendantChange?.(undefined)
+    }, [id, selectedIndex, totalItems, onActiveDescendantChange])
+
     // 暴露键盘处理给 TipTap
     React.useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {
+        if (isImeKeyboardEvent(event)) return false
+        if (totalItems === 0) return false
         if (event.key === 'ArrowUp') {
           event.preventDefault()
           setSelectedIndex((prev) => (prev <= 0 ? totalItems - 1 : prev - 1))
@@ -303,7 +320,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
             <span>文件</span>
             <span className="font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
           </div>
-          <div className="p-2 text-[11px] text-muted-foreground">无匹配文件</div>
+          <div id={id} role="tree" aria-label="引用文件" /><div role="status" className="p-2 text-[11px] text-muted-foreground">无匹配文件</div>
         </div>
       )
     }
@@ -323,7 +340,9 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
           <span>文件</span>
           <span className="ml-auto font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
         </div>
+        <div id={id} role="tree" aria-label="引用文件">
         <TreeNodeList
+          listId={id}
           nodes={treeWithState}
           selectedIndex={selectedIndex}
           baseIndex={0}
@@ -331,6 +350,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
           onToggle={toggleExpand}
           setSelectedIndex={handleSetIndex}
         />
+        </div>
       </div>
       </MentionErrorBoundary>
       </TooltipProvider>
@@ -342,6 +362,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
 
 /** 树节点递归列表 — 展开的目录会递归渲染子节点 */
 function TreeNodeList({
+  listId,
   nodes,
   selectedIndex,
   baseIndex,
@@ -349,6 +370,7 @@ function TreeNodeList({
   onToggle,
   setSelectedIndex,
 }: {
+  listId: string
   nodes: FileTreeNode[]
   selectedIndex: number
   baseIndex: number
@@ -398,6 +420,12 @@ function TreeNodeList({
             <button
           type="button"
           data-mention-item=""
+          id={`${listId}-option-${idx}`}
+          role="treeitem"
+          tabIndex={-1}
+          aria-selected={isSelected}
+          aria-level={node.depth + 1}
+          aria-expanded={node.type === 'dir' && node.children.length > 0 ? node.expanded : undefined}
           className={cn(
             'w-full flex items-center gap-1.5 px-2.5 py-1 text-left text-xs transition-colors',
             isSelected
@@ -416,6 +444,12 @@ function TreeNodeList({
             } else {
               onSelect(node)
             }
+          }}
+          onClick={(event) => {
+            if (event.detail !== 0) return
+            setSelectedIndex(idx)
+            if (node.type === 'dir') onToggle(node)
+            else onSelect(node)
           }}
           onDoubleClick={() => {
             if (node.type === 'dir') {

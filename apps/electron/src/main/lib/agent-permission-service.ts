@@ -346,6 +346,7 @@ export class AgentPermissionService {
     return {
       requestId: randomUUID(),
       sessionId,
+      toolUseId: options.toolUseID,
       toolName,
       toolInput: input,
       description: this.buildDescription(toolName, input),

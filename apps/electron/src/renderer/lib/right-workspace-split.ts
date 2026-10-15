@@ -16,7 +16,7 @@ export interface RightWorkspaceSplitResolution {
 }
 
 export function clampRightWorkspaceSplitRatio(ratio: number): number {
-  return Math.max(0.3, Math.min(0.7, ratio))
+  return Math.max(0.3, Math.min(0.7, Number.isFinite(ratio) ? ratio : 0.5))
 }
 
 export function clampRightWorkspaceSplitRatioForWidth(
@@ -25,7 +25,8 @@ export function clampRightWorkspaceSplitRatioForWidth(
   minimumPaneWidth = 320,
   dividerWidth = 8,
 ): number {
-  const contentWidth = Math.max(0, totalWidth - dividerWidth)
+  const contentWidth = Math.max(0, (Number.isFinite(totalWidth) ? totalWidth : 0) - dividerWidth)
+  ratio = Number.isFinite(ratio) ? ratio : 0.5
   if (contentWidth === 0) return 0.5
   const minimumRatio = Math.min(0.5, Math.max(0.3, minimumPaneWidth / contentWidth))
   return Math.max(minimumRatio, Math.min(1 - minimumRatio, ratio))

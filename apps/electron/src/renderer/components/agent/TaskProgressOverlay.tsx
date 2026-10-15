@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import type { ToolActivity } from '@/atoms/agent-atoms'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
+import { useConversationJumpVisible } from '@/components/ai-elements/conversation'
 import { TaskProgressCard } from './TaskProgressCard'
 import { aggregateTaskItems, getTaskProgressCounts, type TaskItem } from './task-progress'
 import { getTaskProgressDisplay, hasConfirmedTaskProgressSnapshot, isSameTaskProgressRun, resolveTaskProgressRunIdentity, selectTaskProgressActivities, type TaskProgressRunIdentity } from './task-progress-overlay-state'
@@ -92,7 +93,11 @@ function CompactionProgressDetails({ progress }: { progress: ContextCompactionPr
  * 无任务时自动退化为原箭头按钮。
  */
 export function TaskProgressOverlay({ activities, streaming, runGeneration, startedAt, contextCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext()
+  const { scrollToBottom } = useStickToBottomContext()
+  const showJump = useConversationJumpVisible()
+  const jumpToLatest = (): void => {
+    void scrollToBottom(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
+  }
   const liveItems = React.useMemo(
     () => aggregateTaskItems(activities, false),
     [activities],
@@ -211,13 +216,15 @@ export function TaskProgressOverlay({ activities, streaming, runGeneration, star
   const taskDisplay = getTaskProgressDisplay(displayItems, streaming)
   const showTaskProgress = visible && (hasDisplayTasks || !!displayCompaction)
 
-  if (!showTaskProgress && isAtBottom) return null
+  if (!showTaskProgress && !showJump) return null
 
   if (!showTaskProgress) {
     return (
       <Button
         className="absolute bottom-[26px] left-1/2 size-10 -translate-x-1/2 rounded-md border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm transition-[background-color,transform] duration-200 hover:bg-accent/80 active:scale-[0.96]"
-        onClick={() => scrollToBottom()}
+        onClick={jumpToLatest}
+        aria-label="跳至最新消息"
+        title="跳至最新消息"
         type="button"
         variant="ghost"
       >
@@ -270,11 +277,11 @@ export function TaskProgressOverlay({ activities, streaming, runGeneration, star
         </PopoverContent>
       </Popover>
 
-      {!isAtBottom && (
+      {showJump && (
         <Button
           aria-label="回到最下方"
           className="pointer-events-auto size-10 rounded-md border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm transition-[background-color,transform] duration-200 hover:bg-accent/80 active:scale-[0.96]"
-          onClick={() => scrollToBottom()}
+          onClick={jumpToLatest}
           type="button"
           variant="ghost"
         >

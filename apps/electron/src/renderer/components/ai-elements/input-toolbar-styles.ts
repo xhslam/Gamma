@@ -1,7 +1,7 @@
 /** 输入工具栏控件统一高度：与发送按钮的 32px hover 背景对齐。 */
 export const inputToolbarControlHeightClass = 'h-8'
 
-const inputToolbarSquareControlClass = `${inputToolbarControlHeightClass} w-8`
+const inputToolbarSquareControlClass = `gamma-ui ${inputToolbarControlHeightClass} w-8`
 
 export const inputToolbarButtonClass =
   `${inputToolbarSquareControlClass} shrink-0 rounded-md text-foreground/60 hover:text-foreground hover:bg-muted/50 data-[state=open]:bg-muted/50 data-[state=open]:text-foreground`

@@ -9,10 +9,12 @@
  */
 
 import * as React from 'react'
-import { useAtom, useSetAtom } from 'jotai'
+import { useAtom } from 'jotai'
 import { Shield, ShieldAlert, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { allPendingPermissionRequestsAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
+import { allPendingPermissionRequestsAtom } from '@/atoms/agent-atoms'
+import { getToolExecutionPresentation } from '@/lib/tool-execution-presentation'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
 import type { DangerLevel } from '@gamma/shared'
 
 /** 危险等级对应的图标颜色 */
@@ -38,49 +40,39 @@ interface PermissionBannerProps {
 
 export function PermissionBanner({ sessionId }: PermissionBannerProps): React.ReactElement | null {
   const [allRequests, setAllRequests] = useAtom(allPendingPermissionRequestsAtom)
-  const setStreamingStates = useSetAtom(agentStreamingStatesAtom)
   const requests = allRequests.get(sessionId) ?? []
   const [responding, setResponding] = React.useState(false)
-  const respondRef = React.useRef<(behavior: 'allow' | 'deny', alwaysAllow?: boolean) => void>()
-
+  const [stopping, setStopping] = React.useState(false)
+  const dismissingRef = React.useRef(false)
+  const inFlightRef = React.useRef(false)
+  const composingRef = React.useRef(false)
+  const [submissionError, setSubmissionError] = React.useState<{ requestId: string; message: string } | null>(null)
   const request = requests[0] ?? null
 
-  // Enter 键快捷允许
-  React.useEffect(() => {
-    if (!request) return
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) return
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        respondRef.current?.('allow')
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [request?.requestId])
-
   /** 关闭权限请求 & 终止 Agent */
-  const handleDismiss = (): void => {
-    setStreamingStates((prev) => {
-      const current = prev.get(sessionId)
-      if (!current || !current.running) return prev
-      const map = new Map(prev)
-      map.set(sessionId, {
-        ...current,
-        running: false,
+  const handleDismiss = async (): Promise<void> => {
+    if (!request || dismissingRef.current || inFlightRef.current) return
+    dismissingRef.current = true
+    setStopping(true)
+    setSubmissionError(null)
+    const requestIds = new Set(requests.map((pending) => pending.requestId))
+    try {
+      await window.electronAPI.stopAgent(sessionId)
+      // 停止 IPC 失败时不得隐藏审批或伪造停止；晚到响应也不能删除新的请求。
+      setAllRequests((prev) => {
+        const map = new Map(prev)
+        const remaining = (map.get(sessionId) ?? []).filter((pending) => !requestIds.has(pending.requestId))
+        if (remaining.length) map.set(sessionId, remaining)
+        else map.delete(sessionId)
+        return map
       })
-      return map
-    })
-    setAllRequests((prev) => {
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-    window.electronAPI.stopAgent(sessionId).catch(console.error)
+    } catch (error) {
+      console.error('[PermissionBanner] 终止失败:', error)
+      setSubmissionError({ requestId: request.requestId, message: '终止 Agent 失败，请重试。审批请求仍保留。' })
+    } finally {
+      dismissingRef.current = false
+      setStopping(false)
+    }
   }
 
   if (!request) return null
@@ -91,8 +83,10 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
 
   /** 响应权限请求 */
   const respond = async (behavior: 'allow' | 'deny', alwaysAllow = false): Promise<void> => {
-    if (responding) return
+    if (inFlightRef.current || dismissingRef.current) return
+    inFlightRef.current = true
     setResponding(true)
+    setSubmissionError(null)
 
     try {
       await window.electronAPI.respondPermission({
@@ -111,15 +105,26 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
       })
     } catch (error) {
       console.error('[PermissionBanner] 响应失败:', error)
+      setSubmissionError({ requestId: request.requestId, message: '审批提交失败，请检查连接后重试。请求仍保留，尚未确认授权。' })
     } finally {
+      inFlightRef.current = false
       setResponding(false)
     }
   }
 
-  respondRef.current = respond
-
   return (
     <div
+      role="region"
+      aria-label="工具权限审批"
+      aria-busy={responding || stopping}
+      onCompositionStart={() => { composingRef.current = true }}
+      onCompositionEnd={() => { composingRef.current = false }}
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Enter' && isImeKeyboardEvent(event.nativeEvent, composingRef.current)) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+      }}
       className="mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200"
     >
       {/* 头部 */}
@@ -142,8 +147,10 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           <button
             type="button"
             className="size-5 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
-            onClick={handleDismiss}
+            onClick={() => void handleDismiss()}
+            disabled={responding || stopping}
             title="关闭并终止 Agent"
+            aria-label="关闭并终止 Agent"
           >
             <X className="size-3.5" />
           </button>
@@ -176,16 +183,22 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
         ) : null}
       </div>
 
+      <div className="px-3 pb-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+        {stopping ? '正在终止 Agent…' : `${getToolExecutionPresentation({ approval: responding ? 'submitting' : 'pending' }).label}；尚未收到工具执行结果。`}
+      </div>
+      {submissionError?.requestId === request.requestId && (
+        <p role="alert" className="px-3 pb-2 text-xs text-destructive">{submissionError.message}</p>
+      )}
       {/* 操作按钮 */}
       <div className="flex items-center justify-end gap-1.5 px-3 pb-2.5">
         <span className="text-[10px] text-muted-foreground/40 mr-auto">
-          Enter 允许
+          聚焦按钮后按 Enter 确认
         </span>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => respond('deny')}
-          disabled={responding}
+          disabled={responding || stopping}
           className="h-7 px-3 text-xs text-muted-foreground hover:text-destructive"
         >
           <X className="size-3 mr-1" />
@@ -196,7 +209,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           variant="outline"
           size="sm"
           onClick={() => respond('allow', true)}
-          disabled={responding}
+          disabled={responding || stopping}
           className="h-7 px-3 text-xs"
         >
           本次会话总是允许
@@ -206,7 +219,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           variant="default"
           size="sm"
           onClick={() => respond('allow')}
-          disabled={responding}
+          disabled={responding || stopping}
           className="h-7 px-3 text-xs"
         >
           <Check className="size-3 mr-1" />

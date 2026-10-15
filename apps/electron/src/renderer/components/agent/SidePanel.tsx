@@ -1,3 +1,4 @@
+import { beginPaneResize } from '@/lib/pane-resize-policy'
 /**
  * SidePanel — Agent 侧面板容器
  *
@@ -1421,58 +1422,38 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     setSplitRatioMap((previous) => ({ ...previous, [sessionId]: clampRightWorkspaceSplitRatio(ratio) }))
   }, [sessionId, setSplitRatioMap])
 
-  const handleSplitDividerMouseDown = React.useCallback((event: React.MouseEvent) => {
-    if (!split) return
+  const handleSplitDividerMouseDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!split || event.button !== 0) return
     event.preventDefault()
     splitDividerCancelRef.current?.()
     const container = splitContentRef.current
     if (!container) return
+    const snapshot = split
     const startX = event.clientX
-    const width = container.clientWidth || 1
+    const width = container.clientWidth
+    const contentWidth = Math.max(1, width - 8)
     const startRatio = clampRightWorkspaceSplitRatioForWidth(split.ratio, width)
-    let latestX = startX
     let latestRatio = startRatio
-    let frame = 0
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-
-    const apply = () => {
-      latestRatio = clampRightWorkspaceSplitRatioForWidth(startRatio + (latestX - startX) / width, width)
-      setSplitMap((previous) => {
-        const current = previous.get(sessionId)
-        if (!current || current.ratio === latestRatio) return previous
-        const next = new Map(previous)
-        next.set(sessionId, { ...current, ratio: latestRatio })
-        return next
-      })
-    }
-    const cleanup = () => {
-      if (frame) cancelAnimationFrame(frame)
-      frame = 0
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      window.removeEventListener('blur', cancel)
-      if (splitDividerCancelRef.current === cancel) splitDividerCancelRef.current = null
-    }
-    const cancel = () => cleanup()
-    const onMove = (moveEvent: MouseEvent) => {
-      latestX = moveEvent.clientX
-      if (frame) return
-      frame = requestAnimationFrame(() => { frame = 0; apply() })
-    }
-    const onUp = () => {
-      if (frame) cancelAnimationFrame(frame)
-      frame = 0
-      apply()
-      persistSplitRatio(latestRatio)
-      cleanup()
-    }
-    splitDividerCancelRef.current = cancel
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    window.addEventListener('blur', cancel)
+    splitDividerCancelRef.current = beginPaneResize({
+      target: event.currentTarget,
+      pointerId: event.pointerId,
+      startX,
+      move: clientX => {
+        latestRatio = clampRightWorkspaceSplitRatioForWidth(startRatio + (clientX - startX) / contentWidth, width)
+        setSplitMap(previous => {
+          const current = previous.get(sessionId)
+          if (!current) return previous
+          return new Map(previous).set(sessionId, { ...current, ratio: latestRatio })
+        })
+      },
+      finish: commit => {
+        splitDividerCancelRef.current = null
+        if (commit) persistSplitRatio(latestRatio)
+        else setSplitMap(previous => previous.has(sessionId)
+          ? new Map(previous).set(sessionId, snapshot)
+          : previous)
+      },
+    })
   }, [persistSplitRatio, sessionId, setSplitMap, split])
 
   const resetSplitRatio = React.useCallback(() => {
@@ -1785,12 +1766,26 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
           <div ref={splitContentRef} className="relative flex min-h-0 flex-1 overflow-hidden">
             {split ? (
               <>
-                <div className="flex min-h-0 min-w-0" style={{ flex: `0 0 calc(${effectiveSplitRatio * 100}% - 4px)` }}>
+                <div className="flex min-h-0 min-w-0" style={{ flex: `0 0 max(0px, calc((100% - 8px) * ${effectiveSplitRatio}))` }}>
                   {renderWorkspacePane('left', split.leftTab)}
                 </div>
                 <div
-                  className="group relative w-2 shrink-0 cursor-col-resize bg-border/35 transition-colors hover:bg-primary/25 active:bg-primary/45"
-                  onMouseDown={handleSplitDividerMouseDown}
+                  className="group relative w-2 shrink-0 touch-none cursor-col-resize focus-visible:outline focus-visible:outline-primary bg-border/35 transition-colors hover:bg-primary/25 active:bg-primary/45"
+                  onPointerDown={handleSplitDividerMouseDown}
+                  tabIndex={0}
+                  aria-valuemin={Math.round(clampRightWorkspaceSplitRatioForWidth(0, splitContentRef.current?.clientWidth ?? 0) * 100)}
+                  aria-valuemax={Math.round(clampRightWorkspaceSplitRatioForWidth(1, splitContentRef.current?.clientWidth ?? 0) * 100)}
+                  aria-valuenow={Math.round(effectiveSplitRatio * 100)}
+                  aria-valuetext={`左侧 ${Math.round(effectiveSplitRatio * 100)}%`}
+                  onKeyDown={event => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                    event.preventDefault()
+                    const requested = event.key === 'Home' ? 0 : event.key === 'End' ? 1
+                      : effectiveSplitRatio + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 0.1 : 0.02)
+                    const ratio = clampRightWorkspaceSplitRatioForWidth(requested, splitContentRef.current?.clientWidth ?? 0)
+                    updateSplit({ ...split, ratio })
+                    persistSplitRatio(ratio)
+                  }}
                   onDoubleClick={resetSplitRatio}
                   role="separator"
                   aria-orientation="vertical"

@@ -10,12 +10,13 @@ interface WorkspacePanelsProps {
   workspaceWidth: number
   minimumWidth: number
   maximumWidth: number
-  onResizeStart: (event: React.MouseEvent<HTMLDivElement>) => void
+  onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void
+  onResizeReset?: () => void
   onResizeKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }
 
 /** 通过稳定的 key 移动面板，保留编辑草稿与浏览器实例；DOM 顺序同时跟随视觉顺序。 */
-export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, onResizeStart, onResizeKeyDown }: WorkspacePanelsProps): React.ReactElement {
+export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, onResizeStart, onResizeKeyDown, onResizeReset }: WorkspacePanelsProps): React.ReactElement {
   const panes = [
     <div key="agent" data-workspace-pane="agent" className="relative z-[60] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{agent}</div>,
   ]
@@ -33,8 +34,9 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
             aria-valuenow={Math.round(workspaceWidth)}
             aria-valuetext={`${Math.round(workspaceWidth)} 像素`}
             tabIndex={0}
-            className={cn('absolute top-0 bottom-0 w-2 cursor-col-resize active:bg-primary/50 transition-colors z-20 focus-visible:bg-primary/20 focus-visible:outline-none', workspaceSide === 'left' ? 'right-0 translate-x-1/2' : 'left-0 -translate-x-1/2')}
-            onMouseDown={onResizeStart}
+            className={cn('absolute top-0 bottom-0 w-2 touch-none cursor-col-resize active:bg-primary/50 transition-colors z-20 focus-visible:bg-primary/20 focus-visible:outline-none', workspaceSide === 'left' ? 'right-0 translate-x-1/2' : 'left-0 -translate-x-1/2')}
+            onPointerDown={onResizeStart}
+            onDoubleClick={onResizeReset}
             onKeyDown={onResizeKeyDown}
           />
         )}

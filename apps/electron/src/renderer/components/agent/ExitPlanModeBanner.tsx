@@ -6,10 +6,12 @@
  * 2. 拒绝计划 — deny
  * 3. 提供反馈 — 自由输入修改意见
  *
- * 键盘：↑↓ 选择，Enter 确认，数字键快速选择。
+ * 键盘：聚焦选项后 ↑↓ 导航，Enter/Space 确认；快捷键不跨横幅响应。
  */
 
 import * as React from 'react'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
+import { handleBannerNavigation } from '@/lib/agent-control-keyboard'
 import { useAtom, useSetAtom } from 'jotai'
 import {
   Check,
@@ -72,23 +74,23 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
 
   const request = requests[0] ?? null
 
-  // ===== Refs：确保 keydown handler 始终读取最新值，消除闭包过期问题 =====
-  const focusedIdxRef = React.useRef(focusedIdx)
-  focusedIdxRef.current = focusedIdx
-  const feedbackTextRef = React.useRef(feedbackText)
-  feedbackTextRef.current = feedbackText
-  const handleActionRef = React.useRef<((action: ExitPlanModeAction) => void) | null>(null)
+  const submittingRef = React.useRef(false)
+  const composingRef = React.useRef(false)
+  const [submissionError, setSubmissionError] = React.useState<{ requestId: string; message: string } | null>(null)
 
   // 重置状态
   React.useEffect(() => {
     setFocusedIdx(0)
     setShowFeedback(false)
     setFeedbackText('')
+    setSubmissionError(null)
   }, [request?.requestId])
 
   const handleAction = async (action: ExitPlanModeAction): Promise<void> => {
-    if (submitting || !request) return
+    if (submittingRef.current || !request) return
+    submittingRef.current = true
     setSubmitting(true)
+    setSubmissionError(null)
     try {
       await window.electronAPI.respondExitPlanMode({
         requestId: request.requestId,
@@ -106,12 +108,12 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
       })
     } catch (error) {
       console.error('[ExitPlanModeBanner] 响应失败:', error)
+      setSubmissionError({ requestId: request.requestId, message: '计划审批提交失败，请重试。尚未确认授权。' })
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
-
-  handleActionRef.current = handleAction
 
   /** 关闭计划审批 & 终止 Agent */
   const handleOpenPlanDocument = React.useCallback((): void => {
@@ -142,68 +144,17 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
     window.electronAPI.stopAgent(sessionId).catch(console.error)
   }
 
-  // 键盘导航：只在 requestId 变化时重建 handler，内部通过 ref 读取最新值
-  React.useEffect(() => {
-    if (!request) return
-
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      const curFocusIdx = focusedIdxRef.current
-
-      // 反馈输入框内：仅 Enter 提交（输入法组合中跳过）
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-          e.preventDefault()
-          if (feedbackTextRef.current.trim()) {
-            handleActionRef.current?.('feedback')
-          }
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          setShowFeedback(false)
-          setFocusedIdx(3)
-        }
-        return
-      }
-
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        const count = PLAN_OPTIONS.length
-        const next = e.key === 'ArrowDown'
-          ? (curFocusIdx + 1) % count
-          : (curFocusIdx - 1 + count) % count
-        setFocusedIdx(next)
-      } else if (e.key === 'Enter' && !e.isComposing) {
-        e.preventDefault()
-        const option = PLAN_OPTIONS[curFocusIdx]
-        if (option) {
-          if (option.action === 'feedback') {
-            setShowFeedback(true)
-          } else {
-            handleActionRef.current?.(option.action)
-          }
-        }
-      } else if (e.key >= '1' && e.key <= '3') {
-        const idx = parseInt(e.key) - 1
-        const option = PLAN_OPTIONS[idx]
-        if (option) {
-          setFocusedIdx(idx)
-          if (option.action === 'feedback') {
-            setShowFeedback(true)
-          } else {
-            handleActionRef.current?.(option.action)
-          }
-        }
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [request?.requestId])
-
   if (!request) return null
 
   return (
-    <div className="mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+    <div
+      role="region"
+      aria-label="计划审批"
+      aria-busy={submitting}
+      onCompositionStart={() => { composingRef.current = true }}
+      onCompositionEnd={() => { composingRef.current = false }}
+      onKeyDownCapture={(event) => handleBannerNavigation(event, composingRef.current)}
+      className="mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
       {/* 头部 */}
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center gap-2 mb-1">
@@ -247,9 +198,11 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
             return (
               <button
                 key={option.action}
+                data-banner-option=""
+                onFocus={() => setFocusedIdx(idx)}
                 type="button"
                 className={`
-                  flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all outline-none text-left
+                  flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring text-left
                   ${option.variant === 'destructive'
                     ? 'bg-muted/50 text-foreground/80 hover:bg-destructive/10 hover:text-destructive'
                     : 'bg-muted/50 text-foreground/80 hover:bg-muted'
@@ -290,7 +243,7 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                if (e.key === 'Enter' && !e.shiftKey && !isImeKeyboardEvent(e.nativeEvent)) {
                   e.preventDefault()
                   e.stopPropagation()
                   if (feedbackText.trim()) {
@@ -315,10 +268,11 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
         </div>
       )}
 
+      {submissionError?.requestId === request.requestId && <p role="alert" className="px-4 pb-2 text-xs text-destructive">{submissionError.message}</p>}
       {/* 底部提示 */}
       <div className="flex items-center px-4 pb-3">
         <span className="text-[10px] text-muted-foreground/40">
-          点击选择 · ↑↓ Enter 确认 · 1-3 快速选择
+          聚焦选项后 ↑↓ 导航 · Enter 确认
         </span>
       </div>
     </div>

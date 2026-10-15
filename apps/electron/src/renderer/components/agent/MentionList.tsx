@@ -7,9 +7,13 @@
  */
 
 import * as React from 'react'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
 import { cn } from '@/lib/utils'
+import { attachScrollFade } from '@/components/ui/scroll-fade'
 
 export interface MentionListProps<T> {
+  listId?: string
+  onActiveDescendantChange?: (id: string | undefined) => void
   items: T[]
   onSelect: (item: T) => void
   /** 空列表占位文字 */
@@ -37,11 +41,17 @@ export interface MentionListRef {
 }
 
 function MentionListInner<T>(
-  { items, onSelect, emptyText, keyExtractor, renderItem, headerLabel }: MentionListProps<T>,
+  { items, onSelect, emptyText, keyExtractor, renderItem, headerLabel, listId, onActiveDescendantChange }: MentionListProps<T>,
   ref: React.ForwardedRef<MentionListRef>,
 ): React.ReactElement {
+  const generatedId = React.useId()
+  const id = listId ?? `mention-${generatedId}`
   const [localIndex, setLocalIndex] = React.useState(0)
   const containerRef = React.useRef<HTMLDivElement>(null)
+
+  React.useLayoutEffect(() => {
+    if (containerRef.current) return attachScrollFade(containerRef.current, { fadeSize: 12 })
+  }, [items.length > 0])
 
   React.useEffect(() => {
     setLocalIndex(0)
@@ -54,8 +64,15 @@ function MentionListInner<T>(
     item?.scrollIntoView({ block: 'nearest' })
   }, [localIndex])
 
+  React.useEffect(() => {
+    onActiveDescendantChange?.(items[localIndex] ? `${id}-option-${localIndex}` : undefined)
+    return () => onActiveDescendantChange?.(undefined)
+  }, [id, localIndex, items, onActiveDescendantChange])
+
   React.useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
+      if (isImeKeyboardEvent(event)) return false
+      if (items.length === 0) return false
       if (event.key === 'ArrowUp') {
         setLocalIndex((prev) => (prev <= 0 ? items.length - 1 : prev - 1))
         return true
@@ -64,7 +81,7 @@ function MentionListInner<T>(
         setLocalIndex((prev) => (prev >= items.length - 1 ? 0 : prev + 1))
         return true
       }
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' || event.key === 'Tab') {
         if (items.length === 0) return false
         const item = items[localIndex]
         if (item) onSelect(item)
@@ -82,7 +99,7 @@ function MentionListInner<T>(
     return (
       <div className="rounded-lg border bg-popover shadow-lg overflow-hidden w-[280px]">
         <MentionHeader label={headerLabel} />
-        <div role="status" className="p-2 text-[11px] text-muted-foreground">{emptyText}</div>
+        <div id={id} role="listbox" aria-label={headerLabel ?? '引用选项'} /><div role="status" className="p-2 text-[11px] text-muted-foreground">{emptyText}</div>
       </div>
     )
   }
@@ -91,11 +108,13 @@ function MentionListInner<T>(
     <div className="rounded-lg border bg-popover shadow-lg overflow-hidden w-[280px]">
       <MentionHeader label={headerLabel} />
       {/* containerRef 只包裹列表项，键盘导航靠 children[index] 定位，head 须置于其外 */}
-      <div ref={containerRef} className="overflow-y-auto max-h-[240px]" role="listbox" aria-label={headerLabel ?? '引用选项'}>
+      <div id={id} ref={containerRef} className="overflow-y-auto max-h-[240px]" role="listbox" aria-label={headerLabel ?? '引用选项'}>
         {items.map((item, index) => (
           <button
             key={keyExtractor(item)}
             type="button"
+            tabIndex={-1}
+            id={`${id}-option-${index}`}
             role="option"
             aria-selected={index === localIndex}
             className={cn(
@@ -105,6 +124,7 @@ function MentionListInner<T>(
             // 用 mousedown 而非 click：异步 items 重渲染会替换 button 节点，
             // 导致 mousedown/mouseup 不在同一节点、click 不派发而漏选；
             // preventDefault 阻止按钮抢焦点，避免编辑器 blur 触发弹窗关闭竞态。
+            onClick={(event) => { if (event.detail === 0) onSelect(item) }}
             onMouseDown={(e) => {
               e.preventDefault()
               onSelect(item)

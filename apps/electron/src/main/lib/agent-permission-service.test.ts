@@ -1,9 +1,26 @@
 import { describe, expect, test } from 'bun:test'
 import { AgentPermissionService, type CanUseToolOptions } from './agent-permission-service'
+import type { PermissionRequest } from '@gamma/shared'
 
 function permissionOptions(signal: AbortSignal, toolUseID: string): CanUseToolOptions {
   return { signal, toolUseID, displayName: '删除分组', description: '删除 Todo 分组' }
 }
+
+describe('Given 并发同名工具审批', () => {
+  test('When 创建请求 Then 保留精确工具调用ID并隔离响应', async () => {
+    const service = new AgentPermissionService()
+    const requests: PermissionRequest[] = []
+    const canUse = service.createCanUseTool('session-1', (request) => requests.push(request))
+    const first = canUse('Write', { file_path: 'a.txt' }, permissionOptions(new AbortController().signal, 'call-1'))
+    const second = canUse('Write', { file_path: 'b.txt' }, permissionOptions(new AbortController().signal, 'call-2'))
+    expect(requests.map((request) => request.toolUseId)).toEqual(['call-1', 'call-2'])
+    expect(requests[0]?.requestId).not.toBe(requests[1]?.requestId)
+    service.respondToPermission(requests[1]!.requestId, 'deny', false)
+    service.respondToPermission(requests[0]!.requestId, 'allow', false)
+    expect((await first).behavior).toBe('allow')
+    expect((await second).behavior).toBe('deny')
+  })
+})
 
 describe('公开网络查询权限', () => {
   for (const toolName of ['WebSearch', 'WebFetch']) {

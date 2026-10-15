@@ -8,6 +8,7 @@ beforeAll(async () => {
     import React from 'react'
     import { createRoot } from 'react-dom/client'
     import { Provider, createStore, useAtomValue } from 'jotai'
+    import { beginPaneResize, isPaneResizeProtected } from '@/lib/pane-resize-policy'
     import { WorkspacePanels } from '@/components/app-shell/WorkspacePanels'
     import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
     import { AgentHeader } from '@/components/agent/AgentHeader'
@@ -21,7 +22,7 @@ beforeAll(async () => {
     const delay = (ms = 25) => new Promise(resolve => setTimeout(resolve, ms))
     const until = async predicate => { for(let i=0;i<150;i++){if(predicate())return;await delay(10)}throw new Error('工作区布局未达到预期状态') }
     window.workspaceLayoutRegression = {
-      delay, until,
+      delay, until, beginPaneResize, isPaneResizeProtected,
       async mount(layouts) {
         const store=createStore(), root=createRoot(document.getElementById('root')), calls=[], mounts={agent:0,workspace:0};
         window.electronAPI={setAgentBrowserLayout:async input=>calls.push(input)};
@@ -33,7 +34,7 @@ beforeAll(async () => {
           const sessionId=useAtomValue(currentAgentSessionIdAtom), layout=useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)), open=useAtomValue(agentSidePanelOpenAtomFamily(sessionId));
           const side=layout.workspaceSide==='left'?'left':'right';
           const setWidth=width=>store.set(agentSidePanelLayoutAtomFamily(sessionId),previous=>({...previous,width:clampRightPanelWidth(width,800,240,0,true)}));
-          const resizeStart=event=>{const start=event.clientX, width=layout.width;const move=next=>setWidth(getWorkspaceResizeWidth(width,start,next.clientX,side));const finish=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',finish)};document.addEventListener('mousemove',move);document.addEventListener('mouseup',finish)};
+          const resizeStart=event=>{const start=event.clientX, width=layout.width;const move=next=>setWidth(getWorkspaceResizeWidth(width,start,next.clientX,side));const finish=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',finish)};document.addEventListener('pointermove',move);document.addEventListener('pointerup',finish)};
           const resizeKey=event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();setWidth(getWorkspaceResizeWidth(layout.width,0,event.key==='ArrowLeft'?-24:24,side))}};
           return React.createElement(WorkspacePanels,{workspaceSide:side,workspaceOpen:open,workspaceWidth:layout.width,minimumWidth:240,maximumWidth:480,onResizeStart:resizeStart,onResizeKeyDown:resizeKey,
             agent:React.createElement(React.Fragment,null,React.createElement(AgentHeader,{sessionId}),React.createElement(Draft,{name:'agent'})),
@@ -115,11 +116,50 @@ describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
   test('When 在两侧拖拽或通过方向键调整分隔条 Then 分隔条位于相邻边缘且宽度按视觉方向改变', async () => {
     const result = await renderer.run<{ rightDrag: number; leftDrag: number; keyWidth: number; rightEdge: boolean; leftEdge: boolean; keyboardReachable: boolean }>(`
       const api=window.workspaceLayoutRegression,fixture=await api.mount();let handle=document.querySelector('[role="separator"]');const rightEdge=handle.classList.contains('left-0');
-      handle.dispatchEvent(new MouseEvent('mousedown',{clientX:500,bubbles:true}));document.dispatchEvent(new MouseEvent('mousemove',{clientX:540,bubbles:true}));document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));await api.delay();const rightDrag=fixture.width();
+      handle.dispatchEvent(new PointerEvent('pointerdown',{clientX:500,bubbles:true}));document.dispatchEvent(new PointerEvent('pointermove',{clientX:540,bubbles:true}));document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));await api.delay();const rightDrag=fixture.width();
       fixture.swap();await api.until(()=>fixture.side()==='left');handle=document.querySelector('[role="separator"]');const leftEdge=handle.classList.contains('right-0');
-      handle.dispatchEvent(new MouseEvent('mousedown',{clientX:260,bubbles:true}));document.dispatchEvent(new MouseEvent('mousemove',{clientX:300,bubbles:true}));document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));await api.delay();const leftDrag=fixture.width();
+      handle.dispatchEvent(new PointerEvent('pointerdown',{clientX:260,bubbles:true}));document.dispatchEvent(new PointerEvent('pointermove',{clientX:300,bubbles:true}));document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));await api.delay();const leftDrag=fixture.width();
       handle.focus();const keyboardReachable=document.activeElement===handle && handle.tabIndex===0;handle.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true}));await api.delay();const keyWidth=fixture.width();fixture.root.unmount();return {rightDrag,leftDrag,keyWidth,rightEdge,leftEdge,keyboardReachable};
     `)
     expect(result).toEqual({ rightDrag: 260, leftDrag: 300, keyWidth: 276, rightEdge: true, leftEdge: true, keyboardReachable: true })
+  }, 30_000)
+})
+
+
+describe('Given 共享真实 pointer 分栏事务与 BrowserSlot', () => {
+  test('When 死区内点击、Escape、pointercancel、失焦或 capture 丢失 Then 回滚快照并解除原生与iframe保护', async () => {
+    const results = await renderer.run(`
+      const api=window.workspaceLayoutRegression,fixture=await api.mount(),results=[];
+      for (const reason of ['deadzone','Escape','pointercancel','blur','lostpointercapture','commit']) {
+        const target=document.querySelector('[role="separator"]');
+        let width=300, sidebarOpen=true, saved=300, finishes=0;
+        const start=fixture.calls.length;
+        const cancel=api.beginPaneResize({target,pointerId:12,startX:100,
+          move:x=>{width=300+x-100;sidebarOpen=false},
+          finish:commit=>{finishes++;if(commit)saved=width;else{width=300;sidebarOpen=true}}});
+        const protectedNative=fixture.calls.slice(start).some(call=>!call.visible&&call.preserveSessionOnHide);
+        const shield=document.querySelector('[data-pane-resize-shield]');
+        const shieldHit=shield===document.elementFromPoint(20,200);
+        document.dispatchEvent(new PointerEvent('pointermove',{pointerId:99,clientX:200}));
+        const otherPointerIgnored=width===300;
+        const x=reason==='deadzone'?104:160;
+        document.dispatchEvent(new PointerEvent('pointermove',{pointerId:12,clientX:x}));
+        if(reason==='Escape')document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        else if(reason==='pointercancel')document.dispatchEvent(new PointerEvent('pointercancel',{pointerId:12}));
+        else if(reason==='blur')window.dispatchEvent(new Event('blur'));
+        else if(reason==='lostpointercapture')target.dispatchEvent(new PointerEvent('lostpointercapture',{pointerId:12}));
+        else document.dispatchEvent(new PointerEvent('pointerup',{pointerId:12,clientX:x}));
+        cancel();await api.delay(50);
+        results.push({reason,protectedNative,shieldHit,otherPointerIgnored,width,saved,sidebarOpen,finishes,
+          cleaned:!document.querySelector('[data-pane-resize-shield]')&&!api.isPaneResizeProtected(),
+          restoredNative:fixture.calls.at(-1).visible});
+      }
+      fixture.root.unmount();return results;
+    `)
+    expect(results).toEqual(['deadzone', 'Escape', 'pointercancel', 'blur', 'lostpointercapture', 'commit'].map(reason => ({
+      reason, protectedNative: true, shieldHit: true, otherPointerIgnored: true,
+      width: reason === 'commit' ? 360 : 300, saved: reason === 'commit' ? 360 : 300,
+      sidebarOpen: reason !== 'commit', finishes: 1, cleaned: true, restoredNative: true,
+    })))
   }, 30_000)
 })

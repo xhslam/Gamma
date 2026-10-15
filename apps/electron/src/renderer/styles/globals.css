@@ -112,39 +112,39 @@ body {
   }
 
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --background: 40 16% 95.5%;
+    --foreground: 30 8% 16%;
     /* 侧栏主文字：中性炭黑，避免特色浅色主题将密集列表染成低对比色。 */
     --sidebar-primary-foreground: 0 0% 17%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --primary: 0 0% 9%;
+    --muted: 40 12% 93%;
+    --muted-foreground: 30 5% 43%;
+    --border: 35 10% 84%;
+    --input: 35 10% 84%;
+    --ring: 18 48% 45%;
+    --primary: 18 48% 42%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --secondary: 40 12% 93%;
+    --secondary-foreground: 30 8% 20%;
+    --accent: 35 16% 91%;
+    --accent-foreground: 30 8% 20%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --stop-hover-bg: hsla(0, 80%, 60%, 0.12);
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --dialog: 0 0% 100%;
-    --dialog-foreground: 0 0% 3.9%;
-    --content-area: 0 0% 100%;            /* 主内容区域背景 */
+    --card: 40 20% 99%;
+    --card-foreground: var(--foreground);
+    --popover: 40 20% 100%;
+    --popover-foreground: var(--foreground);
+    --dialog: 40 20% 100%;
+    --dialog-foreground: var(--foreground);
+    --content-area: 40 20% 97%;            /* 主内容区域背景：暖纸色 */
     --sidebar-surface: 40 18% 96%;       /* 默认侧栏使用柔和纸色，内容区保持独立层级。 */
     --tabbar-surface: 60 14.3% 98.6%;     /* 默认浅色未选中 Tab 背景：RGB 252/252/251 */
     --tab-indicator: var(--primary);       /* 顶部 Tab 选中条，默认跟随主色 */
     --sidebar-control-surface: 60 7% 93%;
     --sidebar-control-surface-hover: 60 7% 90%;
     --sidebar-control-stroke: 0 0% 9% / 0.10;
-    --input-surface: 60 14.3% 98.6%;      /* 默认浅色输入框：RGB 252/252/251 */
-    --tab-surface: 0 0% 100%;             /* 与内容区域无缝衔接 */
+    --input-surface: 40 20% 99%;      /* 默认浅色输入框：浮起的纸面 */
+    --tab-surface: var(--content-area);             /* 与内容区域无缝衔接 */
     /* 毛玻璃 Tooltip：深色半透明背景 + 白色文字 */
     --tooltip: 0 0% 15%;
     --tooltip-foreground: 0 0% 98%;
@@ -159,38 +159,38 @@ body {
   }
 
   .dark {
-    --background: 0 0% 10%;                /* 侧栏锚点，略亮于内容区 */
-    --foreground: 0 0% 98%;
+    --background: 30 6% 12%;                /* 侧栏锚点，略亮于内容区 */
+    --foreground: 40 12% 90%;
     --sidebar-primary-foreground: 0 0% 96%;
-    --muted: 0 0% 17%;
-    --muted-foreground: 0 0% 63.9%;
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
-    --ring: 0 0% 83.1%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 17%;
-    --secondary-foreground: 0 0% 98%;
-    --accent: 0 0% 40%;
-    --accent-foreground: 0 0% 98%;
+    --muted: 30 5% 18%;
+    --muted-foreground: 35 7% 65%;
+    --border: 30 5% 27%;
+    --input: 30 5% 27%;
+    --ring: 20 61% 64%;
+    --primary: 20 61% 64%;
+    --primary-foreground: 25 15% 10%;
+    --secondary: 30 5% 18%;
+    --secondary-foreground: var(--foreground);
+    --accent: 30 5% 23%;
+    --accent-foreground: var(--foreground);
     --destructive: 0 55% 45%;
     --destructive-foreground: 0 0% 98%;
     --stop-hover-bg: hsl(0, 40%, 18%);
-    --card: 0 0% 13%;                      /* 卡片：浮起于背景 */
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 14%;                   /* 弹出层：最高浮起 */
-    --popover-foreground: 0 0% 98%;
-    --dialog: 0 0% 16%;                    /* 弹窗：比弹出层更亮 */
-    --dialog-foreground: 0 0% 98%;
-    --content-area: 0 0% 7%;              /* 主内容区域：最深，专注 */
-    --sidebar-surface: 30 4% 11%;
-    --tabbar-surface: 0 0% 10%;
+    --card: 30 6% 15%;                      /* 卡片：浮起于背景 */
+    --card-foreground: var(--foreground);
+    --popover: 30 5% 18%;                   /* 弹出层：最高浮起 */
+    --popover-foreground: var(--foreground);
+    --dialog: 30 5% 20%;                    /* 弹窗：比弹出层更亮 */
+    --dialog-foreground: var(--foreground);
+    --content-area: 30 6% 10%;              /* 主内容区域：暖炭色 */
+    --sidebar-surface: 30 6% 12%;
+    --tabbar-surface: 30 6% 12%;
     --tab-indicator: var(--primary);
     --sidebar-control-surface: 0 0% 17%;
     --sidebar-control-surface-hover: 0 0% 21%;
     --sidebar-control-stroke: 0 0% 100% / 0.10;
-    --input-surface: 0 0% 9%;              /* 输入区：介于背景和内容区之间 */
-    --tab-surface: 0 0% 7%;                /* 与内容区域无缝衔接 */
+    --input-surface: 30 6% 15%;              /* 输入区：高于内容背景 */
+    --tab-surface: var(--content-area);                /* 与内容区域无缝衔接 */
     /* 毛玻璃 Tooltip：深色半透明背景 + 白色文字 */
     --tooltip: 0 0% 20%;
     --tooltip-foreground: 0 0% 98%;
@@ -1053,15 +1053,7 @@ body {
   background-color: hsl(var(--input-surface)) !important;
 }
 
-/* 现代界面：保留 rounded-full 的圆形/胶囊语义，只压低卡片、面板、气泡等大圆角。 */
-:root [class*="rounded-lg"]:not([class*="rounded-full"]),
-:root [class*="rounded-xl"]:not([class*="rounded-full"]),
-:root [class*="rounded-2xl"]:not([class*="rounded-full"]),
-:root [class*="rounded-3xl"]:not([class*="rounded-full"]),
-:root [class*="rounded-["]:not([class*="rounded-full"]) {
-  border-radius: var(--radius-cap);
-}
-
+/* 圆角由组件语义决定，不再对 rounded-* 做全局封顶；终端主题保留独立直角规则。 */
 
 /* ===== 输入框段落紧凑行距（仅作用于输入框内的 tiptap 编辑器） ===== */
 .rich-text-input .tiptap p {
@@ -2669,3 +2661,126 @@ body {
   line-height: 1.2;
 }
 
+
+/* ===== 会话 UI 视觉契约 =====
+ * 语义表面引用已有主题变量，特色主题无需重复维护另一套调色板。
+ * hairline 使用阴影轮廓而非布局 border，Chromium 不会将 0.5px border 向上取整。
+ */
+:root {
+  --surface-0: var(--content-area);
+  --surface-1: var(--background);
+  --surface-2: var(--card);
+  --surface-3: var(--popover);
+  --hairline-width: 1px;
+  --floating-outline: hsl(var(--border) / 0.85);
+  --radius-input: 20px;
+  --radius-message: 18px;
+  --radius-dialog: 16px;
+  --radius-control: 8px;
+  --motion-fast: 150ms;
+  --motion-normal: 200ms;
+  --floating-shadow: 0 16px 32px -8px rgb(45 35 25 / 0.16), 0 6px 12px -2px rgb(45 35 25 / 0.08);
+  --input-shadow: 0 2px 6px rgb(45 35 25 / 0.04);
+  --input-shadow-hover: 0 3px 10px rgb(45 35 25 / 0.08);
+  --input-shadow-focus: 0 4px 14px rgb(45 35 25 / 0.10);
+  --ui-medium: 500;
+  --ui-semibold: 600;
+  --ui-bold: 700;
+}
+.dark {
+  --floating-shadow: 0 16px 32px -8px rgb(0 0 0 / 0.4), 0 6px 12px -2px rgb(0 0 0 / 0.24);
+  --input-shadow: 0 2px 6px rgb(0 0 0 / 0.16);
+  --input-shadow-hover: 0 3px 10px rgb(0 0 0 / 0.24);
+  --input-shadow-focus: 0 4px 14px rgb(0 0 0 / 0.32);
+  --ui-medium: 465;
+  --ui-semibold: 560;
+  --ui-bold: 660;
+}
+@media (min-resolution: 2dppx) {
+  :root { --hairline-width: 0.5px; }
+}
+@media (min-resolution: 3dppx) {
+  :root { --hairline-width: calc(1px / 3); }
+}
+
+/* 只控制明确标记的 UI 元素；不继承可变字重到 Markdown、代码、编辑器或 xterm。 */
+@supports (font-variation-settings: normal) {
+  :root:not(.theme-terminal-dark) .gamma-ui.font-medium,
+  :root:not(.theme-terminal-dark) .gamma-ui .font-medium {
+    font-variation-settings: 'wght' var(--ui-medium);
+  }
+  :root:not(.theme-terminal-dark) .gamma-ui.font-semibold,
+  :root:not(.theme-terminal-dark) .gamma-ui .font-semibold {
+    font-variation-settings: 'wght' var(--ui-semibold);
+  }
+  :root:not(.theme-terminal-dark) .gamma-ui.font-bold,
+  :root:not(.theme-terminal-dark) .gamma-ui .font-bold {
+    font-variation-settings: 'wght' var(--ui-bold);
+  }
+}
+/* 浮层可显式选用，与键盘轮廓独立；不对所有布局分隔线减细。 */
+:root:not(.theme-terminal-dark) .ui-floating-surface {
+  border-width: 0;
+  box-shadow: 0 0 0 var(--hairline-width) var(--floating-outline), var(--floating-shadow);
+}
+/* 行内图标专用；flex 居中的按钮图标不使用此类。 */
+.ui-inline-icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+}
+.ui-numeric {
+  display: inline-block;
+  min-width: 3ch;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* 保持现有 data-input-mode 接入，避免要求改写 AgentView 或第三方编辑器。 */
+:root:not(.theme-terminal-dark) [data-input-mode] > div:first-child {
+  border-radius: var(--radius-input);
+}
+:root:not(.theme-terminal-dark) [data-input-mode] > div:first-child:not(.border-dashed) {
+  border-width: 0;
+  box-shadow: inset 0 0 0 var(--hairline-width) var(--floating-outline), var(--input-shadow);
+  transition: box-shadow var(--motion-fast) ease-out, background-color var(--motion-fast) ease-out;
+}
+:root:not(.theme-terminal-dark) [data-input-mode] > div:first-child:not(.border-dashed):hover {
+  box-shadow: inset 0 0 0 var(--hairline-width) hsl(var(--foreground) / 0.26), var(--input-shadow-hover);
+}
+:root:not(.theme-terminal-dark) [data-input-mode] > div:first-child:not(.border-dashed):focus-within {
+  box-shadow: inset 0 0 0 1px hsl(var(--ring) / 0.72), var(--input-shadow-focus);
+}
+/* Plan mode 的虚线 SVG 是唯一轮廓，保留 hover/focus 阴影而不叠画实线。 */
+:root:not(.theme-terminal-dark) [data-input-mode] > div.plan-mode-border:first-child {
+  box-shadow: var(--input-shadow);
+}
+:root:not(.theme-terminal-dark) [data-input-mode] > div.plan-mode-border:first-child:hover {
+  box-shadow: var(--input-shadow-hover);
+}
+:root:not(.theme-terminal-dark) [data-input-mode] > div.plan-mode-border:first-child:focus-within {
+  box-shadow: var(--input-shadow-focus);
+}
+:root:not(.theme-terminal-dark) .message-item.is-user .inline-block[class~="bg-primary/10"] {
+  border-radius: var(--radius-message);
+}
+.gamma-ui {
+  font-optical-sizing: auto;
+}
+/* 时长只赋给明确声明过渡属性的控件；容器不得意外动画 padding/height，
+ * 否则侧栏收起时 macOS 红绿灯避让空间会逐帧缩小。 */
+.gamma-ui[class*="transition-"] {
+  transition-duration: var(--motion-fast);
+}
+:root:not(.theme-terminal-dark) .gamma-ui.rounded-md {
+  border-radius: var(--radius-control);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gamma-ui,
+  .gamma-ui[class*="transition-"],
+  .gamma-ui *,
+  :root:not(.theme-terminal-dark) [data-input-mode] > div:first-child:not(.border-dashed) {
+    transition: none;
+    animation: none;
+  }
+  .gamma-ui:active { transform: none; }
+}

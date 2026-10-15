@@ -1757,6 +1757,8 @@ export interface PermissionRequest {
   requestId: string
   /** 会话 ID */
   sessionId: string
+  /** 对应的工具调用 ID；旧会话可缺省，不得按工具名称猜测关联。 */
+  toolUseId?: string
   /** 工具名称 */
   toolName: string
   /** 工具输入参数 */
