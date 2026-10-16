@@ -98,6 +98,10 @@ export class AgentQueueCoordinator {
     return this.dispatching.has(sessionId)
   }
 
+  isDispatchingMessage(sessionId: string, messageId: string): boolean {
+    return this.dispatching.get(sessionId) === messageId
+  }
+
   hasPending(sessionId: string): boolean {
     return this.dispatching.has(sessionId) || (this.queues.get(sessionId)?.length ?? 0) > 0
   }

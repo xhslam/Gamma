@@ -26,6 +26,8 @@ import {
   markdownFontSizeAtom,
   updateMarkdownFontSize,
 } from '@/atoms/markdown-font-size'
+import { workbenchDensityAtom, updateWorkbenchDensity } from '@/atoms/ui-preferences'
+import { normalizeWorkbenchDensity } from '../../../types/settings'
 import { cn } from '@/lib/utils'
 import type { ThemeMode, ThemeStyle, MarkdownFontSize } from '../../../types'
 
@@ -130,6 +132,23 @@ const ZOOM_HINT = isMac
   : '使用 Ctrl++ 放大、Ctrl+- 缩小、Ctrl+0 恢复默认大小'
 
 export function AppearanceSettings(): React.ReactElement {
+  const [density, setDensity] = useAtom(workbenchDensityAtom)
+  const [densitySaving, setDensitySaving] = React.useState(false)
+  const [densityError, setDensityError] = React.useState<string | null>(null)
+  const handleDensityChange = async (value: string): Promise<void> => {
+    if (densitySaving) return
+    setDensitySaving(true)
+    setDensityError(null)
+    const next = normalizeWorkbenchDensity(value)
+    try {
+      await updateWorkbenchDensity(next)
+      setDensity(next)
+    } catch {
+      setDensityError('工作台密度保存失败，请重试。')
+    } finally {
+      setDensitySaving(false)
+    }
+  }
   const [themeMode, setThemeMode] = useAtom(themeModeAtom)
   const [themeStyle, setThemeStyle] = useAtom(themeStyleAtom)
   const systemIsDark = useAtomValue(systemIsDarkAtom)
@@ -172,6 +191,16 @@ export function AppearanceSettings(): React.ReactElement {
         description="自定义应用的视觉风格"
       >
         <SettingsCard>
+          <fieldset disabled={densitySaving} aria-busy={densitySaving}>
+            <SettingsSegmentedControl
+              label="工作台密度"
+              description="紧凑：28px 侧栏行与 12px 输入圆角；舒适：36px 侧栏行与 14px 输入圆角。不改变主题与字号。"
+              value={density}
+              onValueChange={(value) => { void handleDensityChange(value) }}
+              options={[{ value: 'compact', label: '紧凑' }, { value: 'comfortable', label: '舒适' }]}
+            />
+          </fieldset>
+          {densityError && <p role="alert" className="px-4 pb-3 text-sm text-destructive">{densityError}</p>}
           {/* 主题模式 - 最上面 */}
           <SettingsSegmentedControl
             label="主题模式"

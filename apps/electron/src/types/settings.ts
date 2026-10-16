@@ -290,8 +290,17 @@ export function normalizeProductivityToolsSettings(input: unknown): Productivity
 /** 提升此版本可要求用户重新确认更新后的受管浏览器风险告知。 */
 export const BROWSER_RISK_DISCLAIMER_VERSION = 1
 
+/** 工作台密度只改变布局，不触及主题与正文字号。 */
+export type WorkbenchDensity = 'compact' | 'comfortable'
+
+export function normalizeWorkbenchDensity(input: unknown): WorkbenchDensity {
+  return input === 'comfortable' ? 'comfortable' : 'compact'
+}
+
 /** 应用设置 */
 export interface AppSettings {
+  /** 默认紧凑；旧配置与非法值回退到 compact。 */
+  workbenchDensity?: WorkbenchDensity
   /** 主题模式 */
   themeMode: ThemeMode
   /** 特殊风格主题 */

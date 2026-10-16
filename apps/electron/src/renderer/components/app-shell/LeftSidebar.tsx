@@ -85,7 +85,7 @@ import { hasEnvironmentIssuesAtom } from '@/atoms/environment'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
-import { productivityToolsAtom, sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
+import { productivityToolsAtom, sessionHoverPreviewEnabledAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
@@ -584,6 +584,8 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const hasUpdate = useAtomValue(hasUpdateAtom)
   const updateStatus = useAtomValue(updateStatusAtom)
   const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom)
+  const density = useAtomValue(workbenchDensityAtom)
+  const sidebarRowHeight = density === 'comfortable' ? 36 : 28
   const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
   const productivityTools = useAtomValue(productivityToolsAtom)
 
@@ -2132,7 +2134,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       const isCurrentProject = group.kind === 'workspace' && group.id === currentWorkspaceId
       rows.push({
         id: `agent-archived-project-${group.id}`,
-        estimateSize: 38,
+        estimateSize: sidebarRowHeight + 4,
         content: (
           <div className="pl-1 pr-3">
             <section className="relative py-0.5 rounded-md">
@@ -2140,9 +2142,10 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                 <button
                   type="button"
                   aria-expanded={!collapsed}
+                  aria-current={isCurrentProject ? 'true' : undefined}
                   onClick={() => handleToggleArchivedProject(group.id)}
                   className={cn(
-                    'relative flex-1 min-w-0 flex h-[34px] items-center gap-2 pl-[10px] pr-1 py-1.5 rounded-md text-left transition-[color,background-color] titlebar-no-drag hover:bg-foreground/[0.025]',
+                    'gamma-sidebar-project-row relative flex-1 min-w-0 flex h-[34px] items-center gap-2 pl-[10px] pr-1 py-1.5 rounded-md text-left transition-[color,background-color] titlebar-no-drag hover:bg-foreground/[0.025]',
                     'text-[hsl(var(--sidebar-primary-foreground))] hover:text-[hsl(var(--sidebar-primary-foreground))]',
                   )}
                 >
@@ -2157,9 +2160,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                       projectRootPath={group.workspace?.projectRootPath}
                       projectRootStatus={group.workspace?.projectRootStatus}
                     />
-                    {isCurrentProject && (
-                      <span className="workspace-selected-triangle flex-shrink-0" aria-hidden="true" />
-                    )}
                   </span>
                   <span className="min-w-[4px] flex-1" aria-hidden="true" />
                   {group.kind === 'automation' && (
@@ -2187,7 +2187,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           || (activeChildVisible && !collapsedDelegationParentIds.has(item.session.id))
         rows.push({
           id: `agent-archived-${item.session.id}`,
-          estimateSize: 34,
+          estimateSize: sidebarRowHeight,
           content: (
             <div className="px-3">
               <AgentSessionItem
@@ -2222,7 +2222,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           for (const [childIndex, childSession] of item.childSessions.entries()) {
             rows.push({
               id: `agent-archived-child-${childSession.id}`,
-              estimateSize: childIndex === 0 ? 36 : 34,
+              estimateSize: sidebarRowHeight + (childIndex === 0 ? 2 : 0),
               content: (
                 <div className={cn(
                   'ml-6 border-l border-foreground/10 pl-2 pr-3',
@@ -2251,7 +2251,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       }
     }
     return rows
-  }, [activeDelegationSessionId, activeSessionId, agentIndicatorMap, archivedAgentSessionProjectGroups, collapsedDelegationParentIds, currentWorkspaceId, expandedArchivedProjectIds, expandedDelegationParentIds, handleAgentRename, handleRequestDelete, handleRequestMove, handleSelectAgentSession, handleToggleArchiveAgent, handleToggleArchivedProject, handleToggleDelegationParent, handleTogglePinAgent, handleToggleStarAgent, relativeTimeNow, sessionHoverPreviewEnabled, workspaceNameMap])
+  }, [sidebarRowHeight, activeDelegationSessionId, activeSessionId, agentIndicatorMap, archivedAgentSessionProjectGroups, collapsedDelegationParentIds, currentWorkspaceId, expandedArchivedProjectIds, expandedDelegationParentIds, handleAgentRename, handleRequestDelete, handleRequestMove, handleSelectAgentSession, handleToggleArchiveAgent, handleToggleArchivedProject, handleToggleDelegationParent, handleTogglePinAgent, handleToggleStarAgent, relativeTimeNow, sessionHoverPreviewEnabled, workspaceNameMap])
 
   const agentActiveVirtualRows = React.useMemo<VirtualSidebarRow[]>(() => {
     if (viewMode !== 'active') return []
@@ -2273,7 +2273,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
       rows.push({
         id: `agent-${item.session.id}`,
-        estimateSize: 34,
+        estimateSize: sidebarRowHeight,
         content: (
           <div
             className="ml-7"
@@ -2315,7 +2315,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         for (const [childIndex, childSession] of item.childSessions.entries()) {
           rows.push({
             id: `agent-child-${childSession.id}`,
-            estimateSize: childIndex === 0 ? 36 : 34,
+            estimateSize: sidebarRowHeight + (childIndex === 0 ? 2 : 0),
             content: (
               <div
                 className={cn(
@@ -2456,7 +2456,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
       rows.push({
         id: `agent-project-${group.workspace.id}`,
-        estimateSize: 38,
+        estimateSize: sidebarRowHeight + 4,
         content: (
           <div className="pl-2">
             <AgentProjectGroupItem
@@ -2555,6 +2555,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     workspaceNameMap,
     currentWorkspaceId,
     viewMode,
+    sidebarRowHeight,
   ])
 
   // 收起时仍保留导航 DOM，离场动画和交互隔离由 AppShell 的 SidebarTransition 承载。
@@ -2562,6 +2563,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   return (
     <div
       ref={sidebarRootRef}
+      data-workbench-density={density}
       data-session-switch-hints={quickSwitchHintsVisible ? 'true' : undefined}
       className={cn(
         'gamma-sidebar relative h-full flex flex-col',
@@ -3280,7 +3282,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
           onMouseLeave={() => { setRowHovered(false); preview.handleMouseLeave() }}
           style={active ? undefined : {
             contentVisibility: 'auto',
-            containIntrinsicSize: 'auto 34px',
+            containIntrinsicSize: 'auto var(--workbench-sidebar-row-height, 28px)',
           }}
           className={cn(
             'session-quick-switch-row group relative w-full flex items-center gap-1.5 rounded-lg py-1.5 pl-2.5 pr-1.5 transition-colors duration-150 titlebar-no-drag text-left',
@@ -3697,7 +3699,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         {renamingWorkspace ? (
           <div
             className={cn(
-              'relative flex-1 min-w-0 flex h-[34px] items-center gap-2 pl-[10px] pr-1 py-1.5 rounded-md text-left titlebar-no-drag',
+              'gamma-sidebar-project-row relative flex-1 min-w-0 flex h-[34px] items-center gap-2 pl-[10px] pr-1 py-1.5 rounded-md text-left titlebar-no-drag',
               'text-[hsl(var(--sidebar-primary-foreground))]',
             )}
           >
@@ -3717,6 +3719,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
             type="button"
             aria-expanded={!collapsed}
             aria-controls={hideSessions ? undefined : `project-sessions-${group.workspace.id}`}
+            aria-current={isCurrent ? 'true' : undefined}
             draggable={!renamingWorkspace}
             onDragStart={(e) => onDragStart(e, group.workspace.id)}
             onClick={(e) => {
@@ -3724,7 +3727,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               onSelectProject(group.workspace.id)
             }}
             className={cn(
-              'relative flex-1 min-w-0 flex h-[34px] cursor-grab items-center gap-2 pl-[10px] py-1.5 rounded-md text-left transition-[color,background-color] titlebar-no-drag active:cursor-grabbing hover:bg-foreground/[0.025]',
+              'gamma-sidebar-project-row relative flex-1 min-w-0 flex h-[34px] cursor-grab items-center gap-2 pl-[10px] py-1.5 rounded-md text-left transition-[color,background-color] titlebar-no-drag active:cursor-grabbing hover:bg-foreground/[0.025]',
               isAutomationGroup ? 'pr-1' : 'pr-12',
               'text-[hsl(var(--sidebar-primary-foreground))] hover:text-[hsl(var(--sidebar-primary-foreground))]',
             )}
@@ -3742,9 +3745,6 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                 projectRootPath={group.workspace.projectRootPath}
                 projectRootStatus={group.workspace.projectRootStatus}
               />
-              {isCurrent && (
-                <span className="workspace-selected-triangle flex-shrink-0" aria-hidden="true" />
-              )}
             </span>
             <span className="min-w-[4px] flex-1" aria-hidden="true" />
             {isAutomationGroup && (

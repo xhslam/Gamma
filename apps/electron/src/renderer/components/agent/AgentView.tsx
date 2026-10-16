@@ -22,6 +22,8 @@ import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, List
 import { AgentMessages, type AgentHistoryQuoteNavigationRequest } from './AgentMessages'
 import { AgentHeader } from './AgentHeader'
 import { AgentMessageQueue } from './AgentMessageQueue'
+import { AgentSendOutbox } from './AgentSendOutbox'
+import { useAgentSendOutbox } from '@/hooks/useAgentSendOutbox'
 import { SkillMentionNamesProvider } from './SkillMentionNamesProvider'
 import { ContextUsageBadge } from './ContextUsageBadge'
 import { PermissionBanner } from './PermissionBanner'
@@ -126,7 +128,7 @@ import { useOpenSession } from '@/hooks/useOpenSession'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { sendWithCmdEnterAtom } from '@/atoms/shortcut-atoms'
 import { useOpenPreview } from '@/components/diff/preview-opener'
-import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@gamma/shared'
+import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentSendOutboxEntry, AgentSubmitOrEnqueueInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@gamma/shared'
 import { inferContextWindow, inferReasoningTransport, isCodexFastModeSupportedModel, MAX_ATTACHMENT_SIZE, normalizeReasoningCapabilityLevel, normalizeReasoningLevel, resolveReasoningCapability, resolveReasoningProfile } from '@gamma/shared'
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
 import { getFilePanelDragData, INSERT_FILE_MENTION_EVENT, type FilePanelDragItem } from '@/lib/file-panel-drag'
@@ -676,6 +678,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const [isDragOver, setIsDragOver] = React.useState(false)
   const [errorCopied, setErrorCopied] = React.useState(false)
 
+  const { entries: outboxEntries, error: outboxError, refresh: refreshOutbox } = useAgentSendOutbox(sessionId)
+  const [outboxRetry, setOutboxRetry] = React.useState<{ sessionId: string; id: string; requestId: symbol } | null>(null)
+  const retryingOutboxId = outboxRetry?.sessionId === sessionId ? outboxRetry.id : null
   const recoveryState = getAgentSendRecoveryState(store)
   const sendGuardRef = React.useRef(recoveryState.guard)
   const draftEditVersionsRef = React.useRef(recoveryState.draftEditVersions)
@@ -691,6 +696,11 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const versions = draftEditVersionsRef.current
     versions.set(sessionId, (versions.get(sessionId) ?? 0) + 1)
   }, [sessionId])
+
+  const readOutboxDraftContext = React.useCallback((): string => JSON.stringify({
+    files: store.get(agentPendingFilesAtomFamily(sessionId)).map(({ id, filename, mediaType, size, sourcePath }) => ({ id, filename, mediaType, size, sourcePath })),
+    quote: store.get(quotedSelectionMapAtom).get(sessionId) ?? null,
+  }), [store, sessionId])
 
   // pendingFiles ref（供 addFilesAsAttachments 读取最新列表，避免闭包旧值）
   const pendingFilesRef = React.useRef(pendingFiles)
@@ -1025,6 +1035,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
   const sendPlainTextAgentMessage = React.useCallback(async (
     message: AgentQueuedMessage,
+    beforeSubmit?: (input: AgentSubmitOrEnqueueInput) => Promise<void>,
   ): Promise<void> => {
     const quotedSelectionBlock = message.quotedSelection
       ? buildQuotedSelectionBlock(message.quotedSelection)
@@ -1042,8 +1053,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
     // “立即发送”与后台续轮都由主进程用实时状态路由：活跃通道可用则注入，
     // 否则保留到 deferred queue。这里的 streaming 只表达用户是否要求打断，不决定路由。
-    const result = await window.electronAPI.submitOrEnqueueAgentMessage({
+    const input: AgentSubmitOrEnqueueInput = {
       queueMessageId: message.id,
+      userMessageUuid: message.id,
       sessionId,
       userMessage: payload.sdkText,
       rawUserMessage: payload.rawText,
@@ -1059,14 +1071,16 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       mentionedSessionIds: payload.mentions.mentionedSessionIds,
       mentionedTodoIds: payload.mentions.mentionedTodoIds,
       mentionedCalendarEventIds: payload.mentions.mentionedCalendarEventIds,
-    })
+    }
+    await beforeSubmit?.(input)
+    const result = await window.electronAPI.submitOrEnqueueAgentMessage(input)
     if (result.disposition === 'injected') {
       appendLiveUserMessage(createUserSDKMessage(payload.rawText, message.id, Date.now()))
       setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
       return
     }
 
-    if (result.disposition === 'started') {
+    if (result.disposition === 'started' || result.disposition === 'accepted') {
       // 主进程在 IPC 返回前已发出 started 事件时，监听器可能已移除投影；
       // 这里再幂等移除，避免反向时序下把已发送消息重新留在队列。
       setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
@@ -2040,6 +2054,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       syncVersion: store.get(agentSessionDraftSyncVersionsAtom).get(sessionId) ?? 0,
     })
     const originalDraft = readCheckpoint()
+    const restoredCheckpoint = recoveryState.restoredOutboxDrafts.get(sessionId)
+    const restoredId = recoveryState.restoredOutboxIds.get(sessionId)
+    const isRestoredSnapshot = restoredCheckpoint?.text === originalDraft.text && restoredCheckpoint?.html === originalDraft.html
+      && recoveryState.clearableOutboxDraftIds.get(sessionId) === restoredId
+      && recoveryState.restoredOutboxContexts.get(sessionId) === readOutboxDraftContext()
+    const outboxMessageId = ((overrideText === undefined || fromEditor) && isRestoredSnapshot ? recoveryState.restoredOutboxIds.get(sessionId) : undefined) ?? crypto.randomUUID()
+    let outboxEntry: AgentSendOutboxEntry | undefined
     let expectedDraft = originalDraft
     let cleared = false
     let accepted = false
@@ -2050,6 +2071,19 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const originalQuote = store.get(quotedSelectionMapAtom).get(sessionId) ?? null
     let quoteConsumed = false
     let recoveryApplied = false
+    const persistBeforeSubmit = async (input: AgentSubmitOrEnqueueInput): Promise<void> => {
+      const quoteMarker = originalQuote ? serializeQuotedSelectionMention(originalQuote) || buildQuotedSelectionBlock(originalQuote) : ''
+      const draftText = quoteMarker ? `${effectiveText}\n\n${quoteMarker}` : effectiveText
+      const draftHtml = ((overrideText === undefined || fromEditor) && originalDraft.html ? originalDraft.html : queuedTextToParagraphHtml(effectiveText))
+        + (quoteMarker ? queuedTextToParagraphHtml(quoteMarker) : '')
+      const entry: AgentSendOutboxEntry = {
+        id: outboxMessageId, sessionId, createdAt: Date.now(), status: 'pending',
+        draft: { text: draftText, html: draftHtml, attachments: savedAttachments ?? [] },
+        input: { ...input, queueMessageId: outboxMessageId, userMessageUuid: outboxMessageId },
+      }
+      await window.electronAPI.saveAgentSendOutbox(entry)
+      outboxEntry = entry
+    }
     const consumeCapturedQuote = (): QuotedSelection | null => {
       if (!originalQuote) return null
       store.set(quotedSelectionMapAtom, (previous) => {
@@ -2099,6 +2133,38 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         ? `${current.html || queuedTextToParagraphHtml(current.text)}${htmlToRestore}`
         : htmlToRestore)
       setInputContent(append && current.text ? `${current.text}\n\n${textToRestore}` : textToRestore)
+      if (outboxEntry) {
+        recoveryState.restoredOutboxIds.set(sessionId, outboxEntry.id)
+        recoveryState.restoredOutboxDrafts.set(sessionId, readCheckpoint())
+        recoveryState.restoredOutboxContexts.set(sessionId, readOutboxDraftContext())
+        if (!append && !isSuggestionSend) recoveryState.clearableOutboxDraftIds.set(sessionId, outboxEntry.id)
+        else recoveryState.clearableOutboxDraftIds.delete(sessionId)
+      }
+    }
+    const rollbackLocalSubmission = (): void => {
+      if (sentStartedAt !== undefined) {
+        setStreamingStates((prev) => {
+          const current = prev.get(sessionId)
+          // 不重置其他请求或真实 run_started 已确认的运行态。
+          if (!current || current.startedAt !== sentStartedAt || current.runGeneration != null) return prev
+          const next = new Map(prev)
+          next.set(sessionId, { ...current, running: false })
+          return next
+        })
+      }
+      if (optimisticMessage) {
+        const failedMessage = optimisticMessage
+        setMessagesCache((previous) => {
+          const current = previous.get(sessionId)
+          if (!current?.includes(failedMessage)) return previous
+          return setSessionMessagesCache(previous, sessionId, current.filter((message) => message !== failedMessage))
+        })
+        if (activeComposerSessionRef.current === sessionId) {
+          messagesMutationVersionRef.current += 1
+          persistedSDKMessagesRef.current = persistedSDKMessagesRef.current.filter((message) => message !== failedMessage)
+          setPersistedSDKMessages(persistedSDKMessagesRef.current)
+        }
+      }
     }
     // 真实 started 事件可能先于 IPC 返回；已被主进程接受的请求绝不能回滚成未发送。
     const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
@@ -2108,8 +2174,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       if (event.sessionId !== sessionId) return
       if (event.payload.kind === 'gamma_event' && event.payload.event.type === 'run_started'
         && event.payload.event.startedAt === sentStartedAt) accepted = true
-      if (queuedMessageId && event.payload.kind === 'sdk_message'
-        && (event.payload.message as SDKMessageRecord).uuid === queuedMessageId) accepted = true
+      if (event.payload.kind === 'sdk_message'
+        && (event.payload.message as SDKMessageRecord).uuid === outboxMessageId) accepted = true
     })
     try {
       const additionalDirectoriesForRun = createBaseAdditionalDirectories()
@@ -2123,7 +2189,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
         savedAttachments = attachmentContext?.attachments
         const quotedSelection = consumeCapturedQuote()
-        const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
+        const message = createAgentQueuedMessage(effectiveText, outboxMessageId, Date.now(), quotedSelection, attachmentContext
           ? {
               fileReferenceBlock: attachmentContext.referenceBlock,
               attachments: attachmentContext.attachments,
@@ -2136,6 +2202,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         const payload = buildQueuedMessageSendPayload(message, quotedSelectionBlock)
         const queuedInput: AgentDeferredQueueMessageInput & { dispatch: 'after_current' } = {
           queueMessageId: message.id,
+          userMessageUuid: message.id,
           sessionId,
           userMessage: payload.sdkText,
           rawUserMessage: payload.rawText,
@@ -2151,12 +2218,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           mentionedTodoIds: payload.mentions.mentionedTodoIds,
           mentionedCalendarEventIds: payload.mentions.mentionedCalendarEventIds,
         }
+        await persistBeforeSubmit(queuedInput)
         setQueuedMessages((prev) => [...prev, message])
         queuedMessageId = message.id
         clearSubmittedDraft()
         const result = await window.electronAPI.submitOrEnqueueAgentMessage(queuedInput)
         accepted = true
-        if (result.disposition === 'started') {
+        if (result.disposition === 'started' || result.disposition === 'accepted') {
           setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
         }
         // 入队后消息会出现在队列 UI 中，用户可见；不再弹 toast 打扰。
@@ -2179,14 +2247,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
         savedAttachments = attachmentContext?.attachments
         const quotedSelection = consumeCapturedQuote()
-        const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
+        const message = createAgentQueuedMessage(effectiveText, outboxMessageId, Date.now(), quotedSelection, attachmentContext
           ? {
               fileReferenceBlock: attachmentContext.referenceBlock,
               attachments: attachmentContext.attachments,
               additionalDirectories: attachmentContext.additionalDirectories,
             }
           : undefined)
-        clearSubmittedDraft()
         setPromptSuggestions((prev) => {
           if (!prev.has(sessionId) || prev.get(sessionId) !== suggestion) return prev
           const map = new Map(prev)
@@ -2194,7 +2261,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           return map
         })
         queuedMessageId = message.id
-        await sendPlainTextAgentMessage(message)
+        await sendPlainTextAgentMessage(message, async (input) => {
+          await persistBeforeSubmit(input)
+          clearSubmittedDraft()
+        })
         accepted = true
         return
       }
@@ -2277,6 +2347,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           content: [{ type: 'text', text: finalMessage }],
         },
         parent_tool_use_id: null,
+        uuid: outboxMessageId,
         _createdAt: Date.now(),
       } as unknown as SDKMessage
       optimisticMessage = tempUserSDKMsg
@@ -2284,6 +2355,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
       const input: AgentSendInput = {
         sessionId,
+        userMessageUuid: outboxMessageId,
         userMessage: sdkMessage,
         rawUserMessage: finalMessage,
         channelId: agentChannelId,
@@ -2299,12 +2371,18 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
       }
 
+      await persistBeforeSubmit({ ...input, queueMessageId: outboxMessageId, dispatch: 'after_current' })
+
       // 清空输入框（仅当发送的是用户自己输入的内容，而非推荐建议时）。
       // Enter 路径会显式传入已刷新的编辑器内容，因此也应清空。
       clearSubmittedDraft()
 
-      await window.electronAPI.sendAgentMessage(input)
+      const result = await window.electronAPI.sendAgentMessage(input)
       accepted = true
+      if (result?.disposition === 'already_accepted') {
+        rollbackLocalSubmission()
+        toast.info('此消息已被 Agent 接收，未重复发送')
+      }
     } catch (error) {
       console.error('[AgentView] 消息提交失败:', error)
       if (!accepted && (queuedMessageId || sentStartedAt !== undefined)) {
@@ -2312,42 +2390,28 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         const [queued, active, history] = await Promise.all([
           queuedMessageId ? window.electronAPI.getQueuedAgentMessages(sessionId).catch(() => []) : Promise.resolve([]),
           sentStartedAt !== undefined ? window.electronAPI.listActiveAgentSessionSnapshots().catch(() => []) : Promise.resolve([]),
-          queuedMessageId ? window.electronAPI.getAgentSessionSDKMessages(sessionId).catch(() => []) : Promise.resolve([]),
+          window.electronAPI.getAgentSessionSDKMessages(sessionId).catch(() => []),
         ])
         accepted = accepted || queued.some(({ input }) => input.queueMessageId === queuedMessageId)
           || active.some((run) => run.sessionId === sessionId && run.startedAt === sentStartedAt)
-          || (!!queuedMessageId && [...history, ...(store.get(liveMessagesMapAtom).get(sessionId) ?? [])]
-            .some((message) => (message as SDKMessageRecord).uuid === queuedMessageId))
+          || [...history, ...(store.get(liveMessagesMapAtom).get(sessionId) ?? [])]
+            .some((message) => (message as SDKMessageRecord).uuid === outboxMessageId)
       }
       if (accepted) {
         toast.info('消息已被 Agent 接收', { description: '提交响应异常，请以会话中的实际运行结果为准。' })
         return
       }
-      if (queuedMessageId) setQueuedMessages((prev) => removeQueuedMessage(prev, queuedMessageId!))
-      if (sentStartedAt !== undefined) {
-        setStreamingStates((prev) => {
-          const current = prev.get(sessionId)
-          // 不重置其他请求或真实 run_started 已确认的运行态。
-          if (!current || current.startedAt !== sentStartedAt || current.runGeneration != null) return prev
-          const next = new Map(prev)
-          next.set(sessionId, { ...current, running: false })
-          return next
-        })
-      }
-      if (optimisticMessage) {
-        const failedMessage = optimisticMessage
-        setMessagesCache((previous) => {
-          const current = previous.get(sessionId)
-          if (!current?.includes(failedMessage)) return previous
-          return setSessionMessagesCache(previous, sessionId, current.filter((message) => message !== failedMessage))
-        })
-        if (activeComposerSessionRef.current === sessionId) {
-          messagesMutationVersionRef.current += 1
-          persistedSDKMessagesRef.current = persistedSDKMessagesRef.current.filter((message) => message !== failedMessage)
-          setPersistedSDKMessages(persistedSDKMessagesRef.current)
+      if (outboxEntry) {
+        try {
+          await window.electronAPI.saveAgentSendOutbox({ ...outboxEntry, status: 'failed', error: String(error) })
+        } catch (persistError) {
+          console.error('[AgentView] 更新失败消息日志失败，已保留发送前快照:', persistError)
         }
       }
-      const canRestore = cleared && isAgentDraftUnchanged(expectedDraft, readCheckpoint())
+      if (queuedMessageId) setQueuedMessages((prev) => removeQueuedMessage(prev, queuedMessageId!))
+      rollbackLocalSubmission()
+      const canRestore = (cleared || ((overrideText === undefined || fromEditor) && (!!savedAttachments?.length || quoteConsumed)))
+        && (cleared ? isAgentDraftUnchanged(expectedDraft, readCheckpoint()) : isAgentDraftUnchanged(originalDraft, readCheckpoint()))
         && store.get(agentPendingFilesAtomFamily(sessionId)).length === 0
         && !store.get(quotedSelectionMapAtom).has(sessionId)
       if (canRestore) recoverDraft(false)
@@ -2364,8 +2428,91 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       unsubscribeQueue()
       unsubscribeStream()
       sendGuardRef.current.finish(sessionId, requestId)
+      if (accepted && recoveryState.restoredOutboxIds.get(sessionId) === outboxMessageId) {
+        recoveryState.restoredOutboxIds.delete(sessionId)
+        recoveryState.restoredOutboxDrafts.delete(sessionId)
+        recoveryState.clearableOutboxDraftIds.delete(sessionId)
+        recoveryState.restoredOutboxContexts.delete(sessionId)
+      }
+      await refreshOutbox()
     }
-  }, [setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping])
+  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping])
+
+  const handleRestoreOutbox = React.useCallback((entry: AgentSendOutboxEntry): void => {
+    if (sendGuardRef.current.isPending(sessionId) || entry.sessionId !== sessionId) return
+    richTextInputRef.current?.getMarkdown()
+    const text = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
+    const html = store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? ''
+    const alreadyRestored = recoveryState.restoredOutboxIds.get(sessionId) === entry.id
+    if (alreadyRestored) {
+      toast.info('此消息已恢复在输入框中，可编辑后发送')
+      return
+    }
+    // 只有显式点击才追加；保留用户新输入、附件以及已有外置引用。
+    const wasEmpty = !text.trim() && !store.get(agentPendingFilesAtomFamily(sessionId)).length
+      && !store.get(quotedSelectionMapAtom).has(sessionId)
+    restoreQueuedAttachmentsToPending(entry.draft.attachments)
+    if (wasEmpty) recoveryState.clearableOutboxDraftIds.set(sessionId, entry.id)
+    else recoveryState.clearableOutboxDraftIds.delete(sessionId)
+    setInputHtmlContent(`${html || queuedTextToParagraphHtml(text)}${entry.draft.html || queuedTextToParagraphHtml(entry.draft.text)}`)
+    setInputContent(text ? `${text}\n\n${entry.draft.text}` : entry.draft.text)
+    recoveryState.restoredOutboxIds.set(sessionId, entry.id)
+    recoveryState.restoredOutboxContexts.set(sessionId, readOutboxDraftContext())
+    recoveryState.restoredOutboxDrafts.set(sessionId, {
+      text: store.get(agentSessionDraftsAtom).get(sessionId) ?? '',
+      html: store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? '',
+      editVersion: draftEditVersionsRef.current.get(sessionId) ?? 0,
+      syncVersion: store.get(agentSessionDraftSyncVersionsAtom).get(sessionId) ?? 0,
+    })
+  }, [readOutboxDraftContext, recoveryState, restoreQueuedAttachmentsToPending, sessionId, setInputContent, setInputHtmlContent, store])
+
+  const handleRetryOutbox = React.useCallback(async (entry: AgentSendOutboxEntry): Promise<void> => {
+    if (entry.sessionId !== sessionId || streaming || backgroundWaiting || isStopping || isLegacyTranscript) return
+    const requestId = sendGuardRef.current.begin(sessionId)
+    if (!requestId) return
+    setOutboxRetry({ sessionId, id: entry.id, requestId })
+    // 重试发送持久化快照，绝不读取新草稿拼接到旧消息。
+    try {
+      await window.electronAPI.retryAgentSendOutbox({ sessionId, messageId: entry.id })
+      if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
+      const restored = recoveryState.restoredOutboxDrafts.get(sessionId)
+      const current = {
+        text: store.get(agentSessionDraftsAtom).get(sessionId) ?? '',
+        html: store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? '',
+        editVersion: draftEditVersionsRef.current.get(sessionId) ?? 0,
+        syncVersion: store.get(agentSessionDraftSyncVersionsAtom).get(sessionId) ?? 0,
+      }
+      const files = store.get(agentPendingFilesAtomFamily(sessionId))
+      const paths = new Set(entry.draft.attachments.map((file) => file.targetPath))
+      const quote = store.get(quotedSelectionMapAtom).get(sessionId)
+      const quoteMarker = quote ? serializeQuotedSelectionMention(quote) : null
+      if (recoveryState.restoredOutboxIds.get(sessionId) === entry.id) {
+        if (recoveryState.clearableOutboxDraftIds.get(sessionId) === entry.id && restored && isAgentDraftUnchanged(restored, current)
+          && recoveryState.restoredOutboxContexts.get(sessionId) === readOutboxDraftContext()
+          && files.length === paths.size && files.every((file) => file.sourcePath && paths.has(file.sourcePath))
+          && (!quote || (!!quoteMarker && entry.draft.text.includes(quoteMarker)))) {
+          setInputContent('')
+          setInputHtmlContent('')
+          setPendingFiles([])
+          if (quote) setQuotedSelectionMap((previous) => {
+            if (previous.get(sessionId) !== quote) return previous
+            const next = new Map(previous); next.delete(sessionId); return next
+          })
+        }
+        recoveryState.restoredOutboxIds.delete(sessionId)
+        recoveryState.restoredOutboxDrafts.delete(sessionId)
+        recoveryState.clearableOutboxDraftIds.delete(sessionId)
+        recoveryState.restoredOutboxContexts.delete(sessionId)
+      }
+      toast.success('暂存消息已交给 Agent')
+    } catch (error) {
+      toast.error('暂存消息重试失败', { description: String(error) })
+    } finally {
+      sendGuardRef.current.finish(sessionId, requestId)
+      setOutboxRetry((current) => current?.requestId === requestId ? null : current)
+      await refreshOutbox()
+    }
+  }, [sessionId, streaming, backgroundWaiting, isStopping, isLegacyTranscript, refreshOutbox, readOutboxDraftContext, recoveryState, store, setInputContent, setInputHtmlContent, setPendingFiles, setQuotedSelectionMap])
 
   /** 停止生成。异常流未发出终态时，允许再次下发幂等的 abort 请求。 */
   const handleStop = React.useCallback((): void => {
@@ -3169,6 +3316,16 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               </div>
             )}
 
+            <AgentSendOutbox
+              entries={outboxEntries}
+              error={outboxError}
+              busyId={retryingOutboxId}
+              disabled={isComposerDisabled || streaming || backgroundWaiting || isStopping || sendGuardRef.current.isPending(sessionId)}
+              onRetry={(entry) => { void handleRetryOutbox(entry) }}
+              onRestore={handleRestoreOutbox}
+              onRefresh={() => { void refreshOutbox() }}
+            />
+
             <AgentMessageQueue
               items={queuedMessages}
               canSendNow={canSendQueuedNow}
@@ -3237,9 +3394,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               onAgentHistoryQuoteClick={handleAgentHistoryQuoteClick}
             />
 
-            {/* Footer 工具栏 — 容器变窄时尾部按钮自动折叠进「更多」Popover */}
-            <InputToolbarOverflow items={inputToolbarItems} trailing={inputTrailingNode} />
           </div>
+          {/* 独立底部工具行，保留原有响应式折叠与键盘功能。 */}
+          <InputToolbarOverflow items={inputToolbarItems} trailing={inputTrailingNode} />
         </div>
         )}
         </div>

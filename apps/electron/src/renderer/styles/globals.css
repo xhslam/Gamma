@@ -610,16 +610,6 @@ body {
   }
 }
 
-/* 当前工作区选中指示：纯三角，颜色跟随工作区文字色 */
-.workspace-selected-triangle {
-  width: 0;
-  height: 0;
-  margin-left: 5px;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-right: 7px solid currentColor;
-}
-
 /* Windows 顶部标题栏与系统控制按钮。拖拽区和按钮组分属独立矩形，避免高 DPI 下的 hitmask 重叠。 */
 .window-titlebar {
   --window-titlebar-controls-width: 138px;
@@ -2783,4 +2773,37 @@ body {
     animation: none;
   }
   .gamma-ui:active { transform: none; }
+}
+
+/* 工作台密度只作用于明确标记的输入外壳与侧栏行；不重设主题或全局控件。 */
+[data-workbench-density="compact"] {
+  --workbench-input-radius: 12px;
+  --workbench-sidebar-row-height: 28px;
+}
+[data-workbench-density="comfortable"] {
+  --workbench-input-radius: 14px;
+  --workbench-sidebar-row-height: 36px;
+}
+/* --radius-input 同步给 PlanModeDashedBorder 的现有继承变量，避免虚线与外壳错位。 */
+[data-workbench-density] [data-input-mode="agent"] {
+  --radius-input: var(--workbench-input-radius);
+}
+[data-workbench-density] [data-input-mode="agent"] > .gamma-composer:first-child {
+  border-radius: var(--workbench-input-radius);
+}
+/* 复用 InputToolbarOverflow 的布局与折叠逻辑；可放在输入框外作为独立底部工具行。 */
+[data-workbench-density] [data-input-mode="agent"] > .gamma-composer-footer {
+  margin-top: 4px;
+  padding-inline: 2px;
+  height: 40px;
+}
+.gamma-sidebar[data-workbench-density] :is(.gamma-sidebar-nav-item, .gamma-sidebar-project-row, .session-quick-switch-row) {
+  height: var(--workbench-sidebar-row-height);
+  min-height: var(--workbench-sidebar-row-height);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.gamma-sidebar[data-workbench-density] .session-quick-switch-row:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
 }

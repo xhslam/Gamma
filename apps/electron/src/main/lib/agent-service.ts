@@ -602,6 +602,12 @@ export function listQueuedAgentMessages(sessionId: string): AgentQueuedMessageSn
   return agentQueueCoordinator.snapshot(sessionId)
 }
 
+/** 包括已离开队列、尚在启动预检中的消息，关闭持久化前的重复提交窗口。 */
+export function isAgentMessageQueuedOrDispatching(sessionId: string, messageId: string): boolean {
+  return agentQueueCoordinator.isDispatchingMessage(sessionId, messageId)
+    || agentQueueCoordinator.snapshot(sessionId).some(({ input }) => input.queueMessageId === messageId)
+}
+
 /** 中止所有活跃的 Agent 会话（应用退出时调用） */
 export function stopAllAgents(): void {
   orchestrator.stopAll()

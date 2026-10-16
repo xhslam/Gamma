@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
 import { writeJsonFileAtomic } from './safe-file'
 import { normalizeAppIconVariant } from '../../types/app-icons'
-import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings } from '../../types'
+import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeWorkbenchDensity } from '../../types'
 import type { AgentIslandSettings, AppSettings, UpdateAppSettings } from '../../types'
 import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@gamma/shared'
 
@@ -41,6 +41,7 @@ export function getSettings(): AppSettings {
       notificationsEnabled: true,
       longTextPasteAsAttachmentEnabled: false,
       richTextRenderingEnabled: false,
+      workbenchDensity: normalizeWorkbenchDensity(undefined),
       feishuSessionMirror: { mode: 'off' },
       visionRelay: { enabled: false },
       windowsShellPreference: 'auto',
@@ -81,6 +82,7 @@ export function getSettings(): AppSettings {
       notificationsEnabled: data.notificationsEnabled ?? true,
       longTextPasteAsAttachmentEnabled: data.longTextPasteAsAttachmentEnabled ?? false,
       richTextRenderingEnabled: data.richTextRenderingEnabled ?? false,
+      workbenchDensity: normalizeWorkbenchDensity(data.workbenchDensity),
       feishuSessionMirror: data.feishuSessionMirror ?? { mode: 'off' },
       visionRelay: data.visionRelay ?? { enabled: false },
       windowsShellPreference: settings.windowsShellPreference ?? 'auto',
@@ -106,6 +108,7 @@ export function getSettings(): AppSettings {
       notificationsEnabled: true,
       longTextPasteAsAttachmentEnabled: false,
       richTextRenderingEnabled: false,
+      workbenchDensity: normalizeWorkbenchDensity(undefined),
       feishuSessionMirror: { mode: 'off' },
       visionRelay: { enabled: false },
       windowsShellPreference: 'auto',
@@ -128,6 +131,7 @@ export function updateSettings(updates: UpdateAppSettings): AppSettings {
   const updated: AppSettings = {
     ...current,
     ...updates,
+    workbenchDensity: normalizeWorkbenchDensity(updates.workbenchDensity === undefined ? current.workbenchDensity : updates.workbenchDensity),
     appIconVariant: normalizeAppIconVariant(updates.appIconVariant ?? current.appIconVariant),
     markdownEditor: mergeMarkdownEditorPreferences(current.markdownEditor, updates.markdownEditor),
     // 仅保留 macOS 原生 Island 开关，避免旧非原生 surface 字段被继续回写。

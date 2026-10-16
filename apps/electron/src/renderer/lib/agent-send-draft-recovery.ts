@@ -35,6 +35,11 @@ export function createAgentSendGuard(): {
 interface AgentSendRecoveryState {
   guard: ReturnType<typeof createAgentSendGuard>
   draftEditVersions: Map<string, number>
+  /** 恢复草稿再次提交时复用稳定 ID，避免旧失败项与重发项同时存在。 */
+  restoredOutboxIds: Map<string, string>
+  restoredOutboxDrafts: Map<string, AgentDraftCheckpoint>
+  clearableOutboxDraftIds: Map<string, string>
+  restoredOutboxContexts: Map<string, string>
 }
 
 // 同一 Jotai store 中的多个 AgentView（或切换后重挂载）共享锁与编辑版本。
@@ -43,7 +48,7 @@ const recoveryStates = new WeakMap<object, AgentSendRecoveryState>()
 export function getAgentSendRecoveryState(scope: object): AgentSendRecoveryState {
   let state = recoveryStates.get(scope)
   if (!state) {
-    state = { guard: createAgentSendGuard(), draftEditVersions: new Map() }
+    state = { guard: createAgentSendGuard(), draftEditVersions: new Map(), restoredOutboxIds: new Map(), restoredOutboxDrafts: new Map(), clearableOutboxDraftIds: new Map(), restoredOutboxContexts: new Map() }
     recoveryStates.set(scope, state)
   }
   return state

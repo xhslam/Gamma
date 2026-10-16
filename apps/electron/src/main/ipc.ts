@@ -261,6 +261,7 @@ import {
   searchAgentSessionReferences,
   resolveAgentCwd,
 } from './lib/agent-session-manager'
+import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce } from './lib/agent-send-outbox-service'
 import { runAgent, stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, reserveAgentSessionStart, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
 import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
@@ -3302,21 +3303,24 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SEND_MESSAGE,
-    async (event, input: AgentSendInput): Promise<void> => {
-      const releaseStart = reserveAgentSessionStart(input.sessionId)
-      try {
-        const session = getAgentSessionMeta(input.sessionId)
-        if (session) {
-          await feishuBridgeManager.startSessionMirrorRun(session).catch((error) => {
-            console.error('[飞书 Session 镜像] 流式卡片初始化失败:', error)
-          })
+    async (event, input: AgentSendInput): Promise<import('@gamma/shared').AgentSendResult> => {
+      const result = await submitAgentMessageOnce(input.sessionId, input.userMessageUuid, async () => {
+        const releaseStart = reserveAgentSessionStart(input.sessionId)
+        try {
+          const session = getAgentSessionMeta(input.sessionId)
+          if (session) {
+            await feishuBridgeManager.startSessionMirrorRun(session).catch((error) => {
+              console.error('[飞书 Session 镜像] 流式卡片初始化失败:', error)
+            })
+          }
+          // runGeneration 是主进程内部运行身份；renderer IPC 绝不能指定或复用它。
+          const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSendInput & { runGeneration?: unknown }
+          await runAgent(publicInput, event.sender)
+        } finally {
+          releaseStart()
         }
-        // runGeneration 是主进程内部运行身份；renderer IPC 绝不能指定或复用它。
-        const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSendInput & { runGeneration?: unknown }
-        await runAgent(publicInput, event.sender)
-      } finally {
-        releaseStart()
-      }
+      })
+      return { disposition: result.duplicate ? 'already_accepted' : 'sent' }
     }
   )
 
@@ -3340,13 +3344,19 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  // 发送日志与恢复入口：只按已存在会话解析工作台路径，不接收 renderer 自定义路径。
+  ipcMain.handle(AGENT_IPC_CHANNELS.LIST_SEND_OUTBOX, (_, sessionId: string) => listAgentSendOutbox(sessionId))
+  ipcMain.handle(AGENT_IPC_CHANNELS.SAVE_SEND_OUTBOX, (_, entry: import('@gamma/shared').AgentSendOutboxEntry) => saveAgentSendOutbox(entry))
+  ipcMain.handle(AGENT_IPC_CHANNELS.RETRY_SEND_OUTBOX, (event, input: import('@gamma/shared').AgentQueuedMessageControlInput) => retryAgentSendOutbox(input, event.sender))
+
   // ===== Agent 队列消息 =====
 
   // 排队发送消息
   ipcMain.handle(
     AGENT_IPC_CHANNELS.QUEUE_MESSAGE,
     async (event, input: import('@gamma/shared').AgentQueueMessageInput): Promise<string> => {
-      return queueAgentMessage(input, event.sender)
+      const result = await submitAgentMessageOnce(input.sessionId, input.uuid, () => queueAgentMessage(input, event.sender))
+      return result.duplicate ? input.uuid! : result.value
     }
   )
 
@@ -3354,7 +3364,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SUBMIT_OR_ENQUEUE_MESSAGE,
     async (event, input: import('@gamma/shared').AgentSubmitOrEnqueueInput): Promise<import('@gamma/shared').AgentSubmitOrEnqueueResult> => {
-      return submitOrEnqueueAgentMessage(input, event.sender)
+      const result = await submitAgentMessageOnce(input.sessionId, input.queueMessageId, () => submitOrEnqueueAgentMessage(input, event.sender))
+      return result.duplicate ? { disposition: result.acceptedAs === 'queued' ? 'queued' : 'accepted' } : result.value
     },
   )
 
@@ -3370,7 +3381,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE,
     async (event, input: import('@gamma/shared').AgentDeferredQueueMessageInput): Promise<void> => {
-      enqueueAgentQueuedMessage(input, event.sender)
+      await submitAgentMessageOnce(input.sessionId, input.queueMessageId, async () => { enqueueAgentQueuedMessage(input, event.sender) })
     },
   )
 

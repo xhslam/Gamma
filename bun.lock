@@ -202,7 +202,7 @@
     },
     "packages/shared": {
       "name": "@gamma/shared",
-      "version": "0.1.85",
+      "version": "0.1.86",
       "devDependencies": {
         "typescript": "^5.0.0",
       },
