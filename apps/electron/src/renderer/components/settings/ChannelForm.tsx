@@ -232,6 +232,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
   const [showBaseUrlRiskDialog, setShowBaseUrlRiskDialog] = React.useState(false)
   const [pendingRiskAction, setPendingRiskAction] = React.useState<'auto-save' | 'create' | 'fetch' | 'save-and-close' | 'test' | null>(null)
   const [codexLoggingIn, setCodexLoggingIn] = React.useState(false)
+  const [codexLoginError, setCodexLoginError] = React.useState<string | null>(null)
   const [codexDeviceCode, setCodexDeviceCode] = React.useState<CodexOAuthDeviceCode | null>(null)
   const [githubCopilotLoggingIn, setGithubCopilotLoggingIn] = React.useState(false)
   const [githubCopilotDeviceCode, setGithubCopilotDeviceCode] = React.useState<GithubCopilotOAuthDeviceCode | null>(null)
@@ -510,12 +511,15 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
   const handleCodexLogin = async (method: 'browser' | 'device_code' = 'browser'): Promise<void> => {
     codexLoggingInRef.current = true
     setCodexLoggingIn(true)
+    setCodexLoginError(null)
     setCodexDeviceCode(null)
     setTestResult(null)
     try {
       const result = await window.electronAPI.codexOAuthLogin(method)
       if (!result.success || !result.credentials) {
-        toast.error(result.message ?? 'ChatGPT 登录失败，请重试')
+        const message = result.message ?? 'ChatGPT 登录失败，请重试'
+        setCodexLoginError(message)
+        toast.error(message)
         return
       }
       const credentials = result.credentials
@@ -557,7 +561,9 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
       }
     } catch (error) {
       console.error('[模型配置表单] ChatGPT 登录失败:', error)
-      toast.error('ChatGPT 登录失败，请重试')
+      const message = error instanceof Error ? error.message : 'ChatGPT 登录失败，请重试'
+      setCodexLoginError(message)
+      toast.error(message)
     } finally {
       codexLoggingInRef.current = false
       setCodexLoggingIn(false)
@@ -1058,6 +1064,9 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                   <Button variant="ghost" size="sm" type="button" onClick={handleCancelCodexLogin} className="w-full text-muted-foreground">
                     取消登录
                   </Button>
+                )}
+                {codexLoginError && (
+                  <p role="alert" className="text-xs text-destructive break-words">{codexLoginError}</p>
                 )}
                 {codexDeviceCode && (
                   <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-2">
