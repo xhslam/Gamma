@@ -68,6 +68,58 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result).toEqual({ allVisible: true, hasControls: false, collapsed: true, restored: true })
   }, 30_000)
 
+  test('When Windows 窄侧栏包含长历史列表 Then 浅深色均可滚动到底且没有多余展开按钮', async () => {
+    const results = await renderer.run<Array<{ scrollable: boolean; lastVisible: boolean; fits: boolean; hasControls: boolean }>>(`
+      const api = window.leftSidebarRegression, results = [], now = Date.now();
+      for (const dark of [false, true]) {
+        const agents = Array.from({ length: 40 }, (_, index) => ({
+          id: 'win-' + index, title: 'Windows 长标题会话用于检查窄侧栏截断和滚动 ' + index,
+          workspaceId: 'project-a', createdAt: now - index * 86400000, updatedAt: now - index * 86400000,
+        }));
+        const fixture = await api.mount({ platform: 'Win32', width: 200, dark, agents });
+        const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+        const scrollable = scroll.scrollHeight > scroll.clientHeight;
+        scroll.scrollTop = scroll.scrollHeight; scroll.dispatchEvent(new Event('scroll'));
+        await api.delay(60);
+        const bounds = scroll.getBoundingClientRect(), last = fixture.row('win-39').getBoundingClientRect();
+        const hasControls = [...document.querySelectorAll('button')].some(button => /显示更多会话|收起额外会话/.test(button.getAttribute('aria-label') ?? ''));
+        results.push({ scrollable, lastVisible: last.top >= bounds.top && last.bottom <= bounds.bottom + 1,
+          fits: scroll.scrollWidth <= scroll.clientWidth && last.right <= bounds.right, hasControls });
+        fixture.root.unmount(); await api.delay();
+      }
+      return results;
+    `)
+    expect(results).toEqual(Array.from({ length: 2 }, () => ({ scrollable: true, lastVisible: true, fits: true, hasControls: false })))
+  }, 30_000)
+
+  test('When Windows 用户滚动后按 Ctrl 数字 Then 按当前可见会话切换而不是使用 macOS 修饰键', async () => {
+    const result = await renderer.run<{ modifier: string; metaIgnored: boolean; selected: boolean; hidden: boolean }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const agents = Array.from({ length: 40 }, (_, index) => ({
+        id: 'key-' + index, title: '键盘会话 ' + index, workspaceId: 'project-a', createdAt: now, updatedAt: now - index,
+      }));
+      const fixture = await api.mount({ platform: 'Win32', agents });
+      const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+      scroll.scrollTop = scroll.scrollHeight; scroll.dispatchEvent(new Event('scroll'));
+      await api.delay(60);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', code: 'ControlLeft', ctrlKey: true, bubbles: true }));
+      await api.until(() => document.querySelector('[data-quick-switch-index="2"]'));
+      const target = document.querySelector('[data-quick-switch-index="2"]');
+      const targetId = target.dataset.sessionSwitchId;
+      const modifier = target.querySelector('.session-quick-switch-modifier').textContent;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', code: 'Digit2', metaKey: true, bubbles: true, cancelable: true }));
+      await api.delay(); const metaIgnored = fixture.state().agent === 'key-0';
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', code: 'Digit2', ctrlKey: true, bubbles: true, cancelable: true }));
+      await api.until(() => fixture.state().agent === targetId);
+      const selected = fixture.state().agent === targetId;
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', code: 'ControlLeft', bubbles: true }));
+      await api.until(() => !document.querySelector('[data-quick-switch-index]'));
+      const hidden = !document.querySelector('[data-quick-switch-index]');
+      fixture.root.unmount(); return { modifier, metaIgnored, selected, hidden };
+    `)
+    expect(result).toEqual({ modifier: 'Ctrl', metaIgnored: true, selected: true, hidden: true })
+  }, 30_000)
+
   test('When 在已有 Agent 会话点击工作区导航 Then 各入口打开既有组件并保持会话与项目', async () => {
     const result = await renderer.run<{
       brand: string; titleFits: boolean; labels: string[]; states: Array<{ label: string; tab: string; current: string }>

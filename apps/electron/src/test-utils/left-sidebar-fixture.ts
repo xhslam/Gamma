@@ -31,6 +31,8 @@ export const leftSidebarFixtureSource = `
     for (let i = 0; i < 150; i++) { if (predicate()) return; await delay(10); }
     throw new Error('侧栏未达到预期状态：' + document.body.innerText.slice(0, 800) + rendererErrors.join('; '));
   };
+  const nativePlatform = navigator.platform;
+  const nativeUserAgentData = navigator.userAgentData;
   const now = Date.now();
   const workspaces = [
     { id: 'project-a', name: 'Gamma 项目', slug: 'gamma-project', createdAt: now, updatedAt: now },
@@ -55,6 +57,11 @@ export const leftSidebarFixtureSource = `
   window.leftSidebarRegression = {
     until, delay,
     async mount(options = {}) {
+      // 仅覆盖平台判断输入；Windows 原生滚动和字体仍由 Windows CI 的 Chromium 验证。
+      Object.defineProperty(navigator, 'platform', { configurable: true, value: options.platform ?? nativePlatform });
+      Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: options.platform
+        ? { platform: options.platform === 'Win32' ? 'Windows' : options.platform }
+        : nativeUserAgentData });
       localStorage.clear();
       document.documentElement.classList.toggle('dark', !!options.dark);
       const store = createStore(), root = createRoot(document.getElementById('root')), calls = [];
