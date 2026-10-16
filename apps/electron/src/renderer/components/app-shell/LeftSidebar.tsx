@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SearchDialog } from './SearchDialog'
@@ -112,7 +112,6 @@ import {
   getDelegatedChildSessionStatus,
   getDelegationStatusIconClass,
   groupArchivedAgentSessionsByProject,
-  isAgentSessionVisibleInTrees,
   isDelegationObservationVisible,
   removeDelegatedSessionSelection,
   replaceAgentSessionInFreshnessOrder,
@@ -312,10 +311,6 @@ const AUTOMATION_GROUP_ID = '__automations__'
 const noopVoid = (): void => {}
 const noopAsync = async (): Promise<void> => {}
 
-const PROJECT_SESSION_PREVIEW_LIMIT = 5
-const PROJECT_SESSION_RECENT_WINDOW_MS = 3 * 86_400_000
-/** 点击"显示更多"时每次额外展开的会话数量 */
-const PROJECT_SESSION_EXPAND_STEP = 10
 const SESSION_QUICK_SWITCH_HINT_DELAY_MS = 1000
 const SESSION_QUICK_SWITCH_LIMIT = 9
 const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'gamma:session-quick-switch-keydown'
@@ -567,8 +562,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const [moveTargetId, setMoveTargetId] = React.useState<string | null>(null)
   /** 待迁移会话所属的工作区 ID（用于对话框排除当前分区） */
   const [moveSourceWorkspaceId, setMoveSourceWorkspaceId] = React.useState<string | undefined>()
-  /** 每个项目额外展开显示的会话数量（每次点击"显示更多" +10），未点击则为 0 或无值 */
-  const [expandedExtraCountMap, setExpandedExtraCountMap] = React.useState<Map<string, number>>(new Map())
   /** 记录被用户手动折叠的工作区 ID（点击当前工作区标题时折叠/展开）。刻意不持久化：折叠被视为临时查看行为，刷新/重启后恢复默认展开 */
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = React.useState<Set<string>>(new Set())
   /** 归档项目默认折叠；只记录用户主动展开的项目，避免影响活跃视图的临时状态。 */
@@ -1192,13 +1185,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       setWorkspaces(remainingWorkspaces)
       await refreshAgentSidebarSessions(viewMode === 'archived')
 
-      setExpandedExtraCountMap((prev) => {
-        if (!prev.has(workspaceId)) return prev
-        const next = new Map(prev)
-        next.delete(workspaceId)
-        return next
-      })
-
       setCollapsedWorkspaceIds((prev) => deleteSetEntry(prev, workspaceId))
       setExpandedArchivedProjectIds((prev) => deleteSetEntry(prev, workspaceId))
       setExpandedDelegationParentIds((prev) => {
@@ -1256,25 +1242,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     setAgentSkillsTab('mcp')
     setActiveView('agent-skills')
   }, [handleSelectProject, setActiveView, setAgentSkillsTab])
-
-  /** 展开某个项目时每次额外显示的会话数量 */
-  const handleShowMoreSessions = React.useCallback((workspaceId: string): void => {
-    setExpandedExtraCountMap((prev) => {
-      const next = new Map(prev)
-      next.set(workspaceId, (prev.get(workspaceId) ?? 0) + PROJECT_SESSION_EXPAND_STEP)
-      return next
-    })
-  }, [])
-
-  /** 收起某个项目额外展开的会话 */
-  const handleCollapseExtraSessions = React.useCallback((workspaceId: string): void => {
-    setExpandedExtraCountMap((prev) => {
-      if (!prev.has(workspaceId)) return prev
-      const next = new Map(prev)
-      next.delete(workspaceId)
-      return next
-    })
-  }, [])
 
   /** 开始拖拽项目排序 */
   const handleProjectDragStart = React.useCallback((e: React.DragEvent, workspaceId: string): void => {
@@ -1629,7 +1596,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     viewMode,
     agentSessions,
     pinnedAgentSessions,
-    expandedExtraCountMap,
     collapsedWorkspaceIds,
     expandedArchivedProjectIds,
     expandedDelegationParentIds,
@@ -2482,13 +2448,10 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     for (const group of displayProjectGroups) {
       const isAuto = group.workspace.id === AUTOMATION_GROUP_ID
       const collapsed = collapsedWorkspaceIds.has(group.workspace.id)
-      const extraCount = expandedExtraCountMap.get(group.workspace.id) ?? 0
       const visible = getVisibleAgentProjectSessions({
         group,
         activeSessionId,
         agentIndicatorMap,
-        relativeTimeNow,
-        extraCount,
       })
 
       rows.push({
@@ -2501,8 +2464,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               isAutomationGroup={isAuto}
               workspaceNameMap={isAuto ? workspaceNameMap : undefined}
               currentWorkspaceId={currentWorkspaceId}
-              expanded={extraCount > 0}
-              extraCount={extraCount}
               collapsed={collapsed}
               activeSessionId={activeSessionId}
               activeDelegationSessionId={activeDelegationSessionId}
@@ -2512,8 +2473,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               relativeTimeNow={relativeTimeNow}
               dragging={dragProjectId === group.workspace.id}
               dropPosition={projectDropIndicator?.id === group.workspace.id ? projectDropIndicator.position : null}
-              onShowMore={handleShowMoreSessions}
-              onCollapseExtra={handleCollapseExtraSessions}
               onSelectProject={isAuto ? handleToggleGroupCollapse : handleSelectProject}
               onNewSession={isAuto ? noopAsync : createAgentSessionInWorkspace}
               onDragStart={handleProjectDragStart}
@@ -2550,46 +2509,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           })
         } else {
           for (const item of visible.sessions) pushSessionTreeRows(item, isAuto, true, workspaceNameMap, group.workspace.id)
-          if (visible.hiddenCount > 0 || extraCount > 0) {
-            rows.push({
-              id: `agent-project-controls-${group.workspace.id}`,
-              estimateSize: 34,
-              content: (
-                <div className="ml-7 flex items-center gap-0.5 pt-0.5">
-                  {visible.hiddenCount > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={`显示更多会话，还有 ${visible.hiddenCount} 个`}
-                          onClick={() => handleShowMoreSessions(group.workspace.id)}
-                          className="flex size-7 items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.04] hover:text-foreground/65 transition-colors titlebar-no-drag"
-                        >
-                          <ChevronDown size={14} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">{`显示更多会话（还有 ${visible.hiddenCount} 个）`}</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {extraCount > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label="收起额外会话"
-                          onClick={() => handleCollapseExtraSessions(group.workspace.id)}
-                          className="flex size-7 items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.04] hover:text-foreground/65 transition-colors titlebar-no-drag"
-                        >
-                          <ChevronUp size={14} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">收起额外会话</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              ),
-            })
-          }
         }
       }
     }
@@ -2606,9 +2525,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     displayProjectGroups,
     dragProjectId,
     expandedDelegationParentIds,
-    expandedExtraCountMap,
     handleAgentRename,
-    handleCollapseExtraSessions,
     handleConfigureProject,
     handleCreateProjectFromFolder,
     handleCreateProjectKeyDown,
@@ -2622,7 +2539,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     handleRequestMove,
     handleSelectAgentSession,
     handleSelectProject,
-    handleShowMoreSessions,
     handleStartCreateProject,
     handleToggleArchiveAgent,
     handleToggleDelegationParent,
@@ -3599,7 +3515,6 @@ const DelegatedChildSessionItem = React.memo(function DelegatedChildSessionItem(
 interface VisibleAgentProjectSessions {
   treeItems: AgentSessionTreeItem[]
   sessions: AgentSessionTreeItem[]
-  hiddenCount: number
   activeIds: Set<string>
 }
 
@@ -3607,18 +3522,13 @@ function getVisibleAgentProjectSessions({
   group,
   activeSessionId,
   agentIndicatorMap,
-  relativeTimeNow,
-  extraCount,
   previousActiveIds = new Set<string>(),
 }: {
   group: AgentProjectGroup
   activeSessionId: string | null
   agentIndicatorMap: Map<string, SessionIndicatorStatus>
-  relativeTimeNow: number
-  extraCount: number
   previousActiveIds?: ReadonlySet<string>
 }): VisibleAgentProjectSessions {
-  const recentCutoff = relativeTimeNow - PROJECT_SESSION_RECENT_WINDOW_MS
   const treeItems = buildAgentSessionTrees(group.sessions, agentIndicatorMap)
   const activeSessions = treeItems
     .filter((item) => (
@@ -3633,27 +3543,10 @@ function getVisibleAgentProjectSessions({
       return b.session.updatedAt - a.session.updatedAt
     })
   const activeIds = collectAgentSessionTreeIds(activeSessions)
-  const fillSessions = treeItems
-    .filter((item) => !activeIds.has(item.session.id) && item.session.updatedAt >= recentCutoff)
-    .slice(0, PROJECT_SESSION_PREVIEW_LIMIT)
-  const collapsedSessions = [...activeSessions, ...fillSessions]
-  const collapsedIds = new Set(collapsedSessions.map((item) => item.session.id))
-  const remainingSessions = treeItems.filter((item) => !collapsedIds.has(item.session.id))
-  const extraSessions = remainingSessions.slice(0, extraCount)
-  const sessionsWithoutPinned = [...collapsedSessions, ...extraSessions]
-  const currentSession = activeSessionId && !isAgentSessionVisibleInTrees(sessionsWithoutPinned, activeSessionId)
-    ? treeItems.find((item) => treeContainsSessionId(item, activeSessionId)) ?? null
-    : null
-  const sessions = currentSession
-    ? [...activeSessions, currentSession, ...fillSessions, ...extraSessions]
-    : sessionsWithoutPinned
+  // 项目会话直接列出，长列表由侧栏虚拟滚动承载，不再提供底部展开按钮。
+  const sessions = [...activeSessions, ...treeItems.filter((item) => !activeIds.has(item.session.id))]
 
-  return {
-    treeItems,
-    sessions,
-    hiddenCount: Math.max(0, treeItems.length - sessions.length),
-    activeIds,
-  }
+  return { treeItems, sessions, activeIds }
 }
 
 /** 项目分组历史 */
@@ -3664,10 +3557,7 @@ interface AgentProjectGroupItemProps {
   isAutomationGroup?: boolean
   /** 工作区 ID → 名称映射，仅合成组用来给跨工作区会话渲染角标 */
   workspaceNameMap?: Map<string, string>
-  expanded: boolean
   collapsed: boolean
-  /** 用户已点击"显示更多"额外展开的会话数量（基于 collapsedSessions 之上累加） */
-  extraCount: number
   activeSessionId: string | null
   activeDelegationSessionId: string | null
   agentIndicatorMap: Map<string, SessionIndicatorStatus>
@@ -3676,8 +3566,6 @@ interface AgentProjectGroupItemProps {
   relativeTimeNow: number
   dragging: boolean
   dropPosition: 'before' | 'after' | null
-  onShowMore: (workspaceId: string) => void
-  onCollapseExtra: (workspaceId: string) => void
   onSelectProject: (workspaceId: string) => void
   onNewSession: (workspaceId: string) => Promise<void>
   onDragStart: (e: React.DragEvent, workspaceId: string) => void
@@ -3708,9 +3596,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
   currentWorkspaceId,
   isAutomationGroup = false,
   workspaceNameMap,
-  expanded,
   collapsed,
-  extraCount,
   activeSessionId,
   activeDelegationSessionId,
   agentIndicatorMap,
@@ -3719,8 +3605,6 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
   relativeTimeNow,
   dragging,
   dropPosition,
-  onShowMore,
-  onCollapseExtra,
   onSelectProject,
   onNewSession,
   onDragStart,
@@ -3789,12 +3673,10 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
     }
   }
   const prevActiveIdsRef = React.useRef<Set<string>>(new Set())
-  const { treeItems, sessions, hiddenCount, activeIds } = getVisibleAgentProjectSessions({
+  const { treeItems, sessions, activeIds } = getVisibleAgentProjectSessions({
     group,
     activeSessionId,
     agentIndicatorMap,
-    relativeTimeNow,
-    extraCount,
     previousActiveIds: prevActiveIdsRef.current,
   })
   React.useEffect(() => { prevActiveIdsRef.current = activeIds })
@@ -4040,42 +3922,6 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                   </div>
                 )
               })}
-
-              {(hiddenCount > 0 || expanded) && (
-                <div className="flex items-center gap-0.5 pt-0.5">
-                  {hiddenCount > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={`显示更多会话，还有 ${hiddenCount} 个`}
-                          onClick={() => onShowMore(group.workspace.id)}
-                          className="flex size-7 items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.04] hover:text-foreground/65 transition-colors titlebar-no-drag"
-                        >
-                          <ChevronDown size={14} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">{`显示更多会话（还有 ${hiddenCount} 个）`}</TooltipContent>
-                    </Tooltip>
-                  )}
-
-                  {expanded && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label="收起额外会话"
-                          onClick={() => onCollapseExtra(group.workspace.id)}
-                          className="flex size-7 items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.04] hover:text-foreground/65 transition-colors titlebar-no-drag"
-                        >
-                          <ChevronUp size={14} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">收起额外会话</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
             <div className="pl-2.5 py-0.5 text-[12px] text-muted-foreground/75 select-none">
