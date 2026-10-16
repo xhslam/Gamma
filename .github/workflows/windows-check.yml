@@ -1,0 +1,101 @@
+name: Windows compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    name: Windows x64 测试与安装包冒烟
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 类型检查
+        run: bun run typecheck
+
+      - name: 资源复制与真实 Chromium 侧栏回归
+        working-directory: apps/electron
+        run: bun test ./scripts/build-resources.test.ts ./src/renderer/components/app-shell/LeftSidebar.browser.test.ts
+
+      - name: 构建 Electron 应用
+        run: bun run electron:build
+
+      - name: 同步运行时依赖并重建 Windows PTY
+        working-directory: apps/electron
+        run: |
+          bun run sync:runtime-deps
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bun run rebuild:node-pty
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 生成 Windows x64 安装包（不发布）
+        working-directory: apps/electron
+        run: bunx electron-builder --win --x64 --publish never
+
+      - name: 启动打包后的 Windows 应用并检查主窗口
+        shell: pwsh
+        run: |
+          $app = Join-Path $PWD 'apps/electron/out/win-unpacked/Gamma.exe'
+          $stdout = Join-Path $env:RUNNER_TEMP 'gamma-smoke-stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'gamma-smoke-stderr.log'
+          $process = Start-Process -FilePath $app -ArgumentList '--disable-gpu', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=9223' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 45; $i++) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) { throw "Gamma 提前退出：$($process.ExitCode)" }
+              try {
+                $pages = Invoke-RestMethod 'http://127.0.0.1:9223/json/list' -TimeoutSec 2
+                $main = @($pages | Where-Object { $_.type -eq 'page' -and $_.url -match '/renderer/index\.html' })
+                if ($main.Count -gt 0) { $ready = $true; break }
+              } catch {
+                # Chromium 远程调试入口可能晚于进程创建，下一轮重试。
+              }
+            }
+            if (-not $ready) { throw '打包后的 Windows 主窗口未加载 renderer/index.html' }
+            Start-Sleep -Seconds 5
+            $process.Refresh()
+            if ($process.HasExited) { throw 'Windows 主窗口加载后应用异常退出' }
+            Write-Output 'Windows 打包主进程与 renderer 页面启动检查通过'
+          } finally {
+            $process.Refresh()
+            if (-not $process.HasExited) { taskkill /PID $process.Id /T /F | Out-Null }
+          }
+
+      - name: 上传 Windows 安装包与启动日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-windows-x64-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            apps/electron/out/*.exe
+            apps/electron/out/*.blockmap
+            ${{ runner.temp }}/gamma-smoke-*.log
