@@ -47,6 +47,27 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     }
   }, 30_000)
 
+  test('When 项目包含较多或较早的会话 Then 直接列出且没有底部展开按钮，并保留项目折叠', async () => {
+    const result = await renderer.run<{ allVisible: boolean; hasControls: boolean; collapsed: boolean; restored: boolean }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const agents = Array.from({ length: 8 }, (_, index) => ({
+        id: 'history-' + index, title: '历史会话 ' + index, workspaceId: 'project-a',
+        createdAt: now - index * 86400000, updatedAt: now - index * 86400000,
+      }));
+      const fixture = await api.mount({ agents });
+      await api.until(() => fixture.row('history-7'));
+      const allVisible = agents.every(agent => !!fixture.row(agent.id));
+      const hasControls = [...document.querySelectorAll('button')].some(button => /显示更多会话|收起额外会话/.test(button.getAttribute('aria-label') ?? ''));
+      const project = [...document.querySelectorAll('button[aria-expanded]')].find(button => button.textContent.includes('Gamma 项目'));
+      project.click(); await api.until(() => !fixture.row('history-0'));
+      const collapsed = project.getAttribute('aria-expanded') === 'false';
+      project.click(); await api.until(() => fixture.row('history-7'));
+      const restored = agents.every(agent => !!fixture.row(agent.id));
+      fixture.root.unmount(); return { allVisible, hasControls, collapsed, restored };
+    `)
+    expect(result).toEqual({ allVisible: true, hasControls: false, collapsed: true, restored: true })
+  }, 30_000)
+
   test('When 在已有 Agent 会话点击工作区导航 Then 各入口打开既有组件并保持会话与项目', async () => {
     const result = await renderer.run<{
       brand: string; titleFits: boolean; labels: string[]; states: Array<{ label: string; tab: string; current: string }>
