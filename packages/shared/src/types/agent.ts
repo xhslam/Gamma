@@ -1313,6 +1313,11 @@ export interface AgentSendInput {
   automationContext?: string
 }
 
+/** 重复的稳定 ID 不触发新 run；renderer 据回执回滚本次乐观状态。 */
+export interface AgentSendResult {
+  disposition: 'sent' | 'already_accepted'
+}
+
 // ===== Agent 队列消息 =====
 
 /** 等待当前 run 结束后由主进程启动的消息。 */
@@ -1333,7 +1338,7 @@ export interface AgentSubmitOrEnqueueInput extends AgentDeferredQueueMessageInpu
 
 export interface AgentSubmitOrEnqueueResult {
   /** injected：已注入当前活跃 Agent；started：主进程已启动下一轮；queued：仍在等待。 */
-  disposition: 'injected' | 'started' | 'queued'
+  disposition: 'injected' | 'started' | 'queued' | 'accepted'
 }
 
 /** 流式追加消息的输入参数（Agent 流式中发送新消息） */
@@ -1384,6 +1389,33 @@ export interface AgentQueuedMessageStatus {
   rawUserMessage?: string
   startedAt: number
   runGeneration?: number
+}
+
+/** 发送失败日志中的附件仅保存本地路径，不保存浏览器 File/blob 或凭据。 */
+export interface AgentSendOutboxAttachment {
+  filename: string
+  mediaType: string
+  size: number
+  targetPath: string
+}
+
+/** 网络提交前原子落盘；重启仅恢复入口，绝不自动执行。 */
+export interface AgentSendOutboxEntry {
+  id: string
+  sessionId: string
+  createdAt: number
+  status: 'pending' | 'failed'
+  error?: string
+  draft: {
+    text: string
+    html: string
+    attachments: AgentSendOutboxAttachment[]
+  }
+  input: AgentSubmitOrEnqueueInput
+}
+
+export interface AgentSendOutboxRetryResult {
+  disposition: AgentSubmitOrEnqueueResult['disposition'] | 'accepted'
 }
 
 /** 主进程 deferred queue 的可恢复展示快照。输入保持原样，以便 renderer 重载后继续取消、移动或显示。 */
@@ -1814,6 +1846,9 @@ export const AGENT_IPC_CHANNELS = {
   ACTIVE_SESSIONS_SNAPSHOT: 'agent:active-sessions-snapshot',
   /** 获取指定会话中仍由主进程持有的 deferred queue 快照。 */
   GET_QUEUED_MESSAGES: 'agent:get-queued-messages',
+  LIST_SEND_OUTBOX: 'agent:list-send-outbox',
+  SAVE_SEND_OUTBOX: 'agent:save-send-outbox',
+  RETRY_SEND_OUTBOX: 'agent:retry-send-outbox',
   /** 获取会话 SDKMessage（Phase 4 新格式） */
   GET_SDK_MESSAGES: 'agent:get-sdk-messages',
   /** 更新会话标题 */

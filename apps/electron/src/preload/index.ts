@@ -35,6 +35,9 @@ import type {
   SetAgentSessionActiveWorktreeInput,
   SDKMessage,
   AgentSendInput,
+  AgentSendResult,
+  AgentSendOutboxEntry,
+  AgentSendOutboxRetryResult,
   AgentThinkingLevel,
   AgentStreamEvent,
   AgentStreamCompletePayload,
@@ -525,10 +528,15 @@ export interface ElectronAPI {
   generateAgentTitle: (input: AgentGenerateTitleInput) => Promise<string | null>
 
   /** 发送 Agent 消息 */
-  sendAgentMessage: (input: AgentSendInput) => Promise<void>
+  sendAgentMessage: (input: AgentSendInput) => Promise<AgentSendResult | void>
 
   /** 中止 Agent 执行 */
   stopAgent: (sessionId: string) => Promise<void>
+
+  /** 原子保存发送前快照；重启后仅展示显式恢复入口。 */
+  saveAgentSendOutbox: (entry: AgentSendOutboxEntry) => Promise<void>
+  listAgentSendOutbox: (sessionId: string) => Promise<AgentSendOutboxEntry[]>
+  retryAgentSendOutbox: (input: AgentQueuedMessageControlInput) => Promise<AgentSendOutboxRetryResult>
 
   // ===== Agent 队列消息 =====
 
@@ -1691,6 +1699,10 @@ const electronAPI: ElectronAPI = {
   stopAgent: (sessionId: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.STOP_AGENT, sessionId)
   },
+
+  saveAgentSendOutbox: (entry: AgentSendOutboxEntry) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.SAVE_SEND_OUTBOX, entry),
+  listAgentSendOutbox: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_SEND_OUTBOX, sessionId),
+  retryAgentSendOutbox: (input: AgentQueuedMessageControlInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.RETRY_SEND_OUTBOX, input),
 
   // Agent 队列消息
   queueAgentMessage: (input: AgentQueueMessageInput) => {

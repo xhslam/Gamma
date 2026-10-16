@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight, Download, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { iconButtonNoRingFocusClass } from '@/components/ui/icon-button-styles'
 import { ImageEditor } from '@/components/ui/image-editor'
+import { ImageLightboxPreview } from './image-lightbox-preview'
 
 /** 单张图片描述（多图导航时使用） */
 export interface LightboxImage {
@@ -64,7 +65,8 @@ export function ImageLightbox({
   onIndexChange,
   initialMode = 'preview',
 }: ImageLightboxProps): React.ReactElement | null {
-  const [mode, setMode] = React.useState<'preview' | 'editing'>('preview')
+  const [mode, setMode] = React.useState<'preview' | 'editing'>(initialMode)
+  const returnFocusRef = React.useRef<HTMLElement | null>(null)
 
   const hasImages = Array.isArray(images) && images.length > 0
   const total = hasImages ? images!.length : 0
@@ -134,7 +136,7 @@ export function ImageLightbox({
           className={cn(
             'fixed inset-0 z-[200] bg-black/40 titlebar-no-drag',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0'
+            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none'
           )}
         />
         <DialogPrimitive.Content
@@ -142,9 +144,17 @@ export function ImageLightbox({
             'fixed inset-0 z-[200] flex flex-col items-center justify-center titlebar-no-drag',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-            'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-            'duration-200'
+            'duration-150 motion-reduce:animate-none'
           )}
+          onOpenAutoFocus={() => {
+            returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+          }}
+          onCloseAutoFocus={(event) => {
+            if (returnFocusRef.current?.isConnected) {
+              event.preventDefault()
+              returnFocusRef.current.focus()
+            }
+          }}
           onClick={(e) => {
             if (e.target === e.currentTarget) onOpenChange(false)
           }}
@@ -171,36 +181,19 @@ export function ImageLightbox({
             </>
           )}
 
-          {/* 双层都占位 — visibility 切换，无 unmount，Grid 单格叠加 */}
-          <div className="grid" style={{ gridTemplate: '"layer" 1fr / 1fr' }}>
-            {/* 预览层 */}
-            <div style={{ gridArea: 'layer', visibility: mode === 'editing' ? 'hidden' : 'visible' }}>
-              <div className="flex flex-col items-center">
-              <img
-                src={current.src}
-                alt={current.alt}
-                className="max-w-[90vw] max-h-[85vh] rounded-lg object-contain shadow-2xl select-none"
-                draggable={false}
-              />
-              <div className={cn(
-                'mt-3 flex items-center gap-0.5 rounded-full',
-                'bg-black/50 backdrop-blur-md shadow-lg',
-                'px-3 py-2.5'
-              )}>
+          {/* 使用局部 Radix Presence/CSS 动画，不创建全局 ViewTransition 或延时器。
+              关闭立即卸载手势层；退出动画仅由 Radix 管理，快速重开不会遗留快照。 */}
+          {open && (mode === 'preview' ? (
+            <ImageLightboxPreview key={`${safeIndex}:${current.src}`} src={current.src} alt={current.alt}>
                 <DialogPrimitive.Close className={cn('rounded-full p-1.5 text-white/80 transition-colors duration-150', 'hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white', iconButtonNoRingFocusClass)}>
                   <X className="size-5" /><span className="sr-only">关闭</span>
                 </DialogPrimitive.Close>
                 {showEdit && (<><div className="mx-1.5 h-5 w-px bg-white/20" aria-hidden /><button type="button" onClick={() => setMode('editing')} className={cn('rounded-full p-1.5 text-white/80 transition-colors duration-150', 'hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white', iconButtonNoRingFocusClass)} title="编辑图片"><Pencil className="size-5" /></button></>)}
                 {current.onSave && (<><div className="mx-1.5 h-5 w-px bg-white/20" aria-hidden /><button type="button" onClick={current.onSave} className={cn('rounded-full p-1.5 text-white/80 transition-colors duration-150', 'hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white', iconButtonNoRingFocusClass)} title="保存图片"><Download className="size-5" /></button></>)}
-              </div>
-              </div>
-            </div>
-
-            {/* 编辑层 */}
-            <div style={{ gridArea: 'layer', visibility: mode === 'preview' ? 'hidden' : 'visible' }}>
-              <ImageEditor src={current.src} onSave={handleEditSave} onCancel={handleEditCancel} />
-            </div>
-          </div>
+            </ImageLightboxPreview>
+          ) : (
+            <ImageEditor key={`${safeIndex}:${current.src}`} src={current.src} onSave={handleEditSave} onCancel={handleEditCancel} />
+          ))}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

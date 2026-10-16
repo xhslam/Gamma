@@ -29,8 +29,9 @@ beforeAll(async () => {
       async mount(options = {}) {
         const store = createStore(), root = createRoot(document.getElementById('root'));
         store.set(richTextRenderingEnabledAtom, true);
-        const calls = [], listeners = { queue: new Set(), stream: new Set() };
-        let rejectSend, resolveSend, rejectSave, resolveSave;
+        const calls = [], saves = [], retries = [], disk = options.disk ?? [];
+        const listeners = { queue: new Set(), stream: new Set() };
+        let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
         const submit = input => {
           calls.push(input);
           return new Promise((resolve, reject) => { rejectSend = reject; resolveSend = resolve; });
@@ -39,6 +40,21 @@ beforeAll(async () => {
         const api = {
           onAgentQueuedMessageStatus: subscribe('queue'), onAgentStreamEvent: subscribe('stream'),
           sendAgentMessage: submit, submitOrEnqueueAgentMessage: submit,
+          saveAgentSendOutbox: async entry => {
+            saves.push(structuredClone(entry));
+            if (options.failPersist) throw new Error('磁盘写入失败');
+            const index = disk.findIndex(item => item.id === entry.id && item.sessionId === entry.sessionId);
+            if (index < 0) disk.push(structuredClone(entry)); else disk[index] = structuredClone(entry);
+          },
+          listAgentSendOutbox: async id => structuredClone(disk.filter(entry => entry.sessionId === id)),
+          retryAgentSendOutbox: async input => {
+            retries.push(structuredClone(input));
+            if (options.waitRetry) await new Promise(resolve => { resolveRetry = resolve; });
+            if (options.failRetry) throw new Error('仍然离线');
+            const index = disk.findIndex(entry => entry.id === input.messageId && entry.sessionId === input.sessionId);
+            if (index >= 0) disk.splice(index, 1);
+            return { disposition: 'started' };
+          },
           getQueuedAgentMessages: async () => options.mainAccepted && calls[0]?.queueMessageId ? [{ input: calls[0], queuedAt: 1 }] : [],
           listActiveAgentSessionSnapshots: async () => options.mainAccepted && calls[0]?.startedAt ? [{ sessionId: calls[0].sessionId, startedAt: calls[0].startedAt }] : [],
           getPiReasoningCapability: async () => undefined,
@@ -75,8 +91,11 @@ beforeAll(async () => {
         await delay(100);
         const editor = () => document.querySelector('.tiptap').editor;
         const key = () => document.querySelector('.tiptap').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-        editor().commands.insertContent('<p>失败草稿<strong>保留格式</strong></p>');
-        return { store, root, calls, editor, key,
+        if (options.initialText !== '') editor().commands.insertContent(options.initialText ?? '<p>失败草稿<strong>保留格式</strong></p>');
+        return { store, root, calls, saves, retries, disk, editor, key, resolveRetry: () => resolveRetry(),
+          resolve: () => resolveSend({ disposition: 'queued' }),
+          resolveDuplicate: () => resolveSend({ disposition: 'already_accepted' }),
+          running: () => store.get(atoms.agentStreamingStatesAtom).get('a')?.running ?? false,
           newQuote: () => store.set(quotedSelectionMapAtom, new Map([['a', { ...quote, text: '新选区正文', capturedAt: 2 }]])),
           quote: id => store.get(quotedSelectionMapAtom).get(id),
           addNewFile: () => store.set(atoms.agentPendingFilesAtomFamily('a'), previous => [...previous, { id: 'new-file', filename: '新附件.txt', mediaType: 'text/plain', size: 1, sourcePath: '/fixture/new.txt' }]),
@@ -90,6 +109,7 @@ beforeAll(async () => {
             else for (const listener of listeners.stream) listener({ sessionId: input.sessionId, payload: { kind: 'gamma_event', event: { type: 'run_started', startedAt: input.startedAt } } });
           },
           switch: async () => { active = 'b'; store.set(atoms.currentAgentSessionIdAtom, 'b'); render(); await delay(60); },
+          switchTo: async id => { active = id; store.set(atoms.currentAgentSessionIdAtom, id); render(); await delay(80); },
           draft: id => store.get(atoms.agentSessionDraftsAtom).get(id) ?? '',
           html: id => store.get(atoms.agentSessionDraftHtmlAtom).get(id) ?? '',
           files: id => store.get(atoms.agentPendingFilesAtomFamily(id)),
@@ -237,4 +257,187 @@ describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
     }, 30_000)
   }
 
+})
+
+describe('Given 持久化发送日志与真实 AgentView', () => {
+  test('When 点击发送 Then 网络调用前已保存完整正文、HTML、附件与引用快照', async () => {
+    const result = await renderer.run<{ saves: number; id: string; sentId: string; html: string; text: string; attachments: number; includesQuote: boolean }>(`
+      const f = await window.sendRecovery.mount({ attachment: true, quote: true }); f.key();
+      await window.sendRecovery.until(() => f.calls.length === 1);
+      const entry = f.saves[0];
+      const result = { saves: f.saves.length, id: entry.id, sentId: f.calls[0].userMessageUuid, html: entry.draft.html, text: entry.draft.text, attachments: entry.draft.attachments.length, includesQuote: entry.input.userMessage.includes('原选区正文') };
+      f.reject(); await window.sendRecovery.delay(80); f.root.unmount(); return result;
+    `)
+    expect(result.saves).toBe(1)
+    expect(result.id).toBe(result.sentId)
+    expect(result.html).toContain('<strong>保留格式</strong>')
+    expect(result.text).toContain('&quote:')
+    expect(result.attachments).toBe(1)
+    expect(result.includesQuote).toBe(true)
+  }, 30_000)
+
+  test('When 发送前落盘失败 Then 不调用网络且原草稿和附件可继续编辑', async () => {
+    expect(await renderer.run<{ calls: number; draft: string; files: number; disk: number }>(`
+      const f = await window.sendRecovery.mount({ failPersist: true, attachment: true }); f.key();
+      await window.sendRecovery.until(() => document.body.innerText.includes('磁盘写入失败'));
+      const result = { calls: f.calls.length, draft: f.editor().getText(), files: f.files('a').length, disk: f.disk.length };
+      f.root.unmount(); return result;
+    `)).toEqual({ calls: 0, draft: '失败草稿保留格式', files: 1, disk: 0 })
+  }, 30_000)
+
+  test('When 重挂载模拟重启 Then 暂存入口仍在、不自动发送，连续点击只重试一次且保留新草稿', async () => {
+    expect(await renderer.run<{ restored: number; automatic: number; retries: number; kept: string; remaining: number }>(`
+      const first = await window.sendRecovery.mount({ attachment: true, quote: true }); first.key();
+      await window.sendRecovery.until(() => first.calls.length === 1); first.reject();
+      await window.sendRecovery.until(() => first.disk[0]?.status === 'failed');
+      const disk = first.disk; first.root.unmount(); await window.sendRecovery.delay(30);
+      const f = await window.sendRecovery.mount({ disk, initialText: '<p>重启后的新草稿</p>', waitRetry: true });
+      await window.sendRecovery.until(() => document.querySelector('[aria-label="待恢复消息"]'));
+      const restored = f.disk.length, automatic = f.calls.length + f.retries.length;
+      const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送');
+      button.click(); button.click(); await window.sendRecovery.delay(40); const retries = f.retries.length;
+      f.editor().commands.insertContent('继续编辑'); f.resolveRetry();
+      await window.sendRecovery.until(() => !document.querySelector('[aria-label="待恢复消息"]'));
+      const result = { restored, automatic, retries, kept: f.editor().getText(), remaining: f.disk.length };
+      f.root.unmount(); return result;
+    `)).toEqual({ restored: 1, automatic: 0, retries: 1, kept: '重启后的新草稿继续编辑', remaining: 0 })
+  }, 30_000)
+
+  test('When 恢复到输入框 Then 显式追加完整引用附件且重复点击幂等', async () => {
+    const result = await renderer.run<{ count: number; files: number; quote: boolean; newDraft: boolean; html: boolean }>(`
+      const first = await window.sendRecovery.mount({ attachment: true, quote: true }); first.key();
+      await window.sendRecovery.until(() => first.calls.length === 1); first.reject();
+      await window.sendRecovery.until(() => first.disk[0]?.status === 'failed');
+      const disk = first.disk; first.root.unmount(); await window.sendRecovery.delay(30);
+      const f = await window.sendRecovery.mount({ disk, initialText: '<p>新草稿</p>' });
+      await window.sendRecovery.until(() => document.querySelector('[aria-label="待恢复消息"]'));
+      const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent === '追加到输入框');
+      button.click(); await window.sendRecovery.delay(60); button.click(); await window.sendRecovery.delay(60);
+      const html = f.editor().getHTML(), text = f.editor().getText();
+      const result = { count: text.split('失败草稿').length - 1, files: f.files('a').length, quote: html.includes('data-mention-quote'), newDraft: text.includes('新草稿'), html: html.includes('<strong>保留格式</strong>') };
+      f.root.unmount(); return result;
+    `)
+    expect(result).toEqual({ count: 1, files: 1, quote: true, newDraft: true, html: true })
+  }, 30_000)
+
+  test('When 重试仍然失败 Then 横幅保留且允许再次尝试', async () => {
+    expect(await renderer.run<{ kept: boolean; retries: number; files: number }>(`
+      const first = await window.sendRecovery.mount({ attachment: true }); first.key();
+      await window.sendRecovery.until(() => first.calls.length === 1); first.reject();
+      await window.sendRecovery.until(() => first.disk[0]?.status === 'failed');
+      const disk = first.disk; first.root.unmount(); await window.sendRecovery.delay(30);
+      const f = await window.sendRecovery.mount({ disk, failRetry: true, initialText: '' });
+      await window.sendRecovery.until(() => document.querySelector('[aria-label="待恢复消息"]'));
+      const button = () => Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送');
+      button().click(); await window.sendRecovery.until(() => document.body.innerText.includes('暂存消息重试失败'));
+      await window.sendRecovery.delay(30); button().click(); await window.sendRecovery.delay(80);
+      const result = { kept: !!document.querySelector('[aria-label="待恢复消息"]'), retries: f.retries.length, files: f.disk[0].draft.attachments.length };
+      f.root.unmount(); return result;
+    `)).toEqual({ kept: true, retries: 2, files: 1 })
+  }, 30_000)
+
+  test('When 失败草稿未改动而直接再次发送 Then 复用原ID不叠加另一条暂存记录', async () => {
+    expect(await renderer.run<{ sameId: boolean; records: number }>(`
+      const f = await window.sendRecovery.mount(); f.key();
+      await window.sendRecovery.until(() => f.calls.length === 1); const id = f.calls[0].userMessageUuid; f.reject();
+      await window.sendRecovery.until(() => f.disk[0]?.status === 'failed'); await window.sendRecovery.delay(50);
+      f.key(); await window.sendRecovery.until(() => f.calls.length === 2);
+      const result = { sameId: f.calls[1].userMessageUuid === id, records: f.disk.length };
+      f.reject(); await window.sendRecovery.delay(60); f.root.unmount(); return result;
+    `)).toEqual({ sameId: true, records: 1 })
+  }, 30_000)
+})
+
+describe('Given 已审查的重试时序边界', () => {
+  for (const restoreVia of ['banner', 'toast']) {
+    test(`When B 草稿追加失败 A 后通过 ${restoreVia} 恢复并重试 A Then 不清空 B`, async () => {
+      const result = await renderer.run<{ preserved: boolean; retryCount: number }>(`
+        const f = await window.sendRecovery.mount(); f.key();
+        await window.sendRecovery.until(() => f.calls.length === 1);
+        f.editor().commands.insertContent('新草稿B'); f.reject();
+        await window.sendRecovery.until(() => document.body.innerText.includes('追加失败草稿'));
+        await window.sendRecovery.delay(40);
+        const label = ${JSON.stringify(restoreVia === 'banner' ? '追加到输入框' : '追加失败草稿')};
+        Array.from(document.querySelectorAll('button')).find(button => button.textContent === label).click();
+        await window.sendRecovery.delay(60);
+        Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送').click();
+        await window.sendRecovery.until(() => f.retries.length === 1 && !document.querySelector('[aria-label="待恢复消息"]'));
+        const result = { preserved: f.editor().getText().includes('新草稿B'), retryCount: f.retries.length };
+        f.root.unmount(); return result;
+      `)
+      expect(result).toEqual({ preserved: true, retryCount: 1 })
+    }, 30_000)
+  }
+
+  test('When A 重试中切换 B 再返回 Then 不残留禁用状态也不覆盖 B 草稿', async () => {
+    expect(await renderer.run<{ bEnabled: boolean; bDraft: string; aEnabled: boolean }>(`
+      const first = await window.sendRecovery.mount(); first.key();
+      await window.sendRecovery.until(() => first.calls.length === 1); first.reject();
+      await window.sendRecovery.until(() => first.disk[0]?.status === 'failed');
+      const disk = first.disk;
+      const bEntry = structuredClone(disk[0]); bEntry.sessionId = 'b'; bEntry.id = 'b-message'; bEntry.input = { ...bEntry.input, sessionId: 'b', queueMessageId: 'b-message', userMessageUuid: 'b-message' }; disk.push(bEntry);
+      first.root.unmount(); await window.sendRecovery.delay(30);
+      const f = await window.sendRecovery.mount({ disk, waitRetry: true, initialText: '' });
+      await window.sendRecovery.until(() => document.querySelector('[aria-label="待恢复消息"]'));
+      Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送').click();
+      await window.sendRecovery.until(() => f.retries.length === 1);
+      await f.switchTo('b'); f.editor().commands.insertContent('B独立草稿');
+      const bEnabled = !Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送').disabled;
+      f.resolveRetry(); await window.sendRecovery.delay(80);
+      const bDraft = f.editor().getText(); await f.switchTo('a');
+      // A 已确认，手动保留另一条失败项验证 busy 状态不残留。
+      disk.push({ ...structuredClone(bEntry), sessionId: 'a', id: 'a-other', input: { ...bEntry.input, sessionId: 'a', queueMessageId: 'a-other', userMessageUuid: 'a-other' } });
+      await f.switchTo('b'); await f.switchTo('a');
+      const aEnabled = !Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送').disabled;
+      f.root.unmount(); return { bEnabled, bDraft, aEnabled };
+    `)).toEqual({ bEnabled: true, bDraft: 'B独立草稿', aEnabled: true })
+  }, 30_000)
+
+  test('When 未改动的纯恢复草稿重试成功 Then 清除该副本防止再次发送', async () => {
+    expect(await renderer.run<{ draft: string; records: number }>(`
+      const f = await window.sendRecovery.mount(); f.key();
+      await window.sendRecovery.until(() => f.calls.length === 1); f.reject();
+      await window.sendRecovery.until(() => f.disk[0]?.status === 'failed'); await window.sendRecovery.delay(60);
+      Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送').click();
+      await window.sendRecovery.until(() => f.retries.length === 1 && !document.querySelector('[aria-label="待恢复消息"]'));
+      const result = { draft: f.editor().getText(), records: f.disk.length };
+      f.root.unmount(); return result;
+    `)).toEqual({ draft: '', records: 0 })
+  }, 30_000)
+
+  test('When 渲染真实 AgentView Then 工具行位于输入外壳之外且发送仍可用', async () => {
+    expect(await renderer.run<{ independent: boolean; calls: number }>(`
+      const f = await window.sendRecovery.mount();
+      const footer = document.querySelector('[data-input-mode="agent"] > .gamma-composer-footer');
+      const independent = !!footer && !footer.closest('.gamma-composer');
+      f.key(); await window.sendRecovery.until(() => f.calls.length === 1); f.reject();
+      await window.sendRecovery.delay(60); f.root.unmount(); return { independent, calls: f.calls.length };
+    `)).toEqual({ independent: true, calls: 1 })
+  }, 30_000)
+})
+
+describe('Given 主进程稳定ID回执', () => {
+  test('When 旧窗口重复提交已接收的恢复草稿 Then 回滚乐观消息和运行态但不恢复重复正文', async () => {
+    expect(await renderer.run<{ sameId: boolean; draft: string; running: boolean; messages: number }>(`
+      const f = await window.sendRecovery.mount(); f.key();
+      await window.sendRecovery.until(() => f.calls.length === 1); const id = f.calls[0].userMessageUuid; f.reject();
+      await window.sendRecovery.until(() => f.disk[0]?.status === 'failed'); await window.sendRecovery.delay(60);
+      f.key(); await window.sendRecovery.until(() => f.calls.length === 2);
+      f.disk.splice(0); f.resolveDuplicate();
+      await window.sendRecovery.until(() => document.body.innerText.includes('未重复发送'));
+      const result = { sameId: f.calls[1].userMessageUuid === id, draft: f.editor().getText(), running: f.running(), messages: f.messages('a').length };
+      f.root.unmount(); return result;
+    `)).toEqual({ sameId: true, draft: '', running: false, messages: 0 })
+  }, 30_000)
+  test('When 恢复后添加新附件 Then 使用新ID，不能被旧消息接受证据吞掉', async () => {
+    expect(await renderer.run<{ different: boolean; records: number }>(`
+      const f = await window.sendRecovery.mount(); f.key();
+      await window.sendRecovery.until(() => f.calls.length === 1); const id = f.calls[0].userMessageUuid; f.reject();
+      await window.sendRecovery.until(() => f.disk[0]?.status === 'failed'); await window.sendRecovery.delay(60);
+      f.addNewFile(); await window.sendRecovery.delay(30); f.key();
+      await window.sendRecovery.until(() => f.calls.length === 2);
+      const result = { different: f.calls[1].userMessageUuid !== id, records: f.disk.length };
+      f.reject(); await window.sendRecovery.delay(60); f.root.unmount(); return result;
+    `)).toEqual({ different: true, records: 2 })
+  }, 30_000)
 })

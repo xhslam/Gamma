@@ -259,3 +259,31 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     }
   }, 30_000)
 })
+
+describe('Given 不带三角标记的项目列表', () => {
+  test('When 切换项目并打开归档 Then 无装饰三角，当前项目语义及折叠菜单入口保持', async () => {
+    const result = await renderer.run<{ absent: boolean; current: boolean; switched: boolean; controls: boolean; archived: boolean; collapsed: boolean }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const fixture = await api.mount({ agents: [
+        { id: 'a', title: 'A的会话', workspaceId: 'project-a', createdAt: now, updatedAt: now },
+        { id: 'b', title: 'B的会话', workspaceId: 'project-b', createdAt: now, updatedAt: now },
+        { id: 'old', title: '已归档会话', workspaceId: 'project-b', archived: true, createdAt: now, updatedAt: now },
+      ] });
+      const project = name => [...document.querySelectorAll('.gamma-sidebar-project-row')].find(button => button.textContent.includes(name));
+      const current = project('Gamma 项目').getAttribute('aria-current') === 'true';
+      fixture.row('b').click(); await api.until(() => fixture.state().workspace === 'project-b');
+      const switched = project('第二个项目').getAttribute('aria-current') === 'true' && !project('Gamma 项目').hasAttribute('aria-current');
+      const controls = !!fixture.button('在「第二个项目」中新建会话') && !!fixture.button('项目菜单');
+      [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档 (')).click();
+      await api.until(() => document.body.textContent.includes('已归档会话'));
+      const archivedProject = project('第二个项目');
+      const archived = archivedProject.getAttribute('aria-current') === 'true';
+      archivedProject.click(); await api.until(() => archivedProject.getAttribute('aria-expanded') === 'true');
+      archivedProject.click(); await api.until(() => archivedProject.getAttribute('aria-expanded') === 'false');
+      const collapsed = archivedProject.getAttribute('aria-expanded') === 'false';
+      const absent = !document.querySelector('.workspace-selected-triangle');
+      fixture.root.unmount(); return { absent, current, switched, controls, archived, collapsed };
+    `)
+    expect(result).toEqual({ absent: true, current: true, switched: true, controls: true, archived: true, collapsed: true })
+  }, 30_000)
+})

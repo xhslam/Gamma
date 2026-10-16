@@ -5,9 +5,12 @@
  */
 
 import { atom } from 'jotai'
-import { DEFAULT_PRODUCTIVITY_TOOLS_SETTINGS, type ProductivityToolsSettings } from '@/types/settings'
+import { DEFAULT_PRODUCTIVITY_TOOLS_SETTINGS, normalizeWorkbenchDensity, type WorkbenchDensity, type ProductivityToolsSettings } from '@/types/settings'
 
 // ===== Jotai Atoms =====
+
+/** 工作台布局默认为紧凑，与主题独立。 */
+export const workbenchDensityAtom = atom<WorkbenchDensity>('compact')
 
 /** 粘贴长文本时是否自动转为附件 */
 export const longTextPasteAsAttachmentEnabledAtom = atom<boolean>(false)
@@ -31,6 +34,7 @@ export async function initializeUiPreferences(
   setRichTextRenderingEnabled?: (enabled: boolean) => void,
   setSessionHoverPreviewEnabled?: (enabled: boolean) => void,
   setProductivityTools?: (settings: ProductivityToolsSettings) => void,
+  setWorkbenchDensity?: (density: WorkbenchDensity) => void,
 ): Promise<void> {
   try {
     const settings = await window.electronAPI.getSettings()
@@ -38,6 +42,7 @@ export async function initializeUiPreferences(
     setRichTextRenderingEnabled?.(settings.richTextRenderingEnabled ?? false)
     setSessionHoverPreviewEnabled?.(settings.sessionHoverPreviewEnabled ?? false)
     setProductivityTools?.(settings.productivityTools)
+    setWorkbenchDensity?.(normalizeWorkbenchDensity(settings.workbenchDensity))
   } catch (error) {
     console.error('[UI偏好] 初始化失败:', error)
   }
@@ -86,4 +91,9 @@ export async function updateProductivityTools(settings: ProductivityToolsSetting
     console.error('[UI偏好] 更新生产力工具设置失败:', error)
     throw error
   }
+}
+
+/** 保存成功后由调用方更新 atom；失败保持现状并展示错误。 */
+export async function updateWorkbenchDensity(density: WorkbenchDensity): Promise<void> {
+  await window.electronAPI.updateSettings({ workbenchDensity: normalizeWorkbenchDensity(density) })
 }

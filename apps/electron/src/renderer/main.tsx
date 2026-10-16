@@ -59,6 +59,7 @@ import {
   sessionHoverPreviewEnabledAtom,
   productivityToolsAtom,
   initializeUiPreferences,
+  workbenchDensityAtom,
 } from './atoms/ui-preferences'
 import {
   markdownFontSizeAtom,
@@ -654,6 +655,7 @@ function UiPreferencesInitializer(): null {
   const setRichTextRenderingEnabled = useSetAtom(richTextRenderingEnabledAtom)
   const setSessionHoverPreviewEnabled = useSetAtom(sessionHoverPreviewEnabledAtom)
   const setProductivityTools = useSetAtom(productivityToolsAtom)
+  const setWorkbenchDensity = useSetAtom(workbenchDensityAtom)
 
   useEffect(() => {
     initializeUiPreferences(
@@ -661,8 +663,9 @@ function UiPreferencesInitializer(): null {
       setRichTextRenderingEnabled,
       setSessionHoverPreviewEnabled,
       setProductivityTools,
+      setWorkbenchDensity,
     )
-  }, [setLongTextPasteAsAttachmentEnabled, setProductivityTools, setRichTextRenderingEnabled, setSessionHoverPreviewEnabled])
+  }, [setWorkbenchDensity, setLongTextPasteAsAttachmentEnabled, setProductivityTools, setRichTextRenderingEnabled, setSessionHoverPreviewEnabled])
 
   return null
 }

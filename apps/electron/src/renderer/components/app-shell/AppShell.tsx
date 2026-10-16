@@ -21,7 +21,7 @@ import { activeTabAtom, sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
-import { productivityToolsAtom } from '@/atoms/ui-preferences'
+import { productivityToolsAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { WorkspaceMemoryChangeObserver } from '@/components/agent-skills/WorkspaceMemoryChangeObserver'
 import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleObserver'
@@ -67,6 +67,7 @@ function getRightPanelMinWidth(isTodoTab: boolean, isExpandedWorkspace: boolean)
 }
 
 export function AppShell(): React.ReactElement {
+  const density = useAtomValue(workbenchDensityAtom)
   const activeTab = useAtomValue(activeTabAtom)
   const { workspaces, currentWorkspaceId } = useProjectActions()
   const currentWorkspace = workspaces.find((workspace) => workspace.id === currentWorkspaceId)
@@ -282,7 +283,7 @@ export function AppShell(): React.ReactElement {
     <>
       <WindowControls />
 
-      <div className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
+      <div data-workbench-density={density} className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
         <div
           ref={appContentRef}
           className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
