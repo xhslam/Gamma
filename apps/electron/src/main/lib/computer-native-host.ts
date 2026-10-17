@@ -22,12 +22,14 @@ export class ComputerNativeHost implements ComputerHost {
     const decoder = new StringDecoder('utf8')
     let buffered = ''
     const fail = (): void => {
+      if (this.child !== child) return
       for (const item of this.pending.values()) { clearTimeout(item.timer); item.reject(new Error('原生 helper 失联；不能推断操作未执行')) }
       this.pending.clear()
-      for (const listener of this.listeners) { try { listener() } catch { /* 不阻塞安全回收。 */ } }
+      // 父进程主动回收时，stopped/close 只是退出证明，不应再次触发暂停撤权。
+      if (!this.stopping) for (const listener of this.listeners) { try { listener() } catch { /* 不阻塞安全回收。 */ } }
     }
     child.on('error', fail)
-    child.on('close', () => { if (this.child === child) this.child = undefined; fail() })
+    child.on('close', () => { fail(); if (this.child === child) this.child = undefined })
     child.stdin.on('error', fail)
     // stderr 不进通用日志，避免错误路径夹带AX或图像；始终消费防止子进程堵塞。
     child.stderr.on('data', () => {})

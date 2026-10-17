@@ -69,7 +69,24 @@ export const leftSidebarFixtureSource = `
       const fixtureWorkspaces = options.workspaces ?? workspaces;
       const activeAgent = options.activeAgent === undefined ? (fixtureAgents[0]?.id ?? null) : options.activeAgent;
       const profile = { userName: options.userName ?? 'Gamma 用户', avatar: '🌱' };
+      let computerState = options.computerState ?? { supported: true, phase: 'disabled' };
+      let computerListener = () => {};
       window.electronAPI = {
+        getComputerState: async () => computerState,
+        getComputerPreferences: async () => ({ riskPolicy: 'standard', systemPermissionsDismissed: true, allowedApps: {} }),
+        updateComputerPreferences: async prefs => prefs,
+        onComputerStateChanged: listener => { computerListener = listener; return () => { computerListener = () => {}; }; },
+        resumeComputer: async () => {
+          calls.push('resumeComputer');
+          if (options.resumeError) throw new Error(options.resumeError);
+          computerState = { supported: true, phase: 'disabled', resumeRequired: false };
+          computerListener(computerState); return computerState;
+        },
+        stopComputer: async () => {
+          calls.push('stopComputer');
+          computerState = { supported: true, phase: 'disabled', resumeRequired: true };
+          computerListener(computerState); return computerState;
+        },
         listActiveAgentSessions: async () => fixtureAgents.filter(session => !session.archived),
         countArchivedAgentSessions: async () => fixtureAgents.filter(session => session.archived).length,
         listArchivedAgentSessions: async () => fixtureAgents.filter(session => session.archived),

@@ -48,6 +48,8 @@ export interface ComputerActionReceipt {
 export interface ComputerState {
   supported: boolean
   phase: ComputerPhase
+  /** 停止后仅可信本地重新启用可解除；不授予租约或重放动作。 */
+  resumeRequired?: boolean
   sessionId?: string
   channelId?: string
   modelId?: string
@@ -69,6 +71,7 @@ export interface ComputerArmInput {
 export const COMPUTER_IPC_CHANNELS = {
   GET_STATE: 'computer:get-state',
   STOP: 'computer:stop',
+  RESUME: 'computer:resume',
   ARM: 'computer:arm',
   PERMISSION: 'computer:permission',
   STATE_CHANGED: 'computer:state-changed',

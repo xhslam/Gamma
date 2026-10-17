@@ -28,7 +28,7 @@ import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleOb
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
-import { ComputerUsePanel, ComputerModals } from '@/components/computer-use'
+import { ComputerModals } from '@/components/computer-use'
 import { detectIsWindows } from '@/lib/platform'
 import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
@@ -317,9 +317,6 @@ export function AppShell(): React.ReactElement {
                 workspace={showRightPanel ? <RightSidePanel width={displayedRightPanelWidth} /> : null}
               />
             </div>
-        </div>
-        <div className="fixed bottom-4 left-4 z-[80] titlebar-no-drag">
-          <ComputerUsePanel sessionId={currentSessionId} />
         </div>
         <ComputerModals />
         <TerminalLifecycleObserver />

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { AlertCircle, ChevronDown, Loader2, Monitor, Pause, ShieldCheck, Square, X } from 'lucide-react'
+import { AlertCircle, ChevronRight, Loader2, Monitor, Pause, Play, ShieldCheck, Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ import {
   refreshComputerUseAtom,
   selectComputerSessionAtom,
   stopComputerUseAtom,
+  resumeComputerUseAtom,
 } from '@/atoms/computer-use'
 import { getComputerStatusLabel, hasComputerControl } from './computer-use-model'
 
@@ -18,13 +19,14 @@ export interface ComputerUsePanelProps {
   sessionId: string | null
 }
 
-/** 只展示状态并提供独立停止入口，Agent 自行选择何时使用桌面工具。 */
+/** 侧栏内的桌面状态与本地恢复/停止入口，不遮挡会话主区。 */
 export function ComputerUsePanel({ sessionId }: ComputerUsePanelProps): React.ReactElement {
   const [open, setOpen] = useAtom(computerUsePanelOpenAtom)
   const view = useAtomValue(computerUseViewAtom)
   const selectSession = useSetAtom(selectComputerSessionAtom)
   const refresh = useSetAtom(refreshComputerUseAtom)
   const stop = useSetAtom(stopComputerUseAtom)
+  const resume = useSetAtom(resumeComputerUseAtom)
   const [policy, setPolicy] = React.useState<ComputerRiskPolicy>('standard')
   const titleId = React.useId()
   const descriptionId = React.useId()
@@ -46,6 +48,8 @@ export function ComputerUsePanel({ sessionId }: ComputerUsePanelProps): React.Re
 
   const state = view.state
   const stopping = view.pending === 'stop' || state?.phase === 'stopping'
+  const resuming = view.pending === 'resume'
+  const canResume = state?.supported === true && !stopping && (!hasComputerControl(state) || state.phase === 'paused')
   const statusLabel = getComputerStatusLabel(view)
   const controlling = hasComputerControl(state)
   const otherSession = controlling && state?.sessionId && state.sessionId !== sessionId
@@ -55,13 +59,16 @@ export function ComputerUsePanel({ sessionId }: ComputerUsePanelProps): React.Re
   const targetApp = controlling ? state?.targetApp?.name : undefined
 
   return (
-    <div className="titlebar-no-drag inline-flex max-w-[calc(100vw-2rem)] items-center gap-2" aria-label="桌面操作状态与停止">
+    <div className="titlebar-no-drag flex w-full min-w-0 items-center gap-1" aria-label="桌面操作控制">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" size="sm" className="min-w-0 max-w-64" aria-label={`查看桌面状态：${statusLabel}`}>
-            {view.loading || stopping ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <StatusIcon aria-hidden="true" className="text-muted-foreground" />}
-            <span className="truncate" role="status" aria-live="polite">{targetApp ? `${statusLabel} · ${targetApp}` : statusLabel}</span>
-            <ChevronDown className="text-muted-foreground" aria-hidden="true" />
+          <Button type="button" variant="ghost" className="h-11 min-w-0 flex-1 justify-start gap-2 px-2" aria-label={`查看桌面状态：${statusLabel}`}>
+            {view.loading || stopping || resuming ? <Loader2 className="shrink-0 motion-safe:animate-spin" aria-hidden="true" /> : <StatusIcon aria-hidden="true" className="shrink-0 text-muted-foreground" />}
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block truncate text-xs font-medium">Computer Use</span>
+              <span className="block truncate text-[10px] font-normal text-muted-foreground" role="status" aria-live="polite">{targetApp ? `${statusLabel} · ${targetApp}` : statusLabel}</span>
+            </span>
+            <ChevronRight className="shrink-0 text-muted-foreground" aria-hidden="true" />
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -87,7 +94,7 @@ export function ComputerUsePanel({ sessionId }: ComputerUsePanelProps): React.Re
             {state?.message && <p className="mt-1 break-words text-xs text-muted-foreground">{state.message}</p>}
             {otherSession && <p className="mt-2 text-xs text-muted-foreground">另一个会话正在使用桌面。这里的停止按钮同样有效。</p>}
             {waiting && <p className="mt-2 text-xs text-muted-foreground">请在系统或 App 授权窗口中确认后继续。</p>}
-            {state?.phase === 'paused' && <p className="mt-2 text-xs text-muted-foreground">需要继续时，在会话中告诉 Agent。</p>}
+            {(state?.phase === 'paused' || state?.resumeRequired) && <p className="mt-2 text-xs text-muted-foreground">点击“重新启用”回到待命，再在会话中继续任务。不会自动重放之前的动作。</p>}
             {state?.phase === 'unsupported' && <p className="mt-2 text-xs text-muted-foreground">桌面操作需要 macOS 14.2 或更新版本。</p>}
           </div>
 
@@ -120,6 +127,10 @@ export function ComputerUsePanel({ sessionId }: ComputerUsePanelProps): React.Re
           {view.error && <p role="alert" className="mb-4 break-words rounded-md bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">{view.error}</p>}
 
           <p className="text-xs leading-relaxed text-muted-foreground">动键鼠即可暂停。发送、支付、删除和提交等操作会先请你确认。</p>
+          {canResume && <Button type="button" size="sm" className="mt-3 w-full" disabled={resuming} onClick={() => { void resume() }}>
+            {resuming ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
+            {resuming ? '正在重新启用' : '重新启用'}
+          </Button>}
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">快捷停止 <kbd className="whitespace-nowrap font-sans text-foreground">⌃ ⌥ Esc</kbd></span>
             <Button type="button" size="sm" variant="ghost" disabled={view.loading || stopping} onClick={() => { void refresh() }}>
@@ -129,14 +140,20 @@ export function ComputerUsePanel({ sessionId }: ComputerUsePanelProps): React.Re
           </div>
         </PopoverContent>
       </Popover>
+      {canResume && <Button
+        type="button" variant="ghost" size="icon-sm" className="shrink-0"
+        disabled={resuming} aria-label="重新启用桌面操作" title="重新启用桌面操作"
+        onClick={() => { void resume() }}
+      >
+        {resuming ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
+      </Button>}
       <Button
-        type="button" variant="outline" size="sm" className="shrink-0"
+        type="button" variant="ghost" size="icon-sm" className="shrink-0"
         disabled={view.pending === 'stop'}
-        aria-label="停止所有会话的桌面操作"
+        aria-label="停止所有会话的桌面操作" title="停止桌面操作（⌃⌥Esc）"
         onClick={() => { void stop() }}
       >
         {view.pending === 'stop' ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <Square aria-hidden="true" />}
-        {view.pending === 'stop' ? '正在停止' : '停止'}
       </Button>
     </div>
   )

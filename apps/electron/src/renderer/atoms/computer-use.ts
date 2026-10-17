@@ -3,15 +3,17 @@ import type { ComputerState } from '@gamma/shared'
 import { projectComputerState } from '../components/computer-use/computer-use-model'
 import type { ComputerUseView } from '../components/computer-use/computer-use-model'
 
-/** 状态 UI 没有启用、选窗或系统授权能力；授权由 Agent 首次使用时引导。 */
+/** 本地恢复只解除暂停，不负责选窗、系统授权或自动重放动作。 */
 export interface ComputerUseAPI {
   getComputerState: (sessionId?: string) => Promise<ComputerState>
   stopComputer: () => Promise<ComputerState>
+  resumeComputer: () => Promise<ComputerState>
 }
 
 export const computerUseApiAtom = atom<ComputerUseAPI>({
   getComputerState: (sessionId) => window.electronAPI.getComputerState(sessionId),
   stopComputer: () => window.electronAPI.stopComputer(),
+  resumeComputer: () => window.electronAPI.resumeComputer(),
 })
 
 /** 只控制状态详情的展开，不影响 Agent 的工具可用性。 */
@@ -20,6 +22,7 @@ export const computerUseViewAtom = atom<ComputerUseView>({
   sessionId: null, state: null, loading: false, pending: null, error: null,
 })
 const readEpochAtom = atom(0)
+const operationEpochAtom = atom(0)
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '无法同步桌面状态，请重试读取。'
@@ -50,7 +53,8 @@ export const selectComputerSessionAtom = atom(null, (_get, set, sessionId: strin
 
 export const stopComputerUseAtom = atom(null, async (get, set) => {
   if (get(computerUseViewAtom).pending === 'stop') return
-  // 停止不等待读取完成；旧读取不得把 active 状态恢复回来。
+  // 停止不等待读取或恢复完成；旧响应不得把 active 状态恢复回来。
+  set(operationEpochAtom, get(operationEpochAtom) + 1)
   set(readEpochAtom, get(readEpochAtom) + 1)
   set(computerUseViewAtom, (view) => ({ ...view, pending: 'stop', loading: false, error: null }))
   try {
@@ -59,6 +63,24 @@ export const stopComputerUseAtom = atom(null, async (get, set) => {
     set(readEpochAtom, get(readEpochAtom) + 1)
     set(computerUseViewAtom, (view) => ({ ...view, state, pending: null, loading: false }))
   } catch (error) {
+    set(readEpochAtom, get(readEpochAtom) + 1)
+    set(computerUseViewAtom, (view) => ({ ...view, pending: null, loading: false, error: errorMessage(error) }))
+  }
+})
+
+export const resumeComputerUseAtom = atom(null, async (get, set) => {
+  if (get(computerUseViewAtom).pending) return
+  const epoch = get(operationEpochAtom) + 1
+  set(operationEpochAtom, epoch)
+  set(readEpochAtom, get(readEpochAtom) + 1)
+  set(computerUseViewAtom, (view) => ({ ...view, pending: 'resume', loading: false, error: null }))
+  try {
+    const state = projectComputerState(await get(computerUseApiAtom).resumeComputer())
+    if (get(operationEpochAtom) !== epoch) return
+    set(readEpochAtom, get(readEpochAtom) + 1)
+    set(computerUseViewAtom, (view) => ({ ...view, state, pending: null, loading: false }))
+  } catch (error) {
+    if (get(operationEpochAtom) !== epoch) return
     set(readEpochAtom, get(readEpochAtom) + 1)
     set(computerUseViewAtom, (view) => ({ ...view, pending: null, loading: false, error: errorMessage(error) }))
   }

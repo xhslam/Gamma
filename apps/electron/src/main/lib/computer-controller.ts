@@ -175,7 +175,7 @@ export class ComputerController {
     this.observation = undefined
     this.expiryTimer = setTimeout(() => { void this.stop('桌面授权已到期') }, 30 * 60_000)
     this.expiryTimer.unref()
-    this.publish({ phase: 'armed', sessionId: input.sessionId, channelId: context.binding.channelId, modelId: context.binding.modelId,
+    this.publish({ phase: 'armed', resumeRequired: false, sessionId: input.sessionId, channelId: context.binding.channelId, modelId: context.binding.modelId,
       consentId: undefined, target: undefined, pendingAction: undefined, message: '仅授权下一轮；首次观察时由原生窗口选择目标。每个写动作还需本地确认。' })
     return this.getState()
   }
@@ -258,8 +258,15 @@ export class ComputerController {
    */
   async ensureDesktopSession(): Promise<Lease> {
     if (!this.state.supported) throw new Error('原生桌面控制需要 macOS 14.2+')
-    if (this.lease && this.now() < this.lease.expiresAt && !this.stopping && !this.stopFailed) {
+    if (this.stopping || this.stopFailed) throw new Error('旧原生进程尚未证明停止，请重试停止')
+    if (this.state.resumeRequired) throw new Error('桌面操作已暂停，请在侧边栏点击“重新启用”后再试')
+    if (this.busy || this.permissionInFlight) throw new Error('已有原生操作在途，请等待完成')
+    if (this.lease && this.now() < this.lease.expiresAt) {
       return this.lease
+    }
+    if (this.lease) {
+      await this.stop('桌面授权已到期', 'paused')
+      throw new Error('桌面授权已到期，请在侧边栏重新启用')
     }
     this.epoch += 1
     const leaseId = randomUUID()
@@ -439,10 +446,25 @@ export class ComputerController {
     }
     return this.getState()
   }
+  /** 仅由可信本地 IPC 调用：清理旧 helper 并恢复待命，不创建租约、捕获或重放动作。 */
+  async resume(): Promise<ComputerState> {
+    if (!this.state.supported) throw new Error('原生桌面控制需要 macOS 14.2+')
+    if (this.busy || this.permissionInFlight) throw new Error('已有原生操作在途，请稍后重新启用')
+    const epoch = this.epoch
+    await this.stop('正在清理旧桌面控制')
+    if (this.stopFailed) throw new Error('旧原生进程尚未证明停止，请重试停止')
+    // 新的停止请求优先于恢复；迟到的恢复响应不能解除用户停止。
+    if (this.epoch !== epoch + 1) throw new Error('恢复已被新的停止请求取消')
+    this.publish({ phase: 'disabled', resumeRequired: false, message: '桌面操作已重新启用。请在会话中继续任务；不会自动重放之前的动作。' })
+    return this.getState()
+  }
   /** 原生急停/监听失效只能撤权；事件/恢复消息从不重新 grant。 */
   nativeStopped(): void { void this.stop('原生安全门暂停，需重新由用户授权', 'paused') }
   stop(reason = '本地用户停止', finalPhase: 'disabled' | 'paused' = 'disabled'): Promise<ComputerState> {
-    if (this.stopping) return this.stopping
+    if (this.stopping) {
+      this.epoch += 1
+      return this.stopping
+    }
     const revokedBinding = this.lease?.binding
     this.lease = undefined
     this.observation = undefined
@@ -456,7 +478,7 @@ export class ComputerController {
     if (this.expiryTimer) clearTimeout(this.expiryTimer)
     this.expiryTimer = undefined
     this.epoch += 1
-    this.publish({ phase: 'stopping', target: undefined, pendingAction: undefined, consentId: undefined, message: reason })
+    this.publish({ phase: 'stopping', resumeRequired: true, target: undefined, targetApp: undefined, pendingAction: undefined, consentId: undefined, message: reason })
     const stopping = this.host.terminate().then(() => {
       this.stopFailed = false
       this.publish({ phase: this.state.supported ? finalPhase : 'unsupported', message: reason })

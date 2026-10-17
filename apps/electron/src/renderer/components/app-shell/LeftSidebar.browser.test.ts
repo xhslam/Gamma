@@ -287,3 +287,46 @@ describe('Given 不带三角标记的项目列表', () => {
     expect(result).toEqual({ absent: true, current: true, switched: true, controls: true, archived: true, collapsed: true })
   }, 30_000)
 })
+
+describe('Given 侧栏内的 Computer Use 控制', () => {
+  test('When 窄侧栏处于暂停状态 Then 深浅主题均不溢出，且能重新启用与停止', async () => {
+    const results = await renderer.run<Array<{ fits: boolean; inSidebar: boolean; ready: boolean; stopped: boolean; floating: boolean; calls: string[] }>>(`
+      const api = window.leftSidebarRegression, results = [];
+      for (const dark of [false, true]) {
+        const fixture = await api.mount({ dark, width: 200, computerState: { supported: true, phase: 'paused', resumeRequired: true } });
+        await api.until(() => fixture.button('重新启用桌面操作'));
+        const controls = document.querySelector('[aria-label="桌面操作控制"]'), sidebar = document.querySelector('.gamma-sidebar');
+        const bounds = controls.getBoundingClientRect(), side = sidebar.getBoundingClientRect();
+        const fits = controls.scrollWidth <= controls.clientWidth && bounds.left >= side.left && bounds.right <= side.right;
+        const inSidebar = sidebar.contains(controls), floating = getComputedStyle(controls.parentElement).position === 'fixed';
+        fixture.button('重新启用桌面操作').click();
+        await api.until(() => controls.textContent.includes('桌面待命'));
+        const ready = !controls.textContent.includes('已暂停');
+        fixture.button('停止所有会话的桌面操作').click();
+        await api.until(() => controls.textContent.includes('已停止'));
+        const stopped = !!fixture.button('重新启用桌面操作');
+        results.push({ fits, inSidebar, ready, stopped, floating, calls: fixture.calls.filter(call => typeof call === 'string') });
+        fixture.root.unmount(); await api.delay();
+      }
+      return results;
+    `)
+    expect(results).toEqual(Array.from({ length: 2 }, () => ({ fits: true, inSidebar: true, ready: true, stopped: true, floating: false, calls: ['resumeComputer', 'stopComputer'] })))
+  }, 30_000)
+
+  test('When 本地重新启用失败 Then 详情显示可重试错误并保留停止入口', async () => {
+    const result = await renderer.run<{ error: string; stopEnabled: boolean; retryEnabled: boolean }>(`
+      const api = window.leftSidebarRegression;
+      const fixture = await api.mount({ resumeError: '旧 helper 未停止', computerState: { supported: true, phase: 'paused', resumeRequired: true } });
+      await api.until(() => fixture.button('重新启用桌面操作'));
+      fixture.button('重新启用桌面操作').click();
+      await api.until(() => document.querySelector('[role="status"]').textContent.includes('异常'));
+      document.querySelector('button[aria-label^="查看桌面状态"]').click();
+      await api.until(() => document.querySelector('[role="alert"]'));
+      const result = { error: document.querySelector('[role="alert"]').textContent,
+        stopEnabled: !fixture.button('停止所有会话的桌面操作').disabled,
+        retryEnabled: !fixture.button('重新启用桌面操作').disabled };
+      fixture.root.unmount(); return result;
+    `)
+    expect(result).toEqual({ error: '旧 helper 未停止', stopEnabled: true, retryEnabled: true })
+  }, 30_000)
+})
