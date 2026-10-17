@@ -17,6 +17,9 @@ function computerOptionsForFile(app, original) {
 
 // 仅electron-builder打包签名阶段调用，不在构建/测试/导入时执行签名。
 module.exports = async function signMacApp(options) {
+  if (!options.identity || options.identity === 'none') {
+    return
+  }
   const { signAsync } = require('@electron/osx-sign')
   await signAsync({ ...options, optionsForFile: computerOptionsForFile(options.app, options.optionsForFile) })
 }
