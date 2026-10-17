@@ -7,8 +7,7 @@ import { ComputerController } from './computer-controller'
 import { ComputerNativeHost } from './computer-native-host'
 import { installComputerExecutionGuard } from './computer-execution-gate'
 import { getMainWindow } from './main-window-store'
-import { hasLiveTerminals } from './terminal-service'
-import { COMPUTER_IPC_CHANNELS, type ComputerArmInput, type ComputerState } from '@gamma/shared'
+import { COMPUTER_IPC_CHANNELS } from '@gamma/shared'
 
 import { computerAuthorizationManager } from './computer-authorization-manager'
 export { computerAuthorizationManager }
@@ -33,15 +32,14 @@ computerController.onState(state => {
 computerAuthorizationManager.onAppAuthRequested(req => {
   const window = getMainWindow()
   if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return
+  if (window.isMinimized()) window.restore()
+  window.show(); window.focus()
   window.webContents.send(COMPUTER_IPC_CHANNELS.APP_AUTH_REQUESTED, req)
 })
 computerAuthorizationManager.onRiskConfirmRequested(req => {
   const window = getMainWindow()
   if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return
+  if (window.isMinimized()) window.restore()
+  window.show(); window.focus()
   window.webContents.send(COMPUTER_IPC_CHANNELS.RISK_CONFIRM_REQUESTED, req)
 })
-export async function armComputer(input: ComputerArmInput): Promise<ComputerState> {
-  // 存活的PTY可能有未结束后台工作；不能把“看起来闲置”当作已停止证明。
-  if (hasLiveTerminals()) throw new Error('请先关闭所有存活终端，无法证明其中没有在途命令')
-  return computerController.arm(input)
-}

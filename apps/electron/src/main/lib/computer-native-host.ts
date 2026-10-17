@@ -5,14 +5,45 @@ import type { ComputerHost } from './computer-controller'
 
 interface Pending { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
 export interface ComputerHostCommand { executable: string; args?: string[] }
+const NATIVE_REASONS: Readonly<Record<string, string>> = {
+  'permission-required': '系统权限未授予或已撤销',
+  'secure-input': '系统安全输入禁止注入',
+  'input-held': '检测到按住的按键或鼠标按钮',
+  'preparation-required': '动作准备已失效，请重新观察',
+  'stale-observation': '观察已过期或动作不可重放',
+  'display-changed': '显示器布局已改变，请重新观察',
+  'observation-layout-changed': '前台布局已改变或无法验证，请先聚焦目标窗口并重新截图',
+  'desktop-changed': '桌面布局已改变，请重新观察',
+  'target-changed': '目标应用或控件已改变，请重新观察',
+  'focus-changed': '输入焦点已改变，请重新观察',
+  'application-not-found': '未找到唯一的应用',
+  'ambiguous-application': '存在多个应用进程，无法唯一授权',
+  'invalid-application': '应用名称或标识无效',
+  'unsafe-focus': '无法验证实际输入焦点',
+  'untrusted-surface': '目标属于Gamma或不可授权的系统界面',
+  'unknown-target': '无法验证实际目标控件',
+  'cross-application-drag': '暂不支持跨应用拖拽',
+  'revoked': '原生授权已停止或失效',
+  'busy': '原生操作仍在进行',
+  'unsupported-os': 'Computer Use需要macOS14.2或更新版本',
+}
+const STOP_REASONS = new Set([
+  '检测到用户操作，桌面控制已暂停', '紧急停止快捷键', '用户点击独立原生停止按钮',
+  '安全监听已失活', '安全监听失活', '本地停止UI无响应', '独立原生停止按钮不可见',
+  '系统安全输入已开启', '授权已过期', '父进程已退出', '父进程请求停止',
+  '动作可能部分执行，已暂停，禁止自动重试',
+])
+export class ComputerNativeHostError extends Error {
+  constructor(readonly code: string, readonly reason: string) { super(reason); this.name = 'ComputerNativeHostError' }
+}
 /** 私有 stdio 通道：不暴露任意可执行路径给 renderer/模型，不记录观察 payload。 */
 export class ComputerNativeHost implements ComputerHost {
   private child?: ChildProcessWithoutNullStreams
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
-  private listeners = new Set<() => void>()
+  private listeners = new Set<(reason?: string) => void>()
   constructor(private readonly command: () => ComputerHostCommand, private readonly options: { maxLineBytes?: number } = {}) {}
-  onStopped(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
+  onStopped(listener: (reason?: string) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   private start(): ChildProcessWithoutNullStreams {
     if (this.stopping) throw new Error('原生 helper 正在停止')
     if (this.child) return this.child
@@ -21,16 +52,18 @@ export class ComputerNativeHost implements ComputerHost {
     this.child = child
     const decoder = new StringDecoder('utf8')
     let buffered = ''
-    const fail = (): void => {
-      if (this.child !== child) return
+    let failed = false
+    const fail = (reason = '原生 helper 失联；不能推断操作未执行'): void => {
+      if (failed || this.child !== child) return
+      failed = true
       for (const item of this.pending.values()) { clearTimeout(item.timer); item.reject(new Error('原生 helper 失联；不能推断操作未执行')) }
       this.pending.clear()
       // 父进程主动回收时，stopped/close 只是退出证明，不应再次触发暂停撤权。
-      if (!this.stopping) for (const listener of this.listeners) { try { listener() } catch { /* 不阻塞安全回收。 */ } }
+      if (!this.stopping) for (const listener of this.listeners) { try { listener(reason) } catch { /* 不阻塞安全回收。 */ } }
     }
-    child.on('error', fail)
+    child.on('error', () => { fail(); void this.terminate().catch(() => {}) })
     child.on('close', () => { fail(); if (this.child === child) this.child = undefined })
-    child.stdin.on('error', fail)
+    child.stdin.on('error', () => { fail(); void this.terminate().catch(() => {}) })
     // stderr 不进通用日志，避免错误路径夹带AX或图像；始终消费防止子进程堵塞。
     child.stderr.on('data', () => {})
     child.stdout.on('data', (chunk: Buffer) => {
@@ -44,21 +77,30 @@ export class ComputerNativeHost implements ComputerHost {
           const response: unknown = JSON.parse(line)
           if (!response || typeof response !== 'object' || Array.isArray(response)) throw new Error()
           const message = response as Record<string, unknown>
-          if (message.event === 'stopped') { fail(); continue }
+          if (message.event === 'stopped') {
+            const reason = typeof message.reason === 'string' && STOP_REASONS.has(message.reason) ? message.reason : '原生桌面控制已暂停'
+            fail(reason)
+            void this.terminate().catch(() => {})
+            continue
+          }
           if (typeof message.id !== 'string' || typeof message.ok !== 'boolean') throw new Error()
           const item = this.pending.get(message.id)
           if (!item) continue // 超时/撤权后的迟到回包没有复活能力。
           clearTimeout(item.timer)
           this.pending.delete(message.id)
           if (message.ok) item.resolve(message.result)
-          else item.reject(new Error('原生操作未完成；请检查权限、目标与本地确认'))
+          else {
+            const detail = message.error && typeof message.error === 'object' && !Array.isArray(message.error) ? message.error as Record<string, unknown> : undefined
+            const code = typeof detail?.code === 'string' && Object.hasOwn(NATIVE_REASONS, detail.code) ? detail.code : 'native-failure'
+            item.reject(new ComputerNativeHostError(code, NATIVE_REASONS[code] ?? '原生操作未完成；请检查权限和目标上下文'))
+          }
         } catch { fail(); child.kill('SIGKILL'); return }
       }
     })
     return child
   }
   call(method: string, params: Record<string, unknown> = {}, timeoutMs = 10_000): Promise<unknown> {
-    if (!['status', 'requestPermission', 'select', 'observe', 'screenshot', 'openApp', 'perform'].includes(method)) return Promise.reject(new Error('未允许的原生方法'))
+    if (!['status', 'requestPermission', 'resolveApp', 'select', 'observe', 'screenshot', 'listWindows', 'prepare', 'confirmation', 'perform'].includes(method)) return Promise.reject(new Error('未允许的原生方法'))
     if (this.stopping) return Promise.reject(new Error('原生 helper 正在停止'))
     const id = randomUUID()
     const line = JSON.stringify({ id, method, params }) + '\n'

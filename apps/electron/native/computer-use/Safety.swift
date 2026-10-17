@@ -27,7 +27,8 @@ struct LeaseParams: Codable { let leaseId: String; let epoch: Int; let deadline:
 struct BoundParams: Codable { let leaseId: String; let epoch: Int }
 
 func parseKeyCombination(_ keyString: String) throws -> (CGKeyCode, CGEventFlags) {
-    let parts = keyString.split(whereSeparator: { $0 == "+" || $0 == "-" }).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+    let normalized = keyString == "-" ? "minus" : keyString
+    let parts = normalized.split(whereSeparator: { $0 == "+" || $0 == "-" }).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
     guard !parts.isEmpty else { throw NativeFailure("invalid-key", "按键不能为空") }
     var flags = CGEventFlags()
     var baseKey: String?
@@ -53,6 +54,9 @@ func parseKeyCombination(_ keyString: String) throws -> (CGKeyCode, CGEventFlags
         "backslash": 42, "\\": 42, "comma": 43, ",": 43, "slash": 44, "/": 44, "n": 45,
         "m": 46, "period": 47, ".": 47, "tab": 48, "space": 49, "grave": 50, "`": 50,
         "delete": 51, "backspace": 51, "escape": 53, "esc": 53,
+        "home": 115, "end": 119, "pageup": 116, "pagedown": 121, "forwarddelete": 117,
+        "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97,
+        "f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103, "f12": 111,
         "left": 123, "arrowleft": 123, "right": 124, "arrowright": 124,
         "down": 125, "arrowdown": 125, "up": 126, "arrowup": 126
     ]
@@ -67,21 +71,24 @@ struct Action: Codable, Equatable {
     let startX: Double?, startY: Double?
     let button: String?
     let clickCount: Int?
+    let windowId: UInt32?
+    let bundleId: String?
 
-    init(kind: String, observationId: String, x: Double? = nil, y: Double? = nil, text: String? = nil, key: String? = nil, deltaY: Double? = nil, elementRef: String? = nil, appName: String? = nil, startX: Double? = nil, startY: Double? = nil, button: String? = nil, clickCount: Int? = nil) {
+    init(kind: String, observationId: String, x: Double? = nil, y: Double? = nil, text: String? = nil, key: String? = nil, deltaY: Double? = nil, elementRef: String? = nil, appName: String? = nil, startX: Double? = nil, startY: Double? = nil, button: String? = nil, clickCount: Int? = nil, windowId: UInt32? = nil, bundleId: String? = nil) {
         self.kind = kind; self.observationId = observationId
         self.x = x; self.y = y; self.text = text; self.key = key; self.deltaY = deltaY; self.elementRef = elementRef
         self.appName = appName; self.startX = startX; self.startY = startY
-        self.button = button; self.clickCount = clickCount
+        self.button = button; self.clickCount = clickCount; self.windowId = windowId; self.bundleId = bundleId
     }
 
     func validate() throws {
         guard !observationId.isEmpty, observationId.utf8.count <= 128, elementRef == nil || elementRef!.utf8.count <= 128 else { throw NativeFailure("invalid-action", "观察标识无效") }
+        guard button == nil || ["left", "right", "middle"].contains(button!), clickCount == nil || (1...3).contains(clickCount!) else { throw NativeFailure("invalid-action", "鼠标按钮或点击次数无效") }
         switch kind {
-        case "click", "double_click", "triple_click", "right_click", "middle_click", "mouse_move":
+        case "click", "double_click", "triple_click", "right_click", "middle_click", "mouse_move", "move":
             guard let x, let y, x.isFinite, y.isFinite else { throw NativeFailure("invalid-action", "坐标无效") }
         case "drag", "left_click_drag":
-            guard let x, let y, x.isFinite, y.isFinite else { throw NativeFailure("invalid-action", "拖拽坐标无效") }
+            guard let x, let y, let startX, let startY, [x, y, startX, startY].allSatisfy(\.isFinite) else { throw NativeFailure("invalid-action", "拖拽必须包含有限的起终点坐标") }
         case "scroll":
             guard let x, let y, let deltaY, x.isFinite, y.isFinite, deltaY.isFinite, deltaY != 0, abs(deltaY) >= 1, abs(deltaY) <= 1200 else { throw NativeFailure("invalid-action", "滚动参数无效") }
         case "type", "axSetValue":
@@ -90,7 +97,9 @@ struct Action: Codable, Equatable {
             guard let key, !key.isEmpty else { throw NativeFailure("invalid-action", "按键不能为空") }
             _ = try parseKeyCombination(key)
         case "open_app":
-            guard let appName, !appName.isEmpty else { throw NativeFailure("invalid-action", "应用名称不能为空") }
+            guard let identifier = bundleId ?? appName, identifier.contains("."), !identifier.contains(" "), identifier.utf8.count <= 512 else { throw NativeFailure("invalid-action", "打开应用必须提供已解析的bundleId") }
+        case "focus_window":
+            guard let windowId, windowId > 0 else { throw NativeFailure("invalid-action", "窗口编号无效") }
         case "wait":
             break
         case "axPress":
@@ -99,18 +108,25 @@ struct Action: Codable, Equatable {
         }
     }
 }
-struct PerformParams: Codable { let leaseId: String; let epoch: Int; let actionId: String; let action: Action }
+struct PerformParams: Codable {
+    let leaseId: String; let epoch: Int; let actionId: String; let action: Action
+    let preparationId: String?
+    init(leaseId: String, epoch: Int, actionId: String, action: Action, preparationId: String? = nil) {
+        self.leaseId = leaseId; self.epoch = epoch; self.actionId = actionId; self.action = action; self.preparationId = preparationId
+    }
+}
 struct Receipt: Encodable { let actionId: String, outcome: String, message: String }
 struct ExecutionPermit: Equatable { let nonce: UUID; let fence: UInt64; let until: TimeInterval }
 struct Snapshot {
     let id: String, epoch: Int, fence: UInt64, created: TimeInterval
     let target: Target?, width: Int, height: Int, axDigest: String
     let display: DisplayResult?
+    let desktopDigest: String?
 
-    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil) {
+    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil) {
         self.id = id; self.epoch = epoch; self.fence = fence; self.created = created
         self.target = target; self.width = width; self.height = height; self.axDigest = axDigest
-        self.display = display
+        self.display = display; self.desktopDigest = desktopDigest
     }
 
     func point(x: Double, y: Double) throws -> CGPoint {
@@ -171,6 +187,7 @@ final class SafetyGate {
     private var selecting = false
     private var busy = false
     private var listenerHealthy = false
+    private var confirming: String?
     private let clock: () -> TimeInterval
     init(clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) { self.clock = clock }
     private func locked<T>(_ body: () throws -> T) rethrows -> T { lock.lock(); defer { lock.unlock() }; return try body() }
@@ -200,22 +217,53 @@ final class SafetyGate {
     func startWork(_ token: UInt64) throws { try locked { try valid(token); guard !busy else { throw NativeFailure("busy", "已有原生操作进行中") }; busy = true } }
     func endWork() { locked { busy = false } }
     func check(_ token: UInt64) throws { try locked { try valid(token) } }
+    func setConfirmation(_ id: String, waiting: Bool, token: UInt64) throws {
+        try locked {
+            try valid(token)
+            guard !id.isEmpty, listenerHealthy else { throw NativeFailure("revoked", "确认上下文无效") }
+            if waiting {
+                guard confirming == nil || confirming == id, permit == nil, pending == nil else { throw NativeFailure("busy", "已有确认或执行") }
+                confirming = id
+            } else {
+                guard confirming == id else { throw NativeFailure("revoked", "确认标识已失效") }
+                confirming = nil
+            }
+        }
+    }
+    var isConfirming: Bool { locked { confirming != nil } }
+    func inspect(_ p: PerformParams) throws -> Snapshot {
+        try p.action.validate()
+        return try locked {
+            try valid()
+            guard !selecting, listenerHealthy, confirming == nil, p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
+                  !p.actionId.isEmpty, p.actionId.utf8.count <= 128, !usedActions.contains(p.actionId),
+                  let s = observation, s.id == p.action.observationId, s.epoch == p.epoch, s.fence == fence,
+                  clock() - s.created <= 30 else { throw NativeFailure("stale-observation", "观察、动作或确认状态已失效") }
+            return s
+        }
+    }
+    func checkDispatch(_ token: UInt64) throws {
+        try locked { try valid(token); guard listenerHealthy, confirming == nil else { throw NativeFailure("revoked", "监听失活或正在等待确认") } }
+    }
     // 只允许包裹两个CGEvent.post等短同步投递；严禁AX/UI/捕获进入此锁。
     private func consume(_ ticket: ExecutionPermit) throws {
         try valid(ticket.fence)
-        guard listenerHealthy, permit == ticket, clock() <= ticket.until else { throw NativeFailure("revoked", "单次批准已失效或已消费") }
+        guard listenerHealthy, confirming == nil, permit == ticket, clock() <= ticket.until else { throw NativeFailure("revoked", "单次批准已失效或已消费") }
         permit = nil
     }
     func claimAX(_ ticket: ExecutionPermit) throws { try locked { try consume(ticket) } }
     func commitDispatch(_ ticket: ExecutionPermit, _ dispatch: () -> Void) throws {
         try locked { try consume(ticket); dispatch() }
     }
+    func continueDispatch(_ token: UInt64, _ dispatch: () -> Void) throws {
+        try locked { try valid(token); guard listenerHealthy, confirming == nil else { throw NativeFailure("revoked", "执行已撤权") }; dispatch() }
+    }
     func save(_ s: Snapshot) throws { try locked { try valid(s.fence); guard pending == nil else { throw NativeFailure("busy", "等待本地确认") }; observation = s } }
     func prepare(_ p: PerformParams) throws -> Snapshot {
         try p.action.validate()
         return try locked {
             try valid()
-            guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch, listenerHealthy,
+            guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch, listenerHealthy, confirming == nil,
                   !p.actionId.isEmpty, p.actionId.utf8.count <= 128, !usedActions.contains(p.actionId), usedActions.count < 1024,
                   pending == nil, let s = observation, s.id == p.action.observationId, s.epoch == p.epoch,
                   s.fence == fence, clock() - s.created <= 30 else { throw NativeFailure("stale-observation", "观察过期、动作重放或安全门已撤权") }
@@ -225,7 +273,7 @@ final class SafetyGate {
     @discardableResult func approve(_ p: PerformParams, snapshot: Snapshot) throws -> ExecutionPermit {
         try locked {
             try valid(snapshot.fence)
-            guard listenerHealthy, pending?.actionId == p.actionId, pending?.action == p.action,
+            guard listenerHealthy, confirming == nil, pending?.actionId == p.actionId, pending?.action == p.action,
                   pending?.epoch == p.epoch, pending?.leaseId == p.leaseId, observation?.id == snapshot.id,
                   clock() - snapshot.created <= 30 else { throw NativeFailure("revoked", "迟到确认无效") }
             // 先消费再投递：即使系统调用失败也不能重放同一观察。
@@ -235,7 +283,7 @@ final class SafetyGate {
         }
     }
     @discardableResult func stop() -> Bool {
-        locked { let active = lease != nil; fence &+= 1; lease = nil; target = nil; observation = nil; pending = nil; permit = nil; selecting = false; listenerHealthy = false; return active }
+        locked { let active = lease != nil; fence &+= 1; lease = nil; target = nil; observation = nil; pending = nil; permit = nil; selecting = false; listenerHealthy = false; confirming = nil; return active }
     }
     func invalidateObservation() { locked { observation = nil; pending = nil; permit = nil } }
     var expired: Bool { locked { lease != nil && clock() >= expiry } }

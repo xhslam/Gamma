@@ -58,7 +58,7 @@ import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgen
 import { getAgentWorkspace, getProjectFilesPath, getWorkspaceMcpConfig, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles, getWorkspaceAgentsMdPath, readWorkspaceAgentsMd, getWorkspaceMemoryGuidance, isWorkspaceProjectKnowledgeMaintenanceApproved } from './agent-workspace-manager'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { getMcpApiKeyEnvironment, getMcpOAuthHeaders } from './mcp-oauth-service'
-import { getAgentWorkspacePath, getAgentSessionWorkspacePath, getSdkConfigDir, getWorkspaceSkillsDir } from './config-paths'
+import { getAgentWorkspacePath, getAgentSessionWorkspacePath, getSdkConfigDir, getWorkspaceSkillsDir, getMemoryDir } from './config-paths'
 import { getRuntimeStatus } from './runtime-init'
 import { getSettings } from './settings-service'
 import { buildSystemPrompt, buildDynamicContext } from './agent-prompt-builder'
@@ -1001,13 +1001,13 @@ export class AgentOrchestrator {
     let workspace: import('@gamma/shared').AgentWorkspace | undefined
     const computerBinding: ComputerBinding = { sessionId, runId: `${runGeneration}:${randomUUID()}`, channelId, modelId: selectedModelId,
       routeIdentity: createHash('sha256').update(`${channel.provider}\n${channel.baseUrl ?? ''}`).digest('hex') }
-    let desktopMode = false
     let releaseComputerRevocation: (() => void) | undefined
+    let desktopMode = false
 
     try {
       const vision = await resolvePiImageInputCapability(channel.provider, selectedModelId)
       desktopMode = computerController.beginRun(computerBinding, input.triggeredBy ?? 'user', vision === 'supported')
-      if (desktopMode) releaseComputerRevocation = computerController.onRevoked(computerBinding, () => { void this.adapter.abort(sessionId) })
+      releaseComputerRevocation = computerController.onRevoked(computerBinding, () => { void this.adapter.abort(sessionId) })
       console.log(`[Agent 编排] 启动 Pi runtime — 模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`)
 
       // 确定 Agent 工作目录
@@ -1094,7 +1094,7 @@ export class AgentOrchestrator {
       // 合并外部注入的自定义 MCP 服务器（如飞书群聊工具）
 
       // Gamma 主进程连接用户 MCP server，并转换为 Pi custom tools。
-      if (!desktopMode && Object.keys(mcpServers).length > 0) {
+      if (Object.keys(mcpServers).length > 0) {
         try {
           piMcpTools = await buildPiMcpTools(mcpServers)
         } catch (error) {
@@ -1613,7 +1613,7 @@ export class AgentOrchestrator {
       const handleModelResolved = (model: string): void => {
         // `[1m]` 是 SDK 内部上下文变体，不应泄漏到标题生成或用户可见的模型名。
         resolvedModel = model.replace(/\[1m\]$/i, '')
-        if (desktopMode && resolvedModel !== computerBinding.modelId) void computerController.stopForSession(sessionId, '实际模型与外发同意不一致，授权已撤销')
+        if (resolvedModel !== computerBinding.modelId) void computerController.stopForSession(sessionId, '实际模型与外发同意不一致，授权已撤销')
         console.log(`[Agent 编排] SDK 确认模型: ${resolvedModel}`)
         this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'model_resolved', model: resolvedModel } })
       }
@@ -1632,12 +1632,8 @@ export class AgentOrchestrator {
       let githubCopilotCredentialsSnapshot = githubCopilotOAuthCredentials
       const queryOptions: PiAgentQueryOptions = {
         sessionId,
-        desktopMode,
-        getComputerObservations: async () => {
-          computerController.assertTool(computerBinding, 'ComputerObserve')
-          return computerController.getPrivateObservations(computerBinding)
-        },
-        validateComputerLease: async () => { computerController.assertTool(computerBinding, 'ComputerObserve') },
+        computerToolsAvailable: true,
+        validateComputerLease: async () => { computerController.assertObservationSharing(computerBinding) },
         prompt: finalPrompt,
         // 旧持久化模型 ID 可能带 `[1m]` 上下文后缀；Pi runtime 不支持该变体：
         // 智谱等端点不识别 glm-5.2[1m] 这类后缀，会返回 1211「模型不存在」。
@@ -1666,6 +1662,8 @@ export class AgentOrchestrator {
         initialUserMessageUuid,
         piAgentDir: getSdkConfigDir(),
         piSessionDir: join(getSdkConfigDir(), 'sessions'),
+        memoryEnabled: (input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode,
+        ...(((input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode) ? { memoryRoot: getMemoryDir() } : {}),
         ...(allAdditionalDirectories.length > 0 && { additionalDirectories: allAdditionalDirectories }),
         ...(workspaceSlug ? {
           additionalSkillPaths: [getWorkspaceSkillsDir(workspaceSlug)],

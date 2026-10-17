@@ -214,8 +214,9 @@ export class PiUtilityAdapter {
     if (!pending || pending.ended || pending.stopping || pending.runtimeFailed) throw new Error(`No active Agent query: ${queryId ?? 'unknown'}`)
 
     if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_OBSERVATIONS || request.method === AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_VALIDATE) {
-      if (ownerQueryId !== pending.queryId || request.sessionId !== pending.sessionId || !pending.input.desktopMode) throw new Error('没有该query的私有观察能力')
       const validation = request.method === AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_VALIDATE
+      const permitted = pending.input.desktopMode || (validation && pending.input.computerToolsAvailable)
+      if (ownerQueryId !== pending.queryId || request.sessionId !== pending.sessionId || !permitted) throw new Error('没有该query的电脑观察核验能力')
       if (validation ? !pending.input.validateComputerLease : !pending.input.getComputerObservations) throw new Error('没有该query的私有观察能力')
       const result = validation ? await pending.input.validateComputerLease!() : await pending.input.getComputerObservations!()
       if (pending.ended || pending.stopping || pending.runtimeFailed) throw new Error('query已经撤销')

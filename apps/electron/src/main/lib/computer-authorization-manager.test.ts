@@ -13,13 +13,13 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
     manager = new ComputerAuthorizationManager(tempConfigFile)
   })
 
-  test('初始偏好包含默认受信任应用（备忘录），风险策略默认为 standard', () => {
+  test('Given 首次安装 When 读取偏好 Then 不默认信任任何应用，外发也未同意', () => {
     const prefs = manager.getPreferences()
     expect(prefs.riskPolicy).toBe('standard')
-    expect(prefs.allowedApps['notes']).toBe('always')
-    expect(prefs.allowedApps['备忘录']).toBe('always')
-    expect(manager.checkAppAuthorization('Notes')).toBe('allowed')
-    expect(manager.checkAppAuthorization('备忘录')).toBe('allowed')
+    expect(prefs.allowedApps).toEqual({})
+    expect(prefs.shareObservations).toBe(false)
+    expect(manager.checkAppAuthorization('Notes')).toBe('pending')
+    expect(manager.checkAppAuthorization('备忘录')).toBe('pending')
   })
 
   test('未知应用首次检查返回 pending', () => {
@@ -38,12 +38,12 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
 
   test('用户授予“总是允许 (always)”时，写入持久化配置', () => {
     manager.recordAppDecision('Safari', 'always', 'com.apple.Safari')
-    expect(manager.checkAppAuthorization('Safari')).toBe('allowed')
+    expect(manager.checkAppAuthorization('Safari', 'com.apple.Safari')).toBe('allowed')
     expect(manager.checkAppAuthorization('com.apple.Safari')).toBe('allowed')
 
     // 新建 manager 实例模拟重启后，持久化决策依然生效
     const newManager = new ComputerAuthorizationManager(tempConfigFile)
-    expect(newManager.checkAppAuthorization('Safari')).toBe('allowed')
+    expect(newManager.checkAppAuthorization('Safari', 'com.apple.Safari')).toBe('allowed')
     expect(newManager.checkAppAuthorization('com.apple.Safari')).toBe('allowed')
   })
 
@@ -97,5 +97,62 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
     })
     expect(passed).toBe(true)
     expect(confirmedTitle).toBe('支付确认')
+  })
+})
+
+describe('Given 持久截图外发同意与失败关闭', () => {
+  const create = () => new ComputerAuthorizationManager(join(tmpdir(), `gamma-consent-${randomUUID()}.json`))
+  test('When 首次同意 Then 仅询问一次且配置可重载；dismiss不等于同意', async () => {
+    const path = join(tmpdir(), `gamma-consent-${randomUUID()}.json`)
+    const manager = new ComputerAuthorizationManager(path)
+    manager.updatePreferences({ systemPermissionsDismissed: true })
+    expect(manager.getPreferences().shareObservations).toBe(false)
+    let count = 0
+    manager.setUiHandlers({ observationConsent: async () => { count++; return true } })
+    await manager.ensureObservationConsent(); await manager.ensureObservationConsent()
+    expect(count).toBe(1)
+    expect(new ComputerAuthorizationManager(path).getPreferences().shareObservations).toBe(true)
+  })
+  test('When 拒绝或 UI 抛错 Then 不记录同意', async () => {
+    for (const handler of [async () => false, async () => { throw new Error('UI故障') }]) {
+      const manager = create(); manager.setUiHandlers({ observationConsent: handler })
+      await expect(manager.ensureObservationConsent()).rejects.toThrow('尚未同意')
+      expect(manager.getPreferences().shareObservations).toBe(false)
+    }
+  })
+  test('When 本次允许 Then 限定真实run，finish后清除且不能授权其他run', () => {
+    const manager = create()
+    manager.recordAppDecision('Notes', 'once', 'com.apple.Notes', 'run1')
+    expect(manager.checkAppAuthorization('Notes', 'com.apple.Notes', 'run1')).toBe('allowed')
+    expect(manager.checkAppAuthorization('Notes', 'com.apple.Notes', 'run2')).toBe('pending')
+    manager.clearRun('run1')
+    expect(manager.checkAppAuthorization('Notes', 'com.apple.Notes', 'run1')).toBe('pending')
+  })
+  test('When 应用名称说允许但bundle明确拒绝 Then 拒绝优先', () => {
+    const manager = create()
+    manager.recordAppDecision('Notes', 'always')
+    manager.recordAppDecision('Notes', 'denied', 'com.apple.Notes')
+    expect(manager.checkAppAuthorization('Notes', 'com.apple.Notes')).toBe('denied')
+  })
+  test('When 应用确认抛错、高风险确认抛错 Then 绝不自动允许', async () => {
+    const manager = create()
+    manager.setUiHandlers({ appAuth: async () => { throw new Error('UI unavailable') }, riskConfirm: async () => { throw new Error('UI unavailable') } })
+    await expect(manager.ensureAppAuthorized('Unknown', 'example.unknown')).rejects.toThrow('拒绝')
+    expect(await manager.confirmRiskAction({ requestId: 'risk', title: '提交', reason: '提交', actionKind: 'click', authMethod: 'dialog' })).toBe(false)
+  })
+  test('When 等待中的应用授权被停止 Then 立即拒绝且迟到UI答复失效', async () => {
+    const manager = create()
+    let request = ''
+    manager.onAppAuthRequested(req => { request = req.requestId })
+    const waiting = manager.ensureAppAuthorized('Unknown', 'example.unknown')
+    manager.cancelPending()
+    await expect(waiting).rejects.toThrow('停止')
+    expect(manager.resolveAppAuth(request, 'always')).toBe(false)
+    expect(manager.checkAppAuthorization('Unknown', 'example.unknown')).toBe('pending')
+  })
+  test('When IPC混入无效偏好和非布尔批准 Then 拒绝而不是存盘', () => {
+    const manager = create()
+    expect(() => manager.updatePreferences({ shareObservations: 'yes' } as unknown as Parameters<typeof manager.updatePreferences>[0])).toThrow()
+    expect(() => manager.resolveRiskConfirm('id', 'false' as unknown as boolean)).toThrow()
   })
 })

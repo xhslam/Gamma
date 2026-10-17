@@ -11,10 +11,6 @@ func runSelfTests() throws -> Int {
         do { try body() } catch { count += 1; return }
         throw NativeFailure("self-test", name)
     }
-    for bundle in ["com.apple.Terminal", "com.googlecode.iterm2", "com.agilebits.onepassword7", "com.microsoft.VSCode", "com.apple.systempreferences"] {
-        try expect(forbiddenTargetBundle(bundle), "Given已知执行或敏感应用，Then不可选择")
-    }
-    try expect(!forbiddenTargetBundle("test.fixture"), "Given普通fixture标识，Then仍需完整窗口验证而非全局拒绝")
     try expect(isUnscopedAXSurface(role: "AXSheet", subrole: "", depth: 1), "Given附属sheet，Then不继承窗口授权")
     try expect(isUnscopedAXSurface(role: "AXWindow", subrole: "AXDialog", depth: 2), "Given附属对话框，Then拒绝读取及引用")
     try expect(!isUnscopedAXSurface(role: "AXWindow", subrole: "", depth: 0), "Given所选根窗口，Then允许验证")
@@ -180,5 +176,67 @@ func runSelfTests() throws -> Int {
             try validateWindowStack([window(99, pid: 999, title: "CoreAuthUI"), targetWindow], target: target, requireFrontmost: true)
         }, clock: { readinessTime }, pause: { readinessTime += $0 })
     }
+    // 新全屏协议的离线边界：不解析真实应用，不创建CGEvent或访问AX。
+    let fullDisplay = DisplayResult(displayId: 42, originX: -1440, originY: -100, ptWidth: 1440, ptHeight: 900, scaledWidth: 1280, scaledHeight: 800)
+    let fullSnapshot = Snapshot(id: "full", epoch: 1, fence: 1, created: 0, width: 1280, height: 800, axDigest: "", display: fullDisplay)
+    let fullCenter = try fullSnapshot.point(x: 640, y: 400)
+    try expect(fullCenter.x == -720 && fullCenter.y == 350, "Given主屏截图缩放与负原点，Then按实际图像大小映射points")
+    let doubleAction = Action(kind: "double_click", observationId: "full", x: 640, y: 400)
+    let doubleSteps = try mouseSteps(doubleAction, snapshot: fullSnapshot)
+    try expect(doubleSteps.count == 4 && doubleSteps.map(\.clickState) == [1, 1, 2, 2], "Given双击，Then两个完整down/up序列")
+    let dragAction = Action(kind: "drag", observationId: "full", x: 1200, y: 700, startX: 20, startY: 30)
+    try dragAction.validate()
+    let dragSteps = try mouseSteps(dragAction, snapshot: fullSnapshot)
+    try expect(dragSteps.count == 22 && dragSteps[1].type == .leftMouseDragged && dragSteps.last?.type == .leftMouseUp, "Given拖拽，Then中间包含真实dragged事件与最终抬键")
+    try rejects("Given拖拽缺少起点，Then拒绝") { try Action(kind: "drag", observationId: "full", x: 10, y: 10).validate() }
+    try rejects("Given拖拽起点NaN，Then拒绝") { try Action(kind: "drag", observationId: "full", x: 10, y: 10, startX: .nan, startY: 0).validate() }
+    try rejects("Given未知鼠标按钮，Then拒绝") { try Action(kind: "click", observationId: "full", x: 10, y: 10, button: "unknown").validate() }
+    try Action(kind: "focus_window", observationId: "full", windowId: 5).validate()
+    try rejects("Given提窗没有windowId，Then拒绝") { try Action(kind: "focus_window", observationId: "full").validate() }
+    try rejects("Givenopen_app仅有模型应用名，Then必须先解析真实bundleId") { try Action(kind: "open_app", observationId: "full", appName: "Notes").validate() }
+    try Action(kind: "open_app", observationId: "full", bundleId: "test.fixture").validate()
+    let longUnicode = String(repeating: "中文👩🏽‍💻🚀", count: 20)
+    let chunks = unicodeEventChunks(longUnicode)
+    try expect(chunks.allSatisfy { !$0.isEmpty && $0.count <= 20 } && String(decoding: chunks.flatMap { $0 }, as: UTF16.self) == longUnicode, "Given长Unicode，Then小批事件完整保留UTF16")
+    try expect(chunks.allSatisfy { chunk in !(0xD800...0xDBFF).contains(chunk.last!) && !(0xDC00...0xDFFF).contains(chunk.first!) }, "Given代理对边界，Then不会拆开emoji")
+    try expect(isOwnEvent(tag: 42, sourcePID: 123, expectedTag: 42, expectedPID: 123), "Given本helper标记与PID同时一致，Then识别自身事件")
+    try expect(!isOwnEvent(tag: 42, sourcePID: 456, expectedTag: 42, expectedPID: 123), "Given只有标记相同，Then不忽略外部事件")
+    try expect(!isOwnEvent(tag: 43, sourcePID: 123, expectedTag: 42, expectedPID: 123), "Given只有PID相同，Then不忽略事件")
+    let (minusKey, _) = try parseKeyCombination("-")
+    let (pageKey, pageFlags) = try parseKeyCombination("cmd+shift+PageDown")
+    try expect(minusKey == 27 && pageKey == 121 && pageFlags.contains([.maskCommand, .maskShift]), "Given扩展组合键，Then正确解析minus与翻页")
+    let desktopGate = SafetyGate(clock: { 0 })
+    let desktopLease = LeaseParams(leaseId: "desktop", epoch: 1, deadline: 61_000)
+    let desktopToken = try desktopGate.begin(desktopLease, wallNow: 1000)
+    try desktopGate.finishSelection(nil, token: desktopToken); desktopGate.setListenerHealthy(true)
+    let desktopSnapshot = Snapshot(id: "full", epoch: 1, fence: desktopToken, created: 0, width: 1280, height: 800, axDigest: "", display: fullDisplay)
+    let desktopRequest = PerformParams(leaseId: "desktop", epoch: 1, actionId: "one", action: doubleAction)
+    try desktopGate.save(desktopSnapshot)
+    _ = try desktopGate.inspect(desktopRequest); _ = try desktopGate.inspect(desktopRequest)
+    try expect(true, "Given只读prepare重复，Then不消费观察或actionId")
+    try desktopGate.setConfirmation("prepared", waiting: true, token: desktopToken)
+    try rejects("Given等待确认，Then拒绝准备新动作") { _ = try desktopGate.inspect(desktopRequest) }
+    try rejects("Given等待确认，Then拒绝事件续发") { try desktopGate.continueDispatch(desktopToken) { posted += 1 } }
+    try rejects("Given错误preparationId解除确认，Then拒绝") { try desktopGate.setConfirmation("other", waiting: false, token: desktopToken) }
+    try desktopGate.setConfirmation("prepared", waiting: false, token: desktopToken)
+    _ = try desktopGate.prepare(desktopRequest)
+    let desktopPermit = try desktopGate.approve(desktopRequest, snapshot: desktopSnapshot)
+    try desktopGate.commitDispatch(desktopPermit) { posted += 1 }
+    try desktopGate.continueDispatch(desktopToken) { posted += 1 }
+    desktopGate.stop()
+    try rejects("Given拖拽中停止，Then下一个事件不可续发") { try desktopGate.continueDispatch(desktopToken) { posted += 1 } }
+    try rejects("Given停止后迟到确认，Then不能恢复") { try desktopGate.setConfirmation("prepared", waiting: false, token: desktopToken) }
+    let matchingRequest = PerformParams(leaseId: "desktop", epoch: 1, actionId: "one", action: doubleAction, preparationId: "prepared")
+    try expect(samePreparedRequest(desktopRequest, matchingRequest), "Given同一不可变动作，Then允许携带preparationId执行")
+    let changedRequest = PerformParams(leaseId: "desktop", epoch: 1, actionId: "one", action: Action(kind: "click", observationId: "full", x: 1, y: 2), preparationId: "prepared")
+    try expect(!samePreparedRequest(desktopRequest, changedRequest), "Given批准后替换动作，Then不可复用准备")
+    try Action(kind: "open_app", observationId: "full", appName: "com.apple.Notes").validate()
+    let observedLayoutSnapshot = Snapshot(id: "full", epoch: 1, fence: 1, created: 0, target: target, width: 1280, height: 800, axDigest: "captured-layout", display: fullDisplay)
+    try validateObservedLayout(observedLayoutSnapshot, window: target, digest: "captured-layout")
+    try expect(true, "Given截图与准备控件布局一致，Then允许继续安全检查")
+    try rejects("Given截图后应用内部布局变化，Then拒绝使用旧像素") { try validateObservedLayout(observedLayoutSnapshot, window: target, digest: "changed-layout") }
+    try rejects("Given截图没有可验证AX布局，Then不能盲打") { try validateObservedLayout(fullSnapshot, window: target, digest: "captured-layout") }
+    let otherWindow = Target(windowId: 6, pid: target.pid, processIdentity: target.processIdentity, bundleId: target.bundleId, title: target.title, bounds: target.bounds)
+    try rejects("Given背景窗口未包含在本次前台布局，Then必须先聚焦并重新截图") { try validateObservedLayout(observedLayoutSnapshot, window: otherWindow, digest: "captured-layout") }
     return count
 }

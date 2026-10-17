@@ -24,7 +24,7 @@ describe('computer-risk-analyzer 风险评估引擎', () => {
     test('用例 2: Safari 地址栏输入与回车搜索 -> 低风险，零拦截', () => {
       const typeRes = evaluateComputerRisk(
         { action: 'type', text: '今天的天气' },
-        { bundleId: 'com.apple.Safari', role: 'AXTextField', description: 'Address and search bar' },
+        { bundleId: 'com.apple.Safari', role: 'AXTextField', description: 'Address and search bar', isTrustedSearch: true },
         'standard',
       )
       expect(typeRes.level).toBe('low')
@@ -32,7 +32,7 @@ describe('computer-risk-analyzer 风险评估引擎', () => {
 
       const searchReturnRes = evaluateComputerRisk(
         { action: 'key', key: 'Return' },
-        { bundleId: 'com.apple.Safari', role: 'AXTextField', description: 'Address and search bar' },
+        { bundleId: 'com.apple.Safari', role: 'AXTextField', description: 'Address and search bar', isTrustedSearch: true },
         'standard',
       )
       expect(searchReturnRes.level).toBe('low')
@@ -98,7 +98,7 @@ describe('computer-risk-analyzer 风险评估引擎', () => {
         { bundleId: 'com.tencent.xinWeChat', role: 'AXButton', title: '发送' },
         'relaxed',
       )
-      expect(relaxedRes.requiresConfirmation).toBe(false)
+      expect(relaxedRes.requiresConfirmation).toBe(true)
     })
 
     test('系统设置应用核心配置写操作 -> 强制高风险', () => {
@@ -134,5 +134,27 @@ describe('computer-risk-analyzer 风险评估引擎', () => {
       expect(evaluateComputerRisk({ action: 'scroll', delta_y: -200 }, undefined).requiresConfirmation).toBe(false)
       expect(evaluateComputerRisk({ action: 'wait', duration: 1 }, undefined).requiresConfirmation).toBe(false)
     })
+  })
+})
+
+
+describe('Given 风险策略边界回归', () => {
+  test('When Safari 登录框回车 Then 不能因为浏览器是Safari就冒充搜索', () => {
+    expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, { bundleId: 'com.apple.Safari', role: 'AXTextField', description: '用户名' }).requiresConfirmation).toBe(true)
+  })
+  test('When 消息编辑区回车或快捷发送 Then 即便是AXTextArea也要确认', () => {
+    for (const key of ['Return', 'cmd+Return', 'ctrl+Enter']) expect(evaluateComputerRisk({ action: 'key', key }, { bundleId: 'com.apple.MobileSMS', role: 'AXTextArea' }).requiresConfirmation).toBe(true)
+  })
+  test('When 点击任意应用的发送/提交 Then 三档都保留明确高风险确认', () => {
+    for (const policy of ['strict', 'standard', 'relaxed'] as const) for (const title of ['提交', '发送', '支付', '删除']) expect(evaluateComputerRisk({ action: 'click' }, { role: 'AXButton', title, bundleId: 'com.example.web' }, policy).requiresConfirmation).toBe(true)
+  })
+  test('When 严格策略新建笔记 Then 确认；标准新建不确认，纯观察都不确认', () => {
+    const context = { role: 'AXButton', title: '新建备忘录' }
+    expect(evaluateComputerRisk({ action: 'click' }, context, 'strict').requiresConfirmation).toBe(true)
+    expect(evaluateComputerRisk({ action: 'click' }, context, 'standard').requiresConfirmation).toBe(false)
+    expect(evaluateComputerRisk({ action: 'screenshot' }, context, 'strict').requiresConfirmation).toBe(false)
+  })
+  test('When Cmd-Delete 或 Command+Backspace 别名 Then 仍识别删除', () => {
+    for (const key of ['Cmd-Delete', 'Command+Backspace', 'super+alt+backspace']) expect(evaluateComputerRisk({ action: 'key', key }, { role: 'AXTextArea' }).requiresConfirmation).toBe(true)
   })
 })
