@@ -73,3 +73,49 @@ test('Given 主动停止的 helper When 同时发出 stopped 事件与 close The
   try { await native.call('status') } finally { await native.terminate() }
   expect(pauses).toBe(0)
 })
+
+describe('Given 自主Computer Use原生协议', () => {
+  test('When 解析/准备/确认/列窗 Then 仅开放指定方法，裸openApp不可调用', async () => {
+    const native = host("process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{method:q.method}})+'\\n')")
+    try {
+      for (const method of ['resolveApp', 'prepare', 'confirmation', 'listWindows']) {
+        await expect(native.call(method)).resolves.toEqual({ method })
+      }
+      await expect(native.call('openApp', { appName: 'Notes' })).rejects.toThrow('未允许')
+      await expect(native.call('focusWindow')).rejects.toThrow('未允许')
+    } finally { await native.terminate() }
+  })
+
+  test('When native返回已知错误code与敏感message Then 仅暴露脱敏的code/reason', async () => {
+    const native = host("process.stdout.write(JSON.stringify({id:q.id,ok:false,error:{code:'focus-changed',message:'SECRET_AX_CANARY'}})+'\\n')")
+    try {
+      await expect(native.call('prepare')).rejects.toMatchObject({ code: 'focus-changed', reason: '输入焦点已改变，请重新观察' })
+    } finally { await native.terminate() }
+  })
+
+  test('When native返回未知错误code Then 不传播未知code或message', async () => {
+    const native = host("process.stdout.write(JSON.stringify({id:q.id,ok:false,error:{code:'SECRET_AX_CANARY',message:'SECRET_AX_CANARY'}})+'\\n')")
+    try {
+      await expect(native.call('prepare')).rejects.toMatchObject({ code: 'native-failure' })
+      await expect(native.call('prepare')).rejects.not.toThrow('SECRET_AX_CANARY')
+    } finally { await native.terminate() }
+  })
+
+  test('When 用户接管触发stopped Then 仅通知一次且保留安全reason并回收helper', async () => {
+    const native = host("process.stdout.write(JSON.stringify({event:'stopped',reason:'检测到用户操作，桌面控制已暂停'})+'\\n')")
+    const reasons: Array<string | undefined> = []
+    native.onStopped(reason => { reasons.push(reason) })
+    await expect(native.call('perform')).rejects.toThrow()
+    await native.terminate()
+    expect(reasons).toEqual(['检测到用户操作，桌面控制已暂停'])
+  })
+
+  test('When stopped夹带未知内容 Then 不把敏感内容传播给renderer', async () => {
+    const native = host("process.stdout.write(JSON.stringify({event:'stopped',reason:'SECRET_AX_CANARY'})+'\\n')")
+    const reasons: Array<string | undefined> = []
+    native.onStopped(reason => { reasons.push(reason) })
+    await expect(native.call('perform')).rejects.toThrow()
+    await native.terminate()
+    expect(reasons).toEqual(['原生桌面控制已暂停'])
+  })
+})

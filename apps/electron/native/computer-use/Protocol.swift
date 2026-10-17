@@ -21,12 +21,23 @@ struct PermissionParams: Decodable { let permission: String }
 struct StopParams: Decodable { let reason: String? }
 struct Permissions: Encodable { let accessibility: Bool, screen: Bool, listen: Bool, post: Bool }
 struct Status: Encodable { let supported: Bool; let permissions: Permissions; let message: String? }
-struct Selected: Encodable { let target: Target }
+struct Selected: Encodable { let scope = "main-display"; let target: Target? = nil }
 struct ImageResult: Encodable { let data: String; let mimeType = "image/png"; let width: Int, height: Int }
-struct DisplayResult: Codable { let originX: Double, originY: Double, ptWidth: Double, ptHeight: Double, scaledWidth: Int, scaledHeight: Int }
-struct ObservationResult: Encodable { let observationId: String; let epoch: Int; let image: ImageResult; let display: DisplayResult?; let ax: String }
-struct OpenAppParams: Decodable { let appName: String }
-struct OpenAppResult: Encodable { let success: Bool; let appName: String }
+struct DisplayResult: Codable { var displayId: UInt32? = nil; let originX: Double, originY: Double, ptWidth: Double, ptHeight: Double, scaledWidth: Int, scaledHeight: Int }
+struct ObservationResult: Encodable { let observationId: String; let epoch: Int; let image: ImageResult; let display: DisplayResult?; let ax: String; let targetApp: AppIdentity? }
+struct ResolveAppParams: Decodable { let appName: String }
+struct ResolvedApp: Encodable { let appName: String, bundleId: String; let pid: Int32?; let processIdentity: String? }
+struct AppIdentity: Codable, Equatable { let name: String, bundleId: String; let pid: Int32; let processIdentity: String }
+struct WindowListResult: Encodable { let windows: [Target] }
+struct ElementContext: Encodable, Equatable {
+    let role: String?, subrole: String?, title: String?, description: String?
+    let isSecure: Bool
+    /** 原生确认位于浏览器chrome，而非AXWebArea网页内容。 */
+    let isTrustedSearch: Bool
+}
+struct PreparationResult: Encodable { let preparationId: String, appName: String, bundleId: String; let context: ElementContext }
+struct ConfirmationParams: Decodable { let leaseId: String; let epoch: Int; let preparationId: String; let waiting: Bool }
+struct ConfirmationResult: Encodable { let waiting: Bool }
 
 final class ProtocolWriter {
     private let queue = DispatchQueue(label: "com.gamma.computer-use.stdout")

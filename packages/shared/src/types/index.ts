@@ -22,6 +22,7 @@ export * from './proxy'
 export * from './attachment'
 export * from './session-search'
 export * from './automatic-memory'
+export * from './global-memory'
 
 // Agent 相关类型
 export * from './agent'

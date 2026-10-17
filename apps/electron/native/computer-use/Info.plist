@@ -6,11 +6,10 @@
   <key>CFBundleDisplayName</key><string>Gamma 原生桌面控制</string>
   <key>CFBundleExecutable</key><string>Gamma Computer Use Helper</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>1.0.1</string>
+  <key>CFBundleVersion</key><string>2</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSScreenCaptureUsageDescription</key><string>仅在你明确选择后观察一个窗口，不捕获桌面或音频。</string>
-  <key>NSFaceIDUsageDescription</key><string>每个桌面写动作都需要一次独立本地生物认证。</string>
+  <key>NSScreenCaptureUsageDescription</key><string>经你同意后捕获主显示器全屏，图像会发送给当前AI模型。排除Gamma与原生停止窗口；其他可见应用可能进入截图。不捕获音频。</string>
 </dict></plist>

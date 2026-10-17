@@ -84,3 +84,20 @@ export function compactComputerScreenshots(messages: AgentMessage[], maxScreensh
     return msg
   })
 }
+
+
+/** 仅标识 computer 的工具观察，不干扰用户上传或 read 工具读取的图片。 */
+export function hasComputerObservationContent(messages: readonly unknown[]): boolean {
+  return messages.some(message => !!message && typeof message === 'object' && 'role' in message && message.role === 'toolResult' && 'toolName' in message && message.toolName === 'computer' && 'content' in message && Array.isArray(message.content) && message.content.some((block: unknown) => !!block && typeof block === 'object' && 'type' in block && (block.type === 'image' || (block.type === 'text' && 'text' in block && typeof block.text === 'string' && !block.text.startsWith('[电脑观察外发同意已撤销')))))
+}
+export function stripComputerObservationContent(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map(message => message.role === 'toolResult' && message.toolName === 'computer'
+    ? { ...message, content: [{ type: 'text' as const, text: '[电脑观察外发同意已撤销；历史电脑观察已从本次模型请求省略]' }] }
+    : message)
+}
+/** 在每次provider提交/重试前核验持久同意；普通无电脑观察请求不受影响。 */
+export function withComputerSharingFence(stream: StreamFn, validate: (signal?: AbortSignal) => Promise<void>): StreamFn {
+  return (model, context, options) => hasComputerObservationContent(context.messages)
+    ? withComputerRequestFence(stream, validate)(model, context, options)
+    : stream(model, context, options)
+}

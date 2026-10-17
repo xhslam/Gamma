@@ -102,13 +102,38 @@ function truncate(text: string, max: number): string {
  *
  * 返回的 label 应读起来像一个完整动宾短语，无冗余信息。
  */
-export function getToolPhrase(toolName: string, input: Record<string, unknown>): ToolPhrase {
+export function getToolPhrase(toolName: string, input: Record<string, unknown>, isError = false): ToolPhrase {
   const explicitIntent = getExplicitToolIntent(toolName, input)
   if (explicitIntent && toolName !== 'Edit' && toolName !== 'Write') {
     return phrase(explicitIntent)
   }
 
   switch (toolName) {
+    case 'memory_write':
+    case 'memory_append':
+    case 'memory_str_replace': {
+      return {
+        label: isError ? '记忆更新失败' : '已记住',
+        loadingLabel: '正在记住...',
+      }
+    }
+
+    case 'memory_read': {
+      const fp = input.path
+      const name = typeof fp === 'string' ? filename(fp) : '记忆'
+      return {
+        label: isError ? `查阅记忆失败 ${name}` : `查阅记忆 ${name}`,
+        loadingLabel: '正在查阅记忆...',
+      }
+    }
+
+    case 'memory_list': {
+      return {
+        label: isError ? '查阅记忆清单失败' : '查阅记忆清单',
+        loadingLabel: '正在检索记忆清单...',
+      }
+    }
+
     case 'Read': {
       const fp = input.file_path ?? input.filePath
       if (typeof fp === 'string') {
@@ -492,7 +517,8 @@ export function getToolResultSummary(toolName: string, result: string | undefine
     if (remainingLineCount) return `还有 ${remainingLineCount} 行`
   }
   if (toolName === 'Grep' && /(?:no matches|没有匹配|未找到)/i.test(result)) return '无匹配'
-  if (toolName === 'Bash') return '已完成'
+  if (toolName === 'memory_write' || toolName === 'memory_append' || toolName === 'memory_str_replace') return '已记住'
+  if (toolName === 'memory_read' || toolName === 'memory_list') return '已读取'
   if (toolName === 'Edit' || toolName === 'Write') return '已更新'
   if (toolName === 'Glob') return '已完成'
 

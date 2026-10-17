@@ -701,3 +701,28 @@ export function getAutomationsPath(): string {
 export function getPlanningDatabasePath(): string {
   return join(getConfigDir(), 'planning.db')
 }
+
+function sanitizeUserDirectoryName(name: string): string {
+  return basename(name).replace(/[/\\:*?"<>|]/g, '_')
+}
+
+/**
+ * 获取长期记忆存储目录路径
+ *
+ * 如果提供了 userId，则在 memory/<userId>/ 下隔离存储；
+ * 否则默认存储在 ~/.gamma/memory/（开发模式 ~/.gamma-dev/memory/）。
+ *
+ * @param userId 可选用户标识（用于多用户或渠道隔离）
+ * @returns ~/.gamma/memory/ 或 ~/.gamma/memory/<userId>/
+ */
+export function getMemoryDir(userId?: string): string {
+  const baseDir = join(getConfigDir(), 'memory')
+  const dir = userId ? join(baseDir, sanitizeUserDirectoryName(userId)) : baseDir
+
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+    console.log(`[配置] 已创建长期记忆目录: ${dir}`)
+  }
+
+  return dir
+}

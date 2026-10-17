@@ -7,7 +7,7 @@ import {
   type ComputerUsePreferences,
 } from '@gamma/shared'
 import { getMainWindow } from './main-window-store'
-import { armComputer, computerAuthorizationManager, computerController } from './computer-service'
+import { computerAuthorizationManager, computerController } from './computer-service'
 import { assertComputerSender } from './computer-ipc-policy'
 
 export function registerComputerIpc(): void {
@@ -27,7 +27,7 @@ export function registerComputerIpc(): void {
   ipcMain.handle(COMPUTER_IPC_CHANNELS.ARM, (event, input: ComputerArmInput) => {
     verify(event, true)
     if (!input || Object.keys(input).some(key => !['sessionId', 'consentId', 'shareObservations'].includes(key)) || typeof input.sessionId !== 'string' || typeof input.consentId !== 'string' || input.shareObservations !== true) throw new Error('缺少当前本地授权上下文')
-    return armComputer(input)
+    throw new Error('手动桌面模式已停用；直接在会话中描述任务即可')
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.STOP, event => { verify(event); return computerController.stop() })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.RESUME, event => { verify(event, true); return computerController.resume() })
@@ -45,10 +45,12 @@ export function registerComputerIpc(): void {
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.DECIDE_APP_AUTH, (event, requestId: string, decision: ComputerAppAuthDecision) => {
     verify(event, true)
+    if (typeof requestId !== 'string' || requestId.length > 128 || !['once', 'always', 'denied'].includes(decision)) throw new Error('无效授权决定')
     return computerAuthorizationManager.resolveAppAuth(requestId, decision)
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.DECIDE_RISK_CONFIRM, (event, requestId: string, confirmed: boolean) => {
     verify(event, true)
+    if (typeof requestId !== 'string' || requestId.length > 128 || typeof confirmed !== 'boolean') throw new Error('无效确认决定')
     return computerAuthorizationManager.resolveRiskConfirm(requestId, confirmed)
   })
 }

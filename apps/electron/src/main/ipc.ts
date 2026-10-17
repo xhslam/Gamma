@@ -7,16 +7,19 @@
 import { ipcMain, nativeTheme, shell, dialog, BrowserWindow, app, clipboard, nativeImage } from 'electron'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { existsSync, realpathSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
-import { realpath, stat, writeFile } from 'node:fs/promises'
+import { realpath, stat, writeFile, readdir, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import type { GlobalMemoryEntry } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS, TRAY_IPC_CHANNELS } from '../types'
 import { setAppIconVariant } from './lib/app-icon-service'
 import { getAutomaticMemorySnapshot, updateAutomaticMemorySettings, editAutomaticMemoryEntry, deleteAutomaticMemoryEntry } from './lib/automatic-memory-store'
 import type { AutomaticMemorySettings } from '@gamma/shared'
 import { registerMarkdownWorkspaceIpc } from './lib/markdown-workspace-ipc'
 import { registerComputerIpc } from './lib/computer-ipc'
+import { withFileMutationQueue } from '@earendil-works/pi-coding-agent'
+import { version as computeMemoryVersion } from './lib/memory'
 import type {
   QuickTaskSubmitInput,
   VoiceDictationAudioChunkInput,
@@ -268,7 +271,8 @@ import { permissionService } from './lib/agent-permission-service'
 import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
-import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getConfigDir, getWorkspaceSkillsDir, getScratchPadPath } from './lib/config-paths'
+import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getConfigDir, getWorkspaceSkillsDir, getScratchPadPath, getMemoryDir } from './lib/config-paths'
+import { writeTextFileAtomic } from './lib/safe-file'
 import { getCachedDefaultAppInfo, saveCachedDefaultAppInfo } from './lib/default-app-cache'
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from './lib/storage-service'
 import type { CleanupOptions } from './lib/storage-service'
@@ -3187,6 +3191,101 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(AUTOMATIC_MEMORY_IPC_CHANNELS.SETTINGS, (_, slug: string, patch: Partial<AutomaticMemorySettings>) => updateAutomaticMemorySettings(slug, patch))
   ipcMain.handle(AUTOMATIC_MEMORY_IPC_CHANNELS.EDIT, (_, slug: string, id: string, content: string, revision: number) => editAutomaticMemoryEntry(slug, id, content, revision))
   ipcMain.handle(AUTOMATIC_MEMORY_IPC_CHANNELS.DELETE, (_, slug: string, id: string, revision: number) => deleteAutomaticMemoryEntry(slug, id, revision))
+
+  // ===== 全局长期记忆管理 (Pi Extension Memory) =====
+
+  async function walkGlobalMemoryFiles(dir: string): Promise<string[]> {
+    let entries: import('node:fs').Dirent[] = []
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return []
+    }
+    const out: string[] = []
+    for (const e of entries) {
+      const full = join(dir, e.name)
+      if (e.isDirectory()) out.push(...(await walkGlobalMemoryFiles(full)))
+      else if (e.name.endsWith('.md')) out.push(full)
+    }
+    return out
+  }
+
+  function resolveSafeGlobalMemoryPath(memoryDir: string, relPath: string): string {
+    const target = resolve(memoryDir, relPath.replace(/^[/\\]+/, ''))
+    if (!target.startsWith(memoryDir + sep) || !target.endsWith('.md')) {
+      throw new Error('非法路径：只能操作长期记忆目录下的 .md 文件')
+    }
+    return target
+  }
+
+  ipcMain.handle(GLOBAL_MEMORY_IPC_CHANNELS.LIST, async (_, userId?: string): Promise<GlobalMemoryEntry[]> => {
+    const memoryDir = getMemoryDir(userId)
+    const files = await walkGlobalMemoryFiles(memoryDir)
+    const result: GlobalMemoryEntry[] = []
+    for (const fullPath of files) {
+      try {
+        const content = await readFile(fullPath, 'utf8')
+        const statInfo = await stat(fullPath)
+        const relPath = relative(memoryDir, fullPath).split(sep).join('/')
+        const desc = content.match(/^description:\s*(.+)$/m)?.[1]?.trim()
+        const titleMatch = content.match(/^name:\s*(.+)$/m)?.[1]?.trim() || basename(fullPath, '.md')
+        result.push({
+          path: relPath,
+          name: titleMatch,
+          description: desc,
+          content,
+          version: computeMemoryVersion(content),
+          updatedAt: statInfo.mtimeMs,
+          size: statInfo.size,
+        })
+      } catch {
+        // 忽略单文件读取异常
+      }
+    }
+    return result.sort((a, b) => a.path.localeCompare(b.path))
+  })
+
+  ipcMain.handle(GLOBAL_MEMORY_IPC_CHANNELS.READ, async (_, relPath: string, userId?: string): Promise<string> => {
+    const memoryDir = getMemoryDir(userId)
+    const target = resolveSafeGlobalMemoryPath(memoryDir, relPath)
+    return readFile(target, 'utf8')
+  })
+
+  ipcMain.handle(
+    GLOBAL_MEMORY_IPC_CHANNELS.WRITE,
+    async (_, relPath: string, content: string, ifVersion?: string, userId?: string): Promise<{ success: boolean; version: string }> => {
+      const memoryDir = getMemoryDir(userId)
+      const target = resolveSafeGlobalMemoryPath(memoryDir, relPath)
+      return await withFileMutationQueue(target, async () => {
+        let cur: string | null = null
+        if (existsSync(target)) {
+          cur = await readFile(target, 'utf8')
+        }
+        if (ifVersion !== undefined) {
+          if (cur === null) {
+            if (ifVersion !== 'new') {
+              throw new Error(`${relPath} does not exist; use if_version "new" to create it`)
+            }
+          } else if (ifVersion !== computeMemoryVersion(cur)) {
+            throw new Error(`version conflict. current version: ${computeMemoryVersion(cur)}`)
+          }
+        }
+        mkdirSync(dirname(target), { recursive: true })
+        writeTextFileAtomic(target, content)
+        return { success: true, version: computeMemoryVersion(content) }
+      })
+    },
+  )
+
+  ipcMain.handle(GLOBAL_MEMORY_IPC_CHANNELS.DELETE, async (_, relPath: string, userId?: string): Promise<void> => {
+    const memoryDir = getMemoryDir(userId)
+    const target = resolveSafeGlobalMemoryPath(memoryDir, relPath)
+    await withFileMutationQueue(target, async () => {
+      if (existsSync(target)) {
+        await unlink(target)
+      }
+    })
+  })
 
   // ===== 工作区记忆文件管理 =====
 

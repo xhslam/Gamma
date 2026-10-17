@@ -3,29 +3,13 @@ import ScreenCaptureKit
 import ApplicationServices
 import Carbon
 import Darwin
+import CryptoKit
 
 func processIdentity(_ pid: pid_t) throws -> String {
     var info = proc_bsdinfo()
     let count = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
     guard count == MemoryLayout<proc_bsdinfo>.size, info.pbi_uid == getuid(), info.pbi_pid == UInt32(pid) else { throw NativeFailure("process-identity", "进程身份或用户不可信") }
     return "\(pid):\(info.pbi_start_tvsec):\(info.pbi_start_tvusec)"
-}
-// 这只是已知敏感/执行型应用的拒绝规则，不是任意GUI脚本执行面的OS沙箱。
-func forbiddenTargetBundle(_ bundle: String) -> Bool {
-    let prefixes = ["com.gamma", "com.proma", "cool.proma", "com.apple.loginwindow", "com.apple.systemuiserver", "com.apple.controlcenter", "com.apple.notificationcenterui", "com.apple.securityagent", "com.apple.terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty", "dev.warp.", "org.alacritty", "net.kovidgoyal.kitty", "com.apple.scripteditor", "com.apple.automator", "com.apple.shortcuts", "com.microsoft.vscode", "com.todesktop.230313mzl4w4u92", "dev.zed.zed", "com.sublimetext", "com.agilebits.onepassword", "com.1password", "com.bitwarden", "org.keepassxc", "com.apple.passwords", "com.apple.keychainaccess", "com.apple.systempreferences"]
-    return prefixes.contains { bundle.lowercased().hasPrefix($0) }
-}
-func allowedApplication(_ pid: pid_t, bundle: String) -> Bool {
-    guard pid != getpid(), let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular,
-          !bundle.isEmpty, app.bundleIdentifier == bundle else { return false }
-    return !forbiddenTargetBundle(bundle) &&
-        !(app.bundleURL?.path.contains("/Gamma.app/") ?? false) && app.bundleURL?.lastPathComponent != "Gamma.app"
-}
-func targetForWindow(_ window: SCWindow) throws -> Target {
-    guard let owner = window.owningApplication, allowedApplication(owner.processID, bundle: owner.bundleIdentifier),
-          window.windowLayer == 0, window.isOnScreen, let title = window.title, !title.isEmpty,
-          title.utf8.count <= 4096, Rect(window.frame).valid else { throw NativeFailure("unsafe-target", "只支持明确的普通应用单窗口") }
-    return Target(windowId: window.windowID, pid: owner.processID, processIdentity: try processIdentity(owner.processID), bundleId: owner.bundleIdentifier, title: title, bounds: Rect(window.frame))
 }
 struct WindowMetadata {
     let id: UInt32, pid: pid_t, bounds: CGRect, layer: Int, alpha: Double, onScreen: Bool
@@ -66,219 +50,178 @@ func validateWindowStack(_ raw: [NSDictionary], target: Target, requireFrontmost
     guard seenTarget else { throw NativeFailure("target-gone", "目标窗口已不在屏幕上") }
     guard mappingCount == 1 else { throw NativeFailure("ambiguous-window", "CG窗口到AX窗口的反向映射不唯一") }
 }
-func validateDesktop(_ target: Target, requireFrontmost: Bool) throws {
-    guard try processIdentity(target.pid) == target.processIdentity, allowedApplication(target.pid, bundle: target.bundleId) else { throw NativeFailure("target-changed", "目标进程身份已变化") }
-    guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary] else { throw NativeFailure("window-metadata", "无法有界验证窗口列表") }
-    try validateWindowStack(raw, target: target, requireFrontmost: requireFrontmost)
-    if requireFrontmost {
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target.pid else { throw NativeFailure("not-frontmost", "目标必须已由用户置于前台；不会自动提窗") }
-        guard !IsSecureEventInputEnabled() else { throw NativeFailure("secure-input", "系统安全输入已开启") }
-        // 有修饰键或物理按键按住时不注入，避免继承快捷键/拖拽状态。
-        guard CGEventSource.flagsState(.combinedSessionState).intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand, .maskAlphaShift]).isEmpty,
-              !(0..<128).contains(where: { CGEventSource.keyState(.combinedSessionState, key: CGKeyCode($0)) }),
-              !CGEventSource.buttonState(.combinedSessionState, button: .left),
-              !CGEventSource.buttonState(.combinedSessionState, button: .right),
-              !CGEventSource.buttonState(.combinedSessionState, button: .center) else { throw NativeFailure("input-held", "存在按住的键或鼠标按钮") }
-    }
+// 主屏ID而不是SC列表顺序决定捕获范围；每次执行前重核几何。
+func validateDisplay(_ display: DisplayResult?) throws {
+    guard let d = display, let id = d.displayId, id == CGMainDisplayID(), CGDisplayIsActive(id) != 0 else { throw NativeFailure("display-changed", "主显示器已变化，请重新截图") }
+    let r = CGDisplayBounds(id)
+    guard r.origin.x == d.originX, r.origin.y == d.originY, r.width == d.ptWidth, r.height == d.ptHeight else { throw NativeFailure("display-changed", "显示器缩放或布局已变化") }
 }
-
+func isGammaPID(_ pid: pid_t) -> Bool { pid == getpid() || pid == getppid() }
+func appIdentity(_ pid: pid_t) throws -> AppIdentity {
+    guard let app = NSRunningApplication(processIdentifier: pid), let bundle = app.bundleIdentifier, !bundle.isEmpty else { throw NativeFailure("unknown-application", "无法识别实际目标应用") }
+    return AppIdentity(name: app.localizedName ?? bundle, bundleId: bundle, pid: pid, processIdentity: try processIdentity(pid))
+}
+func currentApplication() throws -> AppIdentity {
+    guard let app = NSWorkspace.shared.frontmostApplication else { throw NativeFailure("unknown-application", "无法识别前台应用") }
+    return try appIdentity(app.processIdentifier)
+}
+func resolveApplication(_ name: String) throws -> (URL, ResolvedApp) {
+    guard !name.isEmpty, name.utf8.count <= 512, !name.contains("/"), !name.contains("\\"), !name.unicodeScalars.contains(where: { $0.value < 32 }) else { throw NativeFailure("invalid-application", "应用名称或标识无效") }
+    let aliases = ["notes": "com.apple.Notes", "备忘录": "com.apple.Notes", "safari": "com.apple.Safari", "finder": "com.apple.finder", "访达": "com.apple.finder", "mail": "com.apple.mail", "邮件": "com.apple.mail", "calendar": "com.apple.iCal", "日历": "com.apple.iCal", "calculator": "com.apple.calculator", "计算器": "com.apple.calculator", "messages": "com.apple.MobileSMS", "信息": "com.apple.MobileSMS", "terminal": "com.apple.Terminal", "终端": "com.apple.Terminal", "system settings": "com.apple.systempreferences", "系统设置": "com.apple.systempreferences"]
+    let identifier = aliases[name.lowercased()] ?? name
+    var urls: [URL] = []
+    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) { urls = [url] }
+    if urls.isEmpty {
+        let base = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+        for directory in ["/Applications", "/System/Applications", "/System/Applications/Utilities", "/Applications/Utilities"] {
+            let url = URL(fileURLWithPath: directory).appendingPathComponent(base + ".app")
+            if FileManager.default.fileExists(atPath: url.path) { urls.append(url) }
+        }
+    }
+    guard Set(urls.map { $0.resolvingSymlinksInPath().path }).count == 1, let url = urls.first?.resolvingSymlinksInPath(), let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier, !bundleId.isEmpty else { throw NativeFailure("application-not-found", "未找到唯一且具有Bundle ID的应用") }
+    let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).filter { $0.bundleURL?.resolvingSymlinksInPath() == url }
+    guard running.count <= 1 else { throw NativeFailure("ambiguous-application", "存在多个目标应用进程") }
+    let pid = running.first?.processIdentifier
+    return (url, ResolvedApp(appName: bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent, bundleId: bundleId, pid: pid, processIdentity: try pid.map { try processIdentity($0) }))
+}
+func desktopWindows() throws -> [Target] {
+    guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary], raw.count <= 2048 else { throw NativeFailure("window-metadata", "无法有界读取窗口列表") }
+    var windows: [Target] = []
+    for item in raw {
+        guard let w = WindowMetadata(item) else { throw NativeFailure("window-metadata", "窗口元数据不完整") }
+        guard w.onScreen, w.alpha > 0, w.bounds.width > 1, w.bounds.height > 1, !isGammaPID(w.pid), let app = NSRunningApplication(processIdentifier: w.pid), app.activationPolicy == .regular, let bundle = app.bundleIdentifier else { continue }
+        windows.append(Target(windowId: w.id, pid: w.pid, processIdentity: try processIdentity(w.pid), bundleId: bundle, title: item[kCGWindowName] as? String ?? "", bounds: Rect(w.bounds)))
+    }
+    return windows
+}
+func windowAt(_ point: CGPoint) throws -> Target {
+    guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary], raw.count <= 2048 else { throw NativeFailure("window-metadata", "无法核验实际点击窗口") }
+    for item in raw {
+        guard let w = WindowMetadata(item) else { throw NativeFailure("window-metadata", "窗口元数据不完整") }
+        guard w.onScreen, w.alpha > 0, w.bounds.contains(point) else { continue }
+        // 不穿透Gamma/系统弹窗/透明遮挡去授权后面的应用。
+        guard !isGammaPID(w.pid), let app = NSRunningApplication(processIdentifier: w.pid), app.activationPolicy == .regular, let bundle = app.bundleIdentifier else { throw NativeFailure("untrusted-surface", "落点属于Gamma或无法授权的系统界面") }
+        return Target(windowId: w.id, pid: w.pid, processIdentity: try processIdentity(w.pid), bundleId: bundle, title: item[kCGWindowName] as? String ?? "", bounds: Rect(w.bounds))
+    }
+    throw NativeFailure("unknown-target", "落点没有可验证的应用窗口")
+}
+func gammaUIContains(_ point: CGPoint) -> Bool {
+    guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary] else { return false }
+    for item in raw {
+        guard let w = WindowMetadata(item) else { return false }
+        if w.onScreen, w.alpha > 0, w.bounds.contains(point) { return isGammaPID(w.pid) }
+    }
+    return false
+}
 func captureDisplay(targetWidth: Int = 1280, completion: @escaping (Result<(Data, DisplayResult, Int, Int), Error>) -> Void) {
+    guard CGPreflightScreenCaptureAccess() else { completion(.failure(NativeFailure("permission-required", "屏幕录制权限未授予或已撤销"))); return }
     if #available(macOS 14.2, *) {
+        let displayID = CGMainDisplayID()
         SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: true) { content, error in
-            guard error == nil, let content, let display = content.displays.first else {
-                completion(.failure(NativeFailure("capture-failed", "无法读取显示器内容")))
-                return
-            }
-            let bounds = CGDisplayBounds(display.displayID)
-            let filter = SCContentFilter(display: display, excludingWindows: [])
-            let scale = Double(targetWidth) / Double(display.width)
-            let targetHeight = max(2, Int((Double(display.height) * scale).rounded()))
-
+            guard error == nil, let content, let display = content.displays.first(where: { $0.displayID == displayID }) else { completion(.failure(NativeFailure("capture-failed", "无法读取主显示器"))); return }
+            let bounds = CGDisplayBounds(displayID)
+            let excluded = content.applications.filter { isGammaPID($0.processID) }
+            let filter = SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: [])
             let config = SCStreamConfiguration()
-            config.width = targetWidth
-            config.height = targetHeight
-            config.showsCursor = false
-            config.capturesAudio = false
-            config.scalesToFit = true
-
+            config.width = targetWidth; config.height = max(2, Int((Double(targetWidth) * bounds.height / bounds.width).rounded()))
+            config.showsCursor = false; config.capturesAudio = false; config.scalesToFit = true
             SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) { image, error in
-                guard error == nil, let image else {
-                    completion(.failure(NativeFailure("capture-failed", "屏幕截图捕获失败")))
-                    return
-                }
-                let rep = NSBitmapImageRep(cgImage: image)
-                guard let png = rep.representation(using: .png, properties: [:]), png.count <= 8 * 1024 * 1024 else {
-                    completion(.failure(NativeFailure("capture-too-large", "截图数据过大")))
-                    return
-                }
-                let displayResult = DisplayResult(
-                    originX: bounds.origin.x,
-                    originY: bounds.origin.y,
-                    ptWidth: bounds.width,
-                    ptHeight: bounds.height,
-                    scaledWidth: image.width,
-                    scaledHeight: image.height
-                )
-                completion(.success((png, displayResult, image.width, image.height)))
+                guard error == nil, let image else { completion(.failure(NativeFailure("capture-failed", "主屏截图失败"))); return }
+                var result = DisplayResult(originX: bounds.origin.x, originY: bounds.origin.y, ptWidth: bounds.width, ptHeight: bounds.height, scaledWidth: image.width, scaledHeight: image.height)
+                result.displayId = displayID
+                do { try validateDisplay(result) } catch { completion(.failure(error)); return }
+                guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]), png.count <= 8 * 1024 * 1024 else { completion(.failure(NativeFailure("capture-too-large", "截图超过预算"))); return }
+                completion(.success((png, result, image.width, image.height)))
             }
         }
-    } else {
-        completion(.failure(NativeFailure("unsupported-os", "需要 macOS 14.2+")))
-    }
+    } else { completion(.failure(NativeFailure("unsupported-os", "需要macOS14.2+"))) }
 }
 
-let HELPER_EVENT_TAG: Int64 = 0x47414D41
-
-func openApplication(named name: String) -> Bool {
-    let ws = NSWorkspace.shared
-    if name.contains(".") {
-        if let url = ws.urlForApplication(withBundleIdentifier: name) {
-            let conf = NSWorkspace.OpenConfiguration()
-            conf.activates = true
-            ws.openApplication(at: url, configuration: conf, completionHandler: nil)
-            return true
-        }
-    }
-    let map: [String: String] = [
-        "notes": "com.apple.Notes",
-        "备忘录": "com.apple.Notes",
-        "safari": "com.apple.Safari",
-        "finder": "com.apple.finder",
-        "访达": "com.apple.finder",
-        "mail": "com.apple.mail",
-        "邮件": "com.apple.mail",
-        "calendar": "com.apple.iCal",
-        "日历": "com.apple.iCal",
-        "calculator": "com.apple.calculator",
-        "计算器": "com.apple.calculator",
-        "messages": "com.apple.MobileSMS",
-        "信息": "com.apple.MobileSMS",
-        "terminal": "com.apple.Terminal",
-        "终端": "com.apple.Terminal",
-        "system settings": "com.apple.systempreferences",
-        "系统设置": "com.apple.systempreferences"
-    ]
-    if let bundleId = map[name.lowercased()],
-       let url = ws.urlForApplication(withBundleIdentifier: bundleId) {
-        let conf = NSWorkspace.OpenConfiguration()
-        conf.activates = true
-        ws.openApplication(at: url, configuration: conf, completionHandler: nil)
-        return true
-    }
-    for candidateDir in ["/Applications", "/System/Applications", "/System/Applications/Utilities", "/Applications/Utilities"] {
-        let appUrl = URL(fileURLWithPath: "\(candidateDir)/\(name).app")
-        if FileManager.default.fileExists(atPath: appUrl.path) {
-            let conf = NSWorkspace.OpenConfiguration()
-            conf.activates = true
-            ws.openApplication(at: appUrl, configuration: conf, completionHandler: nil)
-            return true
-        }
-    }
-    let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-    proc.arguments = ["-a", name]
-    do {
-        try proc.run()
-        proc.waitUntilExit()
-        return proc.terminationStatus == 0
-    } catch {
-        return false
-    }
+// 标记只用于过滤本helper已投递事件，不声称隔离同用户恶意AX程序。
+let HELPER_EVENT_TAG = Int64.random(in: 1...Int64.max)
+func isOwnEvent(tag: Int64, sourcePID: Int64, expectedTag: Int64 = HELPER_EVENT_TAG, expectedPID: Int64 = Int64(getpid())) -> Bool { tag == expectedTag && sourcePID == expectedPID }
+func validateInputEnvironment() throws {
+    guard AXIsProcessTrusted(), CGPreflightPostEventAccess(), CGPreflightListenEventAccess() else { throw NativeFailure("permission-required", "辅助功能或输入权限未授予或已撤销") }
+    guard !IsSecureEventInputEnabled() else { throw NativeFailure("secure-input", "系统安全输入禁止注入，未投递动作") }
+    guard CGEventSource.flagsState(.combinedSessionState).intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand]).isEmpty,
+          !(0..<128).contains(where: { CGEventSource.keyState(.combinedSessionState, key: CGKeyCode($0)) }),
+          ![CGMouseButton.left, .right, .center].contains(where: { CGEventSource.buttonState(.combinedSessionState, button: $0) }) else { throw NativeFailure("input-held", "存在按住的物理按键或鼠标按钮") }
 }
-
+struct MouseStep { let type: CGEventType; let point: CGPoint; let button: CGMouseButton; let clickState: Int64 }
+func mouseSteps(_ action: Action, snapshot: Snapshot) throws -> [MouseStep] {
+    guard let x = action.x, let y = action.y else { throw NativeFailure("invalid-coordinate", "缺少坐标") }
+    let end = try snapshot.point(x: x, y: y)
+    if ["move", "mouse_move"].contains(action.kind) { return [MouseStep(type: .mouseMoved, point: end, button: .left, clickState: 0)] }
+    if ["drag", "left_click_drag"].contains(action.kind) {
+        guard let sx = action.startX, let sy = action.startY else { throw NativeFailure("invalid-coordinate", "缺少拖拽起点") }
+        let start = try snapshot.point(x: sx, y: sy)
+        var steps = [MouseStep(type: .leftMouseDown, point: start, button: .left, clickState: 1)]
+        for i in 1...20 { let t = Double(i) / 20; steps.append(MouseStep(type: .leftMouseDragged, point: CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t), button: .left, clickState: 1)) }
+        steps.append(MouseStep(type: .leftMouseUp, point: end, button: .left, clickState: 1)); return steps
+    }
+    let button: CGMouseButton = action.kind == "right_click" || action.button == "right" ? .right : action.kind == "middle_click" || action.button == "middle" ? .center : .left
+    let count = action.kind == "double_click" ? 2 : action.kind == "triple_click" ? 3 : action.clickCount ?? 1
+    guard (1...3).contains(count) else { throw NativeFailure("invalid-action", "点击次数必须为1到3") }
+    return (1...count).flatMap { n in [MouseStep(type: button == .left ? .leftMouseDown : button == .right ? .rightMouseDown : .otherMouseDown, point: end, button: button, clickState: Int64(n)), MouseStep(type: button == .left ? .leftMouseUp : button == .right ? .rightMouseUp : .otherMouseUp, point: end, button: button, clickState: Int64(n))] }
+}
+// CG Unicode事件采用小批UTF16，不拆开代理对，不写系统剪贴板。
+func unicodeEventChunks(_ text: String) -> [[UInt16]] {
+    var result: [[UInt16]] = [], chunk: [UInt16] = []
+    for scalar in text.unicodeScalars {
+        let units = Array(String(scalar).utf16)
+        if chunk.count + units.count > 20 { result.append(chunk); chunk = [] }
+        chunk.append(contentsOf: units)
+    }
+    if !chunk.isEmpty { result.append(chunk) }; return result
+}
 final class EventDispatcher {
     private let lock = NSLock()
     private var release: CGEvent?
-    func post(_ action: Action, snapshot: Snapshot, validate: () throws -> Void, commit: (() -> Void) throws -> Void) throws {
-        let source = CGEventSource(stateID: .privateState)
-        source?.localEventsSuppressionInterval = 0
-        let down: CGEvent, up: CGEvent?
-        switch action.kind {
-        case "click", "double_click", "triple_click", "right_click", "middle_click", "mouse_move":
-            let point = try snapshot.point(x: action.x!, y: action.y!)
-            if action.kind == "mouse_move" {
-                guard let m = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) else { throw NativeFailure("event-create", "无法构造移动") }
-                m.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                down = m; up = nil
-            } else {
-                let isRight = action.kind == "right_click"
-                let isMiddle = action.kind == "middle_click"
-                let mouseButton: CGMouseButton = isRight ? .right : isMiddle ? .center : .left
-                let downType: CGEventType = isRight ? .rightMouseDown : isMiddle ? .otherMouseDown : .leftMouseDown
-                let upType: CGEventType = isRight ? .rightMouseUp : isMiddle ? .otherMouseUp : .leftMouseUp
-                guard let d = CGEvent(mouseEventSource: source, mouseType: downType, mouseCursorPosition: point, mouseButton: mouseButton),
-                      let u = CGEvent(mouseEventSource: source, mouseType: upType, mouseCursorPosition: point, mouseButton: mouseButton) else { throw NativeFailure("event-create", "无法构造点击") }
-                let clicks: Int64 = action.kind == "double_click" ? 2 : action.kind == "triple_click" ? 3 : 1
-                d.setIntegerValueField(.mouseEventClickState, value: clicks)
-                u.setIntegerValueField(.mouseEventClickState, value: clicks)
-                d.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                u.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                down = d; up = u
-            }
-        case "drag", "left_click_drag":
-            let start = try snapshot.point(x: action.startX ?? action.x!, y: action.startY ?? action.y!)
-            let end = try snapshot.point(x: action.x!, y: action.y!)
-            guard let d = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: start, mouseButton: .left),
-                  let u = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: end, mouseButton: .left) else { throw NativeFailure("event-create", "无法构造拖拽") }
-            d.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-            u.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-            down = d; up = u
-        case "type":
-            let text = action.text ?? ""
-            let hasNonAscii = text.unicodeScalars.contains { $0.value > 127 }
-            if hasNonAscii {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
-                let vCode: CGKeyCode = 9 // 'v'
-                guard let d = CGEvent(keyboardEventSource: source, virtualKey: vCode, keyDown: true),
-                      let u = CGEvent(keyboardEventSource: source, virtualKey: vCode, keyDown: false) else { throw NativeFailure("event-create", "无法构造粘贴事件") }
-                d.flags = .maskCommand
-                u.flags = .maskCommand
-                d.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                u.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                down = d; up = u
-            } else {
-                guard let d = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-                      let u = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else { throw NativeFailure("event-create", "无法构造按键") }
-                let units = Array(text.utf16)
-                guard !units.isEmpty else { throw NativeFailure("invalid-action", "输入不能为空") }
-                units.withUnsafeBufferPointer { buffer in
-                    d.keyboardSetUnicodeString(stringLength: units.count, unicodeString: buffer.baseAddress!)
-                    u.keyboardSetUnicodeString(stringLength: units.count, unicodeString: buffer.baseAddress!)
-                }
-                d.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                u.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-                down = d; up = u
-            }
-        case "key":
-            let (code, flags) = try parseKeyCombination(action.key ?? "")
-            guard let d = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true),
-                  let u = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false) else { throw NativeFailure("event-create", "无法构造按键") }
-            d.flags = flags
-            u.flags = flags
-            d.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-            u.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-            down = d; up = u
-        case "scroll":
-            let point = try snapshot.point(x: action.x!, y: action.y!)
-            guard let d = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 1, wheel1: -Int32(action.deltaY!.rounded()), wheel2: 0, wheel3: 0) else { throw NativeFailure("event-create", "无法构造滚动") }
-            d.location = point
-            d.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG)
-            down = d; up = nil
-        case "open_app":
-            guard let name = action.appName, openApplication(named: name) else { throw NativeFailure("app-open-failed", "打开应用失败") }
-            return
-        case "wait":
-            return
-        default: throw NativeFailure("unsupported-action", "不支持的动作：\(action.kind)")
-        }
+    private func tag(_ event: CGEvent) { event.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG) }
+    private func post(_ event: CGEvent, release nextRelease: CGEvent?, validate: () throws -> Void, commit: (() -> Void) throws -> Void) throws {
         try validate()
         lock.lock(); defer { lock.unlock() }
-        try commit {
-            release = up
-            down.post(tap: .cgSessionEventTap)
-            up?.post(tap: .cgSessionEventTap)
-            release = nil
+        try commit { release = nextRelease; tag(event); event.post(tap: .cgSessionEventTap) }
+    }
+    func post(_ action: Action, snapshot: Snapshot, expectedPID: pid_t? = nil, validate: () throws -> Void, commit: (() -> Void) throws -> Void) throws {
+        let source = CGEventSource(stateID: .privateState); source?.localEventsSuppressionInterval = 0
+        defer { releaseAll() }
+        if ["click", "double_click", "triple_click", "right_click", "middle_click", "mouse_move", "move", "drag", "left_click_drag"].contains(action.kind) {
+            let steps = try mouseSteps(action, snapshot: snapshot)
+            for (index, step) in steps.enumerated() {
+                if let expectedPID { guard try windowAt(step.point).pid == expectedPID else { throw NativeFailure("target-changed", "鼠标事件实际接收应用已变化") } }
+                guard let event = CGEvent(mouseEventSource: source, mouseType: step.type, mouseCursorPosition: step.point, mouseButton: step.button) else { throw NativeFailure("event-create", "无法构造鼠标事件") }
+                event.setIntegerValueField(.mouseEventClickState, value: step.clickState)
+                let isHeld = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .leftMouseDragged].contains(step.type)
+                let upType: CGEventType = step.button == .left ? .leftMouseUp : step.button == .right ? .rightMouseUp : .otherMouseUp
+                let up = isHeld ? CGEvent(mouseEventSource: source, mouseType: upType, mouseCursorPosition: step.point, mouseButton: step.button) : nil
+                if let up { tag(up) }
+                try post(event, release: up, validate: validate, commit: commit)
+                if index + 1 < steps.count { Thread.sleep(forTimeInterval: 0.012) }
+            }
+        } else if action.kind == "scroll" {
+            guard let x = action.x, let y = action.y, let delta = action.deltaY,
+                  let event = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 1, wheel1: -Int32(delta.rounded()), wheel2: 0, wheel3: 0) else { throw NativeFailure("event-create", "无法构造滚动") }
+            event.location = try snapshot.point(x: x, y: y)
+            if let expectedPID { guard try windowAt(event.location).pid == expectedPID else { throw NativeFailure("target-changed", "滚动目标应用已改变") } }
+            try post(event, release: nil, validate: validate, commit: commit)
+        } else {
+            let code: CGKeyCode, flags: CGEventFlags
+            if action.kind == "key" { (code, flags) = try parseKeyCombination(action.key ?? "") }
+            else if action.kind == "type" { code = 0; flags = [] }
+            else { throw NativeFailure("unsupported-action", "此动作不属于输入事件") }
+            let chunks = action.kind == "type" ? unicodeEventChunks(action.text ?? "") : [[]]
+            for units in chunks {
+                guard let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true), let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false) else { throw NativeFailure("event-create", "无法构造键盘事件") }
+                down.flags = flags; up.flags = flags
+                if action.kind == "type" {
+                    guard !units.isEmpty else { throw NativeFailure("invalid-action", "文本不能为空") }
+                    units.withUnsafeBufferPointer { ptr in down.keyboardSetUnicodeString(stringLength: units.count, unicodeString: ptr.baseAddress!); up.keyboardSetUnicodeString(stringLength: units.count, unicodeString: ptr.baseAddress!) }
+                }
+                tag(up)
+                try post(down, release: up, validate: validate, commit: commit)
+                try post(up, release: nil, validate: validate, commit: commit)
+            }
         }
     }
     func releaseAll() { lock.lock(); defer { lock.unlock() }; release?.post(tap: .cgSessionEventTap); release = nil }
@@ -295,21 +238,20 @@ final class SafetyMonitor {
     init(gate: SafetyGate, onStop: @escaping (String) -> Void) { self.gate = gate; self.onStop = onStop }
     func heartbeat() { mutex.lock(); uiHeartbeat = ProcessInfo.processInfo.systemUptime; mutex.unlock() }
     private func received(_ type: CGEventType, _ event: CGEvent) {
-        if event.getIntegerValueField(.eventSourceUserData) == HELPER_EVENT_TAG {
-            return
-        }
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            gate.setListenerHealthy(false); onStop("安全监听已失活")
-            return
-        }
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput { gate.setListenerHealthy(false); onStop("安全监听已失活"); return }
+        if isOwnEvent(tag: event.getIntegerValueField(.eventSourceUserData), sourcePID: event.getIntegerValueField(.eventSourceUnixProcessID)) { return }
         guard gate.monitorsInput else { return }
-        if type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == 53,
-           event.flags.contains([.maskControl, .maskAlternate]) { onStop("紧急停止快捷键"); return }
+        if type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == 53, event.flags.contains([.maskControl, .maskAlternate]) { onStop("紧急停止快捷键"); return }
+        if gate.isConfirming {
+            let isKeyboard = [.keyDown, .keyUp, .flagsChanged].contains(type)
+            if isKeyboard, let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier, isGammaPID(pid) { return }
+            if !isKeyboard, gammaUIContains(event.location) { return }
+        }
         onStop("检测到用户操作，桌面控制已暂停")
     }
     func start() throws {
         mutex.lock(); let already = started; mutex.unlock()
-        guard !already else {
+        if already {
             guard let tap, CGEvent.tapIsEnabled(tap: tap) else { throw NativeFailure("listen-disabled", "监听失活；需重启helper") }
             gate.setListenerHealthy(true); return
         }
@@ -323,25 +265,103 @@ final class SafetyMonitor {
             }
             tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly, eventsOfInterest: mask, callback: callback, userInfo: Unmanaged.passUnretained(self).toOpaque())
             guard let tap, let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else { semaphore.signal(); return }
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-            CGEvent.tapEnable(tap: tap, enable: true)
-            mutex.lock(); started = true; mutex.unlock()
-            gate.setListenerHealthy(CGEvent.tapIsEnabled(tap: tap)); semaphore.signal()
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes); CGEvent.tapEnable(tap: tap, enable: true)
+            mutex.lock(); started = true; mutex.unlock(); gate.setListenerHealthy(CGEvent.tapIsEnabled(tap: tap)); semaphore.signal()
             let timer = Timer(timeInterval: 0.1, repeats: true) { [self] _ in
-                guard gate.isActive else { return }
                 mutex.lock(); let staleUI = ProcessInfo.processInfo.systemUptime - uiHeartbeat > 2; mutex.unlock()
                 if getppid() != parentPID { onStop("父进程已退出"); _exit(0) }
-                else if gate.expired { onStop("授权已过期") }
+                guard gate.isActive else { return }
+                if gate.expired { onStop("授权已过期") }
                 else if !CGEvent.tapIsEnabled(tap: tap) { gate.setListenerHealthy(false); onStop("安全监听失活") }
                 else if staleUI { onStop("本地停止UI无响应") }
                 else if IsSecureEventInputEnabled() { onStop("系统安全输入已开启") }
             }
-            RunLoop.current.add(timer, forMode: .common)
-            CFRunLoopRun()
+            RunLoop.current.add(timer, forMode: .common); CFRunLoopRun()
         }
-        thread.name = "Gamma Computer Use 安全监听"; thread.start()
+        thread.name = "Gamma Computer Use安全监听"; thread.start()
         guard semaphore.wait(timeout: .now() + 2) == .success else { throw NativeFailure("listen-timeout", "安全监听启动超时") }
         mutex.lock(); let success = started; mutex.unlock()
         guard success else { throw NativeFailure("listen-denied", "无法建立独立安全监听") }
     }
+}
+
+struct PreparedAction {
+    let id: String, request: PerformParams
+    let snapshot: Snapshot
+    let app: AppIdentity?
+    let appName: String, bundleId: String
+    let window: Target?
+    let element: AXUIElement?
+    let context: ElementContext
+    let elementBounds: Rect?
+    let layoutDigest: String?
+    let returnApp: AppIdentity?
+    let returnFocus: AXUIElement?
+    let resolvedURL: URL?
+}
+func samePreparedRequest(_ prepared: PerformParams, _ incoming: PerformParams) -> Bool {
+    prepared.leaseId == incoming.leaseId && prepared.epoch == incoming.epoch && prepared.actionId == incoming.actionId && prepared.action == incoming.action
+}
+func desktopDigest() throws -> String {
+    // 只在helper内保存摘要，不把其他窗口标题作为工具输出或日志传播。
+    let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+    let data = try encoder.encode(desktopWindows())
+    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+}
+func validateObservedLayout(_ snapshot: Snapshot, window: Target, digest: String) throws {
+    guard snapshot.target == window, !snapshot.axDigest.isEmpty, snapshot.axDigest == digest else { throw NativeFailure("observation-layout-changed", "实际目标不属于本次已验证的前台布局；请先聚焦目标窗口并重新截图") }
+}
+func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityWorker) throws -> PreparedAction {
+    try validateDisplay(snapshot.display)
+    guard snapshot.desktopDigest == (try desktopDigest()) else { throw NativeFailure("desktop-changed", "桌面布局已改变，请重新截图") }
+    let originalApp = try currentApplication()
+    let originalFocus = try? ax.focusedElement()
+    let action = request.action
+    if action.kind == "open_app" {
+        guard let bundleId = action.bundleId ?? action.appName else { throw NativeFailure("invalid-application", "缺少已解析的Bundle ID") }
+        let (url, result) = try resolveApplication(bundleId)
+        guard result.bundleId == bundleId else { throw NativeFailure("target-changed", "解析应用身份已变化") }
+        let app = try result.pid.map { try appIdentity($0) }
+        return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: result.appName, bundleId: result.bundleId, window: nil, element: nil, context: ElementContext(role: "AXApplication", subrole: nil, title: nil, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: url)
+    }
+    if action.kind == "wait" {
+        return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: originalApp, appName: originalApp.name, bundleId: originalApp.bundleId, window: nil, element: nil, context: ElementContext(role: "AXApplication", subrole: nil, title: nil, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil)
+    }
+    let windows = try desktopWindows()
+    let window: Target, element: AXUIElement
+    if action.kind == "focus_window" {
+        guard let id = action.windowId, let found = windows.first(where: { $0.windowId == id }) else { throw NativeFailure("target-gone", "目标窗口不在屏幕上") }
+        window = found; element = try ax.matchedWindow(found)
+    } else if ["key", "type", "wait"].contains(action.kind) {
+        element = try ax.focusedElement()
+        let pid = try ax.elementPID(element)
+        guard !isGammaPID(pid), pid == originalApp.pid else { throw NativeFailure("unsafe-focus", "焦点不属于可授权的前台应用") }
+        window = try ax.windowForFocused(pid, windows: windows)
+    } else {
+        guard let x = action.startX ?? action.x, let y = action.startY ?? action.y else { throw NativeFailure("invalid-coordinate", "缺少动作坐标") }
+        let point = try snapshot.point(x: x, y: y)
+        window = try windowAt(point); element = try ax.hitElement(point)
+        guard try ax.elementPID(element) == window.pid else { throw NativeFailure("ambiguous-target", "CG命中窗口与AX控件所属应用不一致") }
+        if ["drag", "left_click_drag"].contains(action.kind) {
+            for step in try mouseSteps(action, snapshot: snapshot) {
+                guard try windowAt(step.point).pid == window.pid else { throw NativeFailure("cross-application-drag", "拖拽路径跨应用，暂不支持") }
+            }
+        }
+    }
+    let (context, bounds) = try ax.context(element)
+    let tree = try ax.read(window, allowSurfaces: true)
+    if action.kind != "focus_window" {
+        try validateObservedLayout(snapshot, window: window, digest: tree.digest)
+    }
+    let app = try appIdentity(window.pid)
+    return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: app.name, bundleId: app.bundleId, window: window, element: element, context: context, elementBounds: bounds, layoutDigest: tree.digest, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil)
+}
+func verifyBinding(_ prepared: PreparedAction, ax: AccessibilityWorker) throws {
+    let fresh = try bindAction(prepared.request, snapshot: prepared.snapshot, ax: ax)
+    guard fresh.app == prepared.app, fresh.bundleId == prepared.bundleId, fresh.window == prepared.window,
+          fresh.context == prepared.context, fresh.elementBounds == prepared.elementBounds, fresh.layoutDigest == prepared.layoutDigest,
+          fresh.returnApp == prepared.returnApp, fresh.resolvedURL == prepared.resolvedURL else { throw NativeFailure("target-changed", "目标应用、控件、焦点或布局已改变，未投递动作") }
+    if let old = prepared.element, let new = fresh.element, !CFEqual(old, new) { throw NativeFailure("target-changed", "目标控件已替换") }
+    if let old = prepared.returnFocus, let new = fresh.returnFocus, !CFEqual(old, new) { throw NativeFailure("focus-changed", "原焦点控件已改变") }
+    if (prepared.returnFocus == nil) != (fresh.returnFocus == nil) { throw NativeFailure("focus-changed", "无法确认原焦点一致") }
 }

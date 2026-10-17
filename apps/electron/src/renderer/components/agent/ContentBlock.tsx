@@ -356,20 +356,21 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
   // Agent/Task 子代理内容默认折叠
   const [childrenExpanded, setChildrenExpanded] = React.useState(false)
 
-  const phrase = getToolPhrase(block.name, block.input)
-  const ToolIcon = getToolIcon(block.name)
-  const toolKindLabel = block.name.startsWith('mcp__') ? block.name.split('__').slice(1).join(' / ') : block.name
-  const showToolKindLabel = shouldShowToolKindLabel(block.name, block.input, toolKindLabel, phrase.label)
-
-  const isCompleted = toolResult !== null
-  const resultSummary = getToolResultSummary(block.name, resultText, isError)
-
   // 终态只来自按 tool_use_id 关联的真实结果；停止流式不代表工具成功。
   const messageSessionId = useMessageSessionId()
   const pendingPermissions = useAtomValue(allPendingPermissionRequestsAtom)
   const pendingApproval = messageSessionId !== undefined && pendingPermissions.get(messageSessionId)
     ?.some((request) => request.toolUseId === block.id)
   const presentation = getToolExecutionPresentation({ result: toolResult, isStreaming, approval: pendingApproval ? 'pending' : undefined })
+
+  const isFailed = isError || presentation.status === 'error'
+  const phrase = getToolPhrase(block.name, block.input, isFailed)
+  const ToolIcon = getToolIcon(block.name)
+  const toolKindLabel = block.name.startsWith('mcp__') ? block.name.split('__').slice(1).join(' / ') : block.name
+  const showToolKindLabel = shouldShowToolKindLabel(block.name, block.input, toolKindLabel, phrase.label)
+
+  const isCompleted = toolResult !== null
+  const resultSummary = getToolResultSummary(block.name, resultText, isFailed)
   const displayLabel = presentation.status === 'running' ? phrase.loadingLabel : phrase.label
   const statusBadge = (
     <span

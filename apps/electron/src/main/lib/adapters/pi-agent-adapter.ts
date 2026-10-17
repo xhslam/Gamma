@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence } from './pi-computer-context'
+import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence, hasComputerObservationContent, stripComputerObservationContent, withComputerSharingFence } from './pi-computer-context'
 import type { ComputerPrivateObservation } from '@gamma/shared'
 import { spawn } from 'node:child_process'
 import type { Dispatcher } from 'undici'
@@ -67,6 +67,8 @@ import { createCodexFastModeExtension, withCodexFastModeServiceTier } from './pi
 import { createDeepSeekReasoningRequestExtension } from './pi-deepseek-reasoning-request-settings'
 import { createOpenAIReasoningRequestExtension } from './pi-openai-reasoning-request-settings'
 import { mergeRuntimeEnv, type AgentRuntimeEnv } from '../agent-runtime-env'
+import { createMemoryExtension } from '../memory'
+import { getMemoryDir } from '../config-paths'
 import { sanitizePiMessageImageContent, sanitizeToolResultImageContent } from '../image-content-validation'
 import {
   convertPiMessage,
@@ -113,6 +115,8 @@ export function shouldMarkCompactionAfterCompletedTurn(
 export interface PiAgentQueryOptions extends AgentQueryInput {
   /** 由可信主进程决定，模型或query payload不能自行授予本地租约。 */
   desktopMode?: boolean
+  /** 常规电脑工具的外发核验，不启用独占工具模式。 */
+  computerToolsAvailable?: boolean
   getComputerObservations?: (signal?: AbortSignal) => Promise<ComputerPrivateObservation[]>
   validateComputerLease?: (signal?: AbortSignal) => Promise<void>
   apiKey: string
@@ -188,6 +192,14 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   onXaiOAuthCredentialsRefreshed?: (credentials: XaiOAuthCredentials) => void | Promise<void>
   /** 会话级 OpenAI（Codex OAuth / Responses API）思考深度。 */
   openAIThinkingLevel?: AgentThinkingLevel
+  /** 长期记忆根目录；未指定时默认指向 Gamma 数据目录下的 memory/（按用户隔离）。 */
+  memoryRoot?: string
+  /** 长期记忆用户标识，用于在 Gamma 数据目录下按用户隔离存储。 */
+  memoryUserId?: string
+  /** 是否挂载长期记忆扩展（子 Agent、后台任务、computer use 会话应设为 false）。 */
+  memoryEnabled?: boolean
+  /** 长期记忆是否只读模式 */
+  memoryReadOnly?: boolean
 }
 
 interface ActivePiSession {
@@ -1491,7 +1503,16 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             initialSources: input.projectInstructionScope.initialSources,
           })
         : undefined
+      const shouldMountMemory = input.memoryEnabled === true
+      const memoryExtension = shouldMountMemory
+        ? createMemoryExtension({
+            root: input.memoryRoot ?? getMemoryDir(input.memoryUserId),
+            userId: input.memoryUserId,
+            readOnly: input.memoryReadOnly,
+          })
+        : undefined
       const extensionFactories = [
+        ...(memoryExtension ? [memoryExtension] : []),
         taskProgress.createExtension(),
         ...(projectInstructionScope ? [projectInstructionScope.createExtension()] : []),
         ...(openAIReasoningProfile
@@ -1542,13 +1563,23 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         noTools: 'builtin',
         customTools,
       })
+      await session.bindExtensions({})
       session.agent.toolExecution = 'sequential'
       // Pi session artifact 可以来自旧版本，不能假设其历史 tool_result 已通过当前校验。
       // transformContext 在每个 provider 请求前执行，能隔离 resume 的坏图片而不篡改原 artifact。
       const previousTransformContext = session.agent.transformContext
       session.agent.transformContext = async (messages, signal) => {
         const sanitized = sanitizePiMessageImageContent(await previousTransformContext?.(messages, signal) ?? messages)
-        const compacted = compactComputerScreenshots(sanitized, 2)
+        let compacted = compactComputerScreenshots(sanitized, 2)
+        if (input.computerToolsAvailable && hasComputerObservationContent(compacted)) {
+          try {
+            if (!input.validateComputerLease) throw new Error('缺少电脑外发核验')
+            await input.validateComputerLease(signal)
+          } catch {
+            if (signal?.aborted) throw createAbortError()
+            compacted = stripComputerObservationContent(compacted)
+          }
+        }
         if (!input.desktopMode || !input.getComputerObservations) return compacted
         const observations = await input.getComputerObservations(signal)
         return injectComputerObservationContext(compacted, observations, signal)
@@ -1588,7 +1619,12 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           await input.validateComputerLease(signal)
           if (active.abortRequested || signal?.aborted) throw createAbortError()
         })
-        : session.agent.streamFunction
+        : input.computerToolsAvailable
+          ? withComputerSharingFence(session.agent.streamFunction, async signal => {
+            if (active.abortRequested || signal?.aborted || !input.validateComputerLease) throw createAbortError()
+            await input.validateComputerLease(signal)
+          })
+          : session.agent.streamFunction
       session.agent.streamFunction = withPiStreamWatchdog(
         (requestModel, context, options) => runWithPiRequestProxy(
           requestProxyDispatcher,

@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   AutomaticMemorySnapshot,
@@ -58,6 +58,7 @@ import type {
   OtherWorkspaceSkillsGroup,
   WorkspaceCapabilities,
   WorkspaceMemorySummary,
+  GlobalMemoryEntry,
   FileEntry,
   FileSearchResult,
   EnvironmentCheckResult,
@@ -693,6 +694,12 @@ export interface ElectronAPI {
   editAutomaticMemoryEntry: (workspaceSlug: string, id: string, content: string, expectedRevision: number) => Promise<AutomaticMemorySnapshot>
   deleteAutomaticMemoryEntry: (workspaceSlug: string, id: string, expectedRevision: number) => Promise<AutomaticMemorySnapshot>
   onAutomaticMemoryChanged: (callback: (change: AutomaticMemoryChange) => void) => () => void
+
+  /** 全局长期记忆管理 (Pi Extension Memory) */
+  listGlobalMemory: (userId?: string) => Promise<GlobalMemoryEntry[]>
+  readGlobalMemory: (path: string, userId?: string) => Promise<string>
+  writeGlobalMemory: (path: string, content: string, ifVersion?: string, userId?: string) => Promise<{ success: boolean; version: string }>
+  deleteGlobalMemory: (path: string, userId?: string) => Promise<void>
 
   getWorkspaceMemorySummary: (workspaceSlug: string) => Promise<WorkspaceMemorySummary>
 
@@ -1961,6 +1968,11 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on(AUTOMATIC_MEMORY_IPC_CHANNELS.CHANGED, listener)
     return () => ipcRenderer.removeListener(AUTOMATIC_MEMORY_IPC_CHANNELS.CHANGED, listener)
   },
+
+  listGlobalMemory: (userId?: string) => ipcRenderer.invoke(GLOBAL_MEMORY_IPC_CHANNELS.LIST, userId),
+  readGlobalMemory: (path: string, userId?: string) => ipcRenderer.invoke(GLOBAL_MEMORY_IPC_CHANNELS.READ, path, userId),
+  writeGlobalMemory: (path: string, content: string, ifVersion?: string, userId?: string) => ipcRenderer.invoke(GLOBAL_MEMORY_IPC_CHANNELS.WRITE, path, content, ifVersion, userId),
+  deleteGlobalMemory: (path: string, userId?: string) => ipcRenderer.invoke(GLOBAL_MEMORY_IPC_CHANNELS.DELETE, path, userId),
 
   getWorkspaceMemorySummary: (workspaceSlug: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_WORKSPACE_MEMORY_SUMMARY, workspaceSlug)

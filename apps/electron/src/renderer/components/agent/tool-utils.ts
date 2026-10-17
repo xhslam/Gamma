@@ -42,10 +42,16 @@ import {
   Terminal,
   Wrench,
   Zap,
+  Brain,
 } from 'lucide-react'
 
 /** 工具名称到图标组件的映射 */
 export const TOOL_ICONS: Record<string, LucideIcon> = {
+  memory_write: Brain,
+  memory_append: Brain,
+  memory_str_replace: Brain,
+  memory_read: Brain,
+  memory_list: Brain,
   Edit: Pencil,
   Write: FilePenLine,
   Read: FileText,
@@ -122,6 +128,11 @@ export function getToolIcon(toolName: string): LucideIcon {
 
 /** 内置工具显示名称映射 */
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  memory_write: '长期记忆',
+  memory_append: '长期记忆',
+  memory_str_replace: '长期记忆',
+  memory_read: '查阅记忆',
+  memory_list: '记忆列表',
   Edit: '编辑文件',
   Write: '写入文件',
   Read: '读取文件',

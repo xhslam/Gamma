@@ -48,7 +48,7 @@ export interface ComputerActionReceipt {
 export interface ComputerState {
   supported: boolean
   phase: ComputerPhase
-  /** 停止后仅可信本地重新启用可解除；不授予租约或重放动作。 */
+  /** 同轮停止不可自行恢复；下一条明确用户消息可开始新动作，不重放旧动作。 */
   resumeRequired?: boolean
   sessionId?: string
   channelId?: string
@@ -95,11 +95,15 @@ export interface ComputerAXContext {
   title?: string
   description?: string
   isSecure?: boolean
+  /** 原生层确认位于浏览器chrome地址/搜索栏，而非网页自报标签。 */
+  isTrustedSearch?: boolean
 }
 
 export interface ComputerUsePreferences {
   riskPolicy: ComputerRiskPolicy
   systemPermissionsDismissed: boolean
+  /** 本地用户对桌面截图发送至所配置模型的持久同意；dismiss 不代表同意。 */
+  shareObservations?: boolean
   allowedApps: Record<string, 'always' | 'denied'>
 }
 
