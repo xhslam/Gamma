@@ -1,9 +1,8 @@
-import {
-  type ExtensionAPI,
-  type ExtensionContext,
-  type BeforeAgentStartEvent,
-  type BeforeAgentStartEventResult,
-  withFileMutationQueue,
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  BeforeAgentStartEvent,
+  BeforeAgentStartEventResult,
 } from '@earendil-works/pi-coding-agent'
 import type { AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core'
 import { Type, type Static } from 'typebox'
@@ -13,6 +12,54 @@ import os from 'node:os'
 import path from 'node:path'
 import { getMemoryDir } from './config-paths'
 import { writeTextFileAtomic } from './safe-file'
+
+type FileMutationQueueFn = <T>(filePath: string, fn: () => Promise<T>) => Promise<T>
+
+let cachedQueueFn: FileMutationQueueFn | null = null
+
+// 进程内按路径互斥队列（作为回退实现及轻量级并发保障）
+const localFileMutationQueues = new Map<string, Promise<unknown>>()
+
+async function fallbackWithFileMutationQueue<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+  const normalized = path.resolve(filePath)
+  const currentQueue = localFileMutationQueues.get(normalized) ?? Promise.resolve()
+  let releaseNext!: () => void
+  const nextQueue = new Promise<void>((resolve) => {
+    releaseNext = resolve
+  })
+  const chainedQueue = currentQueue.then(() => nextQueue)
+  localFileMutationQueues.set(normalized, chainedQueue)
+  await currentQueue
+  try {
+    return await fn()
+  } finally {
+    releaseNext()
+    if (localFileMutationQueues.get(normalized) === chainedQueue) {
+      localFileMutationQueues.delete(normalized)
+    }
+  }
+}
+
+/**
+ * 按文件路径互斥执行文件写/改操作，避免并发写入冲突
+ * 优先使用 @earendil-works/pi-coding-agent 导出的 withFileMutationQueue（通过动态 import 避免 CommonJS 打包时导出冲突）
+ */
+export async function withFileMutationQueue<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+  if (!cachedQueueFn) {
+    try {
+      const sdk = await import('@earendil-works/pi-coding-agent')
+      if (typeof sdk.withFileMutationQueue === 'function') {
+        cachedQueueFn = sdk.withFileMutationQueue as FileMutationQueueFn
+      } else {
+        cachedQueueFn = fallbackWithFileMutationQueue
+      }
+    } catch {
+      cachedQueueFn = fallbackWithFileMutationQueue
+    }
+  }
+  return cachedQueueFn(filePath, fn)
+}
+
 
 // 注入给模型的规则：决定"什么时候自动记"
 export const RULES = `<memory_rules>
