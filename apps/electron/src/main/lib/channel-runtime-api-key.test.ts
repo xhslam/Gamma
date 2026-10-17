@@ -4,33 +4,15 @@ import * as os from 'node:os'
 import { join } from 'node:path'
 import { serializeCodexCredentials } from '@gamma/shared'
 import { writeJsonFileAtomic } from './safe-file'
+import { setConfigHomeForTest } from './config-paths'
 
 type ChannelManagerModule = typeof import('./channel-manager')
 
 let channelManager: ChannelManagerModule
 let tempHome: string
-const originalHome = process.env.HOME
-const originalGammaDev = process.env.GAMMA_DEV
-
-mock.module('electron', () => ({
-  app: {
-    isPackaged: true,
-    getPath: () => join(process.env.HOME ?? tempHome, 'Library', 'Application Support'),
-  },
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
-  shell: {
-    openExternal: async () => undefined,
-  },
-}))
-
-mock.module('node:os', () => ({
-  ...os,
-  homedir: () => tempHome,
-}))
+let originalHome: string | undefined
+let originalGammaDev: string | undefined
+let previousConfigHome: string | undefined
 
 function writeChannels(channels: unknown[], version = 2): void {
   const configDir = join(tempHome, '.gamma')
@@ -42,8 +24,11 @@ function writeChannels(channels: unknown[], version = 2): void {
 }
 
 beforeAll(async () => {
+  originalHome = process.env.HOME
+  originalGammaDev = process.env.GAMMA_DEV
   tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-channel-runtime-key-'))
   process.env.HOME = tempHome
+  previousConfigHome = setConfigHomeForTest(tempHome)
   process.env.GAMMA_DEV = '0'
   channelManager = await import('./channel-manager')
 })
@@ -53,6 +38,7 @@ beforeEach(() => {
 })
 
 afterAll(() => {
+  setConfigHomeForTest(previousConfigHome)
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {

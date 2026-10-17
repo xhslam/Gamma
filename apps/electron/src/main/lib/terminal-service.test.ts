@@ -15,10 +15,12 @@ function setup() {
   let windowAvailable = true
   let sendFails = false
   let creation: Promise<TerminalState> | undefined
+  let computerExclusive = false
   const service = loadIsolatedModule<Service>(`${import.meta.dir}/terminal-service.ts`, {
     'node:crypto': { randomUUID: () => 'agent-terminal' },
     '@gamma/shared': shared,
     './terminal-output-buffer': outputBuffer,
+    './computer-execution-gate': { assertComputerExecutionAllowed: () => { if (computerExclusive) throw new Error('桌面控制互斥') } },
     './terminal-agent-policy': { resolveAgentTerminalCwd: () => '/project' },
     './terminal-cwd': { requireTerminalCwd: () => '/project', resolveTerminalCwd: () => '/project' },
     './main-window-store': {
@@ -37,6 +39,7 @@ function setup() {
   })
   return {
     service, acknowledgements, sent,
+    enableComputer: () => { computerExclusive = true },
     output: (sequence: number, data = `output-${sequence}`) => outputListener({ terminalId: 'test-terminal', sequence, data }),
     exit: () => exitListener({ terminalId: 'test-terminal', exitCode: 0 }),
     hideWindow: () => { windowAvailable = false },
@@ -49,6 +52,17 @@ function setup() {
 const input: TerminalCreateInput = { terminalId: 'test-terminal', sessionId: 'session', cols: 80, rows: 24 }
 
 describe('终端主进程可靠输出接收', () => {
+  test('Given 桌面控制租约 When 新建或写入终端 Then 在runtime调用前拒绝', async () => {
+    const context = setup()
+    await context.service.createTerminal(input)
+    expect(context.service.hasLiveTerminals()).toBe(true)
+    context.enableComputer()
+    await expect(context.service.createTerminal({ ...input, terminalId: 'other-terminal' })).rejects.toThrow('桌面控制互斥')
+    await expect(context.service.writeTerminal({ terminalId: input.terminalId, data: 'execute' })).rejects.toThrow('桌面控制互斥')
+    context.exit()
+    expect(context.service.hasLiveTerminals()).toBe(false)
+  })
+
   test('Given 终端视图已卸载 When 连续接收输出 Then 主进程每批接收即 ACK 并保存完整快照', async () => {
     const context = setup()
     await context.service.createTerminal(input)

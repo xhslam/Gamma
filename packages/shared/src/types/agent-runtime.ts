@@ -82,6 +82,9 @@ export const AGENT_RUNTIME_METHODS = {
   CAPABILITY_CAN_USE_TOOL: 'agent.capability.canUseTool',
   CAPABILITY_CANCEL: 'agent.capability.cancel',
   CAPABILITY_CUSTOM_TOOL: 'agent.capability.customTool',
+  /** 私有请求前内存读取，不是模型工具，不进入事件/会话持久化。 */
+  CAPABILITY_COMPUTER_OBSERVATIONS: 'agent.capability.computerObservations',
+  CAPABILITY_COMPUTER_VALIDATE: 'agent.capability.computerValidate',
   CAPABILITY_CODEX_OAUTH_REFRESHED: 'agent.capability.codex_oauth_refreshed',
   CAPABILITY_GITHUB_COPILOT_OAUTH_REFRESHED: 'agent.capability.github_copilot_oauth_refreshed',
   CAPABILITY_XAI_OAUTH_REFRESHED: 'agent.capability.xai_oauth_refreshed',

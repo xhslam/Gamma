@@ -40,6 +40,7 @@ import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
 import { stopAllTerminals } from './lib/terminal-service'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
 import { browserController } from './lib/browser-controller'
+import { computerController } from './lib/computer-service'
 import { markRunningDelegationsAsInterrupted } from './lib/agent-session-manager'
 import { configureUpdater, initAutoUpdater, cleanupUpdater } from './lib/updater/auto-updater'
 import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/workspace-watcher'
@@ -450,7 +451,14 @@ function createWindow(): void {
     // 主 Renderer 成功恢复后重新开始计数；只有连续失败才应进入错误页。
     if (!hasShownRendererFailure) rendererRecoveryAttempts = []
   })
+  mainWindow.on('hide', () => { void computerController.stop('主窗口已隐藏') })
+  mainWindow.on('close', () => { void computerController.stop('主窗口已关闭') })
+  mainWindow.webContents.on('destroyed', () => { void computerController.stop('主页面已销毁') })
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) void computerController.stop('主页面导航或重载')
+  })
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    void computerController.stop('主页面失联')
     // clean-exit 和应用退出不属于 Renderer 故障；避免退出过程中重新加载主窗口。
     if (getIsQuitting() || details.reason === 'clean-exit') return
 
@@ -830,6 +838,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  void computerController.stop('应用正在退出')
   // 标记正在退出，让 close 事件不再阻止关闭
   setQuitting()
 

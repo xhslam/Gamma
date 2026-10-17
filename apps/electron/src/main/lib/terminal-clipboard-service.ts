@@ -18,8 +18,29 @@ import type {
 } from '@gamma/shared'
 import { getConfigDir } from './config-paths'
 
+interface ClipboardReader {
+  readImage(): Pick<ReturnType<typeof clipboard.readImage>, 'isEmpty' | 'toPNG'>
+  readText: typeof clipboard.readText
+  read: typeof clipboard.read
+}
+
+let testClipboard: ClipboardReader | null = null
+let testImagesDir: string | null = null
+
+export function setClipboardForTest(mockClipboard: ClipboardReader | null): void {
+  testClipboard = mockClipboard
+}
+
+export function setTerminalImagesDirForTest(dir: string | null): void {
+  testImagesDir = dir
+}
+
+function getClipboard(): ClipboardReader {
+  return testClipboard ?? clipboard
+}
+
 export function getTerminalImagesDir(): string {
-  const dir = join(getConfigDir(), 'terminal-images')
+  const dir = testImagesDir ?? join(getConfigDir(), 'terminal-images')
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -139,7 +160,7 @@ export async function saveTerminalPastedImage(input?: TerminalSavePastedImageInp
     return { filePath }
   }
 
-  const nativeImage = clipboard.readImage()
+  const nativeImage = getClipboard().readImage()
   if (nativeImage.isEmpty()) {
     throw new Error('剪贴板中未找到图片数据')
   }
@@ -151,7 +172,7 @@ export async function saveTerminalPastedImage(input?: TerminalSavePastedImageInp
 
 export async function getTerminalClipboardContent(): Promise<TerminalClipboardContentResult> {
   // 1. 优先检测原生图片
-  const nativeImage = clipboard.readImage()
+  const nativeImage = getClipboard().readImage()
   if (!nativeImage.isEmpty()) {
     const buffer = nativeImage.toPNG()
     const filePath = await saveTerminalImageBuffer(buffer, 'image/png')
@@ -161,7 +182,7 @@ export async function getTerminalClipboardContent(): Promise<TerminalClipboardCo
   // 2. 检测复制的文件（macOS Finder plist）
   if (process.platform === 'darwin') {
     try {
-      const plistXml = clipboard.read('NSFilenamesPboardType')
+      const plistXml = getClipboard().read('NSFilenamesPboardType')
       if (plistXml) {
         const paths = parseMacFilenamesPboard(plistXml).filter((p) => existsSync(p))
         if (paths.length > 0) {
@@ -174,7 +195,7 @@ export async function getTerminalClipboardContent(): Promise<TerminalClipboardCo
   }
 
   // 3. 检测纯文本
-  const text = clipboard.readText()
+  const text = getClipboard().readText()
   if (text && text.length > 0) {
     return { type: 'text', text }
   }

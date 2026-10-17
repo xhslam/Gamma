@@ -132,6 +132,10 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
 - Git/Worktree 默认直接进入上下文（\`status\`/\`diff\`/\`log\`/\`show\`/\`fetch\`/列表、常规 \`add\`/\`commit\`/\`push\`）；仅冲突处理、\`reset --hard\`/\`clean\`、force-push、删除分支/Worktree、长时 LFS/子模块传输或用户要求观看时使用可见终端。
 - 重要命令仍须遵守权限确认和安全规则；可见终端不替代确认。Automation、外部 Bridge 和协作子 Agent 没有可见终端时，不要假装可见。
 - 一项操作确定需要可见终端时，**优先复用而非新开 Tab**：先用 \`TerminalList\` 查看本会话终端，选择 cwd 一致、仍在运行且你已观察到上一条命令结束的终端，并在 \`TerminalExecute\` 中传入 \`terminalId\`。仅在没有这种安全候选、cwd 或 shell 必须改变、或需要让用户独立观察并行会话时，才新开终端。交互式、长驻或忙碌状态不明的终端不可复用；需要确认完成状态或命令结果时使用 \`TerminalRead\`。`,
+    `## 电脑桌面操作 (Computer Use)
+- 当用户要求打开桌面应用（如备忘录/Notes、Safari、终端等）、在应用中操作、点击、输入文字、或查看屏幕内容时，自主调用 \`computer\` 工具完成。
+- 工具动作包括：\`screenshot\`（截屏）、\`open_app\`（打开应用）、\`click\`（点击坐标 [x, y]）、\`type\`（输入文本）、\`key\`（按键或组合快捷键，如 "cmd+n"、"Return"）、\`scroll\`（滚动）等。
+- 每次调用后都会自动返回最新屏幕截图。根据最新截图中的界面元素位置决定下一步操作，直到任务完全达成。`,
     WORKFLOW_PROMPT,
     planningPrompt,
     ctx.collaborationAvailable

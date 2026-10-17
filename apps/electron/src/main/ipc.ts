@@ -16,6 +16,7 @@ import { setAppIconVariant } from './lib/app-icon-service'
 import { getAutomaticMemorySnapshot, updateAutomaticMemorySettings, editAutomaticMemoryEntry, deleteAutomaticMemoryEntry } from './lib/automatic-memory-store'
 import type { AutomaticMemorySettings } from '@gamma/shared'
 import { registerMarkdownWorkspaceIpc } from './lib/markdown-workspace-ipc'
+import { registerComputerIpc } from './lib/computer-ipc'
 import type {
   QuickTaskSubmitInput,
   VoiceDictationAudioChunkInput,
@@ -1338,6 +1339,7 @@ async function withOAuthDeviceCodeQr<T extends CodexOAuthDeviceCode | GithubCopi
 }
 
 export function registerIpcHandlers(): void {
+  registerComputerIpc()
   registerMarkdownWorkspaceIpc({
     mainWindow: getMainWindow,
     mediaUrl: registerGammaFilePath,

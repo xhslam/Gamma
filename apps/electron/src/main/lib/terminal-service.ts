@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { assertComputerExecutionAllowed } from './computer-execution-gate'
 import {
   TERMINAL_IPC_CHANNELS,
   type AgentTerminalOpenEvent,
@@ -75,10 +76,15 @@ function initialize(): void {
   })
 }
 
+export function hasLiveTerminals(): boolean {
+  return pendingTerminals.size > 0 || [...terminals.keys()].some(id => !terminalExitCodes.has(id))
+}
+
 export async function createTerminal(
   input: TerminalCreateInput,
   options: { strictCwd?: boolean } = {},
 ): Promise<TerminalState> {
+  assertComputerExecutionAllowed()
   initialize()
   validateTerminalId(input.terminalId)
   const existing = terminals.get(input.terminalId)
@@ -119,6 +125,7 @@ export async function createTerminal(
 }
 
 export async function writeTerminal(input: TerminalInput): Promise<void> {
+  assertComputerExecutionAllowed()
   initialize()
   validateTerminalId(input.terminalId)
   if (typeof input.data !== 'string' || input.data.length > 64 * 1024) throw new Error('终端输入无效或过长')

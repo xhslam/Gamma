@@ -4,6 +4,25 @@
  */
 import { app, safeStorage, session } from 'electron'
 import type { Cookie, CookiesSetDetails, Session } from 'electron'
+
+interface LegacyCookieSession {
+  cookies: Pick<Session['cookies'], 'get' | 'set' | 'flushStore'>
+}
+interface LegacyCookieSessionSource {
+  defaultSession: LegacyCookieSession
+  fromPartition(partition: string): LegacyCookieSession
+}
+let testSession: LegacyCookieSessionSource | null = null
+
+/** 测试只替换迁移目标的Cookie读写，不替换源profile的离线网络隔离。 */
+export function setSessionForTest(mockSession: LegacyCookieSessionSource | null): void {
+  testSession = mockSession
+}
+
+function getSession(): LegacyCookieSessionSource {
+  return testSession ?? session
+}
+
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
@@ -238,7 +257,7 @@ export function legacyCookieSetDetails(cookie: Cookie): CookiesSetDetails {
 export async function importLegacyCookieProfiles(profiles: readonly LegacyCookieProfile[]): Promise<void> {
   for (const profile of profiles) {
     if (profile.partition !== null && !/^proma-browser-[a-f\d]{32}$/.test(profile.partition)) throw new Error('旧浏览器 partition 非法，迁移已停止。')
-    const browserSession = profile.partition === null ? session.defaultSession : session.fromPartition(`persist:gamma-browser-${profile.partition.slice('proma-browser-'.length)}`)
+    const browserSession = profile.partition === null ? getSession().defaultSession : getSession().fromPartition(`persist:gamma-browser-${profile.partition.slice('proma-browser-'.length)}`)
     const expected: Cookie[] = []
     const matches = (value: Cookie, cookie: Cookie): boolean => value.name === cookie.name && value.value === cookie.value && value.domain === cookie.domain &&
       value.path === (cookie.path || '/') && Boolean(value.hostOnly) === Boolean(cookie.hostOnly) &&

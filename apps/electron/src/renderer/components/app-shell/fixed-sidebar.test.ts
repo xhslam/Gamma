@@ -19,7 +19,7 @@ describe('Given 固定展开宽度的左侧导航', () => {
     expect(shellSource).not.toContain('isDraggingLeftSidebar')
     expect(shellSource).toContain('useAtom(sidebarCollapsedAtom)')
     expect(shellSource).toContain('sidebarCollapsed ? 0 : LEFT_SIDEBAR_WIDTH + 1')
-    expect(shellSource).toContain('nextSidebarCollapsed ? 0 : LEFT_SIDEBAR_WIDTH + 1')
+    expect(shellSource).toContain('sidebarCollapsedDuringDrag ? 0 : LEFT_SIDEBAR_WIDTH + 1')
     expect(shellSource).toContain('onResizeStart={handleMouseDown}')
     expect(shellSource).toContain('onResizeKeyDown={handleResizeKeyDown}')
   })

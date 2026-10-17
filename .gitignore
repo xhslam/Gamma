@@ -10,6 +10,10 @@ dist
 apps/electron/resources/bin/
 # Swift 编译的 macOS 原生灵动岛 helper（构建时生成，按宿主架构分发）
 apps/electron/resources/agent-island/
+# 原生桌面 Phase 0 探针及临时构建/执行锁
+apps/electron/native/desktop-helper/bin/
+# 独立原生桌面控制 helper bundle（构建时生成）
+apps/electron/resources/computer-use/
 # Objective-C++ 编译的 macOS EventKit N-API addon（构建时生成，按宿主架构分发）
 apps/electron/resources/eventkit/
 # OfficeCLI 随构建脚本下载、校验并嵌入安装包，不提交大体积第三方二进制。

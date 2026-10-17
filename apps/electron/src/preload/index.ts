@@ -245,6 +245,19 @@ export interface ElectronAPI {
   /** 获取独立预览窗口数据 */
   getDetachedPreviewData: (previewId: string) => Promise<DetachedPreviewWindowData | null>
 
+  // ===== 原生桌面控制：可信本地UI，观察数据不经 renderer =====
+  getComputerState: (sessionId?: string) => Promise<import('@gamma/shared').ComputerState>
+  armComputer: (input: import('@gamma/shared').ComputerArmInput) => Promise<import('@gamma/shared').ComputerState>
+  stopComputer: () => Promise<import('@gamma/shared').ComputerState>
+  requestComputerPermission: (permission: import('@gamma/shared').ComputerPermission) => Promise<import('@gamma/shared').ComputerState>
+  onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => () => void
+  getComputerPreferences: () => Promise<import('@gamma/shared').ComputerUsePreferences>
+  updateComputerPreferences: (partial: Partial<import('@gamma/shared').ComputerUsePreferences>) => Promise<import('@gamma/shared').ComputerUsePreferences>
+  decideComputerAppAuth: (requestId: string, decision: import('@gamma/shared').ComputerAppAuthDecision) => Promise<boolean>
+  decideComputerRiskConfirm: (requestId: string, confirmed: boolean) => Promise<boolean>
+  onComputerAppAuthRequested: (callback: (req: import('@gamma/shared').ComputerAppAuthRequest) => void) => () => void
+  onComputerRiskConfirmRequested: (callback: (req: import('@gamma/shared').ComputerRiskConfirmRequest) => void) => () => void
+
   // ===== Pi 受管浏览器（主进程 WebContentsView） =====
   openAgentBrowser: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
   listAgentBrowserTabs: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
@@ -1309,6 +1322,30 @@ const electronAPI: ElectronAPI = {
 
   getDetachedPreviewData: (previewId: string) => {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_DETACHED_PREVIEW_DATA, previewId) as Promise<DetachedPreviewWindowData | null>
+  },
+
+  getComputerState: (sessionId?: string) => ipcRenderer.invoke('computer:get-state', sessionId),
+  armComputer: (input: import('@gamma/shared').ComputerArmInput) => ipcRenderer.invoke('computer:arm', input),
+  stopComputer: () => ipcRenderer.invoke('computer:stop'),
+  requestComputerPermission: (permission: import('@gamma/shared').ComputerPermission) => ipcRenderer.invoke('computer:permission', permission),
+  onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import('@gamma/shared').ComputerState): void => callback(state)
+    ipcRenderer.on('computer:state-changed', listener)
+    return () => ipcRenderer.removeListener('computer:state-changed', listener)
+  },
+  getComputerPreferences: () => ipcRenderer.invoke('computer:get-preferences') as Promise<import('@gamma/shared').ComputerUsePreferences>,
+  updateComputerPreferences: (partial: Partial<import('@gamma/shared').ComputerUsePreferences>) => ipcRenderer.invoke('computer:update-preferences', partial) as Promise<import('@gamma/shared').ComputerUsePreferences>,
+  decideComputerAppAuth: (requestId: string, decision: import('@gamma/shared').ComputerAppAuthDecision) => ipcRenderer.invoke('computer:decide-app-auth', requestId, decision) as Promise<boolean>,
+  decideComputerRiskConfirm: (requestId: string, confirmed: boolean) => ipcRenderer.invoke('computer:decide-risk-confirm', requestId, confirmed) as Promise<boolean>,
+  onComputerAppAuthRequested: (callback: (req: import('@gamma/shared').ComputerAppAuthRequest) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, req: import('@gamma/shared').ComputerAppAuthRequest): void => callback(req)
+    ipcRenderer.on('computer:app-auth-requested', listener)
+    return () => ipcRenderer.removeListener('computer:app-auth-requested', listener)
+  },
+  onComputerRiskConfirmRequested: (callback: (req: import('@gamma/shared').ComputerRiskConfirmRequest) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, req: import('@gamma/shared').ComputerRiskConfirmRequest): void => callback(req)
+    ipcRenderer.on('computer:risk-confirm-requested', listener)
+    return () => ipcRenderer.removeListener('computer:risk-confirm-requested', listener)
   },
 
   openAgentBrowser: (sessionId: string) => {

@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import {
+  buildOAuthNoProxy,
+  readNoProxyEnvironment,
+  runWithOAuthProxyScope,
+  setEffectiveProxyUrlForTest,
+} from './oauth-proxy-scope'
+import { getPiRequestProxyDispatcher } from './adapters/pi-request-proxy'
 
 const getEffectiveProxyUrl = mock<() => Promise<string | undefined>>()
 
-mock.module('./proxy-settings-service', () => ({ getEffectiveProxyUrl }))
-
-const { buildOAuthNoProxy, readNoProxyEnvironment, runWithOAuthProxyScope } = await import('./oauth-proxy-scope')
-const { getPiRequestProxyDispatcher } = await import('./adapters/pi-request-proxy')
-
 afterEach(() => {
   getEffectiveProxyUrl.mockReset()
+  setEffectiveProxyUrlForTest(undefined)
 })
+
 
 describe('OAuth proxy scope', () => {
   test('Given a user NO_PROXY list When building OAuth exclusions Then preserves it and includes every loopback host', () => {
@@ -28,6 +32,7 @@ describe('OAuth proxy scope', () => {
   })
 
   test('Given an application proxy When running OAuth Then scopes the entire operation to that proxy', async () => {
+    setEffectiveProxyUrlForTest(getEffectiveProxyUrl)
     getEffectiveProxyUrl.mockResolvedValue('http://127.0.0.1:7890')
 
     await expect(runWithOAuthProxyScope(async () => {
@@ -39,6 +44,7 @@ describe('OAuth proxy scope', () => {
   })
 
   test('Given no configured proxy When running OAuth Then preserves direct networking while retaining loopback exclusions', async () => {
+    setEffectiveProxyUrlForTest(getEffectiveProxyUrl)
     getEffectiveProxyUrl.mockResolvedValue(undefined)
 
     await expect(runWithOAuthProxyScope(async () => {
