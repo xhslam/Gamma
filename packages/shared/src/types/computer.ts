@@ -1,5 +1,5 @@
 /** 原生桌面控制契约；观察原图与 AX 内容不属于 renderer/持久化状态。 */
-export type ComputerPhase = 'disabled' | 'armed' | 'selecting' | 'authorizing' | 'active' | 'paused' | 'stopping' | 'error' | 'unsupported'
+export type ComputerPhase = 'disabled' | 'armed' | 'authorizing' | 'active' | 'paused' | 'stopping' | 'error' | 'unsupported'
 export interface ComputerBinding {
   sessionId: string
   runId: string

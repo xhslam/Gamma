@@ -89,48 +89,20 @@ async function settle(): Promise<void> {
   await Promise.resolve()
 }
 
-describe('自主桌面工具的常驻 renderer 控件', () => {
-  test('Given 桌面待命 When 渲染 Then 常驻停止入口但没有开启/恢复模式按钮', () => {
-    const html = renderStatus()
-    expect(html).toContain('桌面待命')
-    expect(html).toContain('停止所有会话的桌面操作')
-    expect(html.match(/<button/g)).toHaveLength(1)
-    expect(html).not.toContain('重新启用')
-    expect(html).not.toContain('开启模式')
+describe('自主桌面工具运行时状态控件', () => {
+  test('Given 任何桌面状态 When ComputerUseStatus 渲染 Then 始终返回空（不在应用内放悬浮卡片）', () => {
+    expect(renderStatus()).toBe('')
+    expect(renderStatus({ state: { supported: true, phase: 'active', sessionId: 's2', targetApp: { bundleId: 'app.notes', name: '备忘录' }, message: '正在观察桌面' } })).toBe('')
+    expect(renderStatus({ state: { supported: true, phase: 'paused' } })).toBe('')
+    expect(renderStatus({ pending: 'stop' })).toBe('')
   })
 
-  test('Given Agent 正在观察或操作 When 状态更新 Then 显示状态、应用与主进程消息', () => {
-    const html = renderStatus({ state: { supported: true, phase: 'active', sessionId: 's2', targetApp: { bundleId: 'app.notes', name: '备忘录' }, message: '正在观察桌面' } })
-    expect(html).toContain('正在操作桌面 · 备忘录')
-    expect(html).toContain('正在观察桌面')
-    expect(html).toContain('另一个会话正在使用桌面，仍可停止。')
-    expect(html).toContain('role="status"')
-    expect(html).toContain('aria-live="polite"')
-  })
-
-  test('Given 暂停或停止 When 显示状态 Then 提示通过新消息或新任务恢复且不重放', () => {
-    for (const state of [{ supported: true, phase: 'paused' as const }, { supported: true, phase: 'disabled' as const, resumeRequired: true }]) {
-      const html = renderStatus({ state })
-      expect(html).toContain('发送新消息“继续”或新任务以恢复，不会重放旧动作。')
-      expect(html.match(/<button/g)).toHaveLength(1)
-      expect(html).not.toContain('重新启用')
-    }
-  })
-
-  test('Given 读取失败或正在停止 When 渲染 Then 失败时仍可急停，停止期间阻止重复提交', () => {
-    const failed = renderStatus({ error: '读取失败' })
-    expect(failed).toContain('role="alert"')
-    expect(failed).not.toContain('disabled=""')
-    const stopping = renderStatus({ pending: 'stop' })
-    expect(stopping).toContain('正在停止')
-    expect(stopping).toContain('disabled=""')
-  })
-
-  test('Given 侧栏折叠或设置打开 When AppShell 存活 Then 状态订阅独立挂载且不触发启动引导', () => {
+  test('Given AppShell 存活 Then 应用内无悬浮状态卡片，仅挂载 ComputerModals 且无常驻面板', () => {
     const shell = readFileSync(`${import.meta.dir}/../app-shell/AppShell.tsx`, 'utf8')
     const sidebar = readFileSync(`${import.meta.dir}/../app-shell/LeftSidebar.tsx`, 'utf8')
     const modals = readFileSync(`${import.meta.dir}/ComputerModals.tsx`, 'utf8')
-    expect(shell).toContain('<ComputerUseStatus sessionId={currentSessionId} />')
+    expect(shell).not.toContain('<ComputerUseStatus')
+    expect(shell).toContain('<ComputerModals />')
     expect(sidebar).not.toContain('ComputerUsePanel')
     expect(sidebar).not.toContain('onComputerStateChanged')
     expect(modals).toContain('onComputerAppAuthRequested')
@@ -138,33 +110,6 @@ describe('自主桌面工具的常驻 renderer 控件', () => {
     expect(modals).not.toContain('getComputerPreferences')
     expect(modals).not.toContain('requestComputerPermission')
     expect(modals).not.toContain('不包含键盘密码')
-  })
-
-  test('Given 常驻控件挂载 When 状态事件与停止点击发生 Then 刷新并全局停止，卸载时解除订阅', () => {
-    const effects: Array<() => void | (() => void)> = []
-    const calls: unknown[] = []
-    let onState: (() => void) | undefined
-    let unsubscribed = false
-    const stop = () => { calls.push('stop') }
-    const refresh = () => { calls.push('refresh') }
-    const select = (id: string) => { calls.push(id) }
-    const component = loadComponent<{ ComputerUseStatus(props: { sessionId: string }): React.ReactElement<{ children: React.ReactNode[] }> }>('ComputerUseStatus.tsx', {
-      react: { ...React, useEffect: (effect: () => void | (() => void)) => effects.push(effect) },
-      jotai: { useAtomValue: () => idleView, useSetAtom: (atom: string) => atom === 'stop' ? stop : atom === 'refresh' ? refresh : select },
-      'lucide-react': { AlertCircle: 'i', Loader2: 'i', Monitor: 'i', Pause: 'i', Square: 'i' },
-      '@/components/ui/button': { Button: 'button' },
-      '@/atoms/computer-use': { computerUseViewAtom: 'view', refreshComputerUseAtom: 'refresh', selectComputerSessionAtom: 'select', stopComputerUseAtom: 'stop' },
-      './computer-use-model': { getComputerStatusLabel: () => '桌面待命', hasComputerControl: () => false },
-    }, { window: { electronAPI: { onComputerStateChanged: (listener: () => void) => { onState = listener; return () => { unsubscribed = true } } } } })
-    const tree = component.ComputerUseStatus({ sessionId: 's1' })
-    const cleanups = effects.map((effect) => effect())
-    expect(onState).toBeDefined()
-    onState?.()
-    const button = tree.props.children.find((node) => React.isValidElement(node) && node.type === 'button') as React.ReactElement<{ onClick: () => void }>
-    button.props.onClick()
-    expect(calls).toEqual(['s1', 'refresh', 'stop'])
-    cleanups.forEach((cleanup) => cleanup?.())
-    expect(unsubscribed).toBe(true)
   })
 })
 

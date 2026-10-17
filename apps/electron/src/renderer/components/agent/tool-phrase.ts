@@ -97,6 +97,41 @@ function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text
 }
 
+/** 桌面操作动作类型到中文意图映射 */
+function getComputerActionIntent(action: string, input: Record<string, unknown>): string {
+  const coordinate = (input.coordinate as [number, number]) ?? (input.x !== undefined && input.y !== undefined ? [input.x, input.y] : undefined)
+  switch (action) {
+    case 'screenshot': return '截取屏幕'
+    case 'open_app': return typeof input.app === 'string' ? `打开应用 ${input.app}` : '打开应用'
+    case 'click':
+    case 'left_click': return coordinate ? `点击 [${coordinate[0]}, ${coordinate[1]}]` : '点击'
+    case 'double_click': return coordinate ? `双击 [${coordinate[0]}, ${coordinate[1]}]` : '双击'
+    case 'triple_click': return '三击'
+    case 'right_click': return coordinate ? `右键点击 [${coordinate[0]}, ${coordinate[1]}]` : '右键点击'
+    case 'middle_click': return '中键点击'
+    case 'mouse_move':
+    case 'move': return coordinate ? `移动到 [${coordinate[0]}, ${coordinate[1]}]` : '移动鼠标'
+    case 'type': {
+      const text = typeof input.text === 'string' ? truncate(input.text, 20) : ''
+      return text ? `输入“${text}”` : '输入文本'
+    }
+    case 'key': return typeof input.key === 'string' ? `按下 ${input.key}` : '按键'
+    case 'scroll': {
+      const delta = (input.delta_y ?? input.deltaY ?? input.scroll_amount) as number | undefined
+      return delta && delta > 0 ? '向上滚动' : '向下滚动'
+    }
+    case 'drag':
+    case 'left_click_drag': return '拖拽'
+    case 'wait': {
+      const d = input.duration
+      return typeof d === 'number' ? `等待 ${d} 秒` : '等待'
+    }
+    case 'list_windows': return '查看窗口列表'
+    case 'focus_window': return '切换窗口'
+    default: return action
+  }
+}
+
 /**
  * 根据工具名和输入参数生成语义化短语
  *
@@ -104,11 +139,24 @@ function truncate(text: string, max: number): string {
  */
 export function getToolPhrase(toolName: string, input: Record<string, unknown>, isError = false): ToolPhrase {
   const explicitIntent = getExplicitToolIntent(toolName, input)
-  if (explicitIntent && toolName !== 'Edit' && toolName !== 'Write') {
+  if (explicitIntent && toolName !== 'Edit' && toolName !== 'Write' && toolName !== 'computer') {
     return phrase(explicitIntent)
   }
 
   switch (toolName) {
+    case 'computer': {
+      const explicitIntent = getExplicitToolIntent(toolName, input)
+      const app = (input.app ?? input.appName ?? input.app_name) as string | undefined
+      const action = (input.action as string) || '桌面操作'
+      const target = app ? `${app}` : '系统'
+      const actionIntent = getComputerActionIntent(action, input)
+      const intent = explicitIntent ?? actionIntent
+      return {
+        label: `操作 ${target}：${intent}`,
+        loadingLabel: `正在操作 ${target}：${intent}...`,
+      }
+    }
+
     case 'memory_write':
     case 'memory_append':
     case 'memory_str_replace': {
@@ -509,6 +557,18 @@ export function getToolResultSummary(toolName: string, result: string | undefine
   if (isError) return '失败'
   if (!result?.trim()) return null
 
+  if (toolName === 'computer') {
+    if (isError) return '失败'
+    if (result) {
+      try {
+        const parsed = JSON.parse(result)
+        if (parsed.interrupted) return `已中断${parsed.reason ? ` · ${truncate(parsed.reason, 20)}` : ''}`
+      } catch {
+        if (result.includes('已中断') || result.includes('interrupted')) return '已中断'
+      }
+    }
+    return '已完成'
+  }
   if (toolName === 'Read') {
     const totalLineMatch = result.match(/total\s+(\d+)\s+lines?/i) ?? result.match(/\bof\s+(\d+)\b/i)
     if (totalLineMatch?.[1]) return `${totalLineMatch[1]} 行`

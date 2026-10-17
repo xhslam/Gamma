@@ -20,13 +20,13 @@ export interface ComputerUseView {
 }
 
 export const COMPUTER_PHASE_LABELS: Record<ComputerPhase, string> = {
-  disabled: '桌面待命', armed: '等待授权', selecting: '等待授权', authorizing: '等待授权',
+  disabled: '桌面待命', armed: '等待授权', authorizing: '等待授权',
   active: '正在操作桌面', paused: '桌面操作已暂停', stopping: '正在停止',
   error: '桌面操作异常', unsupported: '桌面操作不可用',
 }
 
 export function hasComputerControl(state: ComputerUseStatus | null): boolean {
-  return state !== null && ['armed', 'selecting', 'authorizing', 'active', 'paused', 'stopping'].includes(state.phase)
+  return state !== null && ['armed', 'authorizing', 'active', 'paused', 'stopping'].includes(state.phase)
 }
 
 /** IPC 扩展字段不应意外进入 React 状态或被序列化到 renderer。 */

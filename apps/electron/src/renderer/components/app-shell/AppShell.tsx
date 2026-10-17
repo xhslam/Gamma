@@ -28,7 +28,7 @@ import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleOb
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
-import { ComputerModals, ComputerUseStatus } from '@/components/computer-use'
+import { ComputerModals } from '@/components/computer-use'
 import { detectIsWindows } from '@/lib/platform'
 import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
@@ -318,7 +318,6 @@ export function AppShell(): React.ReactElement {
               />
             </div>
         </div>
-        <ComputerUseStatus sessionId={currentSessionId} />
         <ComputerModals />
         <TerminalLifecycleObserver />
         {currentWorkspace && <WorkspaceMemoryChangeObserver workspaceSlug={currentWorkspace.slug} />}

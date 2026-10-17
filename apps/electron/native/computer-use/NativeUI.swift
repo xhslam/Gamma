@@ -6,6 +6,14 @@ final class NativeUI: NSObject {
     private var stopPanel: NSPanel?
     private var statusLabel: NSTextField?
     var hasVisibleStop: Bool { stopPanel?.isVisible == true }
+    private func positionPanel(_ panel: NSPanel) {
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            let panelWidth = panel.frame.width
+            let x = screen.visibleFrame.maxX - panelWidth - 16
+            let y = screen.visibleFrame.maxY - 8
+            panel.setFrameTopLeftPoint(NSPoint(x: x, y: y))
+        }
+    }
     func showStop(avoiding target: CGRect) {
         if stopPanel == nil {
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 330, height: 94), styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -17,13 +25,20 @@ final class NativeUI: NSObject {
             label.lineBreakMode = .byTruncatingTail; panel.contentView?.addSubview(label); statusLabel = label
             let button = NSButton(title: "立即停止（⌃⌥Esc）", target: self, action: #selector(stopClicked))
             button.frame = NSRect(x: 12, y: 12, width: 306, height: 34); panel.contentView?.addSubview(button)
-            if let screen = NSScreen.main { panel.setFrameTopLeftPoint(NSPoint(x: screen.visibleFrame.minX + 10, y: screen.visibleFrame.maxY - 10)) }
+            positionPanel(panel)
             stopPanel = panel
+        } else if let panel = stopPanel {
+            positionPanel(panel)
         }
         stopPanel?.orderFrontRegardless()
     }
-    func setStatus(_ text: String) { statusLabel?.stringValue = String(text.prefix(160)); stopPanel?.orderFrontRegardless() }
+    func setStatus(_ text: String) {
+        if stopPanel == nil { showStop(avoiding: .zero) }
+        else if let panel = stopPanel { positionPanel(panel) }
+        statusLabel?.stringValue = String(text.prefix(160))
+        stopPanel?.orderFrontRegardless()
+    }
     @objc private func stopClicked() { onStop("用户点击独立原生停止按钮") }
     func hideStop() { stopPanel?.orderOut(nil) }
-    func cancelAll() { /* 授权UI归父进程所有；原生保留暂停状态与停止入口。 */ }
+    func cancelAll() { hideStop() }
 }

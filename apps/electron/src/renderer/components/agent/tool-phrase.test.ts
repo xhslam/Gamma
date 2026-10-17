@@ -27,4 +27,21 @@ describe('长期记忆工具展示状态 (tool-phrase)', () => {
     const summary = getToolResultSummary('memory_write', 'version conflict', true)
     expect(summary).toBe('失败')
   })
+
+  test('When computer 工具调用并执行动作 Then 格式化为正在操作 XX：意图', () => {
+    const phrase = getToolPhrase('computer', { action: 'open_app', app: '备忘录' }, false)
+    expect(phrase.label).toBe('操作 备忘录：打开应用 备忘录')
+    expect(phrase.loadingLabel).toBe('正在操作 备忘录：打开应用 备忘录...')
+
+    const clickPhrase = getToolPhrase('computer', { action: 'click', coordinate: [100, 200], appName: 'Safari', _intent: '打开网页' }, false)
+    expect(clickPhrase.label).toBe('操作 Safari：打开网页')
+    expect(clickPhrase.loadingLabel).toBe('正在操作 Safari：打开网页...')
+
+    const successSummary = getToolResultSummary('computer', JSON.stringify({ message: '动作已投递' }), false)
+    expect(successSummary).toBe('已完成')
+
+    const interruptedSummary = getToolResultSummary('computer', JSON.stringify({ interrupted: true, reason: '检测到用户接管' }), false)
+    expect(interruptedSummary).toContain('已中断')
+    expect(interruptedSummary).toContain('检测到用户接管')
+  })
 })
