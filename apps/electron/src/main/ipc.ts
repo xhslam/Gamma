@@ -18,8 +18,8 @@ import { getAutomaticMemorySnapshot, updateAutomaticMemorySettings, editAutomati
 import type { AutomaticMemorySettings } from '@gamma/shared'
 import { registerMarkdownWorkspaceIpc } from './lib/markdown-workspace-ipc'
 import { registerComputerIpc } from './lib/computer-ipc'
-import { withFileMutationQueue } from '@earendil-works/pi-coding-agent'
-import { version as computeMemoryVersion } from './lib/memory'
+import { withFileMutationQueue, version as computeMemoryVersion } from './lib/memory'
+
 import type {
   QuickTaskSubmitInput,
   VoiceDictationAudioChunkInput,
