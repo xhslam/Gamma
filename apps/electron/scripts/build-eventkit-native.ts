@@ -2,6 +2,8 @@
 /** Build the in-process macOS EventKit N-API addon for Electron main. */
 
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { isNativeCompileOnly } from './native-build-policy'
 import { chmodSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { homedir } from 'node:os'
@@ -11,7 +13,8 @@ const scriptDir = dirname(fileURLToPath(import.meta.url))
 const appDir = resolve(scriptDir, '..')
 const source = resolve(appDir, 'native/eventkit/macos-eventkit-addon.mm')
 const output = resolve(appDir, 'resources/eventkit/macos-eventkit.node')
-const napiHeaders = resolve(appDir, '../../node_modules/node-addon-api')
+const napiHeaders = dirname(createRequire(import.meta.url).resolve('node-addon-api/package.json'))
+const compileOnly = isNativeCompileOnly(process.argv.slice(2), process.env)
 // Electron uses stable Node-API; use the locally installed Node headers only for declarations.
 const nodeVersion = execFileSync('node', ['-p', 'process.versions.node'], { encoding: 'utf8' }).trim()
 const nodeApiHeaders = resolve(homedir(), 'Library/Caches/node-gyp', nodeVersion, 'include/node')
@@ -25,7 +28,10 @@ if (process.platform !== 'darwin') {
 }
 if (!existsSync(source)) throw new Error(`EventKit addon source not found: ${source}`)
 // CI 不会预热 ~/.cache/node-gyp；按当前 Node 版本拉取一次 header，随后复用缓存。
-if (!existsSync(resolve(nodeApiHeaders, 'node_api.h'))) execFileSync('npx', ['node-gyp', 'install', nodeVersion], { stdio: 'inherit' })
+if (!existsSync(resolve(nodeApiHeaders, 'node_api.h'))) {
+  if (compileOnly) throw new Error(`只编译模式缺少缓存的 Node ${nodeVersion} headers；未下载、未修改开发应用`)
+  execFileSync('bunx', ['--no-install', 'node-gyp', 'install', nodeVersion], { stdio: 'inherit' })
+}
 if (!existsSync(resolve(napiHeaders, 'napi.h')) || !existsSync(resolve(nodeApiHeaders, 'node_api.h'))) throw new Error(`Node-API headers not found for Node ${nodeVersion}`)
 mkdirSync(dirname(output), { recursive: true })
 rmSync(output, { force: true })
@@ -35,7 +41,7 @@ chmodSync(output, 0o755)
 
 // 开发态的 responsible process 是 Electron.app，不是最终 Gamma.app。为它注入相同 usage strings
 // 并重新 ad-hoc 签名，避免 bun run dev 下 TCC 因缺少 Info.plist 键而静默拒绝/不显示弹窗。
-if (existsSync(devElectronInfo)) {
+if (!compileOnly && existsSync(devElectronInfo)) {
   execFileSync('plutil', ['-replace', 'NSCalendarsFullAccessUsageDescription', '-string', 'Gamma 需要访问你选择的日历，以显示、创建和同步日程。', devElectronInfo])
   execFileSync('plutil', ['-replace', 'NSRemindersFullAccessUsageDescription', '-string', 'Gamma 需要访问你选择的提醒事项列表，以同步 Todo。', devElectronInfo])
   // Finder / File Provider 可能为 Electron.app 添加扩展属性，codesign 会拒绝此类元数据。

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
+import { setConfigHomeForTest } from './config-paths'
 
 type AgentSessionManager = typeof import('./agent-session-manager')
 type AgentSessionContextPrompt = typeof import('./agent-session-context-prompt')
@@ -9,60 +10,9 @@ type AgentSessionContextPrompt = typeof import('./agent-session-context-prompt')
 let manager: AgentSessionManager
 let contextPrompt: AgentSessionContextPrompt
 let tempHome: string
-const originalHome = process.env.HOME
-const originalGammaDev = process.env.GAMMA_DEV
-
-// agent-session-manager loads Pi lazily for fork/rewind, so this focused fake isolates
-// entry-tree semantics without requiring a real Pi session JSONL fixture.
-mock.module('@earendil-works/pi-coding-agent', () => ({
-  SessionManager: {
-    open: (sessionFile: string) => ({
-      createBranchedSession: (entryId: string) => {
-        const branchFile = join(tempHome, `.pi-branch-${entryId}.jsonl`)
-        writeFileSync(branchFile, '', 'utf-8')
-        return branchFile
-      },
-      getSessionFile: () => sessionFile,
-      getSessionId: () => 'pi-test-session',
-      getEntry: (entryId: string) => entryId === 'entry-keep' ? { id: entryId } : undefined,
-    }),
-    forkFrom: (_branchFile: string) => {
-      const forkFile = join(tempHome, '.pi-fork.jsonl')
-      writeFileSync(forkFile, '', 'utf-8')
-      return {
-        getSessionFile: () => forkFile,
-        getSessionId: () => 'pi-fork-session',
-        getEntry: (entryId: string) => entryId === 'entry-keep' ? { id: entryId } : undefined,
-      }
-    },
-  },
-}))
-
-mock.module('electron', () => ({
-  app: {
-    isPackaged: true,
-    getPath: () => join(process.env.HOME ?? tempHome, 'Library', 'Application Support'),
-  },
-  BrowserWindow: class {},
-  clipboard: {},
-  dialog: {},
-  nativeImage: { createFromPath: () => ({}) },
-  nativeTheme: {},
-  powerMonitor: {},
-  powerSaveBlocker: {},
-  screen: {},
-  shell: {},
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
-}))
-
-mock.module('node:os', () => ({
-  ...os,
-  homedir: () => tempHome,
-}))
+let originalHome: string | undefined
+let originalGammaDev: string | undefined
+let previousConfigHome: string | undefined
 
 function jsonl(rows: string[]): string {
   return rows.join('\n') + '\n'
@@ -115,14 +65,40 @@ function createIndexedSessions(count: number) {
 }
 
 beforeAll(async () => {
+  originalHome = process.env.HOME
+  originalGammaDev = process.env.GAMMA_DEV
   tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-agent-session-manager-'))
   process.env.HOME = tempHome
+  previousConfigHome = setConfigHomeForTest(tempHome)
   process.env.GAMMA_DEV = '0'
   manager = await import('./agent-session-manager')
   contextPrompt = await import('./agent-session-context-prompt')
+  manager.setPiSessionManagerForTest({
+    open: (sessionFile: string) => ({
+      createBranchedSession: (entryId: string) => {
+        const branchFile = join(tempHome, `.pi-branch-${entryId}.jsonl`)
+        writeFileSync(branchFile, '', 'utf-8')
+        return branchFile
+      },
+      getSessionFile: () => sessionFile,
+      getSessionId: () => 'pi-test-session',
+      getEntry: (entryId: string) => entryId === 'entry-keep' ? { id: entryId } : undefined,
+    }),
+    forkFrom: (_branchFile: string) => {
+      const forkFile = join(tempHome, '.pi-fork.jsonl')
+      writeFileSync(forkFile, '', 'utf-8')
+      return {
+        getSessionFile: () => forkFile,
+        getSessionId: () => 'pi-fork-session',
+        getEntry: (entryId: string) => entryId === 'entry-keep' ? { id: entryId } : undefined,
+      }
+    },
+  })
 })
 
 afterAll(() => {
+  setConfigHomeForTest(previousConfigHome)
+  manager?.setPiSessionManagerForTest(undefined)
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {

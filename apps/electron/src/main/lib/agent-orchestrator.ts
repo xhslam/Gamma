@@ -14,7 +14,11 @@
  * 完全解耦 Electron IPC，可独立测试（mock Adapter + EventBus）。
  */
 
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
+import { computerController } from './computer-service'
+import { buildPiComputerTools } from './adapters/pi-computer-tools'
+import { resolvePiImageInputCapability } from './adapters/pi-model-registry'
+import type { ComputerBinding } from '@gamma/shared'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -685,11 +689,14 @@ export class AgentOrchestrator {
     let userMessagePersisted = false
     let initialUserMessageUuid: string | undefined
     let sessionMeta = getAgentSessionMeta(sessionId)
+    let releaseComputerReservation: () => void = () => {}
 
     const completeBeforeRun = (options: {
       stoppedByUser?: boolean
       startedAt?: number
     } = {}): void => {
+      releaseComputerReservation()
+      void computerController.stopForSession(sessionId, '运行预检结束，未消费授权不能留给后续重放')
       const stoppedByUser = this.stoppedBeforeRunSessions.delete(sessionId)
       callbacks.onComplete([], {
         ...options,
@@ -733,6 +740,13 @@ export class AgentOrchestrator {
       console.warn(`[Agent 编排] 会话 ${sessionId} 正在处理中，拒绝新请求且不保存用户消息`)
       callbacks.onError(getActiveRunRejectionMessage())
       callbacks.onComplete([], { startedAt: streamStartedAt, ...(input.runGeneration != null ? { runGeneration: input.runGeneration } : {}) })
+      return
+    }
+
+    try { releaseComputerReservation = computerController.reserveRun(sessionId) }
+    catch (error) {
+      callbacks.onError(error instanceof Error ? error.message : '桌面控制执行门禁拒绝')
+      completeBeforeRun()
       return
     }
 
@@ -985,8 +999,15 @@ export class AgentOrchestrator {
     let agentCwd: string | undefined
     let workspaceSlug: string | undefined
     let workspace: import('@gamma/shared').AgentWorkspace | undefined
+    const computerBinding: ComputerBinding = { sessionId, runId: `${runGeneration}:${randomUUID()}`, channelId, modelId: selectedModelId,
+      routeIdentity: createHash('sha256').update(`${channel.provider}\n${channel.baseUrl ?? ''}`).digest('hex') }
+    let desktopMode = false
+    let releaseComputerRevocation: (() => void) | undefined
 
     try {
+      const vision = await resolvePiImageInputCapability(channel.provider, selectedModelId)
+      desktopMode = computerController.beginRun(computerBinding, input.triggeredBy ?? 'user', vision === 'supported')
+      if (desktopMode) releaseComputerRevocation = computerController.onRevoked(computerBinding, () => { void this.adapter.abort(sessionId) })
       console.log(`[Agent 编排] 启动 Pi runtime — 模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`)
 
       // 确定 Agent 工作目录
@@ -1067,13 +1088,13 @@ export class AgentOrchestrator {
         lastWindowsTerminalProfile: appSettings.lastWindowsTerminalProfile,
         productivityTools,
       })
-      piBuiltinTools = builtinMcpResult.tools
+      piBuiltinTools = [...builtinMcpResult.tools, ...buildPiComputerTools(piSdk, computerBinding, input.triggeredBy ?? 'user')]
       const collaborationAvailable = builtinMcpResult.collaborationAvailable
 
       // 合并外部注入的自定义 MCP 服务器（如飞书群聊工具）
 
       // Gamma 主进程连接用户 MCP server，并转换为 Pi custom tools。
-      if (Object.keys(mcpServers).length > 0) {
+      if (!desktopMode && Object.keys(mcpServers).length > 0) {
         try {
           piMcpTools = await buildPiMcpTools(mcpServers)
         } catch (error) {
@@ -1296,6 +1317,10 @@ export class AgentOrchestrator {
 
       // 动态 canUseTool：每次调用读取当前权限模式，支持运行中切换
       const canUseTool = async (toolName: string, input: Record<string, unknown>, options: CanUseToolOptions): Promise<PermissionResult> => {
+        // 硬门禁先于任何bypass/计划/普通审批；不能靠提示词或自定义工具回调放行。
+        try { computerController.assertTool(computerBinding, toolName) }
+        catch { return { behavior: 'deny' as const, message: '桌面模式的独立执行门禁拒绝此工具；请先停止桌面控制。' } }
+        if (options.signal.aborted) return { behavior: 'deny' as const, message: '操作已取消' }
         const currentMode = getPermissionMode()
 
         // ── 参数校验守卫（所有模式、所有工具，优先于权限检查） ──
@@ -1588,6 +1613,7 @@ export class AgentOrchestrator {
       const handleModelResolved = (model: string): void => {
         // `[1m]` 是 SDK 内部上下文变体，不应泄漏到标题生成或用户可见的模型名。
         resolvedModel = model.replace(/\[1m\]$/i, '')
+        if (desktopMode && resolvedModel !== computerBinding.modelId) void computerController.stopForSession(sessionId, '实际模型与外发同意不一致，授权已撤销')
         console.log(`[Agent 编排] SDK 确认模型: ${resolvedModel}`)
         this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'model_resolved', model: resolvedModel } })
       }
@@ -1606,6 +1632,12 @@ export class AgentOrchestrator {
       let githubCopilotCredentialsSnapshot = githubCopilotOAuthCredentials
       const queryOptions: PiAgentQueryOptions = {
         sessionId,
+        desktopMode,
+        getComputerObservations: async () => {
+          computerController.assertTool(computerBinding, 'ComputerObserve')
+          return computerController.getPrivateObservations(computerBinding)
+        },
+        validateComputerLease: async () => { computerController.assertTool(computerBinding, 'ComputerObserve') },
         prompt: finalPrompt,
         // 旧持久化模型 ID 可能带 `[1m]` 上下文后缀；Pi runtime 不支持该变体：
         // 智谱等端点不识别 glm-5.2[1m] 这类后缀，会返回 1211「模型不存在」。
@@ -2263,6 +2295,9 @@ export class AgentOrchestrator {
       failRun(recoveryFailure, getAgentSessionMessages(sessionId), { startedAt: streamStartedAt })
 
     } finally {
+      releaseComputerReservation()
+      releaseComputerRevocation?.()
+      await computerController.finishRun(computerBinding)
       // 只在 generation 匹配时才清理，防止旧流的 finally 误删新流的注册
       releaseActiveRun()
       permissionService.clearSessionPending(sessionId)
@@ -2279,6 +2314,7 @@ export class AgentOrchestrator {
    * 再调用 adapter.abort() 中止底层 SDK 进程。
    */
   stop(sessionId: string, stopBeforeRun = false): void | Promise<void> {
+    const computerStopped = computerController.stopForSession(sessionId, '会话已停止')
     const runGeneration = this.activeSessions.get(sessionId)
     this.activeSessions.delete(sessionId)
     this.activeSessionStartedAt.delete(sessionId)
@@ -2294,7 +2330,7 @@ export class AgentOrchestrator {
     this.queuedMessageUuids.delete(sessionId)
     const abort = this.adapter.abort(sessionId)
     console.log(`[Agent 编排] 已中止会话: ${sessionId}`)
-    return abort
+    return Promise.all([abort, computerStopped]).then(() => {})
   }
 
   /** 删除会话专用：等待已发出的底层中止请求完成，再移除持久化文件。 */

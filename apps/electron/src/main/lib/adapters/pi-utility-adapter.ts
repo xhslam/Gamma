@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { computerController } from '../computer-service'
 import type {
   AgentRuntimeEvent,
   AgentRuntimeRequest,
@@ -23,6 +24,8 @@ type PendingQuery = {
   accepted: boolean
   ended: boolean
   runtimeFailed: boolean
+  stopping?: boolean
+  stopPromise?: Promise<void>
 }
 
 type CapabilityRequest = {
@@ -65,8 +68,8 @@ export class PiUtilityAdapter {
       runtimeFailed: false,
     }
     this.pendingQueries.set(queryId, pending)
-    client.setRequestHandler((request) => this.handleRuntimeRequest(request))
-    const unsubscribe = client.onEvent((event) => this.handleRuntimeEvent(event))
+    client.setRequestHandler((request) => this.handleRuntimeRequest(request, queryId))
+    const unsubscribe = client.onEvent((event) => this.handleRuntimeEvent(event, queryId))
 
     try {
       await client.call(
@@ -86,16 +89,21 @@ export class PiUtilityAdapter {
       throw error
     } finally {
       pending.ended = true
+      await computerController.stopForSession(pending.sessionId, 'Pi utility query结束')
       unsubscribe()
-      this.pendingQueries.delete(queryId)
-      if (pending.accepted && !pending.runtimeFailed) {
-        await client.call(
-          AGENT_RUNTIME_METHODS.QUERY_ABORT,
-          { queryId, sessionId: input.sessionId },
-          { queryId, timeoutMs: 5_000 },
-        ).catch(() => {})
-      }
-      await client.stop()
+      try {
+        if (pending.stopPromise) await pending.stopPromise
+        else {
+          if (pending.accepted && !pending.runtimeFailed) {
+            await client.call(
+              AGENT_RUNTIME_METHODS.QUERY_ABORT,
+              { queryId, sessionId: input.sessionId },
+              { queryId, timeoutMs: 5_000 },
+            ).catch(() => {})
+          }
+          await client.stop()
+        }
+      } finally { this.pendingQueries.delete(queryId) }
     }
   }
 
@@ -105,29 +113,35 @@ export class PiUtilityAdapter {
     const aborts: Promise<void>[] = []
     for (const pending of this.pendingQueries.values()) {
       if (pending.sessionId !== sessionId) continue
-      this.abortCapabilitiesForQuery(pending.queryId)
-      aborts.push(pending.client.call<QueryAbortResponse>(
-        AGENT_RUNTIME_METHODS.QUERY_ABORT,
-        { queryId: pending.queryId, sessionId },
-        { queryId: pending.queryId, timeoutMs: 5_000 },
-      ).then(async (result) => {
-        if (result.completed === false) {
-          await this.failStoppedQuery(pending, new Error('停止 Agent 超时，已关闭卡住的运行时'))
-          return
-        }
-        // QUERY_ABORT confirms the utility query has ended. Close its process
-        // before resolving deletion's stop-and-drain barrier instead of relying
-        // on the async iterator's later finally block.
-        await pending.client.stop()
-      }).catch(async (error) => {
-        console.warn(`[PiUtilityAdapter] abort failed: sessionId=${sessionId}`, error)
-        await this.failStoppedQuery(pending, error)
-      }))
+      pending.stopping = true
+      // 在任何撤权回调/异步RPC之前登记共享屏障；重复停止必须等待同一个退出证明。
+      pending.stopPromise ??= Promise.resolve().then(async () => {
+        const nativeStop = computerController.stopForSession(sessionId, 'Pi utility停止')
+        this.abortCapabilitiesForQuery(pending.queryId)
+        const runtimeStop = pending.client.call<QueryAbortResponse>(
+          AGENT_RUNTIME_METHODS.QUERY_ABORT,
+          { queryId: pending.queryId, sessionId },
+          { queryId: pending.queryId, timeoutMs: 5_000 },
+        ).then(async (result) => {
+          if (result.completed === false) {
+            await this.failStoppedQuery(pending, new Error('停止 Agent 超时，已关闭卡住的运行时'))
+            return
+          }
+          await pending.client.stop()
+        }).catch(async (error) => {
+          console.warn(`[PiUtilityAdapter] abort failed: sessionId=${sessionId}`, error)
+          await this.failStoppedQuery(pending, error)
+        })
+        await Promise.all([nativeStop, runtimeStop])
+      })
+      aborts.push(pending.stopPromise)
     }
     await Promise.all(aborts)
   }
 
   private async failStoppedQuery(pending: PendingQuery, error: unknown): Promise<void> {
+    pending.stopping = true
+    await computerController.stopForSession(pending.sessionId, 'Pi utility失效')
     if (!pending.ended && !pending.runtimeFailed) {
       pending.runtimeFailed = true
       this.abortCapabilitiesForQuery(pending.queryId)
@@ -172,7 +186,9 @@ export class PiUtilityAdapter {
 
   dispose(): void {
     for (const pending of this.pendingQueries.values()) {
+      pending.stopping = true
       pending.runtimeFailed = true
+      void computerController.stopForSession(pending.sessionId, 'Pi utility已释放')
       pending.queue.fail(new Error('Agent utility stopped'))
       void pending.client.stop()
     }
@@ -181,18 +197,30 @@ export class PiUtilityAdapter {
     this.capabilityAbortControllers.clear()
   }
 
-  async handleRuntimeRequest(request: AgentRuntimeRequest): Promise<unknown> {
+  async handleRuntimeRequest(request: AgentRuntimeRequest, ownerQueryId?: string): Promise<unknown> {
     const payload = request.payload as Record<string, unknown> | undefined
     const queryId = typeof payload?.queryId === 'string' ? payload.queryId : undefined
     const pending = queryId ? this.pendingQueries.get(queryId) : undefined
 
+    if (ownerQueryId && (request.queryId !== ownerQueryId || (queryId && queryId !== ownerQueryId))) throw new Error('跨query capability请求已拒绝')
     if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_CANCEL) {
       const requestId = typeof payload?.requestId === 'string' ? payload.requestId : ''
-      this.capabilityAbortControllers.get(requestId)?.controller.abort()
+      const capability = this.capabilityAbortControllers.get(requestId)
+      if (capability && ownerQueryId && capability.queryId !== ownerQueryId) throw new Error('不能取消其他query的能力')
+      capability?.controller.abort()
       return { accepted: true }
     }
 
-    if (!pending) throw new Error(`No active Agent query: ${queryId ?? 'unknown'}`)
+    if (!pending || pending.ended || pending.stopping || pending.runtimeFailed) throw new Error(`No active Agent query: ${queryId ?? 'unknown'}`)
+
+    if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_OBSERVATIONS || request.method === AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_VALIDATE) {
+      if (ownerQueryId !== pending.queryId || request.sessionId !== pending.sessionId || !pending.input.desktopMode) throw new Error('没有该query的私有观察能力')
+      const validation = request.method === AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_VALIDATE
+      if (validation ? !pending.input.validateComputerLease : !pending.input.getComputerObservations) throw new Error('没有该query的私有观察能力')
+      const result = validation ? await pending.input.validateComputerLease!() : await pending.input.getComputerObservations!()
+      if (pending.ended || pending.stopping || pending.runtimeFailed) throw new Error('query已经撤销')
+      return result
+    }
 
     if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_CAN_USE_TOOL) {
       if (!pending.input.canUseTool) throw new Error(`No canUseTool handler: ${pending.sessionId}`)
@@ -248,13 +276,18 @@ export class PiUtilityAdapter {
     return Array.from(this.pendingQueries.values()).find((item) => item.sessionId === sessionId)
   }
 
-  private handleRuntimeEvent(event: AgentRuntimeEvent): void {
+  private handleRuntimeEvent(event: AgentRuntimeEvent, ownerQueryId: string): void {
+    const owner = this.pendingQueries.get(ownerQueryId)
+    const eventPayload = event.payload as Record<string, unknown> | undefined
+    if (!owner || event.sessionId !== owner.sessionId || (event.queryId && event.queryId !== ownerQueryId)
+      || (typeof eventPayload?.queryId === 'string' && eventPayload.queryId !== ownerQueryId)) return
     if (event.method === AGENT_RUNTIME_METHODS.EVENT_CRASHED) {
       const error = toRuntimeError(event.payload)
       const failed = Array.from(this.pendingQueries.values())
         .filter((pending) => pending.sessionId === event.sessionId)
       for (const pending of failed) {
         pending.runtimeFailed = true
+        void computerController.stopForSession(pending.sessionId, 'Pi utility崩溃')
         pending.queue.fail(error)
       }
       for (const [requestId, capability] of this.capabilityAbortControllers) {
@@ -279,10 +312,14 @@ export class PiUtilityAdapter {
       return
     }
     if (event.method === AGENT_RUNTIME_METHODS.EVENT_QUERY_END) {
+      pending.stopping = true
+      void computerController.stopForSession(pending.sessionId, 'Pi utility query已结束')
       pending.queue.end()
       return
     }
     if (event.method === AGENT_RUNTIME_METHODS.EVENT_QUERY_ERROR) {
+      pending.stopping = true
+      void computerController.stopForSession(pending.sessionId, 'Pi utility query失败')
       pending.queue.fail(toRuntimeError(payload?.error))
       return
     }
@@ -320,6 +357,8 @@ function serializeQueryInput(input: PiAgentQueryOptions): Record<string, unknown
   const {
     abortSignal: _abortSignal,
     canUseTool: _canUseTool,
+    getComputerObservations: _getComputerObservations,
+    validateComputerLease: _validateComputerLease,
     customTools,
     onSessionId: _onSessionId,
     onPiEntryBindings: _onPiEntryBindings,

@@ -175,6 +175,11 @@ function handleQueryStart(request: RuntimeRequest): void {
 
   const utilityInput = {
     ...queryInput,
+    validateComputerLease: async (signal?: AbortSignal) => { await requestParent(AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_VALIDATE, { queryId, sessionId }, signal) },
+    getComputerObservations: (signal?: AbortSignal) => requestParent(
+      AGENT_RUNTIME_METHODS.CAPABILITY_COMPUTER_OBSERVATIONS,
+      { queryId, sessionId }, signal,
+    ),
     canUseTool: (toolName: string, toolInput: Record<string, unknown>, options: Record<string, unknown>) => requestParent(
       AGENT_RUNTIME_METHODS.CAPABILITY_CAN_USE_TOOL,
       { queryId, sessionId, toolName, input: toolInput, options: serializeCanUseToolOptions(options) },

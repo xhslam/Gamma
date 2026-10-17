@@ -101,6 +101,26 @@ interface JsonlParseError {
   message: string
 }
 
+export interface PiSessionManagerAdapter {
+  open(sessionFile: string, sessionDir: string, cwd?: string): {
+    createBranchedSession(entryId: string): string
+    getSessionFile(): string
+    getSessionId(): string
+    getEntry(entryId: string): unknown
+  }
+  forkFrom(branchFile: string, cwd: string, sessionDir: string): {
+    getSessionFile(): string
+    getSessionId(): string
+    getEntry(entryId: string): unknown
+  }
+}
+
+let testPiSessionManager: PiSessionManagerAdapter | undefined
+
+export function setPiSessionManagerForTest(adapter?: PiSessionManagerAdapter): void {
+  testPiSessionManager = adapter
+}
+
 /**
  * 逐行解析 JSONL，调用方按业务场景决定容错或严格失败。
  */
@@ -851,14 +871,14 @@ async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessi
   const destWorkbenchDir = resolveAgentWorkbenchDir(workspace, newMeta.id)
 
   try {
-    const sdk = await import('@earendil-works/pi-coding-agent')
+    const SessionManager = testPiSessionManager ?? (await import('@earendil-works/pi-coding-agent')).SessionManager
     const sessionDir = join(getSdkConfigDir(), 'sessions')
-    const sourceManager = sdk.SessionManager.open(sourceMeta.piSessionFile, sessionDir, sourceDir)
+    const sourceManager = SessionManager.open(sourceMeta.piSessionFile, sessionDir, sourceDir)
     const branchFile = sourceManager.createBranchedSession(entryId)
     if (!branchFile || !existsSync(branchFile)) {
       throw new Error('Pi 未能生成分叉 session artifact')
     }
-    const forkedManager = sdk.SessionManager.forkFrom(branchFile, destDir ?? sourceDir ?? process.cwd(), sessionDir)
+    const forkedManager = SessionManager.forkFrom(branchFile, destDir ?? sourceDir ?? process.cwd(), sessionDir)
     const piSessionFile = forkedManager.getSessionFile()
     if (!piSessionFile || !existsSync(piSessionFile)) throw new Error('Pi 分叉 artifact 校验失败')
     // 新 branch 只包含分叉点之前的 entry；不能把源树后续 turn 的映射带入 metadata。
@@ -927,11 +947,11 @@ export async function rewindPiAgentSession(sessionId: string, assistantMessageUu
 
   const workspace = meta.workspaceId ? getAgentWorkspace(meta.workspaceId) : undefined
   const cwd = resolveAgentCwd(workspace, meta.id, meta.agentCwdMode, meta.activeWorktree) ?? process.cwd()
-  const sdk = await import('@earendil-works/pi-coding-agent')
-  const manager = sdk.SessionManager.open(meta.piSessionFile, join(getSdkConfigDir(), 'sessions'), cwd)
+  const SessionManager = testPiSessionManager ?? (await import('@earendil-works/pi-coding-agent')).SessionManager
+  const manager = SessionManager.open(meta.piSessionFile, join(getSdkConfigDir(), 'sessions'), cwd)
   const branchFile = manager.createBranchedSession(entryId)
   if (!branchFile || !existsSync(branchFile)) throw new Error('Pi 未能生成回退 session artifact')
-  const rewindManager = sdk.SessionManager.open(branchFile, join(getSdkConfigDir(), 'sessions'), cwd)
+  const rewindManager = SessionManager.open(branchFile, join(getSdkConfigDir(), 'sessions'), cwd)
   const retainedAssistantUuids = new Set(
     kept.flatMap((message) => {
       const candidate = message as { uuid?: unknown; type?: unknown }

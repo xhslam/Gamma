@@ -6,6 +6,8 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence } from './pi-computer-context'
+import type { ComputerPrivateObservation } from '@gamma/shared'
 import { spawn } from 'node:child_process'
 import type { Dispatcher } from 'undici'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
@@ -109,6 +111,10 @@ export function shouldMarkCompactionAfterCompletedTurn(
 
 /** Pi SDK 查询选项（扩展通用 AgentQueryInput） */
 export interface PiAgentQueryOptions extends AgentQueryInput {
+  /** 由可信主进程决定，模型或query payload不能自行授予本地租约。 */
+  desktopMode?: boolean
+  getComputerObservations?: (signal?: AbortSignal) => Promise<ComputerPrivateObservation[]>
+  validateComputerLease?: (signal?: AbortSignal) => Promise<void>
   apiKey: string
   baseUrl?: string
   provider: ProviderType
@@ -1451,7 +1457,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         ),
         ...buildGammaProductToolDefinitions(sdk, input.canUseTool, taskProgress.tasks),
         ...wrapCustomToolDefinitions(input.customTools, input.canUseTool),
-      ]
+      ].filter(tool => !input.desktopMode || ['ComputerStatus', 'ComputerObserve', 'ComputerAct', 'ComputerStop', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(tool.name))
 
       const settingsManager = sdk.SettingsManager.inMemory({
         // 使用 Pi SDK 原生压缩策略：
@@ -1540,9 +1546,13 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       // Pi session artifact 可以来自旧版本，不能假设其历史 tool_result 已通过当前校验。
       // transformContext 在每个 provider 请求前执行，能隔离 resume 的坏图片而不篡改原 artifact。
       const previousTransformContext = session.agent.transformContext
-      session.agent.transformContext = async (messages, signal) => sanitizePiMessageImageContent(
-        await previousTransformContext?.(messages, signal) ?? messages,
-      )
+      session.agent.transformContext = async (messages, signal) => {
+        const sanitized = sanitizePiMessageImageContent(await previousTransformContext?.(messages, signal) ?? messages)
+        const compacted = compactComputerScreenshots(sanitized, 2)
+        if (!input.desktopMode || !input.getComputerObservations) return compacted
+        const observations = await input.getComputerObservations(signal)
+        return injectComputerObservationContext(compacted, observations, signal)
+      }
       // Pi 0.86 的 transcript-aware before_agent_start extension 会在下一轮注入动态项目指令。
       if (piAi && input.codexFastMode && input.provider === 'openai-codex' && isCodexFastModeSupportedModel(input.model)) {
         // Pi 的通用 streamSimple 会丢弃 provider 专属 serviceTier；这里直接走
@@ -1572,7 +1582,13 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       }
       // 代理作用域必须只覆盖模型 provider stream：在整个 session.prompt() 链上设
       // AsyncLocalStorage 会把 MCP/产品工具等同一 Agent loop 中的 fetch 也错误地送进 Codex 代理。
-      const providerStreamFn = session.agent.streamFunction
+      const providerStreamFn = input.desktopMode
+        ? withComputerRequestFence(session.agent.streamFunction, async (signal) => {
+          if (active.abortRequested || signal?.aborted || !input.validateComputerLease) throw createAbortError()
+          await input.validateComputerLease(signal)
+          if (active.abortRequested || signal?.aborted) throw createAbortError()
+        })
+        : session.agent.streamFunction
       session.agent.streamFunction = withPiStreamWatchdog(
         (requestModel, context, options) => runWithPiRequestProxy(
           requestProxyDispatcher,

@@ -60,8 +60,8 @@ export async function createVisualRendererHarness(entrySource: string): Promise<
     throw error
   }
 
-  const require = createRequire(import.meta.url)
-  const electronExecutable: string = require('electron')
+  const { getElectronExecutablePath } = await import('./electron-executable')
+  const electronExecutable = getElectronExecutablePath()
   let runId = 0
   return {
     async run<T>(scenario: string, options: VisualRendererOptions = {}): Promise<T> {

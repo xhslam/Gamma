@@ -26,6 +26,7 @@ export * from './automatic-memory'
 // Agent 相关类型
 export * from './agent'
 export * from './browser'
+export * from './computer'
 export * from './reasoning-profile'
 
 // Agent Provider 适配器接口

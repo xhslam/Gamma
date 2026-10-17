@@ -22,6 +22,15 @@ import { migrateLegacyCoachSkillDirectory } from './legacy-skill-renames'
  * 3. 兜底 '.gamma'
  */
 let _configDirName: string | undefined
+let testConfigHome: string | undefined
+
+/** Bun同进程homedir可能保留首次结果；测试显式注入并恢复，不污染生产环境变量。 */
+export function setConfigHomeForTest(homeDirectory?: string): string | undefined {
+  if (!process.versions.bun || process.env.NODE_ENV !== 'test') throw new Error('配置根替身仅允许Bun测试入口使用')
+  const previous = testConfigHome
+  testConfigHome = homeDirectory
+  return previous
+}
 
 export function getConfigDirName(): string {
   if (_configDirName === undefined) {
@@ -48,7 +57,7 @@ export function getConfigDirName(): string {
  * 如果目录不存在则自动创建。
  */
 export function getConfigDir(): string {
-  const configDir = join(homedir(), getConfigDirName())
+  const configDir = join(testConfigHome ?? homedir(), getConfigDirName())
 
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })

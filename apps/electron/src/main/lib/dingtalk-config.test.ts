@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { createStableDingTalkBotId } from './dingtalk-bot-identity'
+import { setConfigHomeForTest } from './config-paths'
 
 type DingTalkConfigModule = typeof import('./dingtalk-config')
 type ConfigPathsModule = typeof import('./config-paths')
@@ -10,29 +11,16 @@ type ConfigPathsModule = typeof import('./config-paths')
 let dingtalkConfig: DingTalkConfigModule
 let configPaths: ConfigPathsModule
 let tempHome: string
-const originalHome = process.env.HOME
-const originalGammaDev = process.env.GAMMA_DEV
-
-mock.module('electron', () => ({
-  app: {
-    isPackaged: true,
-    getPath: () => join(process.env.HOME ?? tempHome, 'Library', 'Application Support'),
-  },
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
-}))
-
-mock.module('node:os', () => ({
-  ...os,
-  homedir: () => tempHome,
-}))
+let originalHome: string | undefined
+let originalGammaDev: string | undefined
+let previousConfigHome: string | undefined
 
 beforeAll(async () => {
+  originalHome = process.env.HOME
+  originalGammaDev = process.env.GAMMA_DEV
   tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-dingtalk-config-'))
   process.env.HOME = tempHome
+  previousConfigHome = setConfigHomeForTest(tempHome)
   process.env.GAMMA_DEV = '0'
   configPaths = await import('./config-paths')
   dingtalkConfig = await import('./dingtalk-config')
@@ -44,6 +32,7 @@ beforeEach(() => {
 })
 
 afterAll(() => {
+  setConfigHomeForTest(previousConfigHome)
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {

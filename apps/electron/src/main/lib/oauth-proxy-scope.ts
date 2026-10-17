@@ -1,6 +1,12 @@
 import { runWithPiRequestProxyScope } from './adapters/pi-request-proxy'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
 
+let effectiveProxyUrlGetter: () => Promise<string | undefined> = getEffectiveProxyUrl
+
+export function setEffectiveProxyUrlForTest(getter?: () => Promise<string | undefined>): void {
+  effectiveProxyUrlGetter = getter ?? getEffectiveProxyUrl
+}
+
 // EnvHttpProxyAgent 以 URL hostname 匹配 IPv6；方括号形式才能正确匹配 http://[::1]/。
 const LOOPBACK_NO_PROXY_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
@@ -34,7 +40,7 @@ export function buildOAuthNoProxy(noProxy = readNoProxyEnvironment()): string {
  */
 export async function runWithOAuthProxyScope<T>(operation: () => Promise<T>): Promise<T> {
   return runWithPiRequestProxyScope({
-    proxyUrl: await getEffectiveProxyUrl(),
+    proxyUrl: await effectiveProxyUrlGetter(),
     noProxy: buildOAuthNoProxy(),
   }, operation)
 }

@@ -7,7 +7,10 @@ import { dirname, join } from 'node:path'
 
 const managerModulePath = join(import.meta.dir, 'planning-manager.ts')
 const repoRoot = dirname(dirname(dirname(dirname(dirname(import.meta.dir)))))
-const electronBinary = createRequire(import.meta.url)('electron') as string
+import { getElectronExecutablePath } from '../../test-utils/electron-executable'
+
+const electronBinary = getElectronExecutablePath()
+let cachedPlanningScript: string | undefined
 
 async function verifyPlanningMigration(phases: string[]): Promise<void> {
   const taskHome = mkdtempSync(join(tmpdir(), 'gamma-planning-migration-'))
@@ -108,11 +111,14 @@ async function verifyPlanningMigration(phases: string[]): Promise<void> {
     }
   `)
   try {
-    const built = await Bun.build({ entrypoints: [sourcePath], target: 'node', format: 'esm', external: ['electron', 'node:sqlite'] })
-    expect(built.success, built.logs.map((log) => log.message).join('\n')).toBe(true)
-    const script = built.outputs[0]
-    if (!script) throw new Error('未生成 Planning 品牌迁移验证脚本')
-    await Bun.write(outputPath, script)
+    if (!cachedPlanningScript) {
+      const built = await Bun.build({ entrypoints: [sourcePath], target: 'node', format: 'esm', external: ['electron', 'node:sqlite'] })
+      expect(built.success, built.logs.map((log) => log.message).join('\n')).toBe(true)
+      const script = built.outputs[0]
+      if (!script) throw new Error('未生成 Planning 品牌迁移验证脚本')
+      cachedPlanningScript = await script.text()
+    }
+    await Bun.write(outputPath, cachedPlanningScript)
     for (const phase of phases) {
       const result = spawnSync(electronBinary, [outputPath], {
         cwd: repoRoot,

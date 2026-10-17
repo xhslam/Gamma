@@ -51,8 +51,8 @@ export async function createElectronRendererHarness(entrySource: string): Promis
     throw error
   }
 
-  const require = createRequire(import.meta.url)
-  const electronExecutable: string = require('electron')
+  const { getElectronExecutablePath } = await import('./electron-executable')
+  const electronExecutable = getElectronExecutablePath()
   let runId = 0
   return {
     async run<T>(scenario: string): Promise<T> {

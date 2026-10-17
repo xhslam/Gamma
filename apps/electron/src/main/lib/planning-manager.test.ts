@@ -1,13 +1,14 @@
 import { expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const managerModulePath = join(import.meta.dir, 'planning-manager.ts')
 const repoRoot = dirname(dirname(dirname(dirname(dirname(import.meta.dir)))))
-const electronBinary = createRequire(import.meta.url)('electron') as string
+import { getElectronExecutablePath } from '../../test-utils/electron-executable'
+
+const electronBinary = getElectronExecutablePath()
 
 /**
  * planning-manager 的数据库连接是模块级单例，而 node:sqlite 仅由 Electron 的 Node 22 提供。
@@ -100,16 +101,13 @@ test('Given a fresh planning database When planning data changes Then isolation,
   writeFileSync(sourcePath, source)
 
   try {
-    const build = await Bun.build({
-      entrypoints: [sourcePath],
-      target: 'node',
-      format: 'esm',
-      external: ['electron', 'node:sqlite'],
-    })
-    expect(build.success, build.logs.map((log) => log.message).join('\n')).toBe(true)
-    const compiledScript = build.outputs[0]
-    if (!compiledScript) throw new Error('未生成 planning manager 验证脚本')
-    await Bun.write(outputPath, compiledScript)
+    // 使用全新的Bun构建进程，不复用单进程测试已加载模块/替身的解析器状态。
+    // 编译或业务断言失败直接失败，不通过重试隐藏失败。
+    const build = spawnSync(process.execPath, [
+      'build', sourcePath, '--target=node', '--format=esm',
+      '--external=electron', '--external=node:sqlite', '--outfile', outputPath,
+    ], { cwd: repoRoot, encoding: 'utf8' })
+    expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
 
     const result = spawnSync(electronBinary, [outputPath], {
       cwd: repoRoot,

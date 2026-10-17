@@ -8,7 +8,9 @@ import { assertLegacyCookiesComplete } from './legacy-cookie-inventory'
 import type { LegacyCookieInventory } from './legacy-cookie-inventory'
 import type { LegacyCookieProfile } from './legacy-credential-helper'
 
-const electronBinary = createRequire(import.meta.url)('electron') as string
+import { getElectronExecutablePath } from '../../test-utils/electron-executable'
+
+const electronBinary = getElectronExecutablePath()
 const inventoryModulePath = join(import.meta.dir, 'legacy-cookie-inventory.ts')
 const partition = `proma-browser-${'a'.repeat(32)}`
 const expected: LegacyCookieInventory = {

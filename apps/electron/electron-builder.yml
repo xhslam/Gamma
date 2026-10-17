@@ -100,6 +100,11 @@ mac:
     # EventKit N-API bridge 在 Electron main 进程内执行，确保 TCC 归属 Gamma.app。
     - from: resources/eventkit/macos-eventkit.node
       to: eventkit/macos-eventkit.node
+  # 独立TCC身份的嵌套app，不能放入asar或沿用主应用宽权限。
+  extraFiles:
+    - from: resources/computer-use/Gamma Computer Use Helper.app
+      to: Helpers/Gamma Computer Use Helper.app
+  sign: scripts/sign-mac-app.cjs
   binaries:
     - resources/agent-island/macos-agent-island-helper
     - resources/eventkit/macos-eventkit.node
