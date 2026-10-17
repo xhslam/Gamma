@@ -87,6 +87,7 @@ import {
 } from './lib/voice-dictation-window'
 import { registerGlobalShortcut, unregisterAllGlobalShortcuts } from './lib/global-shortcut-service'
 import { setGammaVersion } from '@gamma/core'
+import { COMPUTER_IPC_CHANNELS } from '@gamma/shared'
 import { canRecoverRenderer, RENDERER_RECOVERY_WINDOW_MS } from './lib/renderer-process-recovery'
 import { TRAY_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS } from '../types'
 
@@ -450,15 +451,14 @@ function createWindow(): void {
   mainWindow.webContents.on('did-finish-load', () => {
     // 主 Renderer 成功恢复后重新开始计数；只有连续失败才应进入错误页。
     if (!hasShownRendererFailure) rendererRecoveryAttempts = []
-  })
-  mainWindow.on('hide', () => { void computerController.stop('主窗口已隐藏') })
-  mainWindow.on('close', () => { void computerController.stop('主窗口已关闭') })
-  mainWindow.webContents.on('destroyed', () => { void computerController.stop('主页面已销毁') })
-  mainWindow.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
-    if (isMainFrame) void computerController.stop('主页面导航或重载')
+    // 渲染进程刷新或热更新后，重新连上当前操作状态
+    try {
+      mainWindow?.webContents.send(COMPUTER_IPC_CHANNELS.STATE_CHANGED, computerController.getState())
+    } catch {
+      // 忽略已销毁或发送失败
+    }
   })
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    void computerController.stop('主页面失联')
     // clean-exit 和应用退出不属于 Renderer 故障；避免退出过程中重新加载主窗口。
     if (getIsQuitting() || details.reason === 'clean-exit') return
 

@@ -16,6 +16,7 @@ import { WebSearchResultRenderer } from './web-search-result'
 import { WebFetchResultRenderer } from './web-fetch-result'
 import { TaskGetResultRenderer } from './task-get-result'
 import { TaskListResultRenderer } from './task-list-result'
+import { ComputerResultRenderer } from './computer-result'
 import { DefaultResultRenderer } from './default-result'
 
 export interface ToolResultRendererProps {
@@ -28,6 +29,8 @@ export interface ToolResultRendererProps {
 
 export function ToolResultRenderer({ toolName, input, result, isError, basePath }: ToolResultRendererProps): React.ReactElement {
   switch (toolName) {
+    case 'computer':
+      return <ComputerResultRenderer result={result} isError={isError} />
     case 'Bash':
       return <BashResultRenderer result={result} isError={isError} input={input} />
     case 'Read':

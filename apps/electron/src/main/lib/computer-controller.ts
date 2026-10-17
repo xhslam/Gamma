@@ -114,6 +114,7 @@ export class ComputerController {
   private listeners = new Set<(state: ComputerState) => void>()
   private revocations = new Set<{ binding: ComputerBinding; listener: () => void }>()
   private readonly now: () => number
+  private lastStopReason = new Map<string, string>()
   readonly authManager: ComputerAuthorizationManager
   constructor(private readonly host: ComputerHost, options: { supported?: boolean; now?: () => number; authManager?: ComputerAuthorizationManager } = {}) {
     const supported = options.supported ?? process.platform === 'darwin'
@@ -123,6 +124,13 @@ export class ComputerController {
     this.authManager.onPreferencesChanged(preferences => {
       if (!preferences.shareObservations && (this.lease || this.actionOwner)) void this.stop('截图外发同意已撤销', 'paused')
     })
+  }
+  getLastStopReason(sessionId?: string): string | undefined {
+    if (sessionId && this.lastStopReason.has(sessionId)) return this.lastStopReason.get(sessionId)
+    return this.state.message
+  }
+  isRunStopped(runId: string): boolean {
+    return this.stoppedRuns.has(runId)
   }
   onState(listener: (state: ComputerState) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   /** 同步撤销对应query/provider；清空缓存不能撤回已提取的请求副本。 */
@@ -200,6 +208,7 @@ export class ComputerController {
     return this.getState()
   }
   async stopForSession(sessionId: string, reason: string): Promise<void> {
+    this.lastStopReason.set(sessionId, reason)
     const active = this.activeRuns.get(sessionId)
     if (active) this.stoppedRuns.add(active.runId)
     if (this.lease?.context.binding.sessionId === sessionId || this.actionOwner?.sessionId === sessionId) await this.stop(reason)
@@ -227,7 +236,6 @@ export class ComputerController {
     const lease = this.requireLease(binding)
     return this.operation(signal, async () => {
       if (!lease.started) {
-        this.publish({ phase: 'selecting', message: '正在连接主显示器范围，无需选择窗口。' })
         const selected = await this.host.call('select', { leaseId: lease.leaseId, epoch: lease.epoch, deadline: lease.expiresAt }, 120_000)
         this.verify(lease)
         if (!isRecord(selected) || selected.scope !== 'main-display') throw new Error('原生桌面范围响应无效')
@@ -329,7 +337,6 @@ export class ComputerController {
     this.requireRun(binding)
     const lease: Lease = { leaseId: randomUUID(), epoch: ++this.epoch, context, binding: { ...binding }, expiresAt: this.now() + 30 * 60_000, autonomous: true }
     this.lease = lease
-    this.publish({ phase: 'selecting', resumeRequired: false, sessionId: binding.sessionId, channelId: binding.channelId, modelId: binding.modelId, message: '正在连接电脑工具（无需选窗）' })
     const selected = await this.operation(undefined, () => this.host.call('select', { leaseId: lease.leaseId, epoch: lease.epoch, deadline: lease.expiresAt }, 120_000))
     this.verify(lease)
     if (!isRecord(selected) || selected.scope !== 'main-display') throw new Error('原生初始化响应无效')
@@ -518,6 +525,9 @@ export class ComputerController {
   /** 原生急停/监听失效只能撤权；事件/恢复消息从不重新 grant。 */
   nativeStopped(): void { void this.stop('检测到用户接管或原生安全门暂停；发新任务或说“继续”后开始新动作', 'paused') }
   stop(reason = '本地用户停止', finalPhase: 'disabled' | 'paused' = 'disabled', blockCurrentRun = true): Promise<ComputerState> {
+    if (this.lease?.context.binding.sessionId) this.lastStopReason.set(this.lease.context.binding.sessionId, reason)
+    if (this.actionOwner?.sessionId) this.lastStopReason.set(this.actionOwner.sessionId, reason)
+    for (const run of this.activeRuns.values()) this.lastStopReason.set(run.sessionId, reason)
     if (blockCurrentRun) {
       for (const active of this.activeRuns.values()) this.stoppedRuns.add(active.runId)
       if (this.lease?.binding) this.stoppedRuns.add(this.lease.binding.runId)

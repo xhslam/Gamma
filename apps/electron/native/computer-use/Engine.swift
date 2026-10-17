@@ -17,21 +17,26 @@ final class Engine {
     private var workCount = 0
     private var outstanding = Set<String>()
     private var mainTimer: Timer?
+    private var isExecutingAction: Bool {
+        mutex.lock(); defer { mutex.unlock() }
+        return workCount > 0
+    }
     func start() {
         ui.onStop = { [weak self] reason in self?.stop(reason) }
         writer.onBrokenPipe = { [weak self] in self?.stop("stdio断开或背压超限"); _exit(0) }
         mainTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }; self.monitor.heartbeat()
             if self.gate.expired { self.stop("授权已过期") }
-            else if self.gate.monitorsInput && !self.ui.hasVisibleStop { self.stop("独立原生停止按钮不可见") }
+            else if self.isExecutingAction && !self.ui.hasVisibleStop { self.stop("独立原生停止按钮不可见") }
         }
     }
     @discardableResult func stop(_ reason: String) -> Bool {
         let active = gate.stop(); dispatcher.releaseAll()
         mutex.lock(); if workCount == 0 { owner.release() }; mutex.unlock()
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.gate.isActive else { return }
-            self.ui.cancelAll(); self.ui.setStatus("已暂停 · \(String(reason.prefix(80)))")
+            guard let self else { return }
+            self.ui.cancelAll()
+            self.ui.hideStop()
         }
         worker.async { [weak self] in if self?.gate.isActive == false { self?.prepared = nil } }
         if active { writer.emit(StoppedEvent(reason: String(reason.prefix(200)))) }
@@ -129,7 +134,7 @@ final class Engine {
             defer { endWork() }
             do {
                 try gate.check(token); try monitor.start()
-                DispatchQueue.main.sync { [self] in self.ui.showStop(avoiding: .zero); self.ui.setStatus("已就绪 · 主屏范围 · 人工输入暂停") }
+                DispatchQueue.main.sync { [self] in self.ui.hideStop() }
                 try gate.finishSelection(nil, token: token); try gate.checkDispatch(token)
                 success(id, Selected())
             } catch { stop("桌面初始化失败"); failure(id, error) }
@@ -138,7 +143,8 @@ final class Engine {
     private func observe(_ id: String, p: BoundParams, token: UInt64) {
         worker.async { [self] in
             do {
-                try gate.checkDispatch(token); gate.invalidateObservation(); prepared = nil; state("正在截图 · 主显示器")
+                try gate.checkDispatch(token); gate.invalidateObservation(); prepared = nil
+                state("正在操作 屏幕：截取屏幕")
                 let before = try desktopDigest()
                 let observedApp = try currentApplication()
                 let observedWindow: Target?
@@ -148,7 +154,10 @@ final class Engine {
                 } else { observedWindow = nil; observedLayout = "" }
                 captureDisplay { [self] result in
                     worker.async { [self] in
-                        defer { endWork() }
+                        defer {
+                            endWork()
+                            DispatchQueue.main.async { [self] in self.ui.hideStop() }
+                        }
                         do {
                             try gate.checkDispatch(token)
                             let (png, display, width, height) = try result.get()
@@ -160,12 +169,15 @@ final class Engine {
                             }
                             let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, desktopDigest: before)
                             try gate.save(snapshot); try gate.checkDispatch(token)
-                            state("已观察 · \(app.name) · 人工输入暂停")
                             success(id, ObservationResult(observationId: snapshot.id, epoch: p.epoch, image: ImageResult(data: png.base64EncodedString(), width: width, height: height), display: display, ax: "", targetApp: app))
                         } catch { gate.invalidateObservation(); failure(id, error) }
                     }
                 }
-            } catch { endWork(); failure(id, error) }
+            } catch {
+                endWork()
+                DispatchQueue.main.async { [self] in self.ui.hideStop() }
+                failure(id, error)
+            }
         }
     }
     private func confirmation(_ id: String, _ p: ConfirmationParams, token: UInt64) throws {
@@ -200,14 +212,38 @@ final class Engine {
     }
     private func perform(_ id: String, _ p: PerformParams) {
         var dispatched = false
-        defer { prepared = nil }
+        defer {
+            prepared = nil
+            DispatchQueue.main.async { [self] in self.ui.hideStop() }
+        }
         do {
             guard let binding = prepared, binding.id == p.preparationId, samePreparedRequest(binding.request, p) else { throw NativeFailure("preparation-required", "必须使用同一动作、actionId和preparationId") }
             _ = try gate.inspect(p); try verifyBinding(binding, ax: ax)
             try validateInputEnvironment()
             let snapshot = try gate.prepare(p)
             let ticket = try gate.approve(p, snapshot: snapshot)
-            state("正在执行 · \(binding.appName) · \(p.action.kind)")
+            let intentStr: String
+            switch p.action.kind {
+            case "click", "left_click": intentStr = "点击"
+            case "double_click": intentStr = "双击"
+            case "triple_click": intentStr = "三击"
+            case "right_click": intentStr = "右键点击"
+            case "middle_click": intentStr = "中键点击"
+            case "mouse_move", "move": intentStr = "移动鼠标"
+            case "type":
+                let textSample = (p.action.text ?? "").prefix(12)
+                intentStr = textSample.isEmpty ? "输入文本" : "输入“\(textSample)”"
+            case "key":
+                intentStr = p.action.key != nil ? "按下 \(p.action.key!)" : "按下按键"
+            case "scroll": intentStr = "滚动"
+            case "drag", "left_click_drag": intentStr = "拖拽"
+            case "wait": intentStr = "等待"
+            case "open_app": intentStr = "打开应用"
+            case "focus_window": intentStr = "切换窗口"
+            default: intentStr = p.action.kind
+            }
+            let targetName = binding.appName.isEmpty ? "系统" : binding.appName
+            state("正在操作 \(targetName)：\(intentStr)")
             if p.action.kind == "open_app" {
                 guard let url = binding.resolvedURL else { throw NativeFailure("invalid-application", "没有已绑定的应用路径") }
                 dispatched = true // 已排队的异步系统写请求，失败时保守按未知处理。
@@ -256,13 +292,11 @@ final class Engine {
                 })
             }
             success(id, Receipt(actionId: p.actionId, outcome: "dispatched-unverified", message: "已投递，请用新的截图验证结果；不要自动重试"))
-            state("已投递 · \(binding.appName) · 等待重新观察")
         } catch {
             gate.invalidateObservation()
             let detail = (error as? NativeFailure)?.message ?? "原生安全检查拒绝动作"
             success(id, Receipt(actionId: p.actionId, outcome: dispatched ? "unknown" : "rejected", message: detail))
             if dispatched { stop("动作可能部分执行，已暂停，禁止自动重试") }
-            else { state("已拒绝 · 请重新观察") }
         }
     }
 }

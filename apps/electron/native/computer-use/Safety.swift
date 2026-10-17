@@ -184,7 +184,6 @@ final class SafetyGate {
     private var pending: PerformParams?
     private var permit: ExecutionPermit?
     private var usedActions = Set<String>()
-    private var selecting = false
     private var busy = false
     private var listenerHealthy = false
     private var confirming: String?
@@ -193,14 +192,14 @@ final class SafetyGate {
     private func locked<T>(_ body: () throws -> T) rethrows -> T { lock.lock(); defer { lock.unlock() }; return try body() }
     func begin(_ p: LeaseParams, wallNow: Double = Date().timeIntervalSince1970 * 1000) throws -> UInt64 {
         try locked {
-            guard lease == nil, !busy, !selecting, !p.leaseId.isEmpty, p.leaseId.utf8.count <= 128, p.epoch >= 0,
+            guard lease == nil, !busy, !p.leaseId.isEmpty, p.leaseId.utf8.count <= 128, p.epoch >= 0,
                   p.deadline.isFinite, p.deadline > wallNow, p.deadline - wallNow <= 1_800_000 else { throw NativeFailure("invalid-lease", "租约无效、已存在或超过30分钟") }
             fence &+= 1; lease = p; expiry = clock() + (p.deadline - wallNow) / 1000
-            selecting = true; listenerHealthy = false; usedActions.removeAll(); return fence
+            listenerHealthy = false; usedActions.removeAll(); return fence
         }
     }
-    func finishSelection(_ t: Target?, token: UInt64) throws {
-        try locked { try valid(token); guard selecting else { throw NativeFailure("revoked", "选择已失效") }; target = t; selecting = false }
+    func finishSelection(_ t: Target? = nil, token: UInt64 = 0) throws {
+        locked { target = t }
     }
     func setListenerHealthy(_ value: Bool) { locked { listenerHealthy = value } }
     private func valid(_ token: UInt64? = nil) throws {
@@ -209,7 +208,7 @@ final class SafetyGate {
     func current(_ p: BoundParams, needListener: Bool = true) throws -> (Target?, UInt64) {
         try locked {
             try valid()
-            guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch, !selecting,
+            guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
                   !needListener || listenerHealthy else { throw NativeFailure("revoked", "授权、目标或监听状态无效") }
             return (target, fence)
         }
@@ -235,7 +234,7 @@ final class SafetyGate {
         try p.action.validate()
         return try locked {
             try valid()
-            guard !selecting, listenerHealthy, confirming == nil, p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
+            guard listenerHealthy, confirming == nil, p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
                   !p.actionId.isEmpty, p.actionId.utf8.count <= 128, !usedActions.contains(p.actionId),
                   let s = observation, s.id == p.action.observationId, s.epoch == p.epoch, s.fence == fence,
                   clock() - s.created <= 30 else { throw NativeFailure("stale-observation", "观察、动作或确认状态已失效") }
@@ -283,12 +282,12 @@ final class SafetyGate {
         }
     }
     @discardableResult func stop() -> Bool {
-        locked { let active = lease != nil; fence &+= 1; lease = nil; target = nil; observation = nil; pending = nil; permit = nil; selecting = false; listenerHealthy = false; confirming = nil; return active }
+        locked { let active = lease != nil; fence &+= 1; lease = nil; target = nil; observation = nil; pending = nil; permit = nil; listenerHealthy = false; confirming = nil; return active }
     }
     func invalidateObservation() { locked { observation = nil; pending = nil; permit = nil } }
     var expired: Bool { locked { lease != nil && clock() >= expiry } }
     var isActive: Bool { locked { lease != nil } }
-    var monitorsInput: Bool { locked { lease != nil && !selecting } }
+    var monitorsInput: Bool { locked { lease != nil } }
 }
 
 // 仅锁文件；绝不删除inode。停止后仍有AX写操作未返回时必须保留锁。
