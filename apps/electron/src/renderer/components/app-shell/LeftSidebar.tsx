@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SearchDialog } from './SearchDialog'
 import { UserAvatar } from '@/components/session/UserAvatar'
+import { ComputerUsePanel } from '@/components/computer-use'
 import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
 import { automationFormAtom, automationsAtom } from '@/atoms/automation-atoms'
 import { planningTabAtom } from '@/atoms/planning-atoms'
@@ -2753,6 +2754,10 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             <span>返回活跃{'会话'}</span>
           </button>
         )}
+      </div>
+
+      <div className="shrink-0 border-t border-foreground/[0.06] px-2 py-1">
+        <ComputerUsePanel sessionId={currentAgentSessionId} />
       </div>
 
       {/* 底部账户区保留个人资料、搜索、更新与设置入口。 */}

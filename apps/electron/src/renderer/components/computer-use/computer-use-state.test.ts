@@ -8,6 +8,7 @@ import {
   refreshComputerUseAtom,
   selectComputerSessionAtom,
   stopComputerUseAtom,
+  resumeComputerUseAtom,
 } from '../../atoms/computer-use'
 import type { ComputerUseAPI } from '../../atoms/computer-use'
 
@@ -30,6 +31,7 @@ function setup(overrides: Partial<ComputerUseAPI> = {}) {
       calls.stops++
       return state({ phase: 'disabled' })
     },
+    resumeComputer: async () => state({ resumeRequired: false }),
     ...overrides,
   }
   store.set(computerUseApiAtom, api)
@@ -69,5 +71,43 @@ describe('可信桌面面板状态（离线 Jotai store）', () => {
     await store.set(refreshComputerUseAtom)
     expect(store.get(computerUseViewAtom).error).toBe('网络异常无法连接原生服务')
     expect(store.get(computerUseViewAtom).loading).toBe(false)
+  })
+})
+
+
+describe('Given 侧栏桌面重新启用', () => {
+  test('When 用户从暂停状态重新启用 Then 回到待命且不启动截屏', async () => {
+    let resumes = 0
+    const { store } = setup({
+      getComputerState: async () => state({ phase: 'paused', resumeRequired: true }),
+      resumeComputer: async () => { resumes++; return state({ resumeRequired: false }) },
+    })
+    await store.set(refreshComputerUseAtom)
+    await store.set(resumeComputerUseAtom)
+    expect(resumes).toBe(1)
+    expect(store.get(computerUseViewAtom)).toMatchObject({ pending: null, error: null, state: { phase: 'disabled', resumeRequired: false } })
+  })
+
+  test('When 恢复失败 Then 保留暂停状态与可重试错误', async () => {
+    const { store } = setup({
+      getComputerState: async () => state({ phase: 'paused' }),
+      resumeComputer: async () => { throw new Error('旧 helper 未停止') },
+    })
+    await store.set(refreshComputerUseAtom)
+    await store.set(resumeComputerUseAtom)
+    expect(store.get(computerUseViewAtom)).toMatchObject({ pending: null, error: '旧 helper 未停止', state: { phase: 'paused' } })
+  })
+
+  test('When 恢复在途时再次点击并停止 Then 不重复恢复且停止优先于迟到响应', async () => {
+    let resolveResume!: (value: ComputerState) => void
+    let resumes = 0
+    const { store } = setup({ resumeComputer: () => { resumes++; return new Promise(resolve => { resolveResume = resolve }) } })
+    const resuming = store.set(resumeComputerUseAtom)
+    await store.set(resumeComputerUseAtom)
+    await store.set(stopComputerUseAtom)
+    resolveResume(state({ phase: 'active' }))
+    await resuming
+    expect(resumes).toBe(1)
+    expect(store.get(computerUseViewAtom)).toMatchObject({ pending: null, state: { phase: 'disabled' } })
   })
 })

@@ -1,6 +1,6 @@
 {
   "name": "@gamma/shared",
-  "version": "0.1.89",
+  "version": "0.1.90",
   "license": "AGPL-3.0-only",
   "description": "Shared types, configs and utilities for gamma",
   "type": "module",

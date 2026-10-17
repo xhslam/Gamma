@@ -30,6 +30,7 @@ export function registerComputerIpc(): void {
     return armComputer(input)
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.STOP, event => { verify(event); return computerController.stop() })
+  ipcMain.handle(COMPUTER_IPC_CHANNELS.RESUME, event => { verify(event, true); return computerController.resume() })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.PERMISSION, (event, permission: ComputerPermission) => {
     verify(event, true)
     return computerController.requestPermission(permission)

@@ -249,6 +249,7 @@ export interface ElectronAPI {
   getComputerState: (sessionId?: string) => Promise<import('@gamma/shared').ComputerState>
   armComputer: (input: import('@gamma/shared').ComputerArmInput) => Promise<import('@gamma/shared').ComputerState>
   stopComputer: () => Promise<import('@gamma/shared').ComputerState>
+  resumeComputer: () => Promise<import('@gamma/shared').ComputerState>
   requestComputerPermission: (permission: import('@gamma/shared').ComputerPermission) => Promise<import('@gamma/shared').ComputerState>
   onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => () => void
   getComputerPreferences: () => Promise<import('@gamma/shared').ComputerUsePreferences>
@@ -1327,6 +1328,7 @@ const electronAPI: ElectronAPI = {
   getComputerState: (sessionId?: string) => ipcRenderer.invoke('computer:get-state', sessionId),
   armComputer: (input: import('@gamma/shared').ComputerArmInput) => ipcRenderer.invoke('computer:arm', input),
   stopComputer: () => ipcRenderer.invoke('computer:stop'),
+  resumeComputer: () => ipcRenderer.invoke('computer:resume'),
   requestComputerPermission: (permission: import('@gamma/shared').ComputerPermission) => ipcRenderer.invoke('computer:permission', permission),
   onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: import('@gamma/shared').ComputerState): void => callback(state)

@@ -33,3 +33,43 @@ describe('Given 私有原生 helper 通道（使用无桌面能力的 Bun fixtur
     await expect(native.call('perform', { text: 'x'.repeat(1024 * 1024) })).rejects.toThrow('过大')
   })
 })
+
+describe('Given helper 生命周期通知', () => {
+  test('When 父进程主动停止并重新连接 Then 退出回执不重复通知原生暂停', async () => {
+    const native = host("process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{ready:true}})+'\\n')")
+    let pauses = 0
+    native.onStopped(() => { pauses++ })
+    try {
+      await native.call('status')
+      await native.terminate()
+      expect(pauses).toBe(0)
+      await expect(native.call('status')).resolves.toEqual({ ready: true })
+    } finally { await native.terminate() }
+    expect(pauses).toBe(0)
+  })
+
+  test('When helper 非预期退出 Then 仍通知控制器撤销授权', async () => {
+    const native = host("process.exit(1)")
+    let pauses = 0
+    native.onStopped(() => { pauses++ })
+    await expect(native.call('status')).rejects.toThrow()
+    expect(pauses).toBeGreaterThan(0)
+    await native.terminate()
+  })
+})
+
+test('Given 主动停止的 helper When 同时发出 stopped 事件与 close Then 不再次通知原生暂停', async () => {
+  const native = new ComputerNativeHost(() => ({ executable: process.execPath, args: ['-e', `
+    const r = require('node:readline').createInterface({ input: process.stdin });
+    r.on('line', line => {
+      const q = JSON.parse(line);
+      if (q.method === 'stop') {
+        process.stdout.write(JSON.stringify({ event: 'stopped', reason: 'parent-stop' }) + '\\n', () => process.exit(0));
+      } else process.stdout.write(JSON.stringify({ id: q.id, ok: true, result: {} }) + '\\n');
+    });
+  `] }))
+  let pauses = 0
+  native.onStopped(() => { pauses++ })
+  try { await native.call('status') } finally { await native.terminate() }
+  expect(pauses).toBe(0)
+})

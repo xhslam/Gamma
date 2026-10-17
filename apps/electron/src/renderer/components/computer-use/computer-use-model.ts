@@ -4,6 +4,7 @@ import type { ComputerPhase, ComputerState } from '@gamma/shared'
 export interface ComputerUseStatus {
   supported: boolean
   phase: ComputerPhase
+  resumeRequired?: boolean
   sessionId?: string
   targetApp?: { bundleId: string; name: string }
   message?: string
@@ -14,7 +15,7 @@ export interface ComputerUseView {
   sessionId: string | null
   state: ComputerUseStatus | null
   loading: boolean
-  pending: 'stop' | null
+  pending: 'stop' | 'resume' | null
   error: string | null
 }
 
@@ -33,6 +34,7 @@ export function projectComputerState(state: ComputerState): ComputerUseStatus {
   return {
     supported: state.supported,
     phase: state.phase,
+    resumeRequired: state.resumeRequired,
     sessionId: state.sessionId,
     targetApp: state.targetApp ? { bundleId: state.targetApp.bundleId, name: state.targetApp.name } : undefined,
     message: state.message,
@@ -42,8 +44,10 @@ export function projectComputerState(state: ComputerState): ComputerUseStatus {
 
 export function getComputerStatusLabel(view: ComputerUseView): string {
   if (view.pending === 'stop') return '正在停止'
+  if (view.pending === 'resume') return '正在重新启用'
   if (view.error) return '桌面状态异常'
   if (!view.state) return view.loading ? '正在读取桌面状态' : '桌面状态未知'
   if (view.state.pendingAction) return '等待确认操作'
+  if (view.state.phase === 'disabled' && view.state.resumeRequired) return '桌面操作已停止'
   return COMPUTER_PHASE_LABELS[view.state.phase]
 }

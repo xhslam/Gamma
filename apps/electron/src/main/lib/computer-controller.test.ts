@@ -201,3 +201,76 @@ describe('Given 原生桌面安全控制', () => {
   })
 })
 
+
+describe('Given 桌面控制暂停后的本地恢复', () => {
+  test('When 暂停后 Agent 自动重试 Then 保持暂停；本地重新启用后才允许新初始化', async () => {
+    const { controller, calls } = fixture()
+    await controller.ensureDesktopSession()
+    await controller.stop('用户暂停', 'paused')
+    await expect(controller.ensureDesktopSession()).rejects.toThrow('重新启用')
+    expect(calls.filter(call => call === 'select')).toHaveLength(1)
+    const restored = await controller.resume()
+    expect(restored.phase).toBe('disabled')
+    expect(restored.resumeRequired).toBe(false)
+    expect(calls.filter(call => call === 'select')).toHaveLength(1)
+    await controller.ensureDesktopSession()
+    expect(calls.filter(call => call === 'select')).toHaveLength(2)
+    await controller.stop()
+  })
+
+  test('When 旧 helper 未证明退出 Then 重新启用失败且不创建新租约', async () => {
+    let selects = 0
+    const controller = new ComputerController({
+      async call() { selects++; return {} },
+      async terminate() { throw new Error('退出失败') },
+    }, { supported: true })
+    await controller.stop()
+    await expect(controller.resume()).rejects.toThrow('停止')
+    await expect(controller.ensureDesktopSession()).rejects.toThrow()
+    expect(selects).toBe(0)
+  })
+
+  test('When 初始化仍在途 Then 第二次初始化不能复用未就绪租约或开启新代际', async () => {
+    const { controller, delaySelect, resolveSelect, calls } = fixture()
+    delaySelect()
+    const starting = controller.ensureDesktopSession()
+    await expect(controller.ensureDesktopSession()).rejects.toThrow('在途')
+    resolveSelect({ target: { windowId: 12, pid: 34, processIdentity: 'x', bundleId: 'fixture', title: 'x', bounds: { x: 0, y: 0, width: 10, height: 10 } } })
+    await starting
+    expect(calls).toEqual(['select'])
+    await controller.stop()
+  })
+})
+
+describe('Given 本地恢复与停止的并发屏障', () => {
+  test('When 恢复清理期间用户再次停止 Then 迟到的恢复不得解除暂停', async () => {
+    let finishStop!: () => void
+    let selects = 0
+    const controller = new ComputerController({
+      async call() { selects++; return {} },
+      terminate: () => new Promise<void>(resolve => { finishStop = resolve }),
+    }, { supported: true })
+    const resuming = controller.resume()
+    const stopping = controller.stop('用户再次停止')
+    finishStop()
+    await stopping
+    await expect(resuming).rejects.toThrow('取消')
+    expect(controller.getState().resumeRequired).toBe(true)
+    await expect(controller.ensureDesktopSession()).rejects.toThrow('重新启用')
+    expect(selects).toBe(0)
+  })
+
+  test('When 停止尚未完成 Then 不启动新 helper 或增加 select 调用', async () => {
+    let finishStop!: () => void
+    let selects = 0
+    const controller = new ComputerController({
+      async call() { selects++; return {} },
+      terminate: () => new Promise<void>(resolve => { finishStop = resolve }),
+    }, { supported: true })
+    const stopping = controller.stop()
+    await expect(controller.ensureDesktopSession()).rejects.toThrow('停止')
+    finishStop()
+    await stopping
+    expect(selects).toBe(0)
+  })
+})
