@@ -15,8 +15,16 @@ import { importLegacyCookieProfiles, runLegacyCredentialHelper, startLegacyCrede
 
 export { getMainWindow } from './lib/main-window-store'
 
+process.stdout?.on?.('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE' || err.code === 'EIO') return
+})
+process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE' || err.code === 'EIO') return
+})
+
 // helper 必须在业务模块、Gamma 身份与 Chromium profile 初始化前分流。
 if (!runLegacyCredentialHelper()) bootstrapGamma()
+
 
 function bootstrapGamma(): void {
   const isDevelopment = !app.isPackaged || process.env.GAMMA_DEV === '1'

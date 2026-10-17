@@ -10,16 +10,16 @@ import { getSettings, updateSettings } from './lib/settings-service'
 import { restoreAppIconVariant } from './lib/app-icon-service'
 import { handleGammaFileRequest } from './lib/local-file-protocol'
 
-// 处理 EPIPE 错误：当 stdout/stderr 管道被关闭时（如 electronmon 重启），忽略写入错误
-// 这在开发环境热重载时经常发生，不影响应用功能
+// 处理 EPIPE/EIO 错误：当 stdout/stderr 管道或终端 pty 被关闭时，忽略写入错误
 process.stdout?.on?.('error', (err: NodeJS.ErrnoException) => {
-  if (err.code === 'EPIPE') return
+  if (err.code === 'EPIPE' || err.code === 'EIO') return
   throw err
 })
 process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
-  if (err.code === 'EPIPE') return
+  if (err.code === 'EPIPE' || err.code === 'EIO') return
   throw err
 })
+
 
 // 清理本地环境中的 ANTHROPIC_* 变量，防止干扰应用的认证流程
 // Electron 桌面应用通过渠道系统管理 API Key，不应受终端环境变量影响
