@@ -10,6 +10,71 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
+  test('When 未悬浮会话行且没有归档历史 Then 归档操作和已归档入口仍然可见可点击', async () => {
+    const result = await renderer.run<{ actionVisible: boolean; entryVisible: boolean; opened: boolean; returned: boolean }>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount({ width: 240 });
+      const action = fixture.row('parent').querySelector('button[aria-label="归档"]');
+      const visible = element => {
+        if (!element) return false;
+        for (let node = element; node instanceof HTMLElement; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.opacity === '0' || style.pointerEvents === 'none' || style.display === 'none') return false;
+        }
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && rect.bottom <= innerHeight;
+      };
+      const actionVisible = visible(action);
+      const entry = [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档'));
+      const entryVisible = visible(entry);
+      let opened = false, returned = false;
+      if (entry) {
+        entry.click(); await api.until(() => document.body.innerText.includes('返回活跃会话'));
+        opened = !fixture.row('parent');
+        [...document.querySelectorAll('button')].find(button => button.textContent.includes('返回活跃会话')).click();
+        await api.until(() => fixture.row('parent')); returned = true;
+      }
+      fixture.root.unmount(); return { actionVisible, entryVisible, opened, returned };
+    `)
+    expect(result).toEqual({ actionVisible: true, entryVisible: true, opened: true, returned: true })
+  }, 30_000)
+
+  test('When 点击常显归档按钮 Then 仍需二次确认且不会误选该会话', async () => {
+    expect(await renderer.run<{ before: number; after: number; selected: string; confirming: boolean }>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount();
+      let calls = 0;
+      window.electronAPI.toggleArchiveAgentSession = async id => {
+        calls++; return { id, title: '检查第二个项目', workspaceId: 'project-b', archived: false };
+      };
+      const row = fixture.row('other'); row.querySelector('button[aria-label="归档"]').click();
+      await api.delay();
+      const before = calls, selected = fixture.state().agent;
+      const confirm = row.querySelector('button[aria-label="再次点击确认归档"]');
+      const confirming = !!confirm; confirm.click(); await api.until(() => calls === 1); await api.delay();
+      const result = { before, after: calls, selected, confirming }; fixture.root.unmount(); return result;
+    `)).toEqual({ before: 0, after: 1, selected: 'parent', confirming: true })
+  }, 30_000)
+
+  test('When 浅深色窄侧栏窗口缩短且历史较长 Then 归档和账户入口保持在可见区域', async () => {
+    const results = await renderer.run<Array<{ entryVisible: boolean; accountVisible: boolean; scrollable: boolean }>>(`
+      const api = window.leftSidebarRegression, results = [], now = Date.now();
+      Object.assign(document.getElementById('root').style, { height: '480px', minHeight: '0' });
+      for (const dark of [false, true]) {
+        const fixture = await api.mount({ dark, width: 200, agents: Array.from({ length: 40 }, (_, i) => ({
+          id: 'short-' + i, title: '较长历史会话 ' + i, workspaceId: 'project-a', createdAt: now, updatedAt: now - i,
+        })) });
+        const entry = [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档'));
+        const entryBounds = entry.getBoundingClientRect(), accountBounds = fixture.button('个人资料与设置').getBoundingClientRect();
+        const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+        results.push({ entryVisible: entryBounds.height > 20 && entryBounds.bottom <= 480,
+          accountVisible: accountBounds.height > 20 && accountBounds.bottom <= 480,
+          scrollable: scroll.scrollHeight > scroll.clientHeight });
+        fixture.root.unmount(); await api.delay();
+      }
+      return results;
+    `)
+    expect(results).toEqual(Array.from({ length: 2 }, () => ({ entryVisible: true, accountVisible: true, scrollable: true })))
+  }, 30_000)
+
   test('When 在窄侧栏显示长标题、委派计数与快捷键提示 Then 会话保持紧凑单行且操作不溢出', async () => {
     const results = await renderer.run<Array<{ height: number; aligned: boolean; fits: boolean; truncated: boolean }>>(`
       const api = window.leftSidebarRegression, results = [];

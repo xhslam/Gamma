@@ -338,11 +338,11 @@ function formatRelativeUpdatedAt(updatedAt: number, now: number): string {
   const year = 365 * day
 
   if (diff < minute) return '刚刚'
-  if (diff < hour) return `${Math.max(1, Math.floor(diff / minute))} 分钟`
-  if (diff < day) return `${Math.floor(diff / hour)} 小时`
-  if (diff < month) return `${Math.floor(diff / day)} 天`
-  if (diff < year) return `${Math.floor(diff / month)} 月`
-  return `${Math.floor(diff / year)} 年`
+  if (diff < hour) return `${Math.max(1, Math.floor(diff / minute))}分`
+  if (diff < day) return `${Math.floor(diff / hour)}时`
+  if (diff < month) return `${Math.floor(diff / day)}天`
+  if (diff < year) return `${Math.floor(diff / month)}月`
+  return `${Math.floor(diff / year)}年`
 }
 
 const SIDEBAR_DRAG_STRIP_HEIGHT = {
@@ -2731,19 +2731,16 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       )}
 
       {/* 已归档入口 / 返回活跃对话 */}
-      <div className="px-3 pb-1">
+      <div className="shrink-0 px-3 pb-1">
         {viewMode === 'active' ? (
-          <>
-            {archivedAgentSessionCount > 0 && (
-              <button
-                onClick={() => setViewMode('archived')}
-                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] text-foreground/45 hover:bg-foreground/[0.04] hover:text-foreground/70 transition-colors titlebar-no-drag"
-              >
-                <Archive size={13} className="text-foreground/35" />
-                <span>已归档 ({archivedAgentSessionCount})</span>
-              </button>
-            )}
-          </>
+          <button
+            type="button"
+            onClick={() => setViewMode('archived')}
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] text-foreground/45 hover:bg-foreground/[0.04] hover:text-foreground/70 transition-colors titlebar-no-drag"
+          >
+            <Archive size={13} className="text-foreground/35" />
+            <span>已归档 ({archivedAgentSessionCount})</span>
+          </button>
         ) : (
           <button
             onClick={() => setViewMode('active')}
@@ -2838,7 +2835,7 @@ interface SessionItemActionsProps {
 /**
  * 安全 Tooltip：延迟渲染 Content，避开 Popper 初始定位 (0,0) 的闪现。
  *
- * 左侧列表项的操作按钮默认 hidden，hover 时才显示。Radix Popper 在 Content 首次挂载
+ * 左侧列表项的部分操作按钮默认隐藏，hover 时才显示。Radix Popper 在 Content 首次挂载
  * 时若 trigger 尚未完成布局，会先把浮层放到视口左上角 (0,0)，再跳到正确位置。这里
  * 在 Radix 进入打开状态后，先让 Popper 有一小段时间完成定位，再真正渲染 Content；
  * 同时 trigger rect 为 0 时直接不打开。
@@ -2910,8 +2907,8 @@ function SafeTooltip({ children, content, side = 'top' }: SafeTooltipProps): Rea
 }
 
 /**
- * 列表项右侧默认显示相对更新时间，hover 时显示归档和更多菜单。
- * 将不常用的置顶、重命名和删除收进菜单，同时保留归档的直接入口。
+ * 列表项右侧常显归档入口与相对更新时间，hover 或键盘聚焦时用更多菜单替换时间。
+ * 将不常用的置顶、重命名和删除收进菜单；归档不再依赖悬浮才能发现。
  */
 function SessionItemActions({
   updatedAt,
@@ -2979,20 +2976,13 @@ function SessionItemActions({
       <span
         title={`最后更新：${new Date(updatedAt).toLocaleString('zh-CN')}`}
         className={cn(
-          'absolute inset-y-0 right-0 block w-full overflow-hidden whitespace-nowrap text-right text-[11px] leading-[22px] tabular-nums text-foreground/35 transition-opacity duration-100',
+          'absolute inset-y-0 right-0 block w-[24px] overflow-hidden whitespace-nowrap text-right text-[11px] leading-[22px] tabular-nums text-foreground/35 transition-opacity duration-100',
           actionsVisible ? 'opacity-0' : 'opacity-100 group-hover:opacity-0 group-focus-within:opacity-0',
         )}
       >
         {formatRelativeUpdatedAt(updatedAt, relativeTimeNow)}
       </span>
-      <div
-        className={cn(
-          'absolute right-0 top-0 flex items-center gap-1 transition-opacity duration-100',
-          actionsVisible
-            ? 'opacity-100 pointer-events-auto'
-            : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
-        )}
-      >
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-1">
         <SafeTooltip
           content={archiveConfirming ? '再次点击确认归档' : archived ? '取消归档' : '归档'}
           side="top"
@@ -3021,6 +3011,9 @@ function SessionItemActions({
               title="更多会话操作"
               className={cn(
                 'flex size-[22px] items-center justify-center rounded-md text-foreground/35 transition-colors hover:bg-foreground/[0.08] hover:text-foreground/70',
+                actionsVisible
+                  ? 'opacity-100 pointer-events-auto'
+                  : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
                 'data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground/70',
               )}
             >

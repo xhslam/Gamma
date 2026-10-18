@@ -32,9 +32,13 @@ beforeAll(async () => {
         const calls = [], saves = [], retries = [], disk = options.disk ?? [];
         const listeners = { queue: new Set(), stream: new Set() };
         let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
+        const pendingSubmissions = [];
         const submit = input => {
           calls.push(input);
-          return new Promise((resolve, reject) => { rejectSend = reject; resolveSend = resolve; });
+          return new Promise((resolve, reject) => {
+            rejectSend = reject; resolveSend = resolve;
+            pendingSubmissions.push({ resolve, reject });
+          });
         };
         const subscribe = name => callback => { listeners[name].add(callback); return () => listeners[name].delete(callback); };
         const api = {
@@ -95,6 +99,8 @@ beforeAll(async () => {
         return { store, root, calls, saves, retries, disk, editor, key, resolveRetry: () => resolveRetry(),
           resolve: () => resolveSend({ disposition: 'queued' }),
           resolveDuplicate: () => resolveSend({ disposition: 'already_accepted' }),
+          resolveAt: index => pendingSubmissions[index].resolve({ disposition: 'queued' }),
+          emitStream: event => { for (const listener of listeners.stream) listener(event); },
           running: () => store.get(atoms.agentStreamingStatesAtom).get('a')?.running ?? false,
           newQuote: () => store.set(quotedSelectionMapAtom, new Map([['a', { ...quote, text: '新选区正文', capturedAt: 2 }]])),
           quote: id => store.get(quotedSelectionMapAtom).get(id),
@@ -122,6 +128,39 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
+  for (const confirmation of ['run_started', 'sdk_message']) {
+    test(`When ${confirmation} 已确认首条消息但 IPC 仍在等待整轮任务 Then 可继续排队且旧请求收尾不解锁新提交`, async () => {
+      expect(await renderer.run<{ before: number; after: number; queued: boolean; oldFinishKeptLock: boolean; running: boolean }>(`
+        const api = window.sendRecovery, f = await api.mount(); f.key();
+        await api.until(() => f.calls.length === 1);
+        await api.delay(); f.editor().commands.insertContent('运行中追加的消息');
+        f.emitStream({ sessionId: 'a', payload: { kind: 'gamma_event', event: { type: 'run_started', startedAt: -1 } } });
+        f.key(); await api.delay(60); const before = f.calls.length;
+        f.emitStream({ sessionId: 'a', payload: ${confirmation === 'run_started'
+          ? "{ kind: 'gamma_event', event: { type: 'run_started', startedAt: f.calls[0].startedAt } }"
+          : "{ kind: 'sdk_message', message: { type: 'user', uuid: f.calls[0].userMessageUuid, message: { content: [] } } }"} });
+        f.key(); await api.until(() => f.calls.length === 2);
+        const queued = f.calls[1].dispatch === 'after_current' && f.calls[1].rawUserMessage.includes('运行中追加的消息');
+        f.editor().commands.insertContent('第三条草稿'); f.resolveAt(0); await api.delay(80);
+        f.key(); await api.delay(80); const oldFinishKeptLock = f.calls.length === 2;
+        const result = { before, after: f.calls.length, queued, oldFinishKeptLock, running: f.running() };
+        f.resolveAt(1); await api.delay(50); f.root.unmount(); return result;
+      `)).toEqual({ before: 1, after: 2, queued: true, oldFinishKeptLock: true, running: true })
+    }, 30_000)
+  }
+
+  test('When 运行中仅附加文件 Then 可点击排队发送并保留停止入口', async () => {
+    expect(await renderer.run<{ enabled: boolean; stop: boolean; queued: boolean; attachment: boolean }>(`
+      const api = window.sendRecovery, f = await api.mount({ streaming: true, attachment: true, initialText: '' });
+      const send = document.querySelector('button[aria-label="排队发送消息"]');
+      const enabled = !!send && !send.disabled, stop = !!document.querySelector('button[aria-label="停止 Agent"]');
+      if (send) send.click();
+      await api.until(() => f.calls.length === 1);
+      const result = { enabled, stop, queued: f.calls[0].dispatch === 'after_current', attachment: f.calls[0].userMessage.includes('附件.txt') };
+      f.resolve(); await api.delay(50); f.root.unmount(); return result;
+    `)).toEqual({ enabled: true, stop: true, queued: true, attachment: true })
+  }, 30_000)
+
   for (const mode of ['direct', 'queue', 'background']) {
     test(`When ${mode} 提交失败 Then 恢复正文/富文本/附件并回滚本次乐观消息`, async () => {
       const result = await renderer.run<{ draft: string; html: string; files: number; calls: number; messages: number; error: boolean }>(`
