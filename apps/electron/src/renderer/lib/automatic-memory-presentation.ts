@@ -1,4 +1,4 @@
-import type { AutomaticMemoryCategory, AutomaticMemoryChange, AutomaticMemorySource } from '@gamma/shared'
+import type { AutomaticMemoryCategory, AutomaticMemoryChange, AutomaticMemoryEntry, AutomaticMemorySource } from '@gamma/shared'
 
 export const AUTOMATIC_MEMORY_CATEGORIES: ReadonlyArray<{ key: AutomaticMemoryCategory; label: string }> = [
   { key: 'profile', label: '个人偏好' },
@@ -6,6 +6,13 @@ export const AUTOMATIC_MEMORY_CATEGORIES: ReadonlyArray<{ key: AutomaticMemoryCa
   { key: 'areas', label: '领域' },
   { key: 'people', label: '人物' },
 ]
+
+/** 搜索仅匹配当前工作区已加载的标题与正文，不读取额外文件。 */
+export function filterAutomaticMemoryEntries(entries: AutomaticMemoryEntry[], query: string): AutomaticMemoryEntry[] {
+  const normalized = query.trim().toLocaleLowerCase()
+  if (!normalized) return entries
+  return entries.filter((entry) => `${entry.title}\n${entry.content}`.toLocaleLowerCase().includes(normalized))
+}
 
 /** 提示只来自已提交事件；重订阅和重复广播不能重复展示。 */
 export function appendAutomaticMemoryChange(previous: AutomaticMemoryChange[], change: AutomaticMemoryChange): AutomaticMemoryChange[] {
