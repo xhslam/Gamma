@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { AlertTriangle, Brain, ChevronDown, ChevronRight, FileText, FolderOpen, RefreshCw, Sparkles } from 'lucide-react'
 import type { SkillFileNode, WorkspaceMemorySummary } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SettingsCard } from '@/components/settings/primitives'
 import { AgentActionHint } from '@/components/agent/AgentActionHint'
@@ -11,6 +12,7 @@ import { AutomaticMemoryPanel } from './AutomaticMemoryPanel'
 import { WorkspaceMemoryChangeShelf } from './WorkspaceMemoryChangeShelf'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { agentPendingPromptAtom } from '@/atoms/agent-atoms'
+import { automaticMemoryNavigationAtom } from '@/atoms/automatic-memory-atoms'
 import { memoryFileNavigationAtom, workspaceMemoryChangesAtom } from '@/atoms/memory-change-atoms'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { cn } from '@/lib/utils'
@@ -73,6 +75,12 @@ function filterNodes(nodes: SkillFileNode[], query: string, contentMatchPaths = 
 
 export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded = false, onCloseChangeView }: WorkspaceMemoryTabProps): React.ReactElement {
   const { createAgent } = useCreateSession()
+  const [activeView, setActiveView] = React.useState('classified')
+  const automaticNavigation = useAtomValue(automaticMemoryNavigationAtom)
+  React.useEffect(() => { setActiveView('classified') }, [workspaceSlug])
+  React.useEffect(() => {
+    if (automaticNavigation?.workspaceSlug === workspaceSlug) setActiveView('classified')
+  }, [automaticNavigation, workspaceSlug])
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
   const [memoryNavigationRequest, setMemoryNavigationRequest] = useAtom(memoryFileNavigationAtom)
   const workspaceMemoryChanges = useAtomValue(workspaceMemoryChangesAtom)
@@ -98,6 +106,9 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
   const [contentMatches, setContentMatches] = React.useState<Map<string, string>>(new Map())
   // 右侧项目记忆 Tab 不提供搜索；全屏能力中心仍复用其顶部搜索框。
   const effectiveSearch = embedded ? '' : (search ?? '')
+  React.useEffect(() => {
+    if (effectiveSearch.trim()) setActiveView('files')
+  }, [effectiveSearch])
 
   // 自动保存：用 ref 持有最新的编辑状态，供防抖定时器与"切换文件前 flush"复用，
   // 避免把 selected/editText 塞进一堆回调的依赖数组里。
@@ -241,6 +252,7 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
       setMemoryNavigationRequest(null)
       return
     }
+    setActiveView('files')
     void (async () => {
       await openAutoFile(memoryNavigationRequest.relativePath)
       setMemoryNavigationRequest(null)
@@ -441,173 +453,182 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
     )
   }
 
-  if (loading || !summary) {
-    return <div className="space-y-4 overflow-y-auto"><AutomaticMemoryPanel key={workspaceSlug} workspaceSlug={workspaceSlug} /><div className="py-8 text-center text-sm text-muted-foreground">高级记忆文件尚未加载完成。</div></div>
-  }
-
   return (
-    <div className={cn('flex flex-col gap-5', embedded && 'h-full min-h-0 gap-3 overflow-y-auto')}>
-      <div className="shrink-0"><AutomaticMemoryPanel key={workspaceSlug} workspaceSlug={workspaceSlug} /></div>
-      {embedded && (
-        <div className="flex shrink-0 items-center gap-2 rounded-xl bg-muted/45 px-3 py-2">
-          <Brain className="size-4 shrink-0 text-foreground/65" />
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-foreground">项目记忆</div>
-            <div className="text-[11px] text-muted-foreground">{summary.autoMemory.fileCount} 个记忆文件</div>
-          </div>
+    <Tabs value={activeView} onValueChange={setActiveView} className={cn('flex min-w-0 flex-col gap-4', embedded && 'h-full min-h-0')}>
+      <header className="shrink-0 space-y-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">项目记忆</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">查看积累的协作信息，或维护项目指令与记忆文件。</p>
         </div>
-      )}
-      {embedded && <AgentActionHint action="查找、补充或整理项目记忆" />}
-      {!embedded && <SettingsCard divided={false}>
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">建立项目地图与协作画像</div>
-            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              点击即授权 Agent 基于可验证证据维护项目根与 Gamma 工作区的 AGENTS.md；随后在真实协作中逐步校准你的偏好。不会扫描历史会话。
+        <TabsList aria-label="记忆视图" className="w-fit">
+          <TabsTrigger value="classified" className="gap-1.5 text-xs"><Brain size={14} />分类记忆</TabsTrigger>
+          <TabsTrigger value="files" className="gap-1.5 text-xs"><FileText size={14} />记忆文件</TabsTrigger>
+        </TabsList>
+      </header>
+      <TabsContent value="classified" forceMount className="mt-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+        <AutomaticMemoryPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />
+      </TabsContent>
+      <TabsContent value="files" forceMount className={cn('mt-0 flex min-h-0 flex-col gap-4 data-[state=inactive]:hidden', embedded && 'flex-1 overflow-y-auto')}>
+        {loading || !summary ? <p role="status" className="py-8 text-center text-xs text-muted-foreground">正在加载记忆文件…</p> : <>
+          <div className="shrink-0 space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium">项目指令与长期记忆</h3>
+              <span className="text-[11px] text-muted-foreground">{summary.autoMemory.fileCount} 个记忆文件</span>
             </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">直接编辑原始文件，不会自动迁移到分类记忆。</p>
           </div>
-          <Button onClick={handleBootstrapKnowledge} disabled={bootstrapping}>
-            <Sparkles size={14} className="mr-1.5" />
-            {bootstrapping ? '创建中...' : '同意并开始建立'}
-          </Button>
-        </div>
-      </SettingsCard>}
-
-      {!embedded && <SettingsCard divided={false}>
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">授权会话补证据</div>
-            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {hasProfile
-                ? `仅在你授权的范围内，分批选择少量高信号工作会话补充证据；不会全量扫描，协作记忆仍须确认后写入。`
-                : '先在真实协作中建立初步协作画像，再决定是否用历史会话补充证据。'}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Select value={historyRange} onValueChange={(value) => setHistoryRange(value as MemoryHistoryRange)} disabled={scanningHistory || !hasProfile}>
-              <SelectTrigger className="h-9 w-[116px] text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MEMORY_HISTORY_RANGE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleScanSessionEvidence} disabled={scanningHistory || !hasProfile} title={hasProfile ? undefined : '请先建立协作画像'}>
-              <Sparkles size={14} className="mr-1.5" />
-              {scanningHistory ? '创建中...' : '授权整理'}
-            </Button>
-          </div>
-        </div>
-      </SettingsCard>}
-
-      <p className="text-xs text-muted-foreground">高级文件编辑（手写项目指令与长期记忆，不会自动迁移至分类记忆）</p>
-      <div className={cn('grid min-h-[520px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]', embedded && 'min-h-0 flex-1 grid-cols-[180px_minmax(0,1fr)] gap-3')}>
-        <SettingsCard divided={false} className="min-h-0 overflow-hidden">
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-              <div className="text-[13px] font-medium text-foreground/75">记忆文件</div>
-              <button
-                type="button"
-                title="刷新"
-                onClick={() => void refresh()}
-                className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <RefreshCw size={14} />
-              </button>
-            </div>
-            {migrationIssues.length > 0 && (
-              <div
-                role="status"
-                title={migrationReminderTitle}
-                className="mx-2 mt-2 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
-              >
-                <AlertTriangle size={13} className="shrink-0" />
-                <span>待处理：{migrationIssues.join('、')}，请检查旧文件。</span>
+          {embedded && <AgentActionHint action="查找、补充或整理项目记忆" />}
+          {!embedded && <SettingsCard divided={false}>
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">建立项目地图与协作画像</div>
+                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  点击即授权 Agent 基于可验证证据维护项目根与 Gamma 工作区的 AGENTS.md；随后在真实协作中逐步校准你的偏好。不会扫描历史会话。
+                </div>
               </div>
-            )}
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              <FileButton
-                active={selected?.kind === 'agents'}
-                icon={<FileText size={14} />}
-                label="AGENTS.md"
-                meta="Gamma 工作区项目指令"
-                onClick={() => void openAgents(summary)}
-                onReveal={() => window.electronAPI.showItemInFolder(summary.agentsMd.path)}
-              />
-              <div className="mt-3 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-                长期记忆
+              <Button onClick={handleBootstrapKnowledge} disabled={bootstrapping}>
+                <Sparkles size={14} className="mr-1.5" />
+                {bootstrapping ? '创建中...' : '同意并开始建立'}
+              </Button>
+            </div>
+          </SettingsCard>}
+
+          {!embedded && <SettingsCard divided={false}>
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">授权会话补证据</div>
+                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {hasProfile
+                    ? `仅在你授权的范围内，分批选择少量高信号工作会话补充证据；不会全量扫描，协作记忆仍须确认后写入。`
+                    : '先在真实协作中建立初步协作画像，再决定是否用历史会话补充证据。'}
+                </div>
               </div>
-              <div className="space-y-0.5">
-                {visibleAutoFiles.length === 0 ? (
-                  <div className="px-2 py-6 text-center text-xs text-muted-foreground">没有匹配的记忆文件</div>
-                ) : (
-                  visibleAutoFiles.map((node) => (
-                    <MemoryTreeNode
-                      key={node.relativePath}
-                      node={node}
-                      level={0}
-                      selectedPath={selected?.kind === 'auto' ? selected.relativePath : null}
-                      expanded={expanded}
-                      contentMatches={contentMatches}
-                      onToggle={(path) => {
-                        setExpanded((prev) => {
-                          const next = new Set(prev)
-                          if (next.has(path)) next.delete(path)
-                          else next.add(path)
-                          return next
-                        })
+              <div className="flex shrink-0 items-center gap-2">
+                <Select value={historyRange} onValueChange={(value) => setHistoryRange(value as MemoryHistoryRange)} disabled={scanningHistory || !hasProfile}>
+                  <SelectTrigger className="h-9 w-[116px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MEMORY_HISTORY_RANGE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleScanSessionEvidence} disabled={scanningHistory || !hasProfile} title={hasProfile ? undefined : '请先建立协作画像'}>
+                  <Sparkles size={14} className="mr-1.5" />
+                  {scanningHistory ? '创建中...' : '授权整理'}
+                </Button>
+              </div>
+            </div>
+          </SettingsCard>}
+
+          <div className={cn('grid min-h-[520px] grid-cols-[minmax(120px,30%)_minmax(0,1fr)] gap-3', embedded && 'min-h-[320px] flex-1')}>
+            <SettingsCard divided={false} className="min-h-0 overflow-hidden">
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
+                  <div className="text-[13px] font-medium text-foreground/75">记忆文件</div>
+                  <button
+                    type="button"
+                    title="刷新"
+                    onClick={() => void refresh()}
+                    className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <RefreshCw size={14} />
+                  </button>
+                </div>
+                {migrationIssues.length > 0 && (
+                  <div
+                    role="status"
+                    title={migrationReminderTitle}
+                    className="mx-2 mt-2 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
+                  >
+                    <AlertTriangle size={13} className="shrink-0" />
+                    <span>待处理：{migrationIssues.join('、')}，请检查旧文件。</span>
+                  </div>
+                )}
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                  <FileButton
+                    active={selected?.kind === 'agents'}
+                    icon={<FileText size={14} />}
+                    label="AGENTS.md"
+                    meta="Gamma 工作区项目指令"
+                    onClick={() => void openAgents(summary)}
+                    onReveal={() => window.electronAPI.showItemInFolder(summary.agentsMd.path)}
+                  />
+                  <div className="mt-3 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                    长期记忆
+                  </div>
+                  <div className="space-y-0.5">
+                    {visibleAutoFiles.length === 0 ? (
+                      <div className="px-2 py-6 text-center text-xs text-muted-foreground">没有匹配的记忆文件</div>
+                    ) : (
+                      visibleAutoFiles.map((node) => (
+                        <MemoryTreeNode
+                          key={node.relativePath}
+                          node={node}
+                          level={0}
+                          selectedPath={selected?.kind === 'auto' ? selected.relativePath : null}
+                          expanded={expanded}
+                          contentMatches={contentMatches}
+                          onToggle={(path) => {
+                            setExpanded((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(path)) next.delete(path)
+                              else next.add(path)
+                              return next
+                            })
+                          }}
+                          onOpen={(path) => void openAutoFile(path, summary)}
+                          onReveal={(path) => window.electronAPI.showItemInFolder(autoMemoryPath(summary, path))}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </SettingsCard>
+
+            <SettingsCard divided={false} className="min-h-0 overflow-hidden">
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-foreground">
+                      {selected?.title ?? '未选择文件'}
+                    </div>
+                    <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                      {selected?.absolutePath ?? '从左侧选择一个记忆文件'}
+                    </div>
+                  </div>
+
+                </div>
+                {saveConflict && (
+                  <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    <span>文件已被外部更新，已停止保存以避免覆盖。请复制你的修改后刷新文件。</span>
+                    <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={() => void refresh()}>刷新文件</Button>
+                  </div>
+                )}
+                {loadingFile ? (
+                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">读取文件中...</div>
+                ) : selected ? (
+                  <div className="min-h-0 flex-1 overflow-y-auto">
+                    <LiveMarkdownEditor
+                      value={editText}
+                      onChange={(value) => {
+                        setIsDirty(true)
+                        setEditText(value)
                       }}
-                      onOpen={(path) => void openAutoFile(path, summary)}
-                      onReveal={(path) => window.electronAPI.showItemInFolder(autoMemoryPath(summary, path))}
+                      onSave={() => { void flushPendingSave() }}
+                      readOnly={saveConflict}
+                      className="live-markdown-external-scroll"
                     />
-                  ))
+                  </div>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">从左侧选择一个记忆文件</div>
                 )}
               </div>
-            </div>
+            </SettingsCard>
           </div>
-        </SettingsCard>
-
-        <SettingsCard divided={false} className="min-h-0 overflow-hidden">
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-foreground">
-                  {selected?.title ?? '未选择文件'}
-                </div>
-                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                  {selected?.absolutePath ?? '从左侧选择一个记忆文件'}
-                </div>
-              </div>
-
-            </div>
-            {saveConflict && (
-              <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                <span>文件已被外部更新，已停止保存以避免覆盖。请复制你的修改后刷新文件。</span>
-                <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={() => void refresh()}>刷新文件</Button>
-              </div>
-            )}
-            {loadingFile ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">读取文件中...</div>
-            ) : selected ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <LiveMarkdownEditor
-                  value={editText}
-                  onChange={(value) => {
-                    setIsDirty(true)
-                    setEditText(value)
-                  }}
-                  onSave={() => { void flushPendingSave() }}
-                  readOnly={saveConflict}
-                  className="live-markdown-external-scroll"
-                />
-              </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">从左侧选择一个记忆文件</div>
-            )}
-          </div>
-        </SettingsCard>
-      </div>
-    </div>
+        </>}
+      </TabsContent>
+    </Tabs>
   )
 }
 

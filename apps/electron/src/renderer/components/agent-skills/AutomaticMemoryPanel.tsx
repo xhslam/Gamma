@@ -158,7 +158,7 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
           </div>
         )}
         <CollapsibleContent forceMount className="data-[state=closed]:hidden">
-          <div className="space-y-4 border-t border-border/40 px-4 pb-4 pt-3">
+          <div className="space-y-3 border-t border-border/40 px-4 pb-4 pt-3">
             <Collapsible open={view.settingsOpen} onOpenChange={(settingsOpen) => setView((previous) => ({ ...previous, settingsOpen }))} className="rounded-xl bg-muted/35">
               <CollapsibleTrigger asChild>
                 <button type="button" aria-label="记忆设置" className={cn(triggerClass, 'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs text-muted-foreground')}>
@@ -169,7 +169,7 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent forceMount className="data-[state=closed]:hidden">
-                <div className="space-y-4 border-t border-border/40 px-3 pb-3 pt-3">
+                <div className="space-y-3 border-t border-border/40 px-3 pb-3 pt-3">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <label htmlFor={`automatic-memory-${workspaceSlug}`} className="text-xs font-medium">自动生成记忆</label>
@@ -196,6 +196,7 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
             {busy && <p role="status" className="text-xs text-muted-foreground">正在保存更改…</p>}
             {snapshot && (
               <>
+                {entries.length > 0 && <>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative min-w-0 flex-[1_1_180px]">
                     <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
@@ -210,12 +211,14 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
                   <span>{searching ? '搜索结果' : '已保存的记忆'}</span>
                   <span role="status" className="tabular-nums">{searching ? `${filtered.length} / ${entries.length}` : `${entries.length} 条 · ${AUTOMATIC_MEMORY_CATEGORIES.filter((category) => entries.some((entry) => entry.category === category.key)).length} 个分类`}</span>
                 </div>
+                </>}
                 {focusedId && !entries.some((entry) => entry.id === focusedId) && <p role="status" className="text-xs text-muted-foreground">此条记忆已删除或不再可用。</p>}
                 {filtered.length === 0 ? (
-                  <div className="rounded-xl bg-muted/25 px-4 py-8 text-center">
+                  <div className="rounded-xl px-4 py-6 text-center">
                     {searching ? <Search size={24} className="mx-auto mb-3 text-muted-foreground/45" /> : <Brain size={26} className="mx-auto mb-3 text-primary/50" />}
                     <p className="text-sm font-medium">{searching ? '没有找到匹配的记忆' : '还没有保存的记忆'}</p>
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{searching ? '试试其他关键词，或清空搜索查看全部。' : snapshot.settings.enabled ? '继续对话后，值得保留的信息会出现在这里。' : '在「记忆设置」中开启自动生成，从新的对话开始积累。'}</p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{searching ? '试试其他关键词，或清空搜索查看全部。' : snapshot.settings.enabled ? '继续对话后，值得保留的信息会出现在这里。' : '开启自动生成后，从新对话中逐步积累协作信息。'}</p>
+                    {!searching && !snapshot.settings.enabled && <Button size="sm" variant="outline" className="mt-4 text-xs" onClick={() => setView((previous) => ({ ...previous, settingsOpen: true }))}>打开记忆设置</Button>}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -293,7 +296,7 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
                     })}
                   </div>
                 )}
-                <p className="flex items-center gap-1.5 border-t border-border/40 pt-3 text-[10px] text-muted-foreground"><ShieldCheck size={12} className="shrink-0" />你可以随时编辑或删除，手动编辑的条目不会被自动覆盖。</p>
+                {entries.length > 0 && <p className="flex items-center gap-1.5 border-t border-border/40 pt-3 text-[10px] text-muted-foreground"><ShieldCheck size={12} className="shrink-0" />你可以随时编辑或删除，手动编辑的条目不会被自动覆盖。</p>}
               </>
             )}
           </div>

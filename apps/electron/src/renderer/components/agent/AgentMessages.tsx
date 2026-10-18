@@ -10,6 +10,7 @@ import { AutomaticMemoryNotice } from '@/components/agent-skills/AutomaticMemory
 import { useAtomValue, useSetAtom } from 'jotai'
 import { RotateCw, AlertTriangle, CheckCircle2, Ban, ChevronDown, ChevronRight } from 'lucide-react'
 import { WelcomeEmptyState } from '@/components/welcome/WelcomeEmptyState'
+import { CodeFieldBackground } from '@/components/welcome/CodeFieldBackground'
 import {
   BasePathsProvider,
   Message,
@@ -1189,6 +1190,7 @@ export const AgentMessages = React.memo(function AgentMessages({
     <BasePathsProvider basePaths={messageBasePaths} sessionId={sessionId}>
       <AgentBrowserLinkProvider sessionId={sessionId}>
         <div ref={historySelectionRootRef} className="relative flex min-h-0 flex-1 flex-col">
+          {ready && !hasContent && !streaming && <CodeFieldBackground />}
       <style>{`
         ::highlight(${AGENT_HISTORY_QUOTE_HIGHLIGHT_NAME}) {
           background-color: hsl(var(--primary) / 0.28);

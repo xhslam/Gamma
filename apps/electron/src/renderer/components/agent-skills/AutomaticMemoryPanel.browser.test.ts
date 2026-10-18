@@ -24,7 +24,7 @@ beforeAll(async () => {
     };
     const wait=async(predicate)=>{for(let i=0;i<150;i++){if(predicate())return;await new Promise(r=>setTimeout(r,20))}throw new Error('等待 UI 超时：'+document.body.innerText)};
     window.memoryTest={
-      mount:async(options={})=>{snapshot={settings:{enabled:true,includeSensitive:false},entries:options.empty?[]:defaults,revision:17};store=createStore();calls=[];fail=false;root.render(React.createElement(Provider,{store},React.createElement(AutomaticMemoryPanel,{workspaceSlug:'demo',entryId:options.entryId})));await wait(()=>document.querySelector('[aria-label="搜索记忆"]'));},
+      mount:async(options={})=>{snapshot={settings:{enabled:!options.disabled,includeSensitive:false},entries:options.empty?[]:defaults,revision:17};store=createStore();calls=[];fail=false;root.render(React.createElement(Provider,{store},React.createElement(AutomaticMemoryPanel,{workspaceSlug:'demo',entryId:options.entryId})));await wait(()=>options.empty?document.body.innerText.includes('还没有保存的记忆'):document.querySelector('[aria-label="搜索记忆"]'));},
       wait,calls:()=>calls,setFail:(value)=>{fail=value},
       navigate:(entryId)=>store.set(automaticMemoryNavigationAtom,{workspaceSlug:'demo',entryId}),
       input:(element,value)=>{Object.getOwnPropertyDescriptor(element instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(element,value);element.dispatchEvent(new Event('input',{bubbles:true}));},
@@ -158,9 +158,12 @@ describe('Given 新版自动分类记忆面板', () => {
 
   test('When 工作区尚无记忆或目标已删除 Then 显示明确空状态而非大块空分类', async () => {
     const result = await renderer.run(`
-      const t=window.memoryTest;await t.mount({empty:true,entryId:'missing'});
-      return {empty:document.body.innerText.includes('还没有保存的记忆'),missing:document.body.innerText.includes('此条记忆已删除或不再可用。'),cards:document.querySelectorAll('[data-memory-entry-id]').length};
+      const t=window.memoryTest;await t.mount({empty:true,disabled:true,entryId:'missing'});
+      const noToolbar=!document.querySelector('[aria-label="搜索记忆"]')&&!document.body.innerText.includes('全部展开');
+      Array.from(document.querySelectorAll('button')).find(el=>el.textContent==='打开记忆设置').click();
+      await t.wait(()=>document.querySelector('[aria-label="记忆设置"]').getAttribute('aria-expanded')==='true');
+      return {noToolbar,noConsentChange:t.calls().length===0,empty:document.body.innerText.includes('还没有保存的记忆'),missing:document.body.innerText.includes('此条记忆已删除或不再可用。'),cards:document.querySelectorAll('[data-memory-entry-id]').length};
     `)
-    expect(result).toEqual({ empty: true, missing: true, cards: 0 })
+    expect(result).toEqual({ noToolbar: true, noConsentChange: true, empty: true, missing: true, cards: 0 })
   }, 30_000)
 })
