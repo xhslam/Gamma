@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
-import { BookOpen, FileText, Search, Save, PanelLeft, Loader2, MoreHorizontal, Lock, Unlock, Type, Code2, Columns2, X, SlidersHorizontal, Plus, FilePlus, FolderOpen } from 'lucide-react'
+import { BookOpen, FileText, Search, Save, PanelLeft, FolderTree, ListTree, Loader2, MoreHorizontal, Lock, Unlock, Type, Code2, Columns2, X, SlidersHorizontal, Plus, FilePlus, FolderOpen } from 'lucide-react'
 import type { MarkdownWorkspaceContext, MarkdownWorkspaceOperation } from '@gamma/shared'
 import { currentAgentWorkspaceIdAtom } from '../../atoms/agent-atoms'
 import {
@@ -50,6 +50,19 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
   const [state, setState] = useAtom(markdownWorkspaceStateAtomFamily(scope))
   const [sidebarOpen, setSidebarOpen] = useAtom(markdownSidebarOpenAtom)
   const [sidebarViewMode, setSidebarViewMode] = useAtom(markdownSidebarViewModeAtom)
+  const sidebarId = React.useId()
+  const sidebarState = sidebarOpen ? sidebarViewMode : 'closed'
+  const sidebarHint = !sidebarOpen ? '展开文件侧栏' : sidebarViewMode === 'files' ? '文件 · 点击切换到大纲' : '大纲 · 点击收起侧栏'
+  const cycleSidebar = () => {
+    if (!sidebarOpen) {
+      setSidebarViewMode('files')
+      setSidebarOpen(true)
+    } else if (sidebarViewMode === 'files') {
+      setSidebarViewMode('outline')
+    } else {
+      setSidebarOpen(false)
+    }
+  }
   const store = useStore()
   const preferences = useAtomValue(markdownEditorPreferencesAtom)
   const loadPreferences = useSetAtom(loadMarkdownEditorPreferencesAtom)
@@ -136,7 +149,10 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
       if (result.status === 'source') {
         setState(current => ({ ...current, sources: current.sources.some(source => source.id === result.source.id) ? current.sources : [...current.sources, result.source] }))
         if (result.source.kind === 'file') await openDocument(result.source.id, '')
-        else setSidebarOpen(true)
+        else {
+          setSidebarViewMode('files')
+          setSidebarOpen(true)
+        }
       } else if (result.status === 'error') setError(result.message)
     } catch { setError('来源选择失败。') }
     finally { setOpening(false) }
@@ -291,6 +307,7 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
         {sidebarOpen && (
           <MarkdownDocumentList
             key={scope}
+            id={sidebarId}
             context={context}
             sources={state.sources}
             activePath={active?.path}
@@ -308,7 +325,6 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
                   : richRef.current?.scrollToLine(entry.line, entry.index)
               }
             }}
-            onCloseSidebar={() => setSidebarOpen(false)}
             onError={setError}
           />
         )}
@@ -375,19 +391,16 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
           variant="ghost"
           size="icon"
           className="markdown-status-button"
-          title="文件来源"
-          aria-label="文件来源"
-          aria-pressed={sidebarOpen && sidebarViewMode === 'files'}
-          onClick={() => {
-            if (sidebarOpen && sidebarViewMode === 'files') {
-              setSidebarOpen(false)
-            } else {
-              setSidebarOpen(true)
-              setSidebarViewMode('files')
-            }
-          }}
+          title={sidebarHint}
+          aria-label="切换 Markdown 侧栏"
+          aria-description={sidebarHint}
+          aria-expanded={sidebarOpen}
+          aria-controls={sidebarOpen ? sidebarId : undefined}
+          aria-pressed={sidebarOpen}
+          data-state={sidebarState}
+          onClick={cycleSidebar}
         >
-          <PanelLeft />
+          {!sidebarOpen ? <PanelLeft /> : sidebarViewMode === 'files' ? <FolderTree /> : <ListTree />}
         </Button>
         <Button
           variant="ghost"

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useAtom } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import {
   ChevronRight,
   FileText,
@@ -11,7 +11,6 @@ import {
   FilePlus,
   FolderPlus,
   ChevronsDownUp,
-  PanelLeftClose,
   X,
   Search,
 } from 'lucide-react'
@@ -26,6 +25,7 @@ import { Input } from '../ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog'
 
 export interface MarkdownDocumentListProps {
+  id?: string
   context: MarkdownWorkspaceContext
   sources: MarkdownWorkspaceSource[]
   activePath?: string
@@ -37,12 +37,11 @@ export interface MarkdownDocumentListProps {
   onReleaseSource?: (sourceId: string) => void
   onCreateFile?: (sourceId: string, path: string, name: string) => void
   onJumpOutline?: (entry: MarkdownOutlineEntry) => void
-  onCloseSidebar?: () => void
   onError: (reason: string) => void
 }
 
 export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.ReactElement {
-  const [viewMode, setViewMode] = useAtom(markdownSidebarViewModeAtom)
+  const viewMode = useAtomValue(markdownSidebarViewModeAtom)
   const [expandedArray, setExpandedArray] = useAtom(markdownExpandedFoldersAtom)
   const expanded = React.useMemo(() => new Set(expandedArray), [expandedArray])
 
@@ -213,46 +212,25 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
 
   return (
     <aside
+      id={props.id}
       className="markdown-sidebar flex w-64 shrink-0 flex-col overflow-hidden border-r bg-card/40 text-card-foreground select-none"
       aria-label="Markdown 文件来源"
     >
-      {/* 顶部工具栏：视图切换与快捷操作 */}
-      <div className="flex h-9 shrink-0 items-center justify-between border-b px-2 py-1">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`h-7 px-2 text-xs gap-1.5 ${viewMode === 'files' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'}`}
-            title="文件来源"
-            aria-label="文件树"
-            aria-pressed={viewMode === 'files'}
-            onClick={() => setViewMode('files')}
-          >
-            <FolderTree className="size-3.5" />
-            <span>文件</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`h-7 px-2 text-xs gap-1.5 ${viewMode === 'outline' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'}`}
-            title="文档目录大纲"
-            aria-label="文档大纲"
-            aria-pressed={viewMode === 'outline'}
-            onClick={() => setViewMode('outline')}
-          >
-            <ListTree className="size-3.5" />
-            <span>大纲</span>
-          </Button>
+      {/* 视图由底部统一切换；顶部仅显示标题与当前视图的操作。 */}
+      <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b px-3" role="toolbar" aria-label="Markdown 侧栏工具栏">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          {viewMode === 'files' ? <FolderTree className="size-3.5 shrink-0" /> : <ListTree className="size-3.5 shrink-0" />}
+          <span className="truncate">{viewMode === 'files' ? '文件' : '大纲'}</span>
         </div>
 
-        <div className="flex items-center gap-0.5">
-          {viewMode === 'files' && (
-            <>
+        {viewMode === 'files' && (
+          <div className="flex shrink-0 items-center gap-1">
+            <div className="flex items-center gap-0.5">
               {props.sources.some(s => s.kind === 'directory') && (
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-6 text-muted-foreground hover:text-foreground"
+                  className="size-7 text-muted-foreground hover:text-foreground"
                   title="新建文件"
                   aria-label="新建 Markdown 文件"
                   onClick={() => {
@@ -267,7 +245,7 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-6 text-muted-foreground hover:text-foreground"
+                  className="size-7 text-muted-foreground hover:text-foreground"
                   title="添加文件夹"
                   aria-label="添加文件夹"
                   onClick={props.onAddFolder}
@@ -275,31 +253,21 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
                   <FolderPlus className="size-3.5" />
                 </Button>
               )}
+            </div>
+            <div className="ml-0.5 border-l pl-1.5">
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6 text-muted-foreground hover:text-foreground"
+                className="size-7 text-muted-foreground hover:text-foreground"
                 title="全部折叠"
                 aria-label="折叠全部目录"
                 onClick={collapseAll}
               >
                 <ChevronsDownUp className="size-3.5" />
               </Button>
-            </>
-          )}
-          {props.onCloseSidebar && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 text-muted-foreground hover:text-foreground"
-              title="收起侧边栏"
-              aria-label="收起侧边栏"
-              onClick={props.onCloseSidebar}
-            >
-              <PanelLeftClose className="size-3.5" />
-            </Button>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 视图内容：文件树模式 */}

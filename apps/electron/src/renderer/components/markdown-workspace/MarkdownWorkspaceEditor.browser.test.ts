@@ -6,6 +6,8 @@ beforeAll(async () => {
   renderer = await createElectronRendererHarness(`
     import React from 'react'
     import { createRoot } from 'react-dom/client'
+    import { getDefaultStore } from 'jotai'
+    import { markdownSidebarOpenAtom, markdownSidebarViewModeAtom, markdownExpandedFoldersAtom } from '@/atoms/markdown-workspace-atoms'
     import { EditorView } from '@codemirror/view'
     import { MarkdownWorkspaceEditor } from '@/components/markdown-workspace/MarkdownWorkspaceEditor'
     import { MarkdownWorkspaceView } from '@/components/markdown-workspace/MarkdownWorkspaceView'
@@ -35,6 +37,8 @@ beforeAll(async () => {
         return { root, ref, changes, errors, saves:()=>saves, async editing(value) { editing=value; render(value); await delay(80) }, async theme(value) { theme=value; render(editing); await delay(80) }, async source(value) { source=value; render(editing); await delay(80) } }
       },
       async workspace(initialContent, saveDelay = 0, defaultMode = 'read') {
+        // 每个独立场景从已知导航状态开始；同一 fixture 的 hide/show 仍验证真实状态保留。
+        const store=getDefaultStore(); store.set(markdownSidebarOpenAtom,false); store.set(markdownSidebarViewModeAtom,'files'); store.set(markdownExpandedFoldersAtom,[]);
         const calls=[]; const root=createRoot(document.getElementById('root')); let content='# 原标题\\n\\n第一段\\n\\n第二段\\n'; if(initialContent !== undefined) content=initialContent; let revision='r1'
         window.electronAPI={ getSettings:async()=>({markdownEditor:{defaultMode}}), updateSettings:async updates=>updates, openExternal:async()=>{}, markdownWorkspace: async input => { calls.push(input);
           if(input.action==='choose') return {status:'source',source:{id:'file',name:'sample.md',kind:'file'}}
@@ -52,6 +56,59 @@ beforeAll(async () => {
 }, 240_000)
 afterAll(async () => { await renderer?.dispose() })
 describe('Given 真实 Chromium Markdown 编辑工作区', () => {
+  test('When 循环点击底部侧栏入口 Then 依次展开文件、显示大纲、收起且不重复顶部切换', async () => {
+    const result = await renderer.run<{ states: string[]; expanded: string[]; headings: boolean; noDuplicates: boolean; keyboard: boolean; empty: boolean; saves: number }>(`
+      const api=window.markdownRegression; const fixture=await api.workspace('# 导航标题\\n\\n正文');
+      const button=()=>document.querySelector('[aria-label="切换 Markdown 侧栏"]');
+      const states=[button().getAttribute('data-state')], expanded=[button().getAttribute('aria-expanded')];
+      api.click('切换 Markdown 侧栏'); await api.delay(80);
+      states.push(button().getAttribute('data-state')); expanded.push(button().getAttribute('aria-expanded'));
+      const noDuplicates=!document.querySelector('.markdown-sidebar [aria-label="文件树"],.markdown-sidebar [aria-label="文档大纲"],.markdown-sidebar [aria-label="收起侧边栏"]');
+      api.click('切换 Markdown 侧栏'); await api.delay(80);
+      states.push(button().getAttribute('data-state')); expanded.push(button().getAttribute('aria-expanded'));
+      const headings=[...document.querySelectorAll('.markdown-sidebar button')].some(node=>node.textContent.trim()==='导航标题');
+      api.click('切换 Markdown 侧栏'); await api.delay(80);
+      states.push(button().getAttribute('data-state')); expanded.push(button().getAttribute('aria-expanded'));
+      const root=document.querySelector('[data-testid="markdown-workspace"]');
+      const shortcut=()=>root.dispatchEvent(new KeyboardEvent('keydown',{key:'b',metaKey:true,bubbles:true,cancelable:true}));
+      shortcut(); await api.delay(80); const keyboardOpened=!!document.querySelector('.markdown-sidebar');
+      shortcut(); await api.delay(80); const keyboard=keyboardOpened&&!document.querySelector('.markdown-sidebar');
+      fixture.root.unmount();
+      const plain=await api.workspace('没有标题的正文'); api.click('切换 Markdown 侧栏'); await api.delay(80); api.click('切换 Markdown 侧栏'); await api.delay(80);
+      const empty=document.querySelector('.markdown-sidebar').textContent.includes('当前文档暂无标题大纲');
+      const saves=[...fixture.calls,...plain.calls].filter(call=>call.action==='save').length; plain.root.unmount();
+      return{states,expanded,headings,noDuplicates,keyboard,empty,saves};
+    `)
+    expect(result).toEqual({ states: ['closed', 'files', 'outline', 'closed'], expanded: ['false', 'true', 'true', 'false'], headings: true, noDuplicates: true, keyboard: true, empty: true, saves: 0 })
+  }, 30_000)
+  test('When 在大纲中打开目录并切换侧栏 Then 返回文件视图、保留展开状态且顶部深浅主题单行排列', async () => {
+    const result = await renderer.run<{ files: boolean; preserved: boolean; toolbar: boolean; actions: boolean; collapsed: boolean }>(`
+      const api=window.markdownRegression; const fixture=await api.workspace();
+      const original=window.electronAPI.markdownWorkspace;
+      window.electronAPI.markdownWorkspace=async input=>{
+        if(input.action==='choose'&&input.kind==='directory') return{status:'source',source:{id:'dir',name:'项目目录',kind:'directory'}};
+        if(input.action==='list') return{status:'entries',entries:[{name:'嵌套正文.md',path:'嵌套正文.md',kind:'file'}]};
+        return original(input);
+      };
+      api.click('切换 Markdown 侧栏'); await api.delay(80); api.click('切换 Markdown 侧栏'); await api.delay(80);
+      await api.menu('更多 Markdown 操作','打开目录');
+      const files=document.querySelector('[aria-label="切换 Markdown 侧栏"]').getAttribute('data-state')==='files';
+      api.click('项目目录'); await api.until(()=>[...document.querySelectorAll('.markdown-sidebar button')].some(node=>node.textContent.trim()==='嵌套正文.md'));
+      document.getElementById('root').style.width='320px'; let toolbar=true;
+      for(const dark of [false,true]) {
+        document.documentElement.classList.toggle('dark',dark); await api.delay(80);
+        const header=document.querySelector('[aria-label="Markdown 侧栏工具栏"]');
+        const buttons=[...header.querySelectorAll('button')].map(node=>node.getBoundingClientRect()); const rect=header.getBoundingClientRect();
+        toolbar=toolbar&&header.scrollWidth<=header.clientWidth+1&&buttons.every(button=>button.left>=rect.left&&button.right<=rect.right&&Math.abs(button.top-buttons[0].top)<1);
+      }
+      const actions=!!document.querySelector('.markdown-sidebar [aria-label="新建 Markdown 文件"]')&&!!document.querySelector('.markdown-sidebar [aria-label="添加文件夹"]')&&!!document.querySelector('.markdown-sidebar [aria-label="折叠全部目录"]');
+      api.click('切换 Markdown 侧栏'); await api.delay(80); api.click('切换 Markdown 侧栏'); await api.delay(80); api.click('切换 Markdown 侧栏'); await api.delay(80);
+      const preserved=[...document.querySelectorAll('.markdown-sidebar button')].some(node=>node.textContent.trim()==='嵌套正文.md');
+      api.click('折叠全部目录'); await api.delay(80); const collapsed=![...document.querySelectorAll('.markdown-sidebar button')].some(node=>node.textContent.trim()==='嵌套正文.md');
+      fixture.root.unmount(); document.documentElement.classList.remove('dark'); return{files,preserved,toolbar,actions,collapsed};
+    `)
+    expect(result).toEqual({ files: true, preserved: true, toolbar: true, actions: true, collapsed: true })
+  }, 30_000)
   test('When 旧配置未指定默认视图 Then 可写文档默认解锁并允许编辑', async () => {
     const result = await renderer.run<{ editable: boolean; unlocked: boolean; saves: number }>(`
       const api=window.markdownRegression;const fixture=await api.workspace('默认正文',0,null);
@@ -323,10 +380,10 @@ describe('Given 真实 Chromium Markdown 编辑工作区', () => {
       const quiet=!document.querySelector('.markdown-workspace-view > header') && !document.querySelector('.markdown-workspace-view > nav') && !document.querySelector('.markdown-format-toolbar');
       const footer=document.querySelector('.markdown-workspace-view > footer'); const bottom=footer.getBoundingClientRect().top>=document.querySelector('[data-testid="markdown-rich-editor"]').getBoundingClientRect().bottom-1;
       const noDuplicateOutline=!footer.querySelector('[aria-label="文档目录"]');
-      if(!document.querySelector('.markdown-sidebar')) { api.click('文件来源'); await api.delay(80) }
-      api.click('文档大纲'); await api.delay(80);
-      const sidebarOutline=document.querySelector('.markdown-sidebar [aria-label="文档大纲"]').getAttribute('aria-pressed')==='true' && [...document.querySelectorAll('.markdown-sidebar button')].some(button=>button.textContent.trim()==='一篇正文');
-      api.click('收起侧边栏'); await api.delay(80);
+      if(!document.querySelector('.markdown-sidebar')) { api.click('切换 Markdown 侧栏'); await api.delay(80) }
+      api.click('切换 Markdown 侧栏'); await api.delay(80);
+      const sidebarOutline=document.querySelector('[aria-label="切换 Markdown 侧栏"]').getAttribute('data-state')==='outline' && [...document.querySelectorAll('.markdown-sidebar button')].some(button=>button.textContent.trim()==='一篇正文');
+      api.click('切换 Markdown 侧栏'); await api.delay(80);
       document.getElementById('root').style.width='320px'; api.click('编辑'); await api.delay(80);
       const narrowFits=footer.scrollWidth<=footer.clientWidth+1 && !document.querySelector('.markdown-format-toolbar');
       if(!narrowFits) throw new Error('窄栏尺寸：'+JSON.stringify({width:footer.clientWidth,scrollWidth:footer.scrollWidth,children:[...footer.children].map(node=>({tag:node.tagName,label:node.getAttribute('aria-label'),width:node.getBoundingClientRect().width,display:getComputedStyle(node).display,position:getComputedStyle(node).position}))}));
