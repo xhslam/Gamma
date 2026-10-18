@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai'
-import type { AutomaticMemoryChange } from '@gamma/shared'
+import type { AutomaticMemoryChange, AutomaticMemoryEntry } from '@gamma/shared'
 import { AUTOMATIC_MEMORY_IPC_CHANNELS } from '@gamma/shared'
 import { readFileSync } from 'node:fs'
-import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom } from '../atoms/automatic-memory-atoms'
-import { appendAutomaticMemoryChange, AUTOMATIC_MEMORY_CATEGORIES, selectAutomaticMemoryChanges } from './automatic-memory-presentation'
+import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom, automaticMemoryPanelStateAtomFamily } from '../atoms/automatic-memory-atoms'
+import { appendAutomaticMemoryChange, AUTOMATIC_MEMORY_CATEGORIES, filterAutomaticMemoryEntries, selectAutomaticMemoryChanges } from './automatic-memory-presentation'
 
 function change(patch: Partial<AutomaticMemoryChange> = {}): AutomaticMemoryChange {
   return { workspaceSlug: 'project', source: { kind: 'chat', sessionId: 'session', messageId: 'message', createdAt: 1 }, entryId: 'entry', title: '偏好', category: 'profile', action: 'added', changedAt: 2, ...patch }
@@ -41,6 +41,29 @@ describe('Given 当前运行期的真实自动记忆提交事件', () => {
   })
   test('When 渲染分类 Then 四类契约稳定且无遗漏', () => {
     expect(AUTOMATIC_MEMORY_CATEGORIES.map((item) => item.key)).toEqual(['profile', 'topics', 'areas', 'people'])
+  })
+})
+
+describe('Given 工作区记忆浏览状态', () => {
+  test('When 搜索标题或正文 Then 忽略首尾空格与大小写，不修改原始条目', () => {
+    const entries: AutomaticMemoryEntry[] = [
+      { id: 'a', category: 'profile', title: 'Gamma UI', content: '喜欢紧凑布局', facts: [], revision: 1, createdAt: 1, updatedAt: 2, manuallyEdited: false },
+      { id: 'b', category: 'areas', title: '工程约定', content: '使用 Bun', facts: [], revision: 1, createdAt: 1, updatedAt: 2, manuallyEdited: true },
+    ]
+    expect(filterAutomaticMemoryEntries(entries, ' gamma ')).toEqual(entries.slice(0, 1))
+    expect(filterAutomaticMemoryEntries(entries, '紧凑')).toEqual(entries.slice(0, 1))
+    expect(filterAutomaticMemoryEntries(entries, 'BUN')).toEqual(entries.slice(1, 2))
+    expect(filterAutomaticMemoryEntries(entries, 'missing')).toEqual([])
+    expect(filterAutomaticMemoryEntries(entries, '  ')).toBe(entries)
+    expect(entries).toHaveLength(2)
+  })
+  test('When 切换工作区或重开面板 Then 浏览状态在当前工作区保留但不会串到其他工作区', () => {
+    const store = createStore()
+    const first = automaticMemoryPanelStateAtomFamily('first')
+    const second = automaticMemoryPanelStateAtomFamily('second')
+    store.set(first, (previous) => ({ ...previous, open: false, query: '界面', expandedEntries: ['a'], collapsedCategories: ['people'] }))
+    expect(store.get(automaticMemoryPanelStateAtomFamily('first'))).toEqual({ open: false, settingsOpen: false, query: '界面', expandedEntries: ['a'], collapsedCategories: ['people'] })
+    expect(store.get(second)).toEqual({ open: true, settingsOpen: false, query: '', expandedEntries: [], collapsedCategories: [] })
   })
 })
 

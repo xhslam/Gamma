@@ -4,7 +4,7 @@ import type { AutomaticMemorySource } from '@gamma/shared'
 import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom } from '@/atoms/automatic-memory-atoms'
 import { useAutomaticMemoryChanges } from '@/hooks/useAutomaticMemoryChanges'
 import { selectAutomaticMemoryChanges } from '@/lib/automatic-memory-presentation'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AutomaticMemoryPanel } from './AutomaticMemoryPanel'
 
 interface AutomaticMemoryNoticeProps {
@@ -44,11 +44,16 @@ export function AutomaticMemoryNotice({ kind, sessionId, workspaceSlug }: Automa
         ))}
       </div>
       <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null) }}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          <DialogHeader><DialogTitle>工作区分类记忆</DialogTitle></DialogHeader>
-          {selected && (
-            <AutomaticMemoryPanel key={selected.workspaceSlug} workspaceSlug={selected.workspaceSlug} entryId={selected.entryId} />
-          )}
+        <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-border/40 px-5 py-4 text-left">
+            <DialogTitle className="text-base">工作区记忆</DialogTitle>
+            <DialogDescription className="text-xs">浏览、整理和管理 Gamma 为你保留的信息。</DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-4">
+            {selected && (
+              <AutomaticMemoryPanel key={selected.workspaceSlug} workspaceSlug={selected.workspaceSlug} entryId={selected.entryId} />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </section>
