@@ -41,7 +41,8 @@ export class AgentSendOutboxRecovery {
       const ids = this.acknowledge(input.sessionId)
       if (ids.has(input.messageId)) return { disposition: 'accepted' }
       if (this.options.queuedIds(input.sessionId).has(input.messageId)) return { disposition: 'queued' }
-      if (this.options.isBusy(input.sessionId)) throw new Error('会话仍在运行，请在本轮结束后重试')
+      // 是否运行不能证明这条消息已被接收。稳定 ID 的统一提交门禁负责去重，
+      // 主进程调度负责入队；不能因为另一轮尚未结束就阻止恢复失败消息。
       const entry = this.options.outbox.list(input.sessionId).find((item) => item.id === input.messageId)
       if (!entry) throw new Error('待恢复消息不存在，请刷新后重试')
       const retryInput = this.options.prepareRetryInput(entry)

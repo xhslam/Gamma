@@ -9,7 +9,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { existsSync, realpathSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
 import { realpath, stat, writeFile, readdir, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import type { GlobalMemoryEntry } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS, TRAY_IPC_CHANNELS } from '../types'
@@ -266,7 +266,7 @@ import {
   resolveAgentCwd,
 } from './lib/agent-session-manager'
 import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce } from './lib/agent-send-outbox-service'
-import { runAgent, stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, reserveAgentSessionStart, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
+import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
 import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
 import { askUserService } from './lib/agent-ask-user-service'
@@ -3405,22 +3405,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SEND_MESSAGE,
     async (event, input: AgentSendInput): Promise<import('@gamma/shared').AgentSendResult> => {
-      const result = await submitAgentMessageOnce(input.sessionId, input.userMessageUuid, async () => {
-        const releaseStart = reserveAgentSessionStart(input.sessionId)
-        try {
-          const session = getAgentSessionMeta(input.sessionId)
-          if (session) {
-            await feishuBridgeManager.startSessionMirrorRun(session).catch((error) => {
-              console.error('[飞书 Session 镜像] 流式卡片初始化失败:', error)
-            })
-          }
-          // runGeneration 是主进程内部运行身份；renderer IPC 绝不能指定或复用它。
-          const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSendInput & { runGeneration?: unknown }
-          await runAgent(publicInput, event.sender)
-        } finally {
-          releaseStart()
-        }
-      })
+      // 旧客户端也走同一个接管入口；IPC 只等待接收，不能等待模型与工具执行结束。
+      const messageId = input.userMessageUuid ?? randomUUID()
+      const result = await submitAgentMessageOnce(input.sessionId, messageId, () => submitOrEnqueueAgentMessage({
+        ...input,
+        userMessageUuid: messageId,
+        queueMessageId: messageId,
+        dispatch: 'after_current',
+      }, event.sender))
       return { disposition: result.duplicate ? 'already_accepted' : 'sent' }
     }
   )
