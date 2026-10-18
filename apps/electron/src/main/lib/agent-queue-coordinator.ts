@@ -27,6 +27,9 @@ export interface AgentQueueCoordinatorOptions {
 export class AgentQueueCoordinator {
   private readonly queues = new Map<string, QueueEntry[]>()
   private readonly dispatching = new Map<string, string>()
+  private readonly paused = new Map<string, 'stopped' | 'background'>()
+  /** 本轮已同步处理停止意图，迟到的终态不能再次覆盖之后的新提交。 */
+  private readonly requestedStops = new Set<string>()
 
   constructor(private readonly options: AgentQueueCoordinatorOptions) {}
 
@@ -39,6 +42,8 @@ export class AgentQueueCoordinator {
     }
     queue.push({ input, queuedAt: Date.now() })
     this.queues.set(input.sessionId, queue)
+    // 明确的新提交可恢复用户停止后保留的队列，窗口重绑不能代替用户意图。
+    if (this.paused.get(input.sessionId) === 'stopped') this.paused.delete(input.sessionId)
     this.tryDispatch(input.sessionId)
     const runStarted = this.dispatching.get(input.sessionId) === input.queueMessageId
     return runStarted ? 'started' : 'queued'
@@ -68,20 +73,34 @@ export class AgentQueueCoordinator {
     return true
   }
 
+  requestStop(sessionId: string): void {
+    this.paused.set(sessionId, 'stopped')
+    if (this.dispatching.has(sessionId) || this.options.isActive(sessionId)) this.requestedStops.add(sessionId)
+  }
+
   onRunComplete(
     sessionId: string,
-    queueMessageId: string | undefined,
+    _queueMessageId: string | undefined,
     backgroundTasksPending: boolean,
     stoppedByUser: boolean,
   ): void {
-    if (queueMessageId && this.dispatching.get(sessionId) === queueMessageId) {
-      this.dispatching.delete(sessionId)
-    }
-    if (backgroundTasksPending || stoppedByUser) return
+    // 完成事件先于 runtime/computer use 清理。dispatching 只能由 startRun Promise
+    // 的收尾释放，否则下一轮会与旧执行共享权限、工具通道及桌面控制资源。
+    const stopWasRequested = this.requestedStops.delete(sessionId)
+    if (stoppedByUser) {
+      if (!stopWasRequested) this.paused.set(sessionId, 'stopped')
+    } else if (backgroundTasksPending && this.paused.get(sessionId) !== 'stopped') this.paused.set(sessionId, 'background')
+    if (this.dispatching.has(sessionId)) return
     this.tryDispatch(sessionId)
   }
 
+  /** 清理期发生的 stop 可能没有后续终态；不能把该标记遗留给下一轮。 */
+  onRunSettled(sessionId: string): void {
+    this.requestedStops.delete(sessionId)
+  }
+
   onBackgroundTaskComplete(sessionId: string): void {
+    if (this.paused.get(sessionId) === 'background') this.paused.delete(sessionId)
     this.tryDispatch(sessionId)
   }
 
@@ -109,10 +128,12 @@ export class AgentQueueCoordinator {
   clear(sessionId: string): void {
     this.queues.delete(sessionId)
     this.dispatching.delete(sessionId)
+    this.paused.delete(sessionId)
+    this.requestedStops.delete(sessionId)
   }
 
   private tryDispatch(sessionId: string): void {
-    if (this.dispatching.has(sessionId) || this.options.isActive(sessionId)) return
+    if (this.paused.has(sessionId) || this.dispatching.has(sessionId) || this.options.isActive(sessionId)) return
     const queue = this.queues.get(sessionId)
     const entry = queue?.shift()
     if (!entry) return
@@ -120,16 +141,17 @@ export class AgentQueueCoordinator {
 
     const messageId = entry.input.queueMessageId
     this.dispatching.set(sessionId, messageId)
-    const webContents = this.options.getWebContents(sessionId)
-    if (!webContents || webContents.isDestroyed()) {
-      queue?.unshift(entry)
-      if (queue) this.queues.set(sessionId, queue)
-      this.dispatching.delete(sessionId)
-      return
-    }
-    const runGeneration = this.options.reserveRunGeneration(sessionId)
-    const startedAt = Date.now()
     try {
+      const webContents = this.options.getWebContents(sessionId)
+      if (!webContents || webContents.isDestroyed()) {
+        queue?.unshift(entry)
+        if (queue) this.queues.set(sessionId, queue)
+        this.dispatching.delete(sessionId)
+        return
+      }
+      const runGeneration = this.options.reserveRunGeneration(sessionId)
+      // 有请求时间戳时原样回传，renderer 在接收事件丢失时仍可用快照确认接管。
+      const startedAt = entry.input.startedAt ?? Date.now()
       this.options.sendStarted(webContents, {
         sessionId,
         messageId,
@@ -138,24 +160,25 @@ export class AgentQueueCoordinator {
         rawUserMessage: entry.input.rawUserMessage,
         startedAt,
         runGeneration,
-    })
+      })
+      void Promise.resolve()
+        .then(() => this.options.startRun({ ...entry.input, startedAt, runGeneration, userMessageUuid: messageId }, webContents))
+        .then(
+          () => this.finishDispatch(sessionId, messageId),
+          () => this.finishDispatch(sessionId, messageId),
+        )
     } catch {
-      // renderer 可能在检查 isDestroyed() 后立即销毁；发送失败时必须保留消息，等待下一次重试。
+      // 窗口解析、身份分配或 started 投递均可能失败；恢复原位后等待下一次唤醒。
       queue?.unshift(entry)
       if (queue) this.queues.set(sessionId, queue)
       this.dispatching.delete(sessionId)
       return
     }
-    void Promise.resolve()
-      .then(() => this.options.startRun({ ...entry.input, startedAt, runGeneration, userMessageUuid: messageId }, webContents))
-      .then(
-        () => this.finishDispatch(sessionId, messageId),
-        () => this.finishDispatch(sessionId, messageId),
-      )
   }
 
   private finishDispatch(sessionId: string, messageId: string): void {
     if (this.dispatching.get(sessionId) === messageId) {
+      this.onRunSettled(sessionId)
       this.dispatching.delete(sessionId)
       this.tryDispatch(sessionId)
     }

@@ -52,9 +52,21 @@ describe('Given 主进程恢复协调器', () => {
     await expect(f.recovery.retry(f.control, async () => { called = true; return { disposition: 'started' } })).rejects.toThrow('历史不可读')
     expect(called).toBe(false); expect(f.outbox.list('session')).toHaveLength(1)
   })
-  test('When 会话运行中 Then 阻止不确定的重复提交；失败仍可重试', async () => {
+  test('When 其他任务仍在运行 Then 未接收的稳定 ID 可通过统一门禁重新入队', async () => {
     const f = fixture(); f.state.busy = true
-    await expect(f.recovery.retry(f.control, async () => ({ disposition: 'started' }))).rejects.toThrow('仍在运行')
+    let calls = 0
+    expect(await f.recovery.retry(f.control, async (input) => {
+      ++calls
+      expect(input.queueMessageId).toBe('message')
+      f.queued.add('message')
+      return { disposition: 'queued' }
+    })).toEqual({ disposition: 'queued' })
+    expect(calls).toBe(1)
+    expect(await f.recovery.retry(f.control, async () => { ++calls; return { disposition: 'queued' } })).toEqual({ disposition: 'queued' })
+    expect(calls).toBe(1)
+  })
+  test('When 重试失败 Then 保存失败快照且仍可再次重试', async () => {
+    const f = fixture()
     f.state.busy = false
     await expect(f.recovery.retry(f.control, async () => { throw new Error('离线') })).rejects.toThrow('离线')
     expect(f.outbox.list('session')[0]?.status).toBe('failed')

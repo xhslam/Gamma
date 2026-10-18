@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence, hasComputerObservationContent, stripComputerObservationContent, withComputerSharingFence } from './pi-computer-context'
 import type { ComputerPrivateObservation } from '@gamma/shared'
 import { spawn } from 'node:child_process'
@@ -48,7 +49,7 @@ import type {
 } from '@earendil-works/pi-coding-agent'
 import type { Transport as PiAgentTransport } from '@earendil-works/pi-ai'
 import type { AssistantMessageEvent } from '@earendil-works/pi-ai'
-import type { AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core'
+import type { Agent, AgentMessage, AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core'
 import type { AssistantMessage } from '@earendil-works/pi-ai/compat'
 import { Type, type TSchema } from 'typebox'
 import {
@@ -217,7 +218,126 @@ interface ActivePiSession {
   runtimeGuard?: AgentRuntimeGuard
   skillWorkspaceSlug?: string
   pendingSkillActivations: PendingPromptSkillActivationTracker
+  queuedMessageAdmission: PiQueuedMessageAdmissionGate
+  queuedMessageReceipts?: PiQueuedMessageReceiptTracker
   onSkillActivated?: (activations: SkillActivation[], userMessageUuid: string) => void
+}
+
+function createInactiveQueueError(): Error & { code: string } {
+  return Object.assign(new Error('当前会话没有正在运行的 Agent'), { code: 'agent.query.not_active' })
+}
+
+/**
+ * Pi 的 steer/followUp 在内部还会等待 input hooks，即使原 prompt 已结束也可能成功入队。
+ * 关闭接收前等待这些入队完成，才能回收未被原 prompt 消费的消息并安全释放会话。
+ */
+export class PiQueuedMessageAdmissionGate {
+  private open = true
+  private readonly pending = new Set<Promise<void>>()
+
+  assertOpen(): void {
+    if (!this.open) throw createInactiveQueueError()
+  }
+
+  async admit(enqueue: () => Promise<void>): Promise<void> {
+    this.assertOpen()
+    const operation = Promise.resolve().then(enqueue)
+    this.pending.add(operation)
+    try {
+      await operation
+    } finally {
+      this.pending.delete(operation)
+    }
+  }
+
+  async drainAndClose(): Promise<void> {
+    // 每次 await 期间可能又开始入队；必须在同一同步片段内观察空集合并关闭。
+    while (this.pending.size > 0) await Promise.allSettled([...this.pending])
+    this.close()
+  }
+
+  close(): void {
+    this.open = false
+  }
+
+  reopen(): void {
+    this.open = true
+  }
+}
+
+export async function recoverUnconsumedPiQueuedMessages(
+  admission: PiQueuedMessageAdmissionGate,
+  session: Pick<AgentSession, 'pendingMessageCount' | 'clearQueue'>,
+  canContinue: () => boolean,
+): Promise<string[]> {
+  await admission.drainAndClose()
+  if (!canContinue() || session.pendingMessageCount === 0) return []
+  const unconsumed = session.clearQueue()
+  return [...unconsumed.steering, ...unconsumed.followUp]
+}
+
+/** 用 Pi 公开 core 入队边界的对象身份确认消费，避免按文本猜测或重发已消费输入。 */
+export class PiQueuedMessageReceiptTracker {
+  private readonly storage = new AsyncLocalStorage<{ message?: AgentMessage }>()
+  private readonly consumed = new WeakSet<AgentMessage>()
+  private readonly restore: () => void
+  private readonly unsubscribe: () => void
+  private pending = 0
+  private disposed = false
+
+  constructor(private readonly agent: Agent, private readonly onConsumedError: (error: unknown) => void) {
+    const steer = agent.steer
+    const followUp = agent.followUp
+    const capture = (message: AgentMessage): void => {
+      const receipt = this.storage.getStore()
+      if (receipt) receipt.message = message
+    }
+    const wrappedSteer: Agent['steer'] = (message) => { capture(message); steer.call(agent, message) }
+    const wrappedFollowUp: Agent['followUp'] = (message) => { capture(message); followUp.call(agent, message) }
+    agent.steer = wrappedSteer
+    agent.followUp = wrappedFollowUp
+    this.restore = () => {
+      if (agent.steer === wrappedSteer) agent.steer = steer
+      if (agent.followUp === wrappedFollowUp) agent.followUp = followUp
+      this.storage.disable()
+    }
+    this.unsubscribe = agent.subscribe((event) => {
+      if (event.type === 'message_end') this.consumed.add(event.message)
+    })
+  }
+
+  async submit(enqueue: () => Promise<void>, isCurrent: () => boolean): Promise<void> {
+    const receipt: { message?: AgentMessage } = {}
+    const wasConsumed = (): boolean => receipt.message !== undefined
+      && (this.consumed.has(receipt.message) || this.agent.state.messages.includes(receipt.message))
+    this.pending += 1
+    try {
+      try {
+        await this.storage.run(receipt, enqueue)
+      } catch (error) {
+        if (wasConsumed()) {
+          // 提交已经成功，错误仍交给原 query 上报；不能把这条输入变成可重发消息。
+          this.onConsumedError(error)
+          return
+        }
+        if (!isCurrent()) throw createInactiveQueueError()
+        throw error
+      }
+      // 未入队表示 SDK input hook 主动 handled，保留其成功语义。
+      if (receipt.message && !wasConsumed() && !isCurrent()) throw createInactiveQueueError()
+    } finally {
+      this.pending -= 1
+      if (this.disposed && this.pending === 0) this.restore()
+    }
+  }
+
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.unsubscribe()
+    // 晚到的 SDK 入队仍需留下回执；只在最后一个在途调用退出后恢复旧 Agent 方法。
+    if (this.pending === 0) this.restore()
+  }
 }
 
 interface PendingInterruptPrompt {
@@ -427,6 +547,7 @@ function createActivePiSession(): ActivePiSession {
     interrupting: false,
     pendingInterruptPrompts: [],
     pendingSkillActivations: new PendingPromptSkillActivationTracker(),
+    queuedMessageAdmission: new PiQueuedMessageAdmissionGate(),
     readySettled: false,
     disposed: false,
   }
@@ -1389,6 +1510,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
 
   async *query(input: PiAgentQueryOptions): AsyncIterable<SDKMessage> {
     const active = createActivePiSession()
+    if (input.compactRequest) active.queuedMessageAdmission.close()
     this.activeSessions.set(input.sessionId, active)
     const queue = createAsyncQueue<SDKMessage>()
     const runtimeGuard = createAgentRuntimeGuard(input)
@@ -1402,6 +1524,9 @@ export class PiAgentAdapter implements AgentProviderAdapter {
 
     const cleanupActiveSession = (): void => {
       try {
+        active.queuedMessageAdmission.close()
+        active.queuedMessageReceipts?.dispose()
+        rejectActiveReady(active, createInactiveQueueError())
         unsubscribe?.()
         unsubscribe = undefined
         if (!active.disposed) {
@@ -1635,6 +1760,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       installRuntimeGuardHooks(session, runtimeGuard)
       installCurrentSessionCompactionHooks(session)
       active.session = session
+      active.queuedMessageReceipts = new PiQueuedMessageReceiptTracker(session.agent, (error) => queue.fail(error))
       resolveActiveReady(active, session)
 
       if (active.abortRequested) {
@@ -1923,6 +2049,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             skipSkillExpansion: boolean
             skillMentions?: string[]
             userMessageUuid?: string
+            skipPiPromptExpansion?: boolean
           } | undefined = {
             content: appendOutputFormatInstruction(input.prompt, input.outputFormat),
             skipSkillExpansion: false,
@@ -1930,6 +2057,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             userMessageUuid: input.initialUserMessageUuid,
           }
           let nextInterrupt: PendingInterruptPrompt | undefined
+          const unconsumedQueuedPrompts: string[] = []
           while (nextPrompt !== undefined) {
             const currentInterrupt = nextInterrupt
             nextInterrupt = undefined
@@ -1969,7 +2097,18 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                 return
               }
               currentInterrupt?.resolveAccepted()
-              await session.prompt(prompt, { source: 'rpc' })
+              await session.prompt(prompt, {
+                source: 'rpc',
+                ...(promptInput.skipPiPromptExpansion ? { expandPromptTemplates: false } : {}),
+              })
+              // SDK 入队可能晚于本轮最后一次队列检查。先关闭本轮接收，再把已经接受
+              // 但尚未消费的消息带入 prompt chain，不能在 dispose 时静默丢弃。
+              unconsumedQueuedPrompts.push(...await recoverUnconsumedPiQueuedMessages(
+                active.queuedMessageAdmission,
+                session,
+                () => !active.abortRequested && !runtimeGuard.shouldStopBeforeNextTurn(),
+              ))
+              if (unconsumedQueuedPrompts.length > 0) pendingTerminalResult = undefined
               persistPiEntryBindings()
               if (compactContextRequested) {
                 try {
@@ -2022,10 +2161,17 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             nextInterrupt = pendingInterrupt
             if (pendingInterrupt) {
               nextPrompt = { content: pendingInterrupt.content, skipSkillExpansion: true }
+            } else if (unconsumedQueuedPrompts.length > 0) {
+              nextPrompt = {
+                content: unconsumedQueuedPrompts.shift()!,
+                skipSkillExpansion: true,
+                skipPiPromptExpansion: true,
+              }
             } else if (pendingCompactionContinuation) {
               nextPrompt = { content: pendingCompactionContinuation, skipSkillExpansion: true }
               pendingCompactionContinuation = undefined
             }
+            if (nextPrompt !== undefined) active.queuedMessageAdmission.reopen()
           }
         }
 
@@ -2054,6 +2200,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     const active = this.activeSessions.get(sessionId)
     if (!active) return
     active.abortRequested = true
+    active.queuedMessageAdmission.close()
     rejectPendingInterruptPrompts(active, createAbortError())
     if (!active.session) rejectActiveReady(active, createAbortError())
     active.session?.abortCompaction()
@@ -2066,9 +2213,15 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     options?: SendQueuedMessageOptions,
   ): Promise<void> {
     const active = this.activeSessions.get(sessionId)
-    if (!active) throw new Error('当前会话没有正在运行的 Agent')
+    if (!active) throw createInactiveQueueError()
+    const assertCurrentSession = (): void => {
+      if (active.abortRequested) throw createAbortError()
+      if (active.disposed || this.activeSessions.get(sessionId) !== active) throw createInactiveQueueError()
+      active.queuedMessageAdmission.assertOpen()
+    }
+    assertCurrentSession()
     const session = await waitForActiveSession(active)
-    if (active.abortRequested) throw createAbortError()
+    assertCurrentSession()
     if (active.runtimeGuard?.shouldStopBeforeNextTurn()) {
       session.agent.clearAllQueues()
       const stopOverride = active.runtimeGuard.getLimitResultOverride()
@@ -2082,6 +2235,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         active.skillWorkspaceSlug,
       )
       : { content: message.message.content, activations: [] }
+    assertCurrentSession()
     const content = preparedPrompt.content
     const skillActivationId = registerPromptSkillActivations(
       active,
@@ -2120,11 +2274,13 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       return
     }
     try {
-      if (message.priority === 'now') {
-        await session.steer(content)
-      } else {
-        await session.followUp(content)
-      }
+      await active.queuedMessageAdmission.admit(() => {
+        assertCurrentSession()
+        const enqueue = () => message.priority === 'now' ? session.steer(content) : session.followUp(content)
+        return active.queuedMessageReceipts
+          ? active.queuedMessageReceipts.submit(enqueue, () => !active.abortRequested && !active.disposed && this.activeSessions.get(sessionId) === active)
+          : enqueue()
+      })
     } catch (error) {
       active.pendingSkillActivations.discard(skillActivationId)
       throw error
@@ -2142,6 +2298,8 @@ export class PiAgentAdapter implements AgentProviderAdapter {
 
   dispose(): void {
     for (const active of this.activeSessions.values()) {
+      active.queuedMessageAdmission.close()
+      active.queuedMessageReceipts?.dispose()
       if (!active.disposed) {
         active.disposed = true
         rejectPendingInterruptPrompts(active, createAbortError())

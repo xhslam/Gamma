@@ -10,6 +10,7 @@ beforeAll(async () => {
     import { Provider, createStore } from 'jotai'
     import { Toaster } from 'sonner'
     import { AgentView } from '@/components/agent/AgentView'
+    import { useGlobalAgentListeners } from '@/hooks/useGlobalAgentListeners'
     import { TooltipProvider } from '@/components/ui/tooltip'
     import { channelsAtom } from '@/atoms/channel-atoms'
     import { richTextRenderingEnabledAtom } from '@/atoms/ui-preferences'
@@ -29,12 +30,13 @@ beforeAll(async () => {
       async mount(options = {}) {
         const store = createStore(), root = createRoot(document.getElementById('root'));
         store.set(richTextRenderingEnabledAtom, true);
-        const calls = [], saves = [], retries = [], disk = options.disk ?? [];
-        const listeners = { queue: new Set(), stream: new Set() };
+        const calls = [], routes = [], saves = [], retries = [], created = [], queuedAccepted = [], disk = options.disk ?? [];
+        const listeners = { queue: new Set(), stream: new Set(), complete: new Set() };
         let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
         const pendingSubmissions = [];
-        const submit = input => {
+        const submit = (input, route) => {
           calls.push(input);
+          routes.push(route);
           return new Promise((resolve, reject) => {
             rejectSend = reject; resolveSend = resolve;
             pendingSubmissions.push({ resolve, reject });
@@ -42,8 +44,8 @@ beforeAll(async () => {
         };
         const subscribe = name => callback => { listeners[name].add(callback); return () => listeners[name].delete(callback); };
         const api = {
-          onAgentQueuedMessageStatus: subscribe('queue'), onAgentStreamEvent: subscribe('stream'),
-          sendAgentMessage: submit, submitOrEnqueueAgentMessage: submit,
+          onAgentQueuedMessageStatus: subscribe('queue'), onAgentStreamEvent: subscribe('stream'), onAgentStreamComplete: subscribe('complete'),
+          sendAgentMessage: input => submit(input, 'direct'), submitOrEnqueueAgentMessage: input => submit(input, 'submit'),
           saveAgentSendOutbox: async entry => {
             saves.push(structuredClone(entry));
             if (options.failPersist) throw new Error('磁盘写入失败');
@@ -56,13 +58,15 @@ beforeAll(async () => {
             if (options.waitRetry) await new Promise(resolve => { resolveRetry = resolve; });
             if (options.failRetry) throw new Error('仍然离线');
             const index = disk.findIndex(entry => entry.id === input.messageId && entry.sessionId === input.sessionId);
+            if (options.retryDisposition === 'queued' && index >= 0) queuedAccepted.push({ input: structuredClone(disk[index].input), queuedAt: Date.now() });
             if (index >= 0) disk.splice(index, 1);
-            return { disposition: 'started' };
+            return { disposition: options.retryDisposition ?? 'started' };
           },
-          getQueuedAgentMessages: async () => options.mainAccepted && calls[0]?.queueMessageId ? [{ input: calls[0], queuedAt: 1 }] : [],
+          getQueuedAgentMessages: async () => options.mainAccepted && calls[0]?.queueMessageId ? [{ input: calls[0], queuedAt: 1 }] : structuredClone(queuedAccepted),
           listActiveAgentSessionSnapshots: async () => options.mainAccepted && calls[0]?.startedAt ? [{ sessionId: calls[0].sessionId, startedAt: calls[0].startedAt }] : [],
           getPiReasoningCapability: async () => undefined,
-          getAgentSessionSDKMessages: async () => [],
+          getAgentSessionSDKMessages: async id => id === 'a' ? structuredClone(options.history ?? []) : [],
+          createAgentSession: async () => { const meta = session('new-session'); created.push(meta); return meta; },
           getAgentSessionPath: async () => '/fixture', getWorkspaceFilesPath: async () => '/fixture',
           getWorkspaceAttachedFiles: async () => [],
           getWorkspaceCapabilities: async () => ({ skills: [], mcpServers: [] }),
@@ -88,20 +92,27 @@ beforeAll(async () => {
         const quote = { text: '原选区正文', filePath: '/fixture/原文件.md', sourceType: 'file', capturedAt: 1 };
         if (options.quote) store.set(quotedSelectionMapAtom, new Map([['a', quote]]));
         let active = 'a';
+        const GlobalListeners = () => { useGlobalAgentListeners(); return null; };
         const render = () => root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null,
-          React.createElement(React.Fragment, null, React.createElement(AgentView, { sessionId: active, embedded: true }), React.createElement(Toaster)))));
+          React.createElement(React.Fragment, null, options.globalListeners && React.createElement(GlobalListeners), React.createElement(AgentView, { sessionId: active, embedded: true }), React.createElement(Toaster)))));
         render();
         await until(() => document.querySelector('.tiptap')?.editor);
         await delay(100);
         const editor = () => document.querySelector('.tiptap').editor;
         const key = () => document.querySelector('.tiptap').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
         if (options.initialText !== '') editor().commands.insertContent(options.initialText ?? '<p>失败草稿<strong>保留格式</strong></p>');
-        return { store, root, calls, saves, retries, disk, editor, key, resolveRetry: () => resolveRetry(),
+        return { store, root, calls, routes, saves, retries, created, disk, editor, key, resolveRetry: () => resolveRetry(),
           resolve: () => resolveSend({ disposition: 'queued' }),
-          resolveDuplicate: () => resolveSend({ disposition: 'already_accepted' }),
+          resolveDuplicate: () => resolveSend({ disposition: 'accepted' }),
+          resolveWith: result => resolveSend(result),
           resolveAt: index => pendingSubmissions[index].resolve({ disposition: 'queued' }),
           emitStream: event => { for (const listener of listeners.stream) listener(event); },
+          emitQueue: event => { for (const listener of listeners.queue) listener(event); },
+          emitComplete: event => { for (const listener of listeners.complete) listener(event); },
           running: () => store.get(atoms.agentStreamingStatesAtom).get('a')?.running ?? false,
+          streamState: (id = 'a') => store.get(atoms.agentStreamingStatesAtom).get(id),
+          queue: (id = 'a') => store.get(atoms.agentSessionMessageQueueAtom).get(id) ?? [],
+          liveMessages: (id = 'a') => store.get(atoms.liveMessagesMapAtom).get(id) ?? [],
           newQuote: () => store.set(quotedSelectionMapAtom, new Map([['a', { ...quote, text: '新选区正文', capturedAt: 2 }]])),
           quote: id => store.get(quotedSelectionMapAtom).get(id),
           addNewFile: () => store.set(atoms.agentPendingFilesAtomFamily('a'), previous => [...previous, { id: 'new-file', filename: '新附件.txt', mediaType: 'text/plain', size: 1, sourcePath: '/fixture/new.txt' }]),
@@ -128,6 +139,48 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
+  test('When renderer 空闲但主进程仍忙 Then 统一提交并转为队列，不能留下虚假的运行和已发送气泡', async () => {
+    expect(await renderer.run<{ routes: string[]; dispatch: string; queued: number; running: boolean; messages: number; draft: string }>(`
+      const api = window.sendRecovery, f = await api.mount(); f.key();
+      await api.until(() => f.calls.length === 1);
+      f.resolveWith({ disposition: 'queued' });
+      await api.delay(80);
+      const first = { running: f.running(), messages: f.messages('a').length, draft: f.draft('a') };
+      f.editor().commands.insertContent('主进程收尾时的下一条消息'); f.key();
+      await api.until(() => f.calls.length === 2); f.resolveWith({ disposition: 'queued' });
+      await api.delay(60);
+      const result = { routes: f.routes, dispatch: f.calls[0].dispatch, queued: f.queue().length, ...first };
+      f.root.unmount(); return result;
+    `)).toEqual({ routes: ['submit', 'submit'], dispatch: 'after_current', queued: 2, running: false, messages: 0, draft: '' })
+  }, 30_000)
+
+  test('When 主进程立即确认启动 Then 不等待任务完成就可提交下一条消息', async () => {
+    expect(await renderer.run<{ routes: string[]; running: boolean; messages: number; queued: number }>(`
+      const api = window.sendRecovery, f = await api.mount(); f.key();
+      await api.until(() => f.calls.length === 1); f.resolveWith({ disposition: 'started' }); await api.delay(60);
+      const first = { running: f.running(), messages: f.messages('a').length };
+      f.editor().commands.insertContent('任务执行中的消息'); f.key();
+      await api.until(() => f.calls.length === 2); f.resolveWith({ disposition: 'queued' }); await api.delay(60);
+      const result = { routes: f.routes, ...first, queued: f.queue().length }; f.root.unmount(); return result;
+    `)).toEqual({ routes: ['submit', 'submit'], running: true, messages: 1, queued: 1 })
+  }, 30_000)
+
+  test('When started 先到且 queued 回执晚到 Then 保留权威新 run，旧 complete 不清运行态且后续仍可排队', async () => {
+    expect(await renderer.run<{ generation: number; queuedBefore: number; running: boolean; calls: number; queuedAfter: number }>(`
+      const api = window.sendRecovery, f = await api.mount({ globalListeners: true }); f.key();
+      await api.until(() => f.calls.length === 1);
+      const input = f.calls[0], startedAt = Date.now() + 10;
+      f.emitQueue({ sessionId: 'a', messageId: input.userMessageUuid, status: 'started', userMessage: input.userMessage, rawUserMessage: input.rawUserMessage, startedAt, runGeneration: 2 });
+      f.resolveWith({ disposition: 'queued' }); await api.delay(60);
+      f.emitComplete({ sessionId: 'a', messages: [], startedAt: startedAt - 1, runGeneration: 1, stoppedByUser: false });
+      await api.delay(60);
+      const first = { generation: f.streamState()?.runGeneration, queuedBefore: f.queue().length, running: f.running() };
+      f.editor().commands.insertContent('旧完成事件之后继续发送'); f.key();
+      await api.until(() => f.calls.length === 2); f.resolveWith({ disposition: 'queued' }); await api.delay(60);
+      const result = { ...first, calls: f.calls.length, queuedAfter: f.queue().length }; f.root.unmount(); return result;
+    `)).toEqual({ generation: 2, queuedBefore: 0, running: true, calls: 2, queuedAfter: 1 })
+  }, 30_000)
+
   for (const confirmation of ['run_started', 'sdk_message']) {
     test(`When ${confirmation} 已确认首条消息但 IPC 仍在等待整轮任务 Then 可继续排队且旧请求收尾不解锁新提交`, async () => {
       expect(await renderer.run<{ before: number; after: number; queued: boolean; oldFinishKeptLock: boolean; running: boolean }>(`
@@ -299,6 +352,22 @@ describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
 })
 
 describe('Given 持久化发送日志与真实 AgentView', () => {
+  test('When Agent 运行中显式重试失败项 Then 原消息排队且保留当前运行和新草稿，双击只提交一次', async () => {
+    expect(await renderer.run<{ enabled: boolean; retries: number; automatic: number; queued: number; sameId: boolean; draft: string; running: boolean; startedAt: number }>(`
+      const api = window.sendRecovery, first = await api.mount(); first.key();
+      await api.until(() => first.calls.length === 1); first.reject(); await api.until(() => first.disk[0]?.status === 'failed');
+      const disk = first.disk, id = disk[0].id; first.root.unmount(); await api.delay(30);
+      const f = await api.mount({ disk, streaming: true, retryDisposition: 'queued', waitRetry: true, initialText: '正在写的新草稿' });
+      await api.until(() => document.querySelector('[aria-label="待恢复消息"]'));
+      const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent === '重试发送');
+      const enabled = !button.disabled; button.click(); button.click();
+      if (enabled) { await api.until(() => f.retries.length === 1); f.editor().commands.insertContent('继续编辑'); f.resolveRetry(); await api.until(() => f.queue().length === 1); }
+      const state = f.streamState(), result = { enabled, retries: f.retries.length, automatic: f.calls.length, queued: f.queue().length,
+        sameId: f.queue()[0]?.id === id, draft: f.editor().getText(), running: f.running(), startedAt: state?.startedAt };
+      f.root.unmount(); return result;
+    `)).toEqual({ enabled: true, retries: 1, automatic: 0, queued: 1, sameId: true, draft: '正在写的新草稿继续编辑', running: true, startedAt: 1 })
+  }, 30_000)
+
   test('When 点击发送 Then 网络调用前已保存完整正文、HTML、附件与引用快照', async () => {
     const result = await renderer.run<{ saves: number; id: string; sentId: string; html: string; text: string; attachments: number; includesQuote: boolean }>(`
       const f = await window.sendRecovery.mount({ attachment: true, quote: true }); f.key();
@@ -456,6 +525,28 @@ describe('Given 已审查的重试时序边界', () => {
 })
 
 describe('Given 主进程稳定ID回执', () => {
+  for (const action of ['compact', 'retry', 'retry_in_new_session']) {
+    test(`When ${action} 在主进程收尾期排队 Then 使用统一入口且重复点击不重复执行，并撤销临时运行状态`, async () => {
+      expect(await renderer.run<{ routes: string[]; calls: number; queued: number; running: boolean; compacting: boolean; live: number; created: number; stableId: boolean }>(`
+        const api = window.sendRecovery, action = ${JSON.stringify(action)};
+        const history = [
+          { type: 'user', uuid: 'old-user', message: { content: [{ type: 'text', text: '需要继续的任务' }] }, parent_tool_use_id: null, _createdAt: 1 },
+          { type: 'assistant', uuid: 'old-error', message: { content: [] }, error: { message: '上轮执行失败', errorType: 'unknown_error' }, _errorCode: 'unknown_error', _errorActions: [{ action, label: '执行恢复动作' }], parent_tool_use_id: null, _createdAt: 2 },
+        ];
+        const f = await api.mount({ history, initialText: '' });
+        await api.until(() => Array.from(document.querySelectorAll('button')).some(button => button.textContent === '执行恢复动作'));
+        const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent === '执行恢复动作');
+        button.click(); button.click(); await api.until(() => f.calls.length === 1);
+        const input = f.calls[0], target = input.sessionId; f.resolveWith({ disposition: 'queued' }); await api.delay(80);
+        const state = f.streamState(target);
+        const result = { routes: f.routes, calls: f.calls.length, queued: f.queue(target).length, running: state?.running ?? false,
+          compacting: !!(state?.isCompacting || state?.compactInFlight), live: f.liveMessages(target).length, created: f.created.length,
+          stableId: !!input.userMessageUuid && input.userMessageUuid === input.queueMessageId };
+        f.root.unmount(); return result;
+      `)).toEqual({ routes: ['submit'], calls: 1, queued: 1, running: false, compacting: false, live: 0, created: action === 'retry_in_new_session' ? 1 : 0, stableId: true })
+    }, 30_000)
+  }
+
   test('When 旧窗口重复提交已接收的恢复草稿 Then 回滚乐观消息和运行态但不恢复重复正文', async () => {
     expect(await renderer.run<{ sameId: boolean; draft: string; running: boolean; messages: number }>(`
       const f = await window.sendRecovery.mount(); f.key();

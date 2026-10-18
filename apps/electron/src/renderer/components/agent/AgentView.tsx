@@ -120,6 +120,7 @@ import {
   agentSideTemporaryAgentMapAtom,
   getExplorationSidePanelTab,
 } from '@/atoms/agent-atoms'
+import type { AgentStreamState } from '@/atoms/agent-atoms'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { longTextPasteAsAttachmentEnabledAtom } from '@/atoms/ui-preferences'
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/channel-atoms'
@@ -2064,6 +2065,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     let expectedDraft = originalDraft
     let cleared = false
     let accepted = false
+    let messageStarted = false
     let queuedMessageId: string | undefined
     let sentStartedAt: number | undefined
     let optimisticMessage: SDKMessage | undefined
@@ -2166,21 +2168,22 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         }
       }
     }
-    // SEND_MESSAGE 的 IPC 会等待整轮运行结束，提交锁只能保护接管前的准备阶段。
-    // 收到匹配本次请求的权威接收事件后即可继续排队；旧请求 finally 不能解锁新提交。
-    const confirmAccepted = (): void => {
+    // 提交锁只覆盖接管前的准备阶段，运行生命周期由主进程事件维护。
+    // 启动事件可能早于接收回执；旧请求 finally 不能解锁新提交。
+    const confirmAccepted = (started = false): void => {
       accepted = true
+      messageStarted ||= started
       sendGuardRef.current.finish(sessionId, requestId)
     }
     const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
-      if (status.sessionId === sessionId && status.messageId === queuedMessageId) confirmAccepted()
+      if (status.sessionId === sessionId && status.messageId === queuedMessageId) confirmAccepted(true)
     })
     const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
       if (event.sessionId !== sessionId) return
       if (event.payload.kind === 'gamma_event' && event.payload.event.type === 'run_started'
-        && sentStartedAt !== undefined && event.payload.event.startedAt === sentStartedAt) confirmAccepted()
+        && sentStartedAt !== undefined && event.payload.event.startedAt === sentStartedAt) confirmAccepted(true)
       if (event.payload.kind === 'sdk_message'
-        && (event.payload.message as SDKMessageRecord).uuid === outboxMessageId) confirmAccepted()
+        && (event.payload.message as SDKMessageRecord).uuid === outboxMessageId) confirmAccepted(true)
     })
     try {
       const additionalDirectoriesForRun = createBaseAdditionalDirectories()
@@ -2329,7 +2332,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         session.id === sessionId && session.isDraft ? { ...session, isDraft: false } : session
       )))
 
-      // 初始化流式状态（startedAt 由渲染进程生成，传递给主进程原样回传，确保竞态保护使用同一个值）
+      // 发送准备期间展示临时运行态；主进程启动事件会以真实运行身份替换它。
       const streamStartedAt = Date.now()
       sentStartedAt = streamStartedAt
       setStreamingStates((prev) => {
@@ -2382,9 +2385,27 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       // Enter 路径会显式传入已刷新的编辑器内容，因此也应清空。
       clearSubmittedDraft()
 
-      const result = await window.electronAPI.sendAgentMessage(input)
-      accepted = true
-      if (result?.disposition === 'already_accepted') {
+      queuedMessageId = outboxMessageId
+      // 空闲与运行中的普通消息都交给同一入口，renderer 的展示快照不能决定能否启动。
+      const result = await window.electronAPI.submitOrEnqueueAgentMessage({
+        ...input,
+        queueMessageId: outboxMessageId,
+        dispatch: 'after_current',
+      })
+      confirmAccepted()
+      if (result.disposition === 'queued' && !messageStarted) {
+        // 主进程可能还在上一轮的启动或收尾阶段。只撤销本请求的临时投影，
+        // 已建立 runGeneration 的真实运行态绝不能被这条回执清除。
+        rollbackLocalSubmission()
+        const message = createAgentQueuedMessage(effectiveText, outboxMessageId, Date.now(), quotedSelection, attachmentContext
+          ? {
+              fileReferenceBlock: attachmentContext.referenceBlock,
+              attachments: attachmentContext.attachments,
+              additionalDirectories: attachmentContext.additionalDirectories,
+            }
+          : undefined)
+        setQueuedMessages((prev) => prev.some((item) => item.id === message.id) ? prev : [...prev, message])
+      } else if (result.disposition === 'accepted') {
         rollbackLocalSubmission()
         toast.info('此消息已被 Agent 接收，未重复发送')
       }
@@ -2472,13 +2493,35 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   }, [readOutboxDraftContext, recoveryState, restoreQueuedAttachmentsToPending, sessionId, setInputContent, setInputHtmlContent, store])
 
   const handleRetryOutbox = React.useCallback(async (entry: AgentSendOutboxEntry): Promise<void> => {
-    if (entry.sessionId !== sessionId || streaming || backgroundWaiting || isStopping || isLegacyTranscript) return
+    if (entry.sessionId !== sessionId || isStopping || isLegacyTranscript) return
     const requestId = sendGuardRef.current.begin(sessionId)
     if (!requestId) return
     setOutboxRetry({ sessionId, id: entry.id, requestId })
+    let messageStarted = false
+    const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
+      if (status.sessionId === sessionId && status.messageId === entry.id) messageStarted = true
+    })
+    const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
+      if (event.sessionId === sessionId && event.payload.kind === 'sdk_message'
+        && (event.payload.message as SDKMessageRecord).uuid === entry.id) messageStarted = true
+    })
     // 重试发送持久化快照，绝不读取新草稿拼接到旧消息。
     try {
-      await window.electronAPI.retryAgentSendOutbox({ sessionId, messageId: entry.id })
+      const result = await window.electronAPI.retryAgentSendOutbox({ sessionId, messageId: entry.id })
+      if (result.disposition === 'queued' && !messageStarted) {
+        // 重试使用主进程重新验证后的目录；队列展示保留草稿中的引用与附件。
+        const snapshots = await window.electronAPI.getQueuedAgentMessages(sessionId).catch(() => [])
+        const snapshot = snapshots.find(({ input }) => input.queueMessageId === entry.id)
+        if (!messageStarted) {
+          const attachments = entry.draft.attachments
+          const message = createAgentQueuedMessage(entry.draft.text, entry.id, snapshot?.queuedAt ?? entry.createdAt, null, {
+            attachments,
+            ...(attachments.length > 0 ? { fileReferenceBlock: `<attached_files>\n${attachments.map((file) => `- ${file.filename}: ${file.targetPath}`).join('\n')}\n</attached_files>\n\n` } : {}),
+            additionalDirectories: snapshot?.input.additionalDirectories,
+          })
+          setQueuedMessages((previous) => previous.some((item) => item.id === entry.id) ? previous : [...previous, message])
+        }
+      }
       if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
       const restored = recoveryState.restoredOutboxDrafts.get(sessionId)
       const current = {
@@ -2513,11 +2556,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     } catch (error) {
       toast.error('暂存消息重试失败', { description: String(error) })
     } finally {
+      unsubscribeQueue()
+      unsubscribeStream()
       sendGuardRef.current.finish(sessionId, requestId)
       setOutboxRetry((current) => current?.requestId === requestId ? null : current)
       await refreshOutbox()
     }
-  }, [sessionId, streaming, backgroundWaiting, isStopping, isLegacyTranscript, refreshOutbox, readOutboxDraftContext, recoveryState, store, setInputContent, setInputHtmlContent, setPendingFiles, setQuotedSelectionMap])
+  }, [sessionId, isStopping, isLegacyTranscript, refreshOutbox, readOutboxDraftContext, recoveryState, store, setInputContent, setInputHtmlContent, setPendingFiles, setQuotedSelectionMap, setQueuedMessages])
 
   /** 停止生成。异常流未发出终态时，允许再次下发幂等的 abort 请求。 */
   const handleStop = React.useCallback((): void => {
@@ -2542,12 +2587,73 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (!streaming) setIsStopping(false)
   }, [streaming])
 
+  /** 压缩、重试与新会话续聊也只提交一次，接收回执与真实运行生命周期分开维护。 */
+  const submitCommandOrRetry = React.useCallback(async (
+    input: AgentSendInput,
+    previousState: AgentStreamState | undefined,
+    optimisticUuid?: string,
+  ): Promise<void> => {
+    const requestId = sendGuardRef.current.begin(input.sessionId)
+    if (!requestId) return
+    const messageId = input.userMessageUuid ?? crypto.randomUUID()
+    let messageStarted = false
+    const rollbackProvisional = (): void => {
+      store.set(agentSessionStreamingStateAtomFamily(input.sessionId), (current) => {
+        if (current?.startedAt !== input.startedAt
+          || (current?.runGeneration != null && current.runGeneration !== previousState?.runGeneration)) return current
+        return previousState
+      })
+      if (optimisticUuid) store.set(liveMessagesMapAtom, (previous) => {
+        const current = previous.get(input.sessionId)
+        if (!current?.some((message) => (message as SDKMessageRecord).uuid === optimisticUuid)) return previous
+        const next = new Map(previous)
+        next.set(input.sessionId, current.filter((message) => (message as SDKMessageRecord).uuid !== optimisticUuid))
+        return next
+      })
+    }
+    const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
+      if (status.sessionId === input.sessionId && status.messageId === messageId) messageStarted = true
+    })
+    const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
+      if (event.sessionId === input.sessionId && event.payload.kind === 'sdk_message'
+        && (event.payload.message as SDKMessageRecord).uuid === messageId) messageStarted = true
+    })
+    try {
+      const result = await window.electronAPI.submitOrEnqueueAgentMessage({
+        ...input, queueMessageId: messageId, userMessageUuid: messageId, dispatch: 'after_current',
+      })
+      if (result.disposition === 'queued' && !messageStarted) {
+        rollbackProvisional()
+        const message = createAgentQueuedMessage(input.rawUserMessage ?? input.userMessage, messageId, input.startedAt ?? Date.now(), null, {
+          additionalDirectories: input.additionalDirectories,
+        })
+        store.set(agentMessageQueueAtomFamily(input.sessionId), (previous) => previous.some((item) => item.id === messageId) ? previous : [...previous, message])
+      } else if (result.disposition === 'accepted' && !messageStarted) {
+        rollbackProvisional()
+        toast.info('此消息已被 Agent 接收，未重复发送')
+      }
+    } catch (error) {
+      if (messageStarted) {
+        toast.info('消息已被 Agent 接收', { description: '提交响应异常，请以会话中的实际运行结果为准。' })
+      } else {
+        rollbackProvisional()
+        console.error('[AgentView] 命令或重试提交失败:', error)
+        toast.error('消息发送失败', { description: String(error) })
+      }
+    } finally {
+      unsubscribeQueue()
+      unsubscribeStream()
+      sendGuardRef.current.finish(input.sessionId, requestId)
+    }
+  }, [store])
+
   /** 手动发送 /compact 命令 */
   const handleCompact = React.useCallback((): void => {
-    if (!agentChannelId || streaming) return
+    if (!agentChannelId || streaming || sendGuardRef.current.isPending(sessionId)) return
 
     const streamStartedAt = Date.now()
     const localUuid = crypto.randomUUID()
+    const previousState = store.get(agentSessionStreamingStateAtomFamily(sessionId))
 
     // 1. 立即注入合成用户消息（/compact 气泡立刻可见，与普通发送路径一致）
     const syntheticMsg: import('@gamma/shared').SDKMessage = {
@@ -2586,34 +2692,17 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       return map
     })
 
-    window.electronAPI.sendAgentMessage({
+    void submitCommandOrRetry({
       sessionId,
+      userMessageUuid: localUuid,
       userMessage: '/compact',
       channelId: agentChannelId,
       modelId: agentModelId || undefined,
       workspaceId: currentWorkspaceId || undefined,
       startedAt: streamStartedAt,
       permissionModeOverride: permissionMode,
-    }).catch((error) => {
-      console.error('[AgentView] /compact 发送失败:', error)
-      // 回滚：移除合成用户消息 + 清除 isCompacting flag
-      store.set(liveMessagesMapAtom, (prev) => {
-        const map = new Map(prev)
-        const current = (map.get(sessionId) ?? []).filter(
-          (m) => (m as unknown as { uuid?: string }).uuid !== localUuid,
-        )
-        map.set(sessionId, current)
-        return map
-      })
-      setStreamingStates((prev) => {
-        const map = new Map(prev)
-        const current = prev.get(sessionId)
-        if (!current) return prev
-        map.set(sessionId, { ...current, isCompacting: false, compactInFlight: false })
-        return map
-      })
-    })
-  }, [sessionId, agentChannelId, agentModelId, currentWorkspaceId, streaming, setStreamingStates, store, permissionMode])
+    }, previousState, localUuid)
+  }, [sessionId, agentChannelId, agentModelId, currentWorkspaceId, streaming, setStreamingStates, store, permissionMode, submitCommandOrRetry])
 
   /** 复制错误信息到剪贴板 */
   const handleCopyError = React.useCallback(async (): Promise<void> => {
@@ -2660,7 +2749,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
   /** 重试：在当前会话中重新发送最后一条用户消息 */
   const handleRetry = React.useCallback((retryOfErrorUuid?: string): void => {
-    if (!agentChannelId || streaming) return
+    if (!agentChannelId || streaming || sendGuardRef.current.isPending(sessionId)) return
 
     // 找到最后一条用户消息
     const lastUserRawMessage = [...persistedSDKMessages]
@@ -2689,8 +2778,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       return map
     })
 
-    // 初始化流式状态（startedAt 由渲染进程生成，传递给主进程原样回传）
+    // 发送准备期间展示临时运行态，排队回执会撤销，真实启动事件会替换它。
     const streamStartedAt = Date.now()
+    const previousState = store.get(agentSessionStreamingStateAtomFamily(sessionId))
     setStreamingStates((prev) => {
       const map = new Map(prev)
       const existing = prev.get(sessionId)
@@ -2704,7 +2794,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       return map
     })
 
-    window.electronAPI.sendAgentMessage({
+    void submitCommandOrRetry({
       sessionId,
       // Agent 侧使用解码后的文本（@file 真实路径）；持久化/展示保留编码原文，避免新历史记录被 \S+ 截断
       userMessage: lastUserMessage,
@@ -2715,12 +2805,14 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       startedAt: streamStartedAt,
       permissionModeOverride: permissionMode,
       ...(retryOfErrorUuid && { retryOfErrorUuid }),
-    }).catch(console.error)
-  }, [persistedSDKMessages, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, setAgentStreamErrors, setStreamingStates, setMessagesCache, permissionMode])
+    }, previousState)
+  }, [persistedSDKMessages, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, setAgentStreamErrors, setStreamingStates, setMessagesCache, permissionMode, store, submitCommandOrRetry])
 
   /** 在新对话继续：创建新会话 + 切换 tab + 使用 &session 引用旧会话 */
   const handleRetryInNewSession = React.useCallback(async (): Promise<void> => {
     if (!agentChannelId) return
+    const requestId = sendGuardRef.current.begin(sessionId)
+    if (!requestId) return
 
     try {
       const meta = await window.electronAPI.createAgentSession(
@@ -2746,7 +2838,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         return map
       })
 
-      window.electronAPI.sendAgentMessage({
+      await submitCommandOrRetry({
         sessionId: meta.id,
         userMessage: prompt,
         channelId: agentChannelId,
@@ -2755,11 +2847,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         mentionedSessionIds: [sessionId],
         startedAt: streamStartedAt,
         permissionModeOverride: permissionMode,
-      }).catch(console.error)
+      }, undefined)
     } catch (error) {
       console.error('[AgentView] 在新会话中重试失败:', error)
+    } finally {
+      sendGuardRef.current.finish(sessionId, requestId)
     }
-  }, [sessionId, agentChannelId, agentModelId, currentWorkspaceId, openSession, setAgentSessions, setStreamingStates, permissionMode])
+  }, [sessionId, agentChannelId, agentModelId, currentWorkspaceId, openSession, setAgentSessions, setStreamingStates, permissionMode, submitCommandOrRetry])
 
   /** 从回复节点创建 Pi `/tree` 探索分支，并在当前主线的右侧工作区继续。 */
   const handleFork = React.useCallback(async (upToMessageUuid: string): Promise<void> => {
@@ -3326,7 +3420,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               entries={outboxEntries}
               error={outboxError}
               busyId={retryingOutboxId}
-              disabled={isComposerDisabled || streaming || backgroundWaiting || isStopping || sendGuardRef.current.isPending(sessionId)}
+              disabled={isComposerDisabled || isStopping || sendGuardRef.current.isPending(sessionId)}
               onRetry={(entry) => { void handleRetryOutbox(entry) }}
               onRestore={handleRestoreOutbox}
               onRefresh={() => { void refreshOutbox() }}

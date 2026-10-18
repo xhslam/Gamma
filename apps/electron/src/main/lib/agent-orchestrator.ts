@@ -48,7 +48,6 @@ import { friendlyErrorMessage, isPromptTooLongError, isThinkingSignatureError, m
 import { getActiveRunRejectionMessage, shouldPersistInitialUserMessage } from './agent-send-message-policy'
 import { isSessionNotFoundError } from './error-patterns'
 import { AgentEventBus } from './agent-event-bus'
-import { isStaleActiveQueueError } from './agent-queue-routing'
 import { decryptApiKey, getChannelById, listChannels, persistCodexOAuthCredentials, persistGithubCopilotOAuthCredentials, persistXaiOAuthCredentials, resolveChannelRuntimeApiKey, resolveCodexOAuthCredentials, resolveGithubCopilotOAuthCredentials, resolveXaiOAuthCredentials } from './channel-manager'
 import { getAdapter, fetchTitle } from '@gamma/core'
 import pkg from '../../../package.json' with { type: 'json' }
@@ -119,10 +118,6 @@ const EMPTY_RESPONSE_RESULT_SUBTYPE = 'empty_response'
 
 function errorMessageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-function isMissingActiveQueueChannelError(error: unknown): boolean {
-  return isStaleActiveQueueError(error)
 }
 
 function isPartialSDKMessage(message: SDKMessage): boolean {
@@ -2551,13 +2546,8 @@ export class AgentOrchestrator {
     } catch (error) {
       uuids.delete(uuid)
       this.clearPendingUserSkillActivations(sessionId, uuid)
-      if (isMissingActiveQueueChannelError(error)) {
-        console.warn(`[Agent 编排] 队列注入失败且消息通道已失效，释放陈旧运行状态: sessionId=${sessionId}`)
-        this.activeSessions.delete(sessionId)
-        this.activeSessionStartedAt.delete(sessionId)
-        this.sessionPermissionModes.delete(sessionId)
-        this.queuedMessageUuids.delete(sessionId)
-      }
+      // 注入通道关闭不代表整轮运行结束：Pi 可能还在压缩、续跑或退出清理。
+      // 这里只回滚本条消息，运行槽位及权限由所属 generation 的生命周期统一释放。
       throw error
     }
 
