@@ -2166,16 +2166,21 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         }
       }
     }
-    // 真实 started 事件可能先于 IPC 返回；已被主进程接受的请求绝不能回滚成未发送。
+    // SEND_MESSAGE 的 IPC 会等待整轮运行结束，提交锁只能保护接管前的准备阶段。
+    // 收到匹配本次请求的权威接收事件后即可继续排队；旧请求 finally 不能解锁新提交。
+    const confirmAccepted = (): void => {
+      accepted = true
+      sendGuardRef.current.finish(sessionId, requestId)
+    }
     const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
-      if (status.sessionId === sessionId && status.messageId === queuedMessageId) accepted = true
+      if (status.sessionId === sessionId && status.messageId === queuedMessageId) confirmAccepted()
     })
     const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
       if (event.sessionId !== sessionId) return
       if (event.payload.kind === 'gamma_event' && event.payload.event.type === 'run_started'
-        && event.payload.event.startedAt === sentStartedAt) accepted = true
+        && sentStartedAt !== undefined && event.payload.event.startedAt === sentStartedAt) confirmAccepted()
       if (event.payload.kind === 'sdk_message'
-        && (event.payload.message as SDKMessageRecord).uuid === outboxMessageId) accepted = true
+        && (event.payload.message as SDKMessageRecord).uuid === outboxMessageId) confirmAccepted()
     })
     try {
       const additionalDirectoriesForRun = createBaseAdditionalDirectories()
@@ -3026,7 +3031,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     setInputHasContent(hasContent)
   }, [])
   const hasTextInput = inputHasContent
-  const canSend = !isStopping && messagesLoaded && (streaming || !messagesRefreshing) && (hasTextInput || pendingFiles.length > 0 || !!suggestion) && agentChannelId !== null && hasAvailableModel && (!streaming || hasTextInput)
+  const canSend = !isStopping && messagesLoaded && (streaming || !messagesRefreshing) && (hasTextInput || pendingFiles.length > 0 || !!suggestion) && agentChannelId !== null && hasAvailableModel
 
   const inputToolbarItems = React.useMemo<ToolbarItem[]>(() => [
     ...(isCodexFastModeAvailable ? [{
@@ -3162,6 +3167,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         void handleSend(latestContent, true)
       }}
       disabled={!canSend}
+      aria-label={streaming ? '排队发送消息' : '发送消息'}
     >
       <CornerDownLeft className="size-[22px]" />
     </Button>
@@ -3169,7 +3175,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
   const sendControl = streaming ? (
     <>
-      {hasTextInput && sendButton}
+      {(hasTextInput || pendingFiles.length > 0) && sendButton}
       {stopControl}
     </>
   ) : sendButton
