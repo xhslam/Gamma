@@ -103,6 +103,7 @@ import type {
   AgentSubmitOrEnqueueInput,
   AgentSubmitOrEnqueueResult,
   AgentQueuedMessageControlInput,
+  AgentCancelQueuedMessageInput,
   AgentMoveQueuedMessageInput,
   AgentQueuedMessageStatus,
   AgentQueuedMessageSnapshot,
@@ -561,7 +562,7 @@ export interface ElectronAPI {
   submitOrEnqueueAgentMessage: (input: AgentSubmitOrEnqueueInput) => Promise<AgentSubmitOrEnqueueResult>
   /** 将等待当前 run 结束的消息交给主进程（兼容旧调用）。 */
   enqueueAgentQueuedMessage: (input: AgentDeferredQueueMessageInput) => Promise<void>
-  cancelAgentQueuedMessage: (input: AgentQueuedMessageControlInput) => Promise<boolean>
+  cancelAgentQueuedMessage: (input: AgentCancelQueuedMessageInput) => Promise<boolean>
   moveAgentQueuedMessage: (input: AgentMoveQueuedMessageInput) => Promise<boolean>
   onAgentQueuedMessageStatus: (callback: (status: AgentQueuedMessageStatus) => void) => () => void
   /** 获取主进程持有的 deferred queue 快照；用于 renderer 重载恢复队列 UI。 */
@@ -1760,7 +1761,7 @@ const electronAPI: ElectronAPI = {
   enqueueAgentQueuedMessage: (input: AgentDeferredQueueMessageInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE, input)
   },
-  cancelAgentQueuedMessage: (input: AgentQueuedMessageControlInput) => {
+  cancelAgentQueuedMessage: (input: AgentCancelQueuedMessageInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CANCEL_QUEUED_MESSAGE, input)
   },
   moveAgentQueuedMessage: (input: AgentMoveQueuedMessageInput) => {

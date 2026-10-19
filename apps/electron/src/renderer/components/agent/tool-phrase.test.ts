@@ -38,7 +38,13 @@ describe('长期记忆工具展示状态 (tool-phrase)', () => {
     expect(clickPhrase.loadingLabel).toBe('正在操作 Safari：打开网页...')
 
     const successSummary = getToolResultSummary('computer', JSON.stringify({ message: '动作已投递' }), false)
-    expect(successSummary).toBe('已完成')
+    expect(successSummary).toBe('已投递，待验证')
+
+    expect(getToolResultSummary('computer', JSON.stringify({ observationId: 'new', message: '观察已捕获' }), false)).toBe('已返回新观察')
+    expect(getToolResultSummary('computer', JSON.stringify({ observationStability: 'timeout', message: '动作已投递' }), false)).toBe('已投递，界面待稳定')
+    for (const [action, intent] of [['get_app_state', '观察应用状态'], ['set_value', '替换控件文本'], ['select_text', '选择文本或定位光标'], ['paste', '粘贴文本并保护剪贴板']]) {
+      expect(getToolPhrase('computer', { action, app: 'Notes' }).label).toBe(`操作 Notes：${intent}`)
+    }
 
     const interruptedSummary = getToolResultSummary('computer', JSON.stringify({ interrupted: true, reason: '检测到用户接管' }), false)
     expect(interruptedSummary).toContain('已中断')

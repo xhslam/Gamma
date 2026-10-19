@@ -1,4 +1,4 @@
-import type { AgentQueuedMessageControlInput, AgentSendOutboxEntry, AgentSendOutboxRetryResult, AgentSubmitOrEnqueueInput, AgentSubmitOrEnqueueResult } from '@gamma/shared'
+import type { AgentCancelQueuedMessageInput, AgentQueuedMessageControlInput, AgentSendOutboxEntry, AgentSendOutboxRetryResult, AgentSubmitOrEnqueueInput, AgentSubmitOrEnqueueResult } from '@gamma/shared'
 import type { AgentSendOutbox } from './agent-send-outbox'
 
 interface AgentSendOutboxRecoveryOptions {
@@ -31,6 +31,13 @@ export class AgentSendOutboxRecovery {
 
   save(entry: AgentSendOutboxEntry): void {
     if (!this.acknowledge(entry.sessionId).has(entry.id)) this.options.outbox.save(entry)
+  }
+
+  /** 同步检查、落盘和取消之间不让出事件循环；落盘失败时保留原队列，不能只撤销展示。 */
+  cancelQueued(input: AgentCancelQueuedMessageInput, cancel: () => boolean): boolean {
+    if (!this.options.queuedIds(input.sessionId).has(input.messageId)) return false
+    if (input.preserveSendOutbox !== true) this.options.outbox.discard(input.sessionId, input.messageId)
+    return cancel()
   }
 
   retry(input: AgentQueuedMessageControlInput, submit: (input: AgentSubmitOrEnqueueInput) => Promise<AgentSubmitOrEnqueueResult>): Promise<AgentSendOutboxRetryResult> {

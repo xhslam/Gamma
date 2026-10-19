@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentSendOutboxEntry } from '@gamma/shared'
@@ -76,6 +76,33 @@ describe('Given 主进程恢复协调器', () => {
   test('When 迟到失败回调试图写回已确认消息 Then 不复活旧日志', () => {
     const f = fixture(); f.accepted.add('message'); f.recovery.save(f.entry)
     expect(f.outbox.list('session')).toEqual([])
+  })
+  test('When 用户撤回队列消息 Then 同步清理发送日志，重启后不再复活为失败消息', () => {
+    const f = fixture(); f.queued.add('message')
+    expect(f.recovery.cancelQueued(f.control, () => f.queued.delete('message'))).toBe(true)
+    expect(f.queued.size).toBe(0)
+    expect(new AgentSendOutbox((id) => join(f.dir, `${id}.json`)).list('session')).toEqual([])
+    expect(f.recovery.list('session')).toEqual([])
+  })
+  test('When 为立即插队取消原队列 Then 保留发送日志直到实际接收，不因 IPC 失败丢失消息', () => {
+    const f = fixture(); f.queued.add('message')
+    expect(f.recovery.cancelQueued({ ...f.control, preserveSendOutbox: true }, () => f.queued.delete('message'))).toBe(true)
+    expect(f.queued.size).toBe(0)
+    expect(f.outbox.list('session')).toEqual([f.entry])
+    expect(f.recovery.list('session')).toHaveLength(1)
+  })
+  test('When 消息已经开始执行 Then 撤回失败且不删除日志，也不调用取消', () => {
+    const f = fixture(); let cancelled = false
+    expect(f.recovery.cancelQueued(f.control, () => { cancelled = true; return true })).toBe(false)
+    expect(cancelled).toBe(false)
+    expect(f.outbox.list('session')).toEqual([f.entry])
+  })
+  test('When 撤回时发送日志不可写 Then 保留主进程队列与原文件，不仅移除界面', () => {
+    const f = fixture(); f.queued.add('message')
+    const path = join(f.dir, 'session.json'); writeFileSync(path, '{broken')
+    expect(() => f.recovery.cancelQueued(f.control, () => f.queued.delete('message'))).toThrow()
+    expect(f.queued.has('message')).toBe(true)
+    expect(readFileSync(path, 'utf8')).toBe('{broken')
   })
   test('When 附件被删除、撤销授权或符号链接越界 Then 不恢复旧授权', () => {
     const f = fixture(); const allowed = join(f.dir, 'allowed'), external = join(f.dir, 'external')

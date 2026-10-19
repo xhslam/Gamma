@@ -2,6 +2,7 @@ export interface CodeFieldRipple {
   x: number
   y: number
   startedAt: number
+  strength?: number
 }
 
 export const CODE_FIELD_RIPPLE_LIFETIME = 1800
@@ -17,7 +18,7 @@ export function sampleCodeFieldRipple(ripples: readonly CodeFieldRipple[], x: nu
     const radius = age * 0.24
     const crest = Math.exp(-(((distance - radius) / 20) ** 2))
     const wake = Math.exp(-(((distance - radius + 36) / 28) ** 2)) * 0.3
-    strength += (crest + wake) * (1 - age / CODE_FIELD_RIPPLE_LIFETIME) ** 2
+    strength += (crest + wake) * (1 - age / CODE_FIELD_RIPPLE_LIFETIME) ** 2 * (ripple.strength ?? 1)
   }
   return Math.min(1, strength)
 }

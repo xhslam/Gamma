@@ -1,9 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElectronRendererHarness } from '../../../test-utils/electron-renderer'
 import type { ElectronRendererHarness } from '../../../test-utils/electron-renderer'
+import type { AgentSendOutboxEntry } from '@gamma/shared'
+import { parseSendOutboxEntry } from '../../../main/lib/agent-send-outbox'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 let renderer: ElectronRendererHarness
+let validationDirectory: string
 beforeAll(async () => {
+  validationDirectory = await mkdtemp(join(tmpdir(), 'gamma-send-ipc-'))
+  const validationModule = join(validationDirectory, 'outbox.cjs')
+  const build = await Bun.build({ entrypoints: [resolve(import.meta.dir, '../../../main/lib/agent-send-outbox.ts')], target: 'node', format: 'cjs' })
+  if (!build.success || !build.outputs[0]) throw new Error('发送校验 IPC 测试构建失败')
+  await writeFile(validationModule, await build.outputs[0].text())
   renderer = await createElectronRendererHarness(`
     import React from 'react'
     import { createRoot } from 'react-dom/client'
@@ -30,7 +41,7 @@ beforeAll(async () => {
       async mount(options = {}) {
         const store = createStore(), root = createRoot(document.getElementById('root'));
         store.set(richTextRenderingEnabledAtom, true);
-        const calls = [], routes = [], saves = [], retries = [], created = [], queuedAccepted = [], disk = options.disk ?? [];
+        const calls = [], routes = [], saves = [], retries = [], created = [], cancellations = [], queuedAccepted = [], disk = options.disk ?? [];
         const listeners = { queue: new Set(), stream: new Set(), complete: new Set() };
         let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
         const pendingSubmissions = [];
@@ -38,8 +49,14 @@ beforeAll(async () => {
           calls.push(input);
           routes.push(route);
           return new Promise((resolve, reject) => {
-            rejectSend = reject; resolveSend = resolve;
-            pendingSubmissions.push({ resolve, reject });
+            const receive = result => {
+              if (options.trackMainQueue && result.disposition === 'queued' && !queuedAccepted.some(entry => entry.input.queueMessageId === input.queueMessageId)) {
+                queuedAccepted.push({ input: structuredClone(input), queuedAt: Date.now() });
+              }
+              resolve(result);
+            };
+            rejectSend = reject; resolveSend = receive;
+            pendingSubmissions.push({ resolve: receive, reject });
           });
         };
         const subscribe = name => callback => { listeners[name].add(callback); return () => listeners[name].delete(callback); };
@@ -49,6 +66,7 @@ beforeAll(async () => {
           saveAgentSendOutbox: async entry => {
             saves.push(structuredClone(entry));
             if (options.failPersist) throw new Error('磁盘写入失败');
+            await window.outboxValidation.save(entry);
             const index = disk.findIndex(item => item.id === entry.id && item.sessionId === entry.sessionId);
             if (index < 0) disk.push(structuredClone(entry)); else disk[index] = structuredClone(entry);
           },
@@ -61,6 +79,17 @@ beforeAll(async () => {
             if (options.retryDisposition === 'queued' && index >= 0) queuedAccepted.push({ input: structuredClone(disk[index].input), queuedAt: Date.now() });
             if (index >= 0) disk.splice(index, 1);
             return { disposition: options.retryDisposition ?? 'started' };
+          },
+          cancelAgentQueuedMessage: async input => {
+            cancellations.push(structuredClone(input));
+            if (options.failCancel) throw new Error('取消队列失败');
+            const index = queuedAccepted.findIndex(entry => entry.input.queueMessageId === input.messageId && entry.input.sessionId === input.sessionId);
+            if (index < 0) return false;
+            if (!input.preserveSendOutbox) {
+              const logIndex = disk.findIndex(entry => entry.id === input.messageId && entry.sessionId === input.sessionId);
+              if (logIndex >= 0) disk.splice(logIndex, 1);
+            }
+            queuedAccepted.splice(index, 1); return true;
           },
           getQueuedAgentMessages: async () => options.mainAccepted && calls[0]?.queueMessageId ? [{ input: calls[0], queuedAt: 1 }] : structuredClone(queuedAccepted),
           listActiveAgentSessionSnapshots: async () => options.mainAccepted && calls[0]?.startedAt ? [{ sessionId: calls[0].sessionId, startedAt: calls[0].startedAt }] : [],
@@ -101,7 +130,7 @@ beforeAll(async () => {
         const editor = () => document.querySelector('.tiptap').editor;
         const key = () => document.querySelector('.tiptap').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
         if (options.initialText !== '') editor().commands.insertContent(options.initialText ?? '<p>失败草稿<strong>保留格式</strong></p>');
-        return { store, root, calls, routes, saves, retries, created, disk, editor, key, resolveRetry: () => resolveRetry(),
+        return { store, root, calls, routes, saves, retries, created, disk, cancellations, queuedAccepted, editor, key, resolveRetry: () => resolveRetry(),
           resolve: () => resolveSend({ disposition: 'queued' }),
           resolveDuplicate: () => resolveSend({ disposition: 'accepted' }),
           resolveWith: result => resolveSend(result),
@@ -134,11 +163,113 @@ beforeAll(async () => {
         };
       }
     };
-  `)
+  `, {
+    mainProcessSetup: `
+      const { ipcMain } = require('electron');
+      const { AgentSendOutbox } = require(${JSON.stringify(validationModule)});
+      const outbox = new AgentSendOutbox(id => require('node:path').join(${JSON.stringify(validationDirectory)}, process.pid + '-' + id + '.json'));
+      ipcMain.handle('test:save-send-outbox', (_, entry) => outbox.save(entry));
+    `,
+    preloadSource: `
+      const { contextBridge, ipcRenderer } = require('electron');
+      contextBridge.exposeInMainWorld('outboxValidation', { save: entry => ipcRenderer.invoke('test:save-send-outbox', entry) });
+    `,
+  })
 }, 90_000)
-afterAll(async () => { await renderer?.dispose() })
+afterAll(async () => {
+  await renderer?.dispose()
+  if (validationDirectory) await rm(validationDirectory, { recursive: true, force: true })
+})
 
 describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
+  for (const streaming of [false, true]) {
+    for (const text of ['普通文字消息', '/skill:gamma-coach', '#mcp:example', '&session:other-session', '&todo:todo-1', '&calendar_event:event-1']) {
+      test(`When ${streaming ? '工作中排队' : '空闲发送'} ${text} Then 真实主进程暂存校验接受同一份发送参数`, async () => {
+        const snapshots = await renderer.run<AgentSendOutboxEntry[]>(`
+          const api = window.sendRecovery, f = await api.mount({ streaming: ${streaming}, initialText: '' });
+          f.editor().commands.insertContent(${JSON.stringify(text)});
+          await api.delay(); document.querySelector('button[aria-label="${streaming ? '排队发送消息' : '发送消息'}"]').click();
+          await api.until(() => f.calls.length === 1);
+          const result = structuredClone(f.saves); f.resolve(); await api.delay(30); f.root.unmount(); return result;
+        `)
+        expect(snapshots).toHaveLength(1)
+        for (const snapshot of snapshots) {
+          expect(() => parseSendOutboxEntry(snapshot, snapshot.sessionId)).not.toThrow()
+          expect(snapshot.input.userMessage.trim()).not.toBe('')
+          expect(snapshot.input.dispatch).toBe('after_current')
+        }
+      }, 30_000)
+    }
+  }
+  test('When 工作中排队后撤回 Then 正文和附件回到输入框，保留新草稿与新选区且清除暂存日志', async () => {
+    expect(await renderer.run<{ queued: number; mainQueued: number; disk: number; files: number; oldText: boolean; newText: boolean; html: boolean; quote: string; inlineQuote: boolean }>(`
+      const api = window.sendRecovery, f = await api.mount({ streaming: true, trackMainQueue: true, attachment: true, quote: true });
+      f.key(); await api.until(() => f.calls.length === 1); f.resolve();
+      await api.until(() => !!document.querySelector('button[aria-label="撤回到输入框"]'));
+      f.editor().commands.insertContent('<p>新草稿<strong>新格式</strong></p>'); f.newQuote();
+      document.querySelector('button[aria-label="撤回到输入框"]').click();
+      await api.until(() => f.queue().length === 0 && f.editor().getText().includes('失败草稿'));
+      const result = { queued: f.queue().length, mainQueued: f.queuedAccepted.length, disk: f.disk.length, files: f.files('a').length,
+        oldText: f.editor().getText().includes('失败草稿'), newText: f.editor().getText().includes('新草稿'), html: f.html('a').includes('<strong>新格式</strong>'),
+        quote: f.quote('a').text, inlineQuote: f.draft('a').includes('&quote:') };
+      f.root.unmount(); return result;
+    `)).toEqual({ queued: 0, mainQueued: 0, disk: 0, files: 1, oldText: true, newText: true, html: true, quote: '新选区正文', inlineQuote: true })
+  }, 30_000)
+
+  test('When 点击立即插队两次 Then 同一 ID 只插队一次，保留当前新草稿并传递中断意图', async () => {
+    expect(await renderer.run<{ calls: number; cancellations: number; dispatch: string; interrupt: boolean; sameId: boolean; preserved: boolean; queued: number; draft: string }>(`
+      const api = window.sendRecovery, f = await api.mount({ streaming: true, trackMainQueue: true });
+      f.key(); await api.until(() => f.calls.length === 1); f.resolve();
+      await api.until(() => !!document.querySelector('button[aria-label="立即插队（打断当前执行）"]'));
+      f.editor().commands.insertContent('继续编辑的新草稿');
+      const button = document.querySelector('button[aria-label="立即插队（打断当前执行）"]'); button.click(); button.click();
+      await api.until(() => f.calls.length === 2); f.resolveWith({ disposition: 'injected' }); await api.delay();
+      const result = { calls: f.calls.length, cancellations: f.cancellations.length, dispatch: f.calls[1].dispatch, interrupt: f.calls[1].interrupt,
+        sameId: f.calls[0].queueMessageId === f.calls[1].queueMessageId, preserved: f.cancellations[0].preserveSendOutbox,
+        queued: f.queue().length, draft: f.editor().getText() }; f.root.unmount(); return result;
+    `)).toEqual({ calls: 2, cancellations: 1, dispatch: 'now', interrupt: true, sameId: true, preserved: true, queued: 0, draft: '继续编辑的新草稿' })
+  }, 30_000)
+
+  for (const response of ['queued', 'rejected']) {
+    test(`When 插队启动事件先于 ${response} 回执 Then 不复活队列消息、不再次提交`, async () => {
+      expect(await renderer.run<{ calls: number; queued: number; failed: boolean }>(`
+        const api = window.sendRecovery, f = await api.mount({ streaming: true, trackMainQueue: true });
+        f.key(); await api.until(() => f.calls.length === 1); f.resolve();
+        await api.until(() => !!document.querySelector('button[aria-label="立即插队（打断当前执行）"]'));
+        document.querySelector('button[aria-label="立即插队（打断当前执行）"]').click();
+        await api.until(() => f.calls.length === 2);
+        f.emitQueue({ sessionId: 'a', messageId: f.calls[1].queueMessageId, status: 'started', startedAt: Date.now() });
+        ${response === 'queued' ? 'f.resolve();' : 'f.reject();'} await api.delay(80);
+        const result = { calls: f.calls.length, queued: f.queue().length, failed: f.disk[0]?.status === 'failed' }; f.root.unmount(); return result;
+      `)).toEqual({ calls: 2, queued: 0, failed: false })
+    }, 30_000)
+  }
+
+  for (const failRestore of [false, true]) {
+    test(`When 插队失败且重新入队${failRestore ? '也失败' : '成功'} Then ${failRestore ? '显式暂存，不显示虚假队列' : '恢复主进程队列，不只恢复界面'}`, async () => {
+      expect(await renderer.run<{ calls: number; queued: number; mainQueued: number; failed: boolean; dispatch: string; interrupt: boolean; sameId: boolean }>(`
+        const api = window.sendRecovery, f = await api.mount({ streaming: true, trackMainQueue: true });
+        f.key(); await api.until(() => f.calls.length === 1); f.resolve();
+        await api.until(() => !!document.querySelector('button[aria-label="立即插队（打断当前执行）"]'));
+        document.querySelector('button[aria-label="立即插队（打断当前执行）"]').click();
+        await api.until(() => f.calls.length === 2); f.reject(); await api.until(() => f.calls.length === 3);
+        ${failRestore ? 'f.reject(); await api.until(() => f.disk[0]?.status === "failed");' : 'f.resolve(); await api.until(() => f.queue().length === 1);'}
+        const result = { calls: f.calls.length, queued: f.queue().length, mainQueued: f.queuedAccepted.length, failed: f.disk[0]?.status === 'failed',
+          dispatch: f.calls[2].dispatch, interrupt: f.calls[2].interrupt, sameId: f.calls.every(input => input.queueMessageId === f.calls[0].queueMessageId) };
+        f.root.unmount(); return result;
+      `)).toEqual({ calls: 3, queued: failRestore ? 0 : 1, mainQueued: failRestore ? 0 : 1, failed: failRestore, dispatch: 'after_current', interrupt: false, sameId: true })
+    }, 30_000)
+  }
+
+  test('When 连续发送前校验失败 Then 保留原草稿且同会话只显示一条失败提示', async () => {
+    expect(await renderer.run<{ toasts: number; calls: number; draft: boolean }>(`
+      const api = window.sendRecovery, f = await api.mount({ streaming: true, failPersist: true });
+      for (let i = 0; i < 3; i++) { f.key(); await api.until(() => f.saves.length === i + 1); await api.delay(80); }
+      const result = { toasts: document.querySelectorAll('[data-sonner-toast]').length, calls: f.calls.length, draft: f.editor().getText().includes('失败草稿') };
+      f.root.unmount(); return result;
+    `)).toEqual({ toasts: 1, calls: 0, draft: true })
+  }, 30_000)
+
   test('When renderer 空闲但主进程仍忙 Then 统一提交并转为队列，不能留下虚假的运行和已发送气泡', async () => {
     expect(await renderer.run<{ routes: string[]; dispatch: string; queued: number; running: boolean; messages: number; draft: string }>(`
       const api = window.sendRecovery, f = await api.mount(); f.key();

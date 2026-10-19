@@ -331,6 +331,8 @@ export function parseQueuedMessageMentions(text: string): ParsedQueuedMessageMen
   }
 
   return {
+    // 只有引用时仍是一条有效用户消息，不能把正文清空后交给暂存/模型入口。
+    // 有普通正文时继续剥离协议；引用本身仍由结构化 ID 注入上下文。
     cleanedText: text
       .replace(REF_PATTERN, '')
       // @file: 路径在 htmlToMarkdown 序列化时已 encodeURIComponent（路径可能含空格），
@@ -341,7 +343,7 @@ export function parseQueuedMessageMentions(text: string): ParsedQueuedMessageMen
           ? `@file:${decodeReferenceLabel(encodedPath)}`
           : full
       )
-      .trim(),
+      .trim() || text.trim(),
     mentionedSkills,
     mentionedMcpServers,
     mentionedSessionIds,

@@ -6,6 +6,22 @@ struct AXTree {
     let text: String, digest: String, root: AXUIElement
     let refs: [String: AXUIElement]
 }
+/// 与AX句柄无关的有界序列化器，离线测试可验证refs不会污染布局摘要。
+struct AXObservationBuffer {
+    private var lines: [String] = [], canonical: [String] = []
+    private(set) var bytes = 0
+    var count: Int { lines.count }
+    var text: String { lines.joined(separator: "\n") }
+    var digest: String { SHA256.hash(data: Data(canonical.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined() }
+    mutating func append(entry: String, content: String = "", ref: String? = nil) -> Bool {
+        let line = ref.map { "ref=\($0) \(entry)" } ?? entry
+        guard count < 256, bytes + line.utf8.count + 1 <= 32_700 else { return false }
+        lines.append(line); bytes += line.utf8.count + 1
+        canonical.append(entry + " content=" + SHA256.hash(data: Data(content.utf8)).map { String(format: "%02x", $0) }.joined())
+        return true
+    }
+}
+
 final class AccessibilityWorker {
     // 仅从串行worker调用；每次访问都有单元素超时、总节点/深度/时间预算。
     private var ends: TimeInterval = 0
@@ -50,52 +66,73 @@ final class AccessibilityWorker {
         guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与CG窗口不是唯一PID、标题、几何匹配") }
         return matches[0]
     }
+    private func actionNames(_ element: AXUIElement) throws -> [String] {
+        try budget(); AXUIElementSetMessagingTimeout(element, 0.08)
+        var raw: CFArray?
+        let result = AXUIElementCopyActionNames(element, &raw)
+        if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX动作枚举超时，不重试") }
+        if result == .actionUnsupported || result == .attributeUnsupported || result == .noValue { return [] }
+        guard result == .success, let names = raw as? [String], names.count <= 64,
+              names.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 }) else { throw NativeFailure("ax-actions", "AX动作枚举失败或超过预算") }
+        return names.sorted()
+    }
     func read(_ target: Target, allowSurfaces: Bool = false) throws -> AXTree {
         let root = try matchedWindow(target)
-        ends = ProcessInfo.processInfo.systemUptime + 1.2
-        var lines: [String] = [], canonical: [String] = [], refs: [String: AXUIElement] = [:]
-        var seen: [AXUIElement] = [], totalBytes = 0
+        ends = ProcessInfo.processInfo.systemUptime + 2.0
+        var output = AXObservationBuffer(), refs: [String: AXUIElement] = [:]
+        var seen: [AXUIElement] = []
+        func field(_ text: String, limit: Int = 256) -> String { String(reflecting: String(text.prefix(limit))) }
         func visit(_ element: AXUIElement, depth: Int) throws {
             try budget()
-            guard depth <= 8, seen.count < 96, totalBytes < 28_000, !seen.contains(where: { CFEqual($0, element) }) else { return }
+            guard depth <= 12, seen.count < 256, output.bytes < 32_700, !seen.contains(where: { CFEqual($0, element) }) else { return }
             seen.append(element)
             let role = try string(element, kAXRoleAttribute) ?? "unknown"
             let subrole = try string(element, kAXSubroleAttribute) ?? ""
             guard allowSurfaces || !isUnscopedAXSurface(role: role, subrole: subrole, depth: depth) else { throw NativeFailure("unscoped-surface", "附属窗口、sheet、菜单或弹出面板不继承所选窗口授权") }
-            let secure = role == "unknown" || role == kAXSecureTextFieldSubrole || subrole == kAXSecureTextFieldSubrole || subrole.localizedCaseInsensitiveContains("secure") || subrole.localizedCaseInsensitiveContains("password")
+            let secure = isHiddenAXControl(role: role, subrole: subrole)
+            // 安全/未知控件不读标题、描述、AXValue、动作、几何及子树，也不提供引用。
+            if secure {
+                let entry = "\(depth) [安全或未知控件：已隐藏]"
+                _ = output.append(entry: entry)
+                return
+            }
             let frame = try rect(element)
-            // 不读取AXValue：安全控件的标题/描述也可能包含敏感提示，整个子树略过。
-            let title = secure ? "[安全或未知控件：已隐藏]" : String((try string(element, kAXTitleAttribute) ?? "").prefix(160))
+            let title = try string(element, kAXTitleAttribute) ?? ""
+            let description = try string(element, kAXDescriptionAttribute) ?? ""
+            guard title.utf16.count <= 1_048_576, description.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX元数据超过读取预算") }
+            let names = try actionNames(element)
+            var text = ""
+            if [kAXTextFieldRole, kAXTextAreaRole, kAXStaticTextRole, kAXComboBoxRole].contains(role) {
+                text = try string(element, kAXValueAttribute) ?? ""
+                guard text.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX文本值超过读取预算") }
+            }
             let geometry = frame.map { "\($0.origin.x),\($0.origin.y),\($0.width),\($0.height)" } ?? "unknown"
-            let entry = "\(depth) \(role) \(subrole) frame=\(geometry) title=\(title)"
-            canonical.append(entry)
+            let entry = "\(depth) role=\(field(role)) subrole=\(field(subrole)) frame=\(geometry) title=\(field(title)) description=\(field(description, limit: 384)) value=\(field(text, limit: 768)) actions=\(field(names.joined(separator: ","), limit: 2048))"
             let ref = UUID().uuidString
-            let line = "ref=\(ref) \(entry)"
-            if totalBytes + line.utf8.count + 1 <= 28_000 { lines.append(line); totalBytes += line.utf8.count + 1 }
-            if !secure { refs[ref] = element }
-            guard !secure, depth < 8, seen.count < 96 else { return }
-            // CopyAttributeValues限制返回量，避免先拷贝不受限数组。
+            // 摘要不含随机ref，完整文本/动作的哈希也参与核验，避免截断文本变化被忽略。
+            let content = String(decoding: try JSONEncoder().encode([title, description, text] + names), as: UTF8.self)
+            guard output.append(entry: entry, content: content, ref: ref) else { return }
+            refs[ref] = element
+            guard depth < 12, seen.count < 256 else { return }
             var children: CFArray?
-            let result = AXUIElementCopyAttributeValues(element, kAXChildrenAttribute as CFString, 0, 96 - seen.count, &children)
-            if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX子树读取超时") }
+            let result = AXUIElementCopyAttributeValues(element, kAXChildrenAttribute as CFString, 0, 256 - seen.count, &children)
+            if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX子树读取超时，不重试") }
             if result == .success, let items = children as? [AXUIElement] {
                 for child in items { try visit(child, depth: depth + 1) }
             }
         }
         try visit(root, depth: 0)
-        let digest = SHA256.hash(data: Data(canonical.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined()
-        return AXTree(text: lines.joined(separator: "\n"), digest: digest, root: root, refs: refs)
+        return AXTree(text: output.text, digest: output.digest, root: root, refs: refs)
     }
     func validateElement(_ element: AXUIElement, target: Target, root: AXUIElement) throws {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         var node = element
-        for _ in 0..<12 {
+        for _ in 0..<16 {
             var pid: pid_t = 0
             guard AXUIElementGetPid(node, &pid) == .success, pid == target.pid,
-                  let role = try string(node, kAXRoleAttribute), role != "unknown" else { throw NativeFailure("unsafe-element", "AX元素身份不明") }
+                  let role = try string(node, kAXRoleAttribute) else { throw NativeFailure("unsafe-element", "AX元素身份不明") }
             let subrole = try string(node, kAXSubroleAttribute) ?? ""
-            guard role != kAXSecureTextFieldSubrole, subrole != kAXSecureTextFieldSubrole,
-                  !subrole.localizedCaseInsensitiveContains("secure"), !subrole.localizedCaseInsensitiveContains("password") else { throw NativeFailure("secure-field", "拒绝安全字段及其子元素") }
+            guard !isHiddenAXControl(role: role, subrole: subrole) else { throw NativeFailure("secure-field", "拒绝安全或未知字段及其子元素") }
             if CFEqual(node, root) { return }
             guard let parent = try value(node, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
             node = unsafeBitCast(parent, to: AXUIElement.self)
@@ -131,7 +168,7 @@ final class AccessibilityWorker {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         let role = try string(element, kAXRoleAttribute)
         let subrole = try string(element, kAXSubroleAttribute)
-        let secure = role == nil || role == kAXSecureTextFieldSubrole || subrole?.localizedCaseInsensitiveContains("secure") == true || subrole?.localizedCaseInsensitiveContains("password") == true
+        let secure = isHiddenAXControl(role: role, subrole: subrole)
         // 绝不读取AXValue，安全控件不读取标题/描述。
         let title = secure ? nil : try string(element, kAXTitleAttribute).map { String($0.prefix(256)) }
         let description = secure ? nil : try string(element, kAXDescriptionAttribute).map { String($0.prefix(512)) }
@@ -159,20 +196,95 @@ final class AccessibilityWorker {
         guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "焦点窗口无法唯一关联CG窗口") }
         return matches[0]
     }
-    func performAX(_ action: Action, element: AXUIElement, target: Target, root: AXUIElement, beforeDispatch: () throws -> Void) throws -> AXError {
-        try validateElement(element, target: target, root: root)
-        if action.kind == "axPress" {
-            var actions: CFArray?
-            guard AXUIElementCopyActionNames(element, &actions) == .success,
-                  (actions as? [String])?.contains(kAXPressAction) == true else { throw NativeFailure("unsupported-action", "元素不支持AXPress") }
-            try beforeDispatch()
-            return AXUIElementPerformAction(element, kAXPressAction as CFString)
-        }
-        let role = try string(element, kAXRoleAttribute)
-        guard role == kAXTextFieldRole || role == kAXTextAreaRole else { throw NativeFailure("unsafe-element", "仅允许设置非安全文本控件") }
+    private func attributeSettable(_ element: AXUIElement, _ attribute: String) throws -> Bool {
+        try budget()
         var settable = DarwinBoolean(false)
-        guard AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success, settable.boolValue else { throw NativeFailure("unsupported-action", "元素值不可设置") }
+        let result = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+        if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX可写检查超时，不重试") }
+        if result == .attributeUnsupported || result == .noValue { return false }
+        guard result == .success else { throw NativeFailure("ax-capability", "无法确认AX属性可写能力") }
+        return settable.boolValue
+    }
+    private func requireSettable(_ element: AXUIElement, _ attribute: String) throws {
+        guard try attributeSettable(element, attribute) else { throw NativeFailure("unsupported-action", "控件不支持设置所需AX属性") }
+    }
+    func editableText(_ element: AXUIElement, target: Target, root: AXUIElement) throws -> String {
+        try validateElement(element, target: target, root: root)
+        let role = try string(element, kAXRoleAttribute)
+        guard role == kAXTextFieldRole || role == kAXTextAreaRole || role == kAXComboBoxRole else { throw NativeFailure("unsafe-element", "仅允许明确的非安全可编辑文本控件") }
+        try requireSettable(element, kAXValueAttribute)
+        guard let text = try string(element, kAXValueAttribute), text.utf16.count <= 1_048_576 else { throw NativeFailure("unsafe-element", "无法有界读取可编辑文本") }
+        return text
+    }
+    private func selectedRange(_ element: AXUIElement) throws -> CFRange {
+        guard let raw = try value(element, kAXSelectedTextRangeAttribute), CFGetTypeID(raw) == AXValueGetTypeID() else { throw NativeFailure("invalid-selection", "无法读取可信AX选区；不猜测插入位置") }
+        let axValue = unsafeBitCast(raw, to: AXValue.self)
+        var range = CFRange(location: -1, length: -1)
+        guard AXValueGetType(axValue) == .cfRange, AXValueGetValue(axValue, .cfRange, &range) else { throw NativeFailure("invalid-selection", "AX选区不是有效UTF16范围") }
+        return range
+    }
+    func textInsertionState(_ element: AXUIElement, target: Target, root: AXUIElement) throws -> TextInsertionState {
+        let original = try editableText(element, target: target, root: root)
+        try requireSettable(element, kAXSelectedTextRangeAttribute)
+        let range = try selectedRange(element)
+        _ = try replacingSelectedText(original: original, range: range, replacement: "")
+        guard CFEqual(try focusedElement(), element),
+              let stableValue = try string(element, kAXValueAttribute), original.utf16.elementsEqual(stableValue.utf16) else { throw NativeFailure("focus-changed", "插入前目标焦点或原文不稳定") }
+        let stableRange = try selectedRange(element)
+        guard stableRange.location == range.location, stableRange.length == range.length else { throw NativeFailure("selection-changed", "读取期间选区已变化，拒绝替换") }
+        return TextInsertionState(value: original, location: range.location, length: range.length)
+    }
+    // prepare、确认后verify及最终dispatch共用同一套实时能力检查。
+    func validateAction(_ action: Action, element: AXUIElement, target: Target, root: AXUIElement) throws {
+        try validateElement(element, target: target, root: root)
+        switch action.kind {
+        case "axPress", "axAction":
+            _ = try validatedAXActionName(kind: action.kind, secondaryAction: action.secondaryAction, supported: actionNames(element))
+        case "axFocus": try requireSettable(element, kAXFocusedAttribute)
+        case "axSetValue": _ = try editableText(element, target: target, root: root)
+        case "axSelectText":
+            let text = try editableText(element, target: target, root: root)
+            try requireSettable(element, kAXSelectedTextRangeAttribute)
+            _ = try selectedTextRange(value: text, selectionText: action.selectionText ?? "", prefix: action.prefix, suffix: action.suffix, selectionType: action.selectionType ?? "text")
+        case "paste":
+            try validateInsertionFormat(action.format ?? "text")
+            let state = try textInsertionState(element, target: target, root: root)
+            _ = try replacingSelectedText(original: state.value, range: state.range, replacement: action.text ?? "")
+        default: break
+        }
+    }
+    func performAX(_ action: Action, element: AXUIElement, target: Target, root: AXUIElement, expectedInsertion: TextInsertionState? = nil, beforeDispatch: () throws -> Void) throws -> AXError {
+        try validateAction(action, element: element, target: target, root: root)
+        let name: String, attribute: String, payload: CFTypeRef?
+        switch action.kind {
+        case "axPress", "axAction": name = action.kind == "axPress" ? kAXPressAction : action.secondaryAction ?? ""; attribute = ""; payload = nil
+        case "axFocus": name = ""; attribute = kAXFocusedAttribute; payload = kCFBooleanTrue
+        case "axSetValue": name = ""; attribute = kAXValueAttribute; payload = (action.text ?? "") as CFString
+        case "paste":
+            // 不使用剪贴板或cmd+v；延迟执行/停止时也没有读取用户原剪贴板的路径。
+            guard let expectedInsertion else { throw NativeFailure("preparation-required", "缺少已绑定的原文与可信选区") }
+            let current = try textInsertionState(element, target: target, root: root)
+            try validateInsertionState(expectedInsertion, current: current)
+            let replacement = action.text ?? ""
+            let fullValue = try replacingSelectedText(original: current.value, range: current.range, replacement: replacement)
+            name = ""
+            if try attributeSettable(element, kAXSelectedTextAttribute) {
+                attribute = kAXSelectedTextAttribute; payload = replacement as CFString
+            } else {
+                // SelectedText不可写时只进行一次确定的全文设置，不发送键盘事件、不尝试其他写路径。
+                try requireSettable(element, kAXValueAttribute)
+                attribute = kAXValueAttribute; payload = fullValue as CFString
+            }
+        case "axSelectText":
+            let text = try editableText(element, target: target, root: root)
+            var range = try selectedTextRange(value: text, selectionText: action.selectionText ?? "", prefix: action.prefix, suffix: action.suffix, selectionType: action.selectionType ?? "text")
+            guard let value = AXValueCreate(.cfRange, &range) else { throw NativeFailure("invalid-selection", "无法构造UTF16文本范围") }
+            name = ""; attribute = kAXSelectedTextRangeAttribute; payload = value
+        default: throw NativeFailure("unsupported-action", "不支持的AX写操作")
+        }
         try beforeDispatch()
-        return AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, (action.text ?? "") as CFString)
+        AXUIElementSetMessagingTimeout(element, 0.08)
+        if let payload { return AXUIElementSetAttributeValue(element, attribute as CFString, payload) }
+        return AXUIElementPerformAction(element, name as CFString)
     }
 }

@@ -27,6 +27,8 @@ struct DisplayResult: Codable { var displayId: UInt32? = nil; let originX: Doubl
 struct ObservationResult: Encodable { let observationId: String; let epoch: Int; let image: ImageResult; let display: DisplayResult?; let ax: String; let targetApp: AppIdentity? }
 struct ResolveAppParams: Decodable { let appName: String }
 struct ResolvedApp: Encodable { let appName: String, bundleId: String; let pid: Int32?; let processIdentity: String? }
+struct ListedApp: Encodable { let appName: String, bundleId: String; let pid: Int32?; let isRunning: Bool }
+struct AppListResult: Encodable { let apps: [ListedApp]; let scope = "running-regular-apps" }
 struct AppIdentity: Codable, Equatable { let name: String, bundleId: String; let pid: Int32; let processIdentity: String }
 struct WindowListResult: Encodable { let windows: [Target] }
 struct ElementContext: Encodable, Equatable {

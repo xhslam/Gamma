@@ -21,10 +21,11 @@ export function parseSendOutboxEntry(value: unknown, sessionId: string): AgentSe
     throw new Error('失败消息快照格式无效')
   }
   const input = value.input
-  if (input.sessionId !== sessionId || input.queueMessageId !== value.id || input.userMessageUuid !== value.id
-    || typeof input.userMessage !== 'string' || !input.userMessage.trim()
-    || typeof input.channelId !== 'string' || !input.channelId
-    || (input.dispatch !== 'now' && input.dispatch !== 'after_current')) throw new Error('失败消息发送参数无效')
+  if (input.sessionId !== sessionId) throw new Error('发送快照的会话不一致')
+  if (input.queueMessageId !== value.id || input.userMessageUuid !== value.id) throw new Error('发送快照的消息 ID 不一致')
+  if (typeof input.userMessage !== 'string' || !input.userMessage.trim()) throw new Error('发送正文为空，请检查消息引用')
+  if (typeof input.channelId !== 'string' || !input.channelId) throw new Error('发送渠道无效，请重新选择渠道')
+  if (input.dispatch !== 'now' && input.dispatch !== 'after_current') throw new Error('发送调度方式无效，请重新提交消息')
   const attachments = value.draft.attachments.map((file: unknown) => {
     if (!isRecord(file) || typeof file.filename !== 'string' || typeof file.mediaType !== 'string'
       || typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size < 0
@@ -87,6 +88,13 @@ export class AgentSendOutbox {
     else entries[index] = entry
     if (entries.length > MAX_OUTBOX_ENTRIES) throw new Error('待恢复消息已达100条，请先处理已有消息')
     this.write(entry.sessionId, entries)
+  }
+
+  /** 用户明确撤回/删除尚未执行的队列消息；调用者须先确认该 ID 仍在主进程队列。 */
+  discard(sessionId: string, messageId: string): void {
+    const entries = this.list(sessionId)
+    const remaining = entries.filter((entry) => entry.id !== messageId)
+    if (remaining.length !== entries.length) this.write(sessionId, remaining)
   }
 
   /** 仅有持久化用户消息的 UUID 证据时调用，不能凭网络响应或启动事件删除日志。 */

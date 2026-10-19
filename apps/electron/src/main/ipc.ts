@@ -265,8 +265,8 @@ import {
   searchAgentSessionReferences,
   resolveAgentCwd,
 } from './lib/agent-session-manager'
-import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce } from './lib/agent-send-outbox-service'
-import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
+import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce, cancelQueuedAgentSend } from './lib/agent-send-outbox-service'
+import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
 import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
 import { askUserService } from './lib/agent-ask-user-service'
@@ -3480,8 +3480,8 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.CANCEL_QUEUED_MESSAGE,
-    async (_, input: import('@gamma/shared').AgentQueuedMessageControlInput): Promise<boolean> => {
-      return cancelAgentQueuedMessage(input)
+    async (_, input: import('@gamma/shared').AgentCancelQueuedMessageInput): Promise<boolean> => {
+      return cancelQueuedAgentSend(input)
     },
   )
 
