@@ -1,17 +1,22 @@
 .code-field-background {
   --code-field-ink: hsl(var(--muted-foreground));
-  --code-field-glow: hsl(205 48% 38%);
+  --code-field-glow: hsl(205 58% 32%);
+  --code-field-base-opacity: 0.15;
+  --code-field-wave-opacity: 0.24;
+  --code-field-glow-opacity: 0.64;
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   user-select: none;
-  opacity: 0.45;
+  opacity: 1;
   mask-image: linear-gradient(to bottom, transparent, black 8%, black 88%, transparent);
 }
 
 .dark .code-field-background {
   --code-field-glow: hsl(205 58% 52%);
-  opacity: 1;
+  --code-field-base-opacity: 0.1;
+  --code-field-wave-opacity: 0.22;
+  --code-field-glow-opacity: 0.62;
 }

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
 import { GAMMA_DEFAULT_PERMISSION_MODE } from '@gamma/shared'
-import type { AgentQueuedMessageControlInput, AgentSendOutboxEntry, AgentSendOutboxRetryResult } from '@gamma/shared'
+import type { AgentCancelQueuedMessageInput, AgentQueuedMessageControlInput, AgentSendOutboxEntry, AgentSendOutboxRetryResult } from '@gamma/shared'
 import { AgentSendOutbox, readPersistedOutboxUserIds } from './agent-send-outbox'
 import { AgentSendOutboxRecovery } from './agent-send-outbox-recovery'
 import { prepareOutboxRetryInput } from './agent-send-outbox-retry-policy'
@@ -9,7 +9,7 @@ import { AgentMessageSubmissionGate } from './agent-message-submission-gate'
 import { getAgentSessionMeta, isAgentSessionDeleting } from './agent-session-manager'
 import { getAgentWorkspace, getProjectFilesPath, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles } from './agent-workspace-manager'
 import { getAgentSessionWorkspacePath, getAgentSessionMessagesPath } from './config-paths'
-import { isAgentSessionBusy, isAgentMessageQueuedOrDispatching, listQueuedAgentMessages, submitOrEnqueueAgentMessage } from './agent-service'
+import { isAgentSessionBusy, isAgentMessageQueuedOrDispatching, listQueuedAgentMessages, submitOrEnqueueAgentMessage, cancelAgentQueuedMessage } from './agent-service'
 
 function resolveOutboxContext(sessionId: string) {
   const session = getAgentSessionMeta(sessionId)
@@ -46,6 +46,9 @@ const recovery = new AgentSendOutboxRecovery({
 
 export function listAgentSendOutbox(sessionId: string): AgentSendOutboxEntry[] { return recovery.list(sessionId) }
 export function saveAgentSendOutbox(entry: AgentSendOutboxEntry): void { recovery.save(entry) }
+export function cancelQueuedAgentSend(input: AgentCancelQueuedMessageInput): boolean {
+  return recovery.cancelQueued(input, () => cancelAgentQueuedMessage(input))
+}
 export function retryAgentSendOutbox(input: AgentQueuedMessageControlInput, target: WebContents): Promise<AgentSendOutboxRetryResult> {
   return recovery.retry(input, async (retryInput) => {
     const result = await submitAgentMessageOnce(input.sessionId, input.messageId, () => submitOrEnqueueAgentMessage(retryInput, target))

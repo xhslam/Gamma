@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import ApplicationServices
 import Darwin
 
 // 单窗口授权不自动扩展到AX附属窗口、sheet、菜单或弹出面板。
@@ -73,16 +74,23 @@ struct Action: Codable, Equatable {
     let clickCount: Int?
     let windowId: UInt32?
     let bundleId: String?
+    let secondaryAction: String?, selectionText: String?, prefix: String?, suffix: String?, selectionType: String?, format: String?
 
-    init(kind: String, observationId: String, x: Double? = nil, y: Double? = nil, text: String? = nil, key: String? = nil, deltaY: Double? = nil, elementRef: String? = nil, appName: String? = nil, startX: Double? = nil, startY: Double? = nil, button: String? = nil, clickCount: Int? = nil, windowId: UInt32? = nil, bundleId: String? = nil) {
+    init(kind: String, observationId: String, x: Double? = nil, y: Double? = nil, text: String? = nil, key: String? = nil, deltaY: Double? = nil, elementRef: String? = nil, appName: String? = nil, startX: Double? = nil, startY: Double? = nil, button: String? = nil, clickCount: Int? = nil, windowId: UInt32? = nil, bundleId: String? = nil, secondaryAction: String? = nil, selectionText: String? = nil, prefix: String? = nil, suffix: String? = nil, selectionType: String? = nil, format: String? = nil) {
         self.kind = kind; self.observationId = observationId
         self.x = x; self.y = y; self.text = text; self.key = key; self.deltaY = deltaY; self.elementRef = elementRef
         self.appName = appName; self.startX = startX; self.startY = startY
         self.button = button; self.clickCount = clickCount; self.windowId = windowId; self.bundleId = bundleId
+        self.secondaryAction = secondaryAction; self.selectionText = selectionText; self.prefix = prefix; self.suffix = suffix; self.selectionType = selectionType; self.format = format
     }
 
     func validate() throws {
         guard !observationId.isEmpty, observationId.utf8.count <= 128, elementRef == nil || elementRef!.utf8.count <= 128 else { throw NativeFailure("invalid-action", "观察标识无效") }
+        if let bundleId { try validateBundleConstraint(bundleId, actual: bundleId) }
+        for field in [secondaryAction, selectionText, prefix, suffix, selectionType, format].compactMap({ $0 }) {
+            guard field.utf16.count <= 4096, !field.contains("\0") else { throw NativeFailure("invalid-action", "AX或剪贴板参数超过预算") }
+        }
+        if kind.hasPrefix("ax") { guard elementRef?.isEmpty == false else { throw NativeFailure("invalid-action", "AX动作必须引用本次观察的elementRef") } }
         guard button == nil || ["left", "right", "middle"].contains(button!), clickCount == nil || (1...3).contains(clickCount!) else { throw NativeFailure("invalid-action", "鼠标按钮或点击次数无效") }
         switch kind {
         case "click", "double_click", "triple_click", "right_click", "middle_click", "mouse_move", "move":
@@ -91,8 +99,9 @@ struct Action: Codable, Equatable {
             guard let x, let y, let startX, let startY, [x, y, startX, startY].allSatisfy(\.isFinite) else { throw NativeFailure("invalid-action", "拖拽必须包含有限的起终点坐标") }
         case "scroll":
             guard let x, let y, let deltaY, x.isFinite, y.isFinite, deltaY.isFinite, deltaY != 0, abs(deltaY) >= 1, abs(deltaY) <= 1200 else { throw NativeFailure("invalid-action", "滚动参数无效") }
-        case "type", "axSetValue":
-            guard let text, !text.isEmpty, text.utf16.count <= 4096, !text.unicodeScalars.contains(where: { $0.value == 0 || ($0.value < 32 && $0.value != 10 && $0.value != 9) }) else { throw NativeFailure("invalid-action", "文本参数无效") }
+        case "type", "axSetValue", "paste":
+            guard let text, (kind == "axSetValue" || !text.isEmpty), text.utf16.count <= (kind == "paste" ? 65_536 : 4096), !text.unicodeScalars.contains(where: { $0.value == 0 || ($0.value < 32 && $0.value != 10 && $0.value != 9 && $0.value != 13) }) else { throw NativeFailure("invalid-action", "文本参数无效") }
+            if kind == "paste" { try validateInsertionFormat(format ?? "text") }
         case "key":
             guard let key, !key.isEmpty else { throw NativeFailure("invalid-action", "按键不能为空") }
             _ = try parseKeyCombination(key)
@@ -102,8 +111,11 @@ struct Action: Codable, Equatable {
             guard let windowId, windowId > 0 else { throw NativeFailure("invalid-action", "窗口编号无效") }
         case "wait":
             break
-        case "axPress":
-            guard elementRef?.isEmpty == false else { throw NativeFailure("invalid-action", "AX动作参数无效") }
+        case "axPress", "axFocus": break
+        case "axAction":
+            guard let secondaryAction, !secondaryAction.isEmpty, secondaryAction.utf8.count <= 256 else { throw NativeFailure("invalid-action", "axAction必须指定真实支持的secondaryAction") }
+        case "axSelectText":
+            guard let selectionText, !selectionText.isEmpty, ["text", "cursor_before", "cursor_after"].contains(selectionType ?? "text") else { throw NativeFailure("invalid-action", "选择文本或selectionType无效") }
         default: throw NativeFailure("unsupported-action", "不支持的动作：\(kind)")
         }
     }
@@ -122,11 +134,13 @@ struct Snapshot {
     let target: Target?, width: Int, height: Int, axDigest: String
     let display: DisplayResult?
     let desktopDigest: String?
+    let axRefs: [String: AXUIElement]
+    let axRoot: AXUIElement?
 
-    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil) {
+    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil, axRefs: [String: AXUIElement] = [:], axRoot: AXUIElement? = nil) {
         self.id = id; self.epoch = epoch; self.fence = fence; self.created = created
         self.target = target; self.width = width; self.height = height; self.axDigest = axDigest
-        self.display = display; self.desktopDigest = desktopDigest
+        self.display = display; self.desktopDigest = desktopDigest; self.axRefs = axRefs; self.axRoot = axRoot
     }
 
     func point(x: Double, y: Double) throws -> CGPoint {
@@ -142,6 +156,90 @@ struct Snapshot {
         }
         return CGPoint(x: x, y: y)
     }
+}
+
+private let knownAXRoles: Set<String> = [
+    "AXApplication", "AXSystemWide", "AXWindow", "AXSheet", "AXDrawer", "AXGrowArea", "AXImage",
+    "AXButton", "AXRadioButton", "AXCheckBox", "AXPopUpButton", "AXMenuButton", "AXTabGroup",
+    "AXTable", "AXColumn", "AXRow", "AXOutline", "AXBrowser", "AXScrollArea", "AXScrollBar",
+    "AXRadioGroup", "AXList", "AXGroup", "AXValueIndicator", "AXComboBox", "AXSlider", "AXIncrementor",
+    "AXBusyIndicator", "AXProgressIndicator", "AXRelevanceIndicator", "AXToolbar", "AXDisclosureTriangle",
+    "AXTextField", "AXTextArea", "AXStaticText", "AXMenuBar", "AXMenu", "AXMenuItem", "AXSplitGroup",
+    "AXSplitter", "AXColorWell", "AXTimeField", "AXDateField", "AXHelpTag", "AXMatte", "AXDockItem",
+    "AXHeading", "AXLink", "AXWebArea", "AXLayoutArea", "AXLayoutItem", "AXHandle", "AXCell", "AXPopover",
+    "AXLevelIndicator", "AXRuler", "AXRulerMarker", "AXGrid", "AXPage", "AXText", "AXSwitch",
+    "AXDescriptionList", "AXDefinition", "AXTerm", "AXDetails", "AXSummary", "AXFeed", "AXFigure", "AXMark"
+]
+func isHiddenAXControl(role: String?, subrole: String?) -> Bool {
+    guard let role, knownAXRoles.contains(role), subrole != "AXUnknown", subrole != "unknown" else { return true }
+    let identity = role + " " + (subrole ?? "")
+    return identity.localizedCaseInsensitiveContains("secure") || identity.localizedCaseInsensitiveContains("password")
+}
+
+func validateBundleConstraint(_ expected: String?, actual: String) throws {
+    guard let expected else { return }
+    guard !expected.isEmpty, expected.utf8.count <= 512, expected.contains("."),
+          !expected.contains("/"), !expected.contains("\\"), !expected.unicodeScalars.contains(where: { $0.value <= 32 }),
+          expected == actual else { throw NativeFailure("application-mismatch", "实际接收应用与bundleId约束不一致") }
+}
+
+func selectedTextRange(value: String, selectionText: String, prefix: String?, suffix: String?, selectionType: String) throws -> CFRange {
+    guard !selectionText.isEmpty, value.utf16.count <= 1_048_576,
+          ["text", "cursor_before", "cursor_after"].contains(selectionType) else { throw NativeFailure("invalid-selection", "选择参数或控件文本超过预算") }
+    // String边界保留完整Unicode字符；转换为NSRange后使用AX要求的UTF16偏移。
+    var matches: [Range<String.Index>] = [], cursor = value.startIndex, attempts = 0
+    while cursor < value.endIndex, let range = value.range(of: selectionText, options: .literal, range: cursor..<value.endIndex) {
+        attempts += 1
+        guard attempts <= 4096 else { throw NativeFailure("selection-budget", "文本匹配次数超过预算") }
+        if range.lowerBound.samePosition(in: value.utf16) != nil, range.upperBound.samePosition(in: value.utf16) != nil,
+           (prefix == nil || value[..<range.lowerBound].hasSuffix(prefix!)),
+           (suffix == nil || value[range.upperBound...].hasPrefix(suffix!)) { matches.append(range) }
+        guard matches.count <= 1024 else { throw NativeFailure("ambiguous-selection", "文本匹配过多") }
+        cursor = value.index(after: range.lowerBound)
+    }
+    guard matches.count == 1, let match = matches.first else { throw NativeFailure("ambiguous-selection", "文本不存在或有重复；请用相邻prefix/suffix消歧") }
+    let range = NSRange(match, in: value)
+    return CFRange(location: selectionType == "cursor_after" ? range.location + range.length : range.location, length: selectionType == "text" ? range.length : 0)
+}
+
+func validatedAXActionName(kind: String, secondaryAction: String?, supported: [String]) throws -> String {
+    guard ["axPress", "axAction"].contains(kind), supported.count <= 64 else { throw NativeFailure("unsupported-action", "不是支持的AX动作种类") }
+    let name = kind == "axPress" ? "AXPress" : secondaryAction ?? ""
+    guard !name.isEmpty, name.utf8.count <= 256, supported.contains(name) else { throw NativeFailure("unsupported-action", "AX动作不在目标当前真实支持列表中") }
+    return name
+}
+
+func validateInsertionFormat(_ format: String) throws {
+    guard ["text", "md"].contains(format) else { throw NativeFailure("unsupported-format", "当前不支持可验证的HTML/富文本粘贴；仅支持text或原样Markdown文本，且不读取或修改剪贴板") }
+}
+
+struct TextInsertionState: Equatable {
+    let value: String
+    let location: Int, length: Int
+    var range: CFRange { CFRange(location: location, length: length) }
+    static func == (lhs: TextInsertionState, rhs: TextInsertionState) -> Bool {
+        lhs.location == rhs.location && lhs.length == rhs.length && lhs.value.utf16.elementsEqual(rhs.value.utf16)
+    }
+}
+
+/// 只计算替换结果；不会修改原字符串、选区或系统剪贴板。
+func replacingSelectedText(original: String, range: CFRange, replacement: String) throws -> String {
+    let limit = 1_048_576
+    guard original.utf16.count <= limit, replacement.utf16.count <= 65_536 else { throw NativeFailure("text-budget", "选区替换文本超过预算") }
+    let units = Array(original.utf16), inserted = Array(replacement.utf16)
+    guard range.location >= 0, range.location <= units.count, range.length >= 0,
+          range.length <= units.count - range.location else { throw NativeFailure("invalid-selection", "AX选区不是原文中的可信有界范围") }
+    let end = range.location + range.length
+    func isBoundary(_ offset: Int) -> Bool {
+        offset == 0 || offset == units.count || !((0xD800...0xDBFF).contains(units[offset - 1]) && (0xDC00...0xDFFF).contains(units[offset]))
+    }
+    guard isBoundary(range.location), isBoundary(end) else { throw NativeFailure("invalid-selection", "AX选区不能拆开UTF16代理对") }
+    guard inserted.count <= limit - (units.count - range.length) else { throw NativeFailure("text-budget", "替换后全文超过预算") }
+    return String(decoding: Array(units[..<range.location]) + inserted + Array(units[end...]), as: UTF16.self)
+}
+
+func validateInsertionState(_ expected: TextInsertionState, current: TextInsertionState) throws {
+    guard expected == current else { throw NativeFailure("selection-changed", "确认后原文或选区已变化，未投递文本替换") }
 }
 
 // 仅在AX worker上等待认证窗口真实退场及焦点恢复，不以PID白名单忽略遮挡。

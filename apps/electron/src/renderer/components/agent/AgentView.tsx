@@ -15,7 +15,7 @@
 
 import { getAgentSendRecoveryState, isAgentDraftUnchanged } from '@/lib/agent-send-draft-recovery'
 import * as React from 'react'
-import { unstable_batchedUpdates } from 'react-dom'
+import { flushSync, unstable_batchedUpdates } from 'react-dom'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { toast } from 'sonner'
 import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, ListTodo, Paperclip } from 'lucide-react'
@@ -153,7 +153,6 @@ import {
   parseQueuedMessageMentions,
   queuedTextToParagraphHtml,
   removeQueuedMessage,
-  restoreQueuedMessageToFront,
 } from '@/lib/agent-message-queue'
 import type { AgentQueuedAttachment, AgentQueuedMessage, QueueDropPlacement } from '@/lib/agent-message-queue'
 
@@ -1037,6 +1036,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const sendPlainTextAgentMessage = React.useCallback(async (
     message: AgentQueuedMessage,
     beforeSubmit?: (input: AgentSubmitOrEnqueueInput) => Promise<void>,
+    dispatch: AgentSubmitOrEnqueueInput['dispatch'] = 'now',
   ): Promise<void> => {
     const quotedSelectionBlock = message.quotedSelection
       ? buildQuotedSelectionBlock(message.quotedSelection)
@@ -1065,31 +1065,47 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       workspaceId: currentWorkspaceId || undefined,
       additionalDirectories: message.additionalDirectories,
       permissionModeOverride: permissionMode,
-      dispatch: 'now',
-      interrupt: streaming,
+      dispatch,
+      interrupt: dispatch === 'now' && streaming,
       mentionedSkills: payload.mentions.mentionedSkills,
       mentionedMcpServers: payload.mentions.mentionedMcpServers,
       mentionedSessionIds: payload.mentions.mentionedSessionIds,
       mentionedTodoIds: payload.mentions.mentionedTodoIds,
       mentionedCalendarEventIds: payload.mentions.mentionedCalendarEventIds,
     }
-    await beforeSubmit?.(input)
-    const result = await window.electronAPI.submitOrEnqueueAgentMessage(input)
-    if (result.disposition === 'injected') {
-      appendLiveUserMessage(createUserSDKMessage(payload.rawText, message.id, Date.now()))
-      setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
-      return
-    }
+    let messageStarted = false
+    const unsubscribeQueue = window.electronAPI.onAgentQueuedMessageStatus((status) => {
+      if (status.sessionId === sessionId && status.messageId === message.id) messageStarted = true
+    })
+    const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
+      if (event.sessionId === sessionId && event.payload.kind === 'sdk_message'
+        && (event.payload.message as SDKMessageRecord).uuid === message.id) messageStarted = true
+    })
+    try {
+      await beforeSubmit?.(input)
+      const result = await window.electronAPI.submitOrEnqueueAgentMessage(input)
+      if (result.disposition === 'injected') {
+        appendLiveUserMessage(createUserSDKMessage(payload.rawText, message.id, Date.now()))
+        setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
+        return
+      }
 
-    if (result.disposition === 'started' || result.disposition === 'accepted') {
-      // 主进程在 IPC 返回前已发出 started 事件时，监听器可能已移除投影；
-      // 这里再幂等移除，避免反向时序下把已发送消息重新留在队列。
-      setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
-      return
-    }
+      if (messageStarted || result.disposition === 'started' || result.disposition === 'accepted') {
+        // started/用户消息可早于 queued 回执，不能把已消费的消息重新放回队列。
+        setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
+        return
+      }
 
-    // 主进程已接管消息但仍在等待；恢复/保留队列投影，等待 started 事件消费。
-    setQueuedMessages((prev) => prev.some((item) => item.id === message.id) ? prev : [...prev, message])
+      setQueuedMessages((prev) => prev.some((item) => item.id === message.id) ? prev : [...prev, message])
+    } catch (error) {
+      if (!messageStarted) throw error
+      // 权威启动事件已确认接收，响应失败不能触发第二次发送或恢复草稿。
+      setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
+      toast.info('消息已被 Agent 接收', { description: '提交响应异常，请以会话中的实际运行结果为准。' })
+    } finally {
+      unsubscribeQueue()
+      unsubscribeStream()
+    }
   }, [
     agentChannelId,
     agentModelId,
@@ -2099,8 +2115,12 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     }
     const clearSubmittedDraft = (): void => {
       if ((overrideText === undefined || fromEditor) && isAgentDraftUnchanged(originalDraft, readCheckpoint())) {
-        setInputContent('')
-        setInputHtmlContent('')
+        // 在提交 IPC 前完成编辑器清空，不能只写 atom 等待后续 effect；
+        // 否则真实暂存 IPC 返回后立即输入的新草稿，可能被迟到的清空同步覆盖。
+        flushSync(() => {
+          setInputContent('')
+          setInputHtmlContent('')
+        })
         cleared = true
         expectedDraft = readCheckpoint()
       }
@@ -2442,8 +2462,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         && !store.get(quotedSelectionMapAtom).has(sessionId)
       if (canRestore) recoverDraft(false)
       toast.error('消息发送失败', {
+        id: `agent-send-failed:${sessionId}`,
         description: `${String(error)}${canRestore ? '；草稿已恢复。' : '；当前草稿已保留。'}`,
-        duration: canRestore ? 15_000 : Infinity,
+        duration: 15_000,
         ...(!canRestore && (cleared || savedAttachments?.length || quoteConsumed || (overrideText !== undefined && !fromEditor)
           || !isAgentDraftUnchanged(originalDraft, readCheckpoint())
           || (quoteConsumed && originalQuote && store.get(quotedSelectionMapAtom).get(sessionId) !== originalQuote))
@@ -2993,17 +3014,40 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
     queuedSendInFlightRef.current = true
     sendingQueuedMessageIdsRef.current.add(messageId)
-    void window.electronAPI.cancelAgentQueuedMessage({ sessionId, messageId })
+    let submittedInput: AgentSubmitOrEnqueueInput | undefined
+    void window.electronAPI.cancelAgentQueuedMessage({ sessionId, messageId, preserveSendOutbox: true })
       .then((cancelled) => {
         if (!cancelled) {
           toast.info('消息已开始发送，无法再立即发送')
           return
         }
         setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
-        return sendPlainTextAgentMessage(message).catch((error) => {
-          console.error('[AgentView] 队列消息发送失败:', error)
-          toast.error('队列消息发送失败', { description: String(error) })
-          setQueuedMessages((prev) => restoreQueuedMessageToFront(prev, message))
+        return sendPlainTextAgentMessage(message, async (input) => { submittedInput = input }).catch(async (error) => {
+          console.error('[AgentView] 队列消息插队失败:', error)
+          // 已取消旧队列后，不能只恢复 renderer 投影。用相同稳定 ID 交回主进程；
+          // 如果插队其实已被接收，统一门禁会返回 accepted，不会重复执行。
+          if (submittedInput) {
+            try {
+              await sendPlainTextAgentMessage(message, undefined, 'after_current')
+              toast.info('插队响应异常，消息已交回 Agent')
+              return
+            } catch (restoreError) {
+              console.error('[AgentView] 恢复主进程队列失败:', restoreError)
+            }
+            const quoteMarker = message.quotedSelection ? serializeQuotedSelectionMention(message.quotedSelection) || buildQuotedSelectionBlock(message.quotedSelection) : ''
+            const text = quoteMarker ? `${message.text}\n\n${quoteMarker}` : message.text
+            try {
+              await window.electronAPI.saveAgentSendOutbox({
+                id: message.id, sessionId, createdAt: message.createdAt, status: 'failed', error: String(error),
+                draft: { text, html: queuedTextToParagraphHtml(text), attachments: message.attachments ?? [] },
+                input: { ...submittedInput, dispatch: 'after_current', interrupt: false },
+              })
+            } catch (persistError) {
+              console.error('[AgentView] 更新插队失败日志失败，保留原暂存快照:', persistError)
+            }
+          }
+          await refreshOutbox()
+          toast.error('插队失败，原消息已保留在暂存记录中', { id: `agent-send-failed:${sessionId}`, description: String(error) })
         })
       })
       .catch((error) => {
@@ -3014,7 +3058,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         sendingQueuedMessageIdsRef.current.delete(messageId)
         queuedSendInFlightRef.current = false
       })
-  }, [canSendQueuedNow, queuedMessages, sendPlainTextAgentMessage, setQueuedMessages, streaming])
+  }, [canSendQueuedNow, queuedMessages, sendPlainTextAgentMessage, setQueuedMessages, streaming, sessionId, refreshOutbox])
 
   const handleRecallQueuedMessage = React.useCallback((messageId: string): void => {
     const message = queuedMessages.find((item) => item.id === messageId)
@@ -3027,22 +3071,25 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           return
         }
         setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
+        if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
         const recalledQuotedSelection = message.quotedSelection
-        if (recalledQuotedSelection) {
-          setQuotedSelectionMap((prev) => {
-            const map = new Map(prev)
-            map.set(sessionId, recalledQuotedSelection)
-            return map
-          })
+        const currentQuote = store.get(quotedSelectionMapAtom).get(sessionId)
+        if (recalledQuotedSelection && !currentQuote) {
+          setQuotedSelectionMap((prev) => new Map(prev).set(sessionId, recalledQuotedSelection))
         }
         restoreQueuedAttachmentsToPending(message.attachments)
+        // 当前草稿已有选区时，将撤回消息的选区恢复为内联引用，不覆盖用户的新选区。
+        const quoteMarker = recalledQuotedSelection && currentQuote
+          ? serializeQuotedSelectionMention(recalledQuotedSelection) || buildQuotedSelectionBlock(recalledQuotedSelection)
+          : ''
+        const recalledText = quoteMarker ? `${message.text}\n\n${quoteMarker}` : message.text
 
         const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
         const currentDraftHtml = store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? ''
         const hasDraft = currentDraft.trim().length > 0
         const nextDraft = hasDraft
-          ? `${currentDraft.trimEnd()}\n\n${message.text}`
-          : message.text
+          ? `${currentDraft.trimEnd()}\n\n${recalledText}`
+          : recalledText
         setInputContent(nextDraft)
 
         // 已有草稿时，用「原草稿 HTML + 队列文本段落 HTML」合并，保留原草稿的 mention 等富文本节点；
@@ -3051,13 +3098,14 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           const draftHtml = currentDraftHtml.trim().length > 0
             ? currentDraftHtml
             : queuedTextToParagraphHtml(currentDraft)
-          setInputHtmlContent(`${draftHtml}${queuedTextToParagraphHtml(message.text)}`)
+          setInputHtmlContent(`${draftHtml}${queuedTextToParagraphHtml(recalledText)}`)
         } else {
           setInputHtmlContent('')
         }
       })
       .catch((error) => {
         console.warn('[AgentView] 撤回主进程队列消息失败:', error)
+        toast.error('撤回失败，原消息仍在队列中', { description: String(error) })
       })
   }, [queuedMessages, restoreQueuedAttachmentsToPending, sessionId, setInputContent, setInputHtmlContent, setQueuedMessages, setQuotedSelectionMap, store])
 

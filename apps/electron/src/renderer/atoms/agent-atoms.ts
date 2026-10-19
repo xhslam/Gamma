@@ -498,7 +498,7 @@ export const workspaceGitDiffRefreshVersionAtom = atom(0)
 
 // ===== 侧面板 Atoms =====
 
-/** 侧面板是否打开：按 Agent 会话持久化，未存储的会话默认打开。 */
+/** 侧面板是否打开：按 Agent 会话持久化，未存储的会话默认收起，保持首次进入界面简洁。 */
 export const agentSidePanelOpenMapAtom = atomWithStorage<Record<string, boolean>>(
   'gamma-agent-sidepanel-open-by-session',
   {},
@@ -508,7 +508,7 @@ export const agentSidePanelOpenMapAtom = atomWithStorage<Record<string, boolean>
 
 /** 指定 Agent 会话的侧面板开关。 */
 export const agentSidePanelOpenAtomFamily = atomFamily((sessionId: string) => atom(
-  (get) => get(agentSidePanelOpenMapAtom)[sessionId] ?? true,
+  (get) => get(agentSidePanelOpenMapAtom)[sessionId] ?? false,
   (_get, set, isOpen: boolean) => {
     set(agentSidePanelOpenMapAtom, (previous) => ({ ...previous, [sessionId]: isOpen }))
   },

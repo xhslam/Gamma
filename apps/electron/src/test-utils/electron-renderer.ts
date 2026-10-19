@@ -11,8 +11,14 @@ export interface ElectronRendererHarness {
   dispose(): Promise<void>
 }
 
+interface ElectronRendererHarnessOptions {
+  /** 测试专用主进程初始化，可注册真实 ipcMain handler，不能连接用户配置。 */
+  mainProcessSetup?: string
+  preloadSource?: string
+}
+
 /** 用应用真实的 Vite 构建与 Chromium DOM 检查 renderer，避免模拟 DOM 掩盖 xterm 原生事件顺序。 */
-export async function createElectronRendererHarness(entrySource: string): Promise<ElectronRendererHarness> {
+export async function createElectronRendererHarness(entrySource: string, options: ElectronRendererHarnessOptions = {}): Promise<ElectronRendererHarness> {
   const directory = await mkdtemp(join(tmpdir(), 'gamma-renderer-regression-'))
   const entry = 'gamma-electron-renderer-regression'
   try {
@@ -42,6 +48,7 @@ export async function createElectronRendererHarness(entrySource: string): Promis
       .map((item) => item.type === 'asset' ? typeof item.source === 'string' ? item.source : new TextDecoder().decode(item.source) : '')
       .join('\n')
     await Promise.all([
+      ...(options.preloadSource ? [writeFile(join(directory, 'preload.cjs'), options.preloadSource)] : []),
       writeFile(join(directory, 'renderer.js'), chunk.code),
       writeFile(join(directory, 'renderer.css'), css),
       writeFile(join(directory, 'index.html'), '<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>'),
@@ -61,10 +68,11 @@ export async function createElectronRendererHarness(entrySource: string): Promis
       // 不连接真实 PTY/剪贴板；结果只来自该次场景提供的 mock 数据。
       await writeFile(mainPath, `
 const { app, BrowserWindow } = require('electron');
+${options.mainProcessSetup ?? ''}
 app.setPath('userData', ${JSON.stringify(join(directory, 'user-data'))});
 app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
-  const window = new BrowserWindow({ width: 900, height: 600, show: false, webPreferences: { backgroundThrottling: false } });
+  const window = new BrowserWindow({ width: 900, height: 600, show: false, webPreferences: { backgroundThrottling: false, ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
   try {
     await window.loadFile(${JSON.stringify(join(directory, 'index.html'))});
     const result = await window.webContents.executeJavaScript(${JSON.stringify(`(async () => { ${scenario} })()`)});

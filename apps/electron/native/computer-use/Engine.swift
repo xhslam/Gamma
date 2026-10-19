@@ -83,6 +83,8 @@ final class Engine {
                     }
                     success(envelope.id, status())
                 }
+            case "listApps":
+                DispatchQueue.main.async { [self] in success(envelope.id, listApplications()) }
             case "resolveApp":
                 let p = try JSONDecoder().decode(Request<ResolveAppParams>.self, from: data).params
                 worker.async { [self] in do { success(envelope.id, try resolveApplication(p.appName).1) } catch { failure(envelope.id, error) } }
@@ -148,10 +150,11 @@ final class Engine {
                 let before = try desktopDigest()
                 let observedApp = try currentApplication()
                 let observedWindow: Target?
+                let observedTree: AXTree?
                 let observedLayout: String
                 if !isGammaPID(observedApp.pid), let window = try? ax.windowForFocused(observedApp.pid, windows: desktopWindows()), let tree = try? ax.read(window, allowSurfaces: true) {
-                    observedWindow = window; observedLayout = tree.digest
-                } else { observedWindow = nil; observedLayout = "" }
+                    observedWindow = window; observedLayout = tree.digest; observedTree = tree
+                } else { observedWindow = nil; observedLayout = ""; observedTree = nil }
                 captureDisplay { [self] result in
                     worker.async { [self] in
                         defer {
@@ -167,9 +170,9 @@ final class Engine {
                             if let window = observedWindow {
                                 guard try ax.read(window, allowSurfaces: true).digest == observedLayout else { throw NativeFailure("observation-layout-changed", "截图期间目标布局改变") }
                             }
-                            let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, desktopDigest: before)
+                            let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, desktopDigest: before, axRefs: observedTree?.refs ?? [:], axRoot: observedTree?.root)
                             try gate.save(snapshot); try gate.checkDispatch(token)
-                            success(id, ObservationResult(observationId: snapshot.id, epoch: p.epoch, image: ImageResult(data: png.base64EncodedString(), width: width, height: height), display: display, ax: "", targetApp: app))
+                            success(id, ObservationResult(observationId: snapshot.id, epoch: p.epoch, image: ImageResult(data: png.base64EncodedString(), width: width, height: height), display: display, ax: observedTree?.text ?? "[当前前台窗口没有可安全读取的AX树；不可使用AX引用]", targetApp: app))
                         } catch { gate.invalidateObservation(); failure(id, error) }
                     }
                 }
@@ -230,6 +233,7 @@ final class Engine {
             case "right_click": intentStr = "右键点击"
             case "middle_click": intentStr = "中键点击"
             case "mouse_move", "move": intentStr = "移动鼠标"
+            case "paste": intentStr = "粘贴文本"
             case "type":
                 let textSample = (p.action.text ?? "").prefix(12)
                 intentStr = textSample.isEmpty ? "输入文本" : "输入“\(textSample)”"
@@ -267,16 +271,28 @@ final class Engine {
                 guard result.success else { throw NativeFailure("app-open-failed", "应用未能确认启动") }
             } else if p.action.kind == "focus_window" {
                 guard let window = binding.window, let element = binding.element else { throw NativeFailure("target-gone", "目标窗口已失效") }
+                try verifyBinding(binding, ax: ax)
                 try gate.claimAX(ticket); try gate.checkDispatch(snapshot.fence); dispatched = true
                 guard AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .success else { throw NativeFailure("focus-unknown", "提窗结果无法确认") }
                 try gate.checkDispatch(snapshot.fence)
                 DispatchQueue.main.sync { [self] in if (try? self.gate.checkDispatch(snapshot.fence)) != nil { _ = NSRunningApplication(processIdentifier: window.pid)?.activate(options: []) } }
+            } else if p.action.kind.hasPrefix("ax") || p.action.kind == "paste" {
+                guard let element = binding.element, let window = binding.window, let root = snapshot.axRoot else { throw NativeFailure("stale-element-ref", "AX引用或根窗口已失效") }
+                let result = try ax.performAX(p.action, element: element, target: window, root: root, expectedInsertion: binding.insertionState, beforeDispatch: { [self] in
+                    try verifyBinding(binding, ax: ax)
+                    try validateInputEnvironment(); try validateDisplay(snapshot.display)
+                    try gate.claimAX(ticket); try gate.checkDispatch(snapshot.fence)
+                    dispatched = true
+                })
+                guard result == .success else { throw NativeFailure(result == .cannotComplete ? "ax-timeout" : "ax-write-unknown", "AX写操作结果无法确认，已暂停且禁止重试") }
             } else if p.action.kind == "wait" {
-                // 仅消费动作；有界且可取消的等待由父TS负责。
-                try gate.claimAX(ticket)
+                // 仅消费动作；有界且可取消的等待由父TS负责，wait同样检查bundle约束。
+                try verifyBinding(binding, ax: ax)
+                try gate.claimAX(ticket); try gate.checkDispatch(snapshot.fence)
             } else {
                 var first = true
                 try dispatcher.post(p.action, snapshot: snapshot, expectedPID: binding.app?.pid, validate: { [self] in
+                    if first { try verifyBinding(binding, ax: ax) }
                     try gate.checkDispatch(snapshot.fence); try validateDisplay(snapshot.display)
                     guard !IsSecureEventInputEnabled(), CGPreflightPostEventAccess(), AXIsProcessTrusted() else { throw NativeFailure("secure-input", "权限撤销或系统安全输入已开启") }
                     if let app = binding.app {
@@ -290,6 +306,19 @@ final class Engine {
                     else { try gate.continueDispatch(snapshot.fence, dispatch) }
                     dispatched = true
                 })
+            }
+            if p.action.kind != "wait" {
+                // 只读CG窗口元数据收敛，不重建AX refs，也不重发动作。
+                var previous = ""
+                do {
+                    try waitForDesktopReadiness(checkFence: { [self] in try gate.checkDispatch(snapshot.fence) }, checkDesktop: {
+                        let signature = try desktopDigest() + currentApplication().processIdentity
+                        defer { previous = signature }
+                        guard signature == previous else { throw NativeFailure("not-frontmost", "动作后的桌面仍在收敛") }
+                    })
+                } catch let failure as NativeFailure where failure.code == "desktop-not-ready" {
+                    throw NativeFailure("post-action-not-settled", "动作已投递，但800ms内桌面未稳定；已暂停，禁止重试")
+                }
             }
             success(id, Receipt(actionId: p.actionId, outcome: "dispatched-unverified", message: "已投递，请用新的截图验证结果；不要自动重试"))
         } catch {

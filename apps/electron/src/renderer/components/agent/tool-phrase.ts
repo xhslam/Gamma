@@ -102,6 +102,13 @@ function getComputerActionIntent(action: string, input: Record<string, unknown>)
   const coordinate = (input.coordinate as [number, number]) ?? (input.x !== undefined && input.y !== undefined ? [input.x, input.y] : undefined)
   switch (action) {
     case 'screenshot': return '截取屏幕'
+    case 'get_app_state': return '观察应用状态'
+    case 'list_apps': return '查看运行中的应用'
+    case 'set_value': return input.text === '' ? '清空文本控件' : '替换控件文本'
+    case 'focus': return '聚焦文本或控件'
+    case 'select_text': return '选择文本或定位光标'
+    case 'perform_secondary_action': return '执行控件辅助动作'
+    case 'paste': return '粘贴文本并保护剪贴板'
     case 'open_app': return typeof input.app === 'string' ? `打开应用 ${input.app}` : '打开应用'
     case 'click':
     case 'left_click': return coordinate ? `点击 [${coordinate[0]}, ${coordinate[1]}]` : '点击'
@@ -111,10 +118,12 @@ function getComputerActionIntent(action: string, input: Record<string, unknown>)
     case 'middle_click': return '中键点击'
     case 'mouse_move':
     case 'move': return coordinate ? `移动到 [${coordinate[0]}, ${coordinate[1]}]` : '移动鼠标'
+    case 'type_text':
     case 'type': {
       const text = typeof input.text === 'string' ? truncate(input.text, 20) : ''
       return text ? `输入“${text}”` : '输入文本'
     }
+    case 'press_key':
     case 'key': return typeof input.key === 'string' ? `按下 ${input.key}` : '按键'
     case 'scroll': {
       const delta = (input.delta_y ?? input.deltaY ?? input.scroll_amount) as number | undefined
@@ -563,11 +572,14 @@ export function getToolResultSummary(toolName: string, result: string | undefine
       try {
         const parsed = JSON.parse(result)
         if (parsed.interrupted) return `已中断${parsed.reason ? ` · ${truncate(parsed.reason, 20)}` : ''}`
+        if (parsed.observationStability === 'timeout') return '已投递，界面待稳定'
+        if (typeof parsed.message === 'string' && parsed.message.includes('已投递')) return '已投递，待验证'
+        if (typeof parsed.observationId === 'string') return '已返回新观察'
       } catch {
         if (result.includes('已中断') || result.includes('interrupted')) return '已中断'
       }
     }
-    return '已完成'
+    return '已返回结果'
   }
   if (toolName === 'Read') {
     const totalLineMatch = result.match(/total\s+(\d+)\s+lines?/i) ?? result.match(/\bof\s+(\d+)\b/i)

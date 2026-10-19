@@ -84,6 +84,16 @@ func resolveApplication(_ name: String) throws -> (URL, ResolvedApp) {
     let pid = running.first?.processIdentifier
     return (url, ResolvedApp(appName: bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent, bundleId: bundleId, pid: pid, processIdentity: try pid.map { try processIdentity($0) }))
 }
+func listApplications() -> AppListResult {
+    let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && !isGammaPID($0.processIdentifier) }
+        .sorted { ($0.bundleIdentifier ?? "", $0.processIdentifier) < ($1.bundleIdentifier ?? "", $1.processIdentifier) }
+        .prefix(256).compactMap { app -> ListedApp? in
+            guard let bundle = app.bundleIdentifier, !bundle.isEmpty, bundle.utf8.count <= 512 else { return nil }
+            return ListedApp(appName: String((app.localizedName ?? bundle).prefix(256)), bundleId: bundle, pid: app.processIdentifier, isRunning: true)
+        }
+    return AppListResult(apps: apps)
+}
+
 func desktopWindows() throws -> [Target] {
     guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary], raw.count <= 2048 else { throw NativeFailure("window-metadata", "无法有界读取窗口列表") }
     var windows: [Target] = []
@@ -295,6 +305,7 @@ struct PreparedAction {
     let context: ElementContext
     let elementBounds: Rect?
     let layoutDigest: String?
+    let insertionState: TextInsertionState?
     let returnApp: AppIdentity?
     let returnFocus: AXUIElement?
     let resolvedURL: URL?
@@ -315,24 +326,33 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
     try validateDisplay(snapshot.display)
     guard snapshot.desktopDigest == (try desktopDigest()) else { throw NativeFailure("desktop-changed", "桌面布局已改变，请重新截图") }
     let originalApp = try currentApplication()
-    let originalFocus = try? ax.focusedElement()
+    let originalFocus: AXUIElement?
+    do { originalFocus = try ax.focusedElement() }
+    catch let failure as NativeFailure where failure.code == "ax-timeout" { throw failure }
+    catch { originalFocus = nil }
     let action = request.action
     if action.kind == "open_app" {
         guard let bundleId = action.bundleId ?? action.appName else { throw NativeFailure("invalid-application", "缺少已解析的Bundle ID") }
         let (url, result) = try resolveApplication(bundleId)
         guard result.bundleId == bundleId else { throw NativeFailure("target-changed", "解析应用身份已变化") }
         let app = try result.pid.map { try appIdentity($0) }
-        return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: result.appName, bundleId: result.bundleId, window: nil, element: nil, context: ElementContext(role: "AXApplication", subrole: nil, title: nil, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: url)
+        return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: result.appName, bundleId: result.bundleId, window: nil, element: nil, context: ElementContext(role: "AXApplication", subrole: nil, title: nil, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, insertionState: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: url)
     }
     if action.kind == "wait" {
-        return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: originalApp, appName: originalApp.name, bundleId: originalApp.bundleId, window: nil, element: nil, context: ElementContext(role: "AXApplication", subrole: nil, title: nil, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil)
+        try validateBundleConstraint(action.bundleId, actual: originalApp.bundleId)
+        return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: originalApp, appName: originalApp.name, bundleId: originalApp.bundleId, window: nil, element: nil, context: ElementContext(role: "AXApplication", subrole: nil, title: nil, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, insertionState: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil)
     }
     let windows = try desktopWindows()
     let window: Target, element: AXUIElement
-    if action.kind == "focus_window" {
+    if action.kind.hasPrefix("ax") || (action.kind == "paste" && action.elementRef != nil) {
+        guard let ref = action.elementRef, let stored = snapshot.axRefs[ref], let target = snapshot.target,
+              snapshot.axRoot != nil else { throw NativeFailure("stale-element-ref", "elementRef不属于本次观察；请重新观察获取引用") }
+        window = target; element = stored
+        guard target.pid == originalApp.pid, !isGammaPID(target.pid) else { throw NativeFailure("unsafe-focus", "AX引用目标不是可授权的前台应用") }
+    } else if action.kind == "focus_window" {
         guard let id = action.windowId, let found = windows.first(where: { $0.windowId == id }) else { throw NativeFailure("target-gone", "目标窗口不在屏幕上") }
         window = found; element = try ax.matchedWindow(found)
-    } else if ["key", "type", "wait"].contains(action.kind) {
+    } else if ["key", "type", "paste"].contains(action.kind) {
         element = try ax.focusedElement()
         let pid = try ax.elementPID(element)
         guard !isGammaPID(pid), pid == originalApp.pid else { throw NativeFailure("unsafe-focus", "焦点不属于可授权的前台应用") }
@@ -348,18 +368,26 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
             }
         }
     }
-    let (context, bounds) = try ax.context(element)
+    try validateBundleConstraint(action.bundleId, actual: window.bundleId)
     let tree = try ax.read(window, allowSurfaces: true)
+    try ax.validateElement(element, target: window, root: tree.root)
+    if action.kind.hasPrefix("ax") {
+        guard let oldRoot = snapshot.axRoot, CFEqual(oldRoot, tree.root), tree.refs.values.contains(where: { CFEqual($0, element) }) else { throw NativeFailure("stale-element-ref", "观察中的原AX元素已不在当前有界树中") }
+    }
+    try ax.validateAction(action, element: element, target: window, root: tree.root)
+    let insertionState = action.kind == "paste" ? try ax.textInsertionState(element, target: window, root: tree.root) : nil
+    let (context, bounds) = try ax.context(element)
     if action.kind != "focus_window" {
         try validateObservedLayout(snapshot, window: window, digest: tree.digest)
     }
     let app = try appIdentity(window.pid)
-    return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: app.name, bundleId: app.bundleId, window: window, element: element, context: context, elementBounds: bounds, layoutDigest: tree.digest, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil)
+    try validateBundleConstraint(action.bundleId, actual: app.bundleId)
+    return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: app.name, bundleId: app.bundleId, window: window, element: element, context: context, elementBounds: bounds, layoutDigest: tree.digest, insertionState: insertionState, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil)
 }
 func verifyBinding(_ prepared: PreparedAction, ax: AccessibilityWorker) throws {
     let fresh = try bindAction(prepared.request, snapshot: prepared.snapshot, ax: ax)
     guard fresh.app == prepared.app, fresh.bundleId == prepared.bundleId, fresh.window == prepared.window,
-          fresh.context == prepared.context, fresh.elementBounds == prepared.elementBounds, fresh.layoutDigest == prepared.layoutDigest,
+          fresh.context == prepared.context, fresh.elementBounds == prepared.elementBounds, fresh.layoutDigest == prepared.layoutDigest, fresh.insertionState == prepared.insertionState,
           fresh.returnApp == prepared.returnApp, fresh.resolvedURL == prepared.resolvedURL else { throw NativeFailure("target-changed", "目标应用、控件、焦点或布局已改变，未投递动作") }
     if let old = prepared.element, let new = fresh.element, !CFEqual(old, new) { throw NativeFailure("target-changed", "目标控件已替换") }
     if let old = prepared.returnFocus, let new = fresh.returnFocus, !CFEqual(old, new) { throw NativeFailure("focus-changed", "原焦点控件已改变") }

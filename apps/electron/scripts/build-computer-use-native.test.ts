@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,7 +33,8 @@ macTest('Given纯离线入口 When编译并运行--self-test Then安全锁存/�
     const output = resolve(directory, 'offline-test')
     const source = computerUseBuildPlan({ appDir, platform: 'darwin', hostArch: process.arch })!
     // 编译整套生产源码，但只执行--self-test分支；禁止运行正常入口或权限API。
-    const names = ['Safety.swift', 'Accessibility.swift', 'Desktop.swift', 'NativeUI.swift', 'Protocol.swift', 'Engine.swift', 'SelfTests.swift', 'main.swift']
+    // 与生产构建使用相同源码集合，新增 worker 不应被离线编译遗漏。
+    const names = readdirSync(source.sourceDir).filter(name => name.endsWith('.swift')).sort()
     execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-warnings-as-errors', '-target', source.target, ...names.map((name) => resolve(source.sourceDir, name)), '-o', output], { timeout: 120_000 })
     const result = JSON.parse(execFileSync(output, ['--self-test'], { encoding: 'utf8', timeout: 15_000 })) as { selfTest: boolean; passed: number; desktopAPIsInvoked: boolean }
     expect(result.selfTest).toBe(true)

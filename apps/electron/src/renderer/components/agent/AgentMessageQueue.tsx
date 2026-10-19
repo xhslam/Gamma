@@ -136,7 +136,7 @@ export function AgentMessageQueue({
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 <QueueIconButton
-                  label={interruptsCurrentTurn ? '立即发送（打断当前执行）' : '立即发送'}
+                  label={interruptsCurrentTurn ? '立即插队（打断当前执行）' : '立即发送'}
                   disabled={!canSendNow}
                   onClick={() => onSendNow(item.id)}
                 >
@@ -225,6 +225,7 @@ function QueueIconButton({
           variant="ghost"
           size="icon"
           disabled={disabled}
+          aria-label={label}
           className={cn(
             'size-7 rounded-md text-muted-foreground hover:text-foreground',
             danger && 'hover:text-destructive',

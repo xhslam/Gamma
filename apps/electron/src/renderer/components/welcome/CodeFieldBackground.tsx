@@ -7,6 +7,12 @@ const GLYPHS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const CELL_WIDTH = 9
 const CELL_HEIGHT = 16
 
+interface HoverPoint {
+  x: number
+  y: number
+  at: number
+}
+
 /** 固定字符网格上的柔和流场：只改变亮度与少量字符，不做下落雨。 */
 export function CodeFieldBackground(): React.ReactElement {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
@@ -24,6 +30,10 @@ export function CodeFieldBackground(): React.ReactElement {
     let visible = true
     let ink = ''
     let glow = ''
+    let baseOpacity = 0.15
+    let waveOpacity = 0.24
+    let glowOpacity = 0.64
+    let lastHover: HoverPoint | null = null
     let ripples: CodeFieldRipple[] = []
     const started = performance.now()
 
@@ -58,10 +68,10 @@ export function CodeFieldBackground(): React.ReactElement {
           // 波峰轻轻推动字符并提亮，形成水面感而非叠加一条实心圆线。
           const offset = ripple * 2 * Math.sin(time * 9 + row * 0.4)
           context.fillStyle = ink
-          context.globalAlpha = (0.055 + light * 0.12) * (1 - pulse * 0.4)
+          context.globalAlpha = (baseOpacity + light * waveOpacity) * (1 - pulse * 0.4)
           context.fillText(glyph, x, y + offset)
           context.fillStyle = glow
-          context.globalAlpha = Math.min(0.8, light * pulse * 0.46 + ripple * 0.65)
+          context.globalAlpha = Math.min(0.8, light * pulse * glowOpacity + ripple * 0.65)
           context.fillText(glyph, x, y + offset)
         }
       }
@@ -76,24 +86,44 @@ export function CodeFieldBackground(): React.ReactElement {
     }
     const resume = (): void => {
       stop()
-      if (motion.matches || document.hidden) ripples = []
+      if (motion.matches || document.hidden || !visible) { ripples = []; lastHover = null }
       if (!visible || document.hidden || width === 0 || height === 0) return
       paint(performance.now())
       if (!motion.matches) frame = requestAnimationFrame(animate)
     }
-    const handlePointerDown = (event: PointerEvent): void => {
-      if (event.button !== 0 || !event.isPrimary || motion.matches || !visible || document.hidden) return
+    const getPointerPoint = (event: PointerEvent): HoverPoint | null => {
+      if (!event.isPrimary || motion.matches || !visible || document.hidden) return null
       const target = event.target
       // 监听背景的父容器，画布继续穿透鼠标；交互控件不触发涟漪。
-      if (!(target instanceof Element) || target.closest('button, a, input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="link"], [role="menuitem"], [role="textbox"], [role="slider"], [role="combobox"], [tabindex]')) return
+      if (!(target instanceof Element) || target.closest('button, a, input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="link"], [role="menuitem"], [role="textbox"], [role="slider"], [role="combobox"], [tabindex]')) return null
       const bounds = canvas.getBoundingClientRect()
       const x = event.clientX - bounds.left
       const y = event.clientY - bounds.top
-      if (x < 0 || y < 0 || x >= width || y >= height) return
-      const now = performance.now()
-      ripples = [...ripples.slice(-(CODE_FIELD_MAX_RIPPLES - 1)), { x, y, startedAt: now }]
-      paint(now)
+      if (x < 0 || y < 0 || x >= width || y >= height) return null
+      return { x, y, at: performance.now() }
     }
+    const addRipple = (point: HoverPoint, strength: number): void => {
+      ripples = [...ripples.slice(-(CODE_FIELD_MAX_RIPPLES - 1)), {
+        x: point.x, y: point.y, startedAt: point.at, strength,
+      }]
+    }
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (event.button !== 0) return
+      const point = getPointerPoint(event)
+      if (!point) return
+      addRipple(point, 1)
+      paint(point.at)
+    }
+    const handlePointerMove = (event: PointerEvent): void => {
+      if (event.buttons !== 0 || (event.pointerType !== 'mouse' && event.pointerType !== 'pen')) return
+      const point = getPointerPoint(event)
+      if (!point) { lastHover = null; return }
+      // 同时限制时间和距离：高刷新率鼠标不会生成密集圆环，也不在事件里重绘。
+      if (lastHover && (point.at - lastHover.at < 100 || Math.hypot(point.x - lastHover.x, point.y - lastHover.y) < 18)) return
+      lastHover = point
+      addRipple(point, 0.45)
+    }
+    const handlePointerLeave = (): void => { lastHover = null }
     const resize = (): void => {
       const bounds = canvas.getBoundingClientRect()
       width = bounds.width
@@ -105,6 +135,9 @@ export function CodeFieldBackground(): React.ReactElement {
       const style = getComputedStyle(canvas)
       ink = style.getPropertyValue('--code-field-ink').trim()
       glow = style.getPropertyValue('--code-field-glow').trim()
+      baseOpacity = Number(style.getPropertyValue('--code-field-base-opacity'))
+      waveOpacity = Number(style.getPropertyValue('--code-field-wave-opacity'))
+      glowOpacity = Number(style.getPropertyValue('--code-field-glow-opacity'))
       resume()
     }
     const observer = new ResizeObserver(resize)
@@ -119,6 +152,8 @@ export function CodeFieldBackground(): React.ReactElement {
     motion.addEventListener('change', resume)
     document.addEventListener('visibilitychange', resume)
     surface?.addEventListener('pointerdown', handlePointerDown, true)
+    surface?.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true })
+    surface?.addEventListener('pointerleave', handlePointerLeave)
     resize()
     return () => {
       stop()
@@ -128,6 +163,8 @@ export function CodeFieldBackground(): React.ReactElement {
       motion.removeEventListener('change', resume)
       document.removeEventListener('visibilitychange', resume)
       surface?.removeEventListener('pointerdown', handlePointerDown, true)
+      surface?.removeEventListener('pointermove', handlePointerMove, true)
+      surface?.removeEventListener('pointerleave', handlePointerLeave)
     }
   }, [])
 

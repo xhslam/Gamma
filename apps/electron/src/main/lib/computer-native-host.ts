@@ -25,6 +25,19 @@ const NATIVE_REASONS: Readonly<Record<string, string>> = {
   'cross-application-drag': '暂不支持跨应用拖拽',
   'revoked': '原生授权已停止或失效',
   'busy': '原生操作仍在进行',
+  'stale-element': '元素引用已失效，请重新获取应用状态',
+  'stale-element-ref': '元素引用已失效，请重新获取应用状态',
+  'application-mismatch': '实际接收应用与指定应用不一致，动作未投递',
+  'unsupported-format': '当前仅支持 text/md 的 AX 选区插入，不支持 HTML 富文本',
+  'invalid-selection': '无法验证当前文本选区，请重新观察或使用 set_value',
+  'selection-changed': '文本或选区已改变，动作未投递，请重新观察',
+  'text-budget': '文本插入超过安全预算，动作未投递',
+  'unsupported-action': '该控件不支持所选 AX 动作，请重新观察或使用截图兜底',
+  'secure-field': '拒绝操作安全或密码字段',
+  'unsafe-element': '无法验证元素所属窗口或安全性',
+  'ax-timeout': '应用辅助功能无响应，未确认操作结果，禁止自动重试',
+  'ambiguous-selection': '选文匹配不唯一，请用 prefix/suffix 消歧',
+  'selection-not-found': '未找到目标文本，请重新获取应用状态',
   'unsupported-os': 'Computer Use需要macOS14.2或更新版本',
 }
 const STOP_REASONS = new Set([
@@ -100,7 +113,7 @@ export class ComputerNativeHost implements ComputerHost {
     return child
   }
   call(method: string, params: Record<string, unknown> = {}, timeoutMs = 10_000): Promise<unknown> {
-    if (!['status', 'requestPermission', 'resolveApp', 'select', 'observe', 'screenshot', 'listWindows', 'prepare', 'confirmation', 'perform'].includes(method)) return Promise.reject(new Error('未允许的原生方法'))
+    if (!['status', 'requestPermission', 'resolveApp', 'select', 'observe', 'screenshot', 'listWindows', 'listApps', 'prepare', 'confirmation', 'perform'].includes(method)) return Promise.reject(new Error('未允许的原生方法'))
     if (this.stopping) return Promise.reject(new Error('原生 helper 正在停止'))
     const id = randomUUID()
     const line = JSON.stringify({ id, method, params }) + '\n'

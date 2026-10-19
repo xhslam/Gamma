@@ -1374,6 +1374,11 @@ export interface AgentQueuedMessageControlInput {
   messageId: string
 }
 
+/** 撤回/删除清理发送日志；立即插队须保留日志，直到收到持久化接收证据。 */
+export interface AgentCancelQueuedMessageInput extends AgentQueuedMessageControlInput {
+  preserveSendOutbox?: boolean
+}
+
 export interface AgentMoveQueuedMessageInput {
   sessionId: string
   sourceId: string

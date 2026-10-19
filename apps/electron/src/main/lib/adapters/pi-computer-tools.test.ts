@@ -16,6 +16,20 @@ describe('Pi computer 工具中断结果与错误处理', () => {
     defineTool: (def: unknown) => def,
   } as unknown as typeof import('@earendil-works/pi-coding-agent')
 
+  test('Given 新应用观察 When 工具返回 Then 模型获得新ID、AX和差异而renderer状态不包含AX', async () => {
+    const mockController = {
+      executeAutonomousAction: async () => ({ message: '观察成功', observationId: 'snapshot-new', ax: '[1] ref=fresh AXButton', axDiff: 'AX未变化，引用刷新', image: { data: 'png', mimeType: 'image/png', width: 1, height: 1 }, state: { phase: 'active', supported: true } }),
+    } as unknown as ComputerController
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController).find(t => t.name === 'computer')!
+    const output = await tool.execute('new-observe', { action: 'get_app_state', app: 'Notes' }, undefined, undefined, {} as never)
+    const text = output.content.find(block => block.type === 'text')
+    expect(text?.type === 'text' && text.text).toContain('snapshot-new')
+    expect(text?.type === 'text' && text.text).toContain('ref=fresh')
+    expect(JSON.stringify(output.details)).not.toContain('ref=fresh')
+    expect(JSON.stringify(tool.parameters)).toContain('perform_secondary_action')
+    expect(JSON.stringify(tool.parameters)).toContain('observationId')
+  })
+
   test('Given 操作被用户接管或手动停止中断 When execute 执行 Then 将原因作为工具结果返回给 Agent 而不抛异常', async () => {
     const mockController = {
       executeAutonomousAction: async () => {

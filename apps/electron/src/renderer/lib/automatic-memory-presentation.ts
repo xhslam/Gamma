@@ -14,6 +14,11 @@ export function filterAutomaticMemoryEntries(entries: AutomaticMemoryEntry[], qu
   return entries.filter((entry) => `${entry.title}\n${entry.content}`.toLocaleLowerCase().includes(normalized))
 }
 
+/** 包含来源和保存时刻，关闭旧提示不会屏蔽同条记忆的后续更新。 */
+export function automaticMemoryChangeKey(change: AutomaticMemoryChange): string {
+  return JSON.stringify([change.workspaceSlug, change.entryId, change.changedAt, change.source.kind, change.source.sessionId, change.source.messageId])
+}
+
 /** 提示只来自已提交事件；重订阅和重复广播不能重复展示。 */
 export function appendAutomaticMemoryChange(previous: AutomaticMemoryChange[], change: AutomaticMemoryChange): AutomaticMemoryChange[] {
   const duplicate = previous.some((item) => item.workspaceSlug === change.workspaceSlug && item.entryId === change.entryId
