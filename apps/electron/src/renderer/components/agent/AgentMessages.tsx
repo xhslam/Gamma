@@ -215,6 +215,8 @@ export interface AgentHistoryQuoteNavigationRequest {
 /** AgentMessages 属性接口 */
 interface AgentMessagesProps {
   sessionId: string
+  /** 背景独立于限宽消息栏，覆盖整个会话面板。 */
+  backgroundContainer?: HTMLElement | null
   /** 用户在前端选择的模型 ID（用于显示渠道配置的 Model Name） */
   sessionModelId?: string
   /** 消息是否已完成首次加载 */
@@ -873,6 +875,7 @@ const AgentTranscriptHistory = React.forwardRef<AgentTranscriptHistoryHandle, Ag
 
 export const AgentMessages = React.memo(function AgentMessages({
   sessionId,
+  backgroundContainer,
   sessionModelId,
   messagesLoaded,
   persistedSDKMessages,
@@ -1190,7 +1193,7 @@ export const AgentMessages = React.memo(function AgentMessages({
     <BasePathsProvider basePaths={messageBasePaths} sessionId={sessionId}>
       <AgentBrowserLinkProvider sessionId={sessionId}>
         <div ref={historySelectionRootRef} className="relative flex min-h-0 flex-1 flex-col">
-          {ready && !hasContent && !streaming && <CodeFieldBackground />}
+          {ready && !hasContent && !streaming && <CodeFieldBackground container={backgroundContainer} />}
       <style>{`
         ::highlight(${AGENT_HISTORY_QUOTE_HIGHLIGHT_NAME}) {
           background-color: hsl(var(--primary) / 0.28);

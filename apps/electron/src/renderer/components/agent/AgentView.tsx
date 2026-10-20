@@ -424,6 +424,7 @@ interface AgentViewProps {
 }
 
 export function AgentView({ sessionId, embedded = false }: AgentViewProps): React.ReactElement {
+  const [backgroundContainer, setBackgroundContainer] = React.useState<HTMLDivElement | null>(null)
   const store = useStore()
   const stopShortcutTarget = React.useMemo(() => ({ kind: 'agent' as const, sessionId }), [sessionId])
   const markStopShortcutTarget = React.useCallback(() => {
@@ -3355,7 +3356,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   return (
     <SkillMentionNamesProvider workspaceSlug={workspaceSlug}>
       <div
-        className="flex h-full min-h-0 flex-1 min-w-0 flex-col overflow-hidden"
+        ref={setBackgroundContainer}
+        className="relative isolate flex h-full min-h-0 flex-1 min-w-0 flex-col overflow-hidden"
         onFocusCapture={markStopShortcutTarget}
         onPointerDownCapture={markStopShortcutTarget}
       >
@@ -3368,6 +3370,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         )}>
         {/* 消息区域 */}
         <AgentMessages
+          backgroundContainer={backgroundContainer}
           sessionId={sessionId}
           sessionModelId={agentModelId || undefined}
           messagesLoaded={messagesLoaded}

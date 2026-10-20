@@ -27,6 +27,19 @@ beforeAll(async () => {
               React.createElement('h1', {className:'text-3xl font-medium tracking-tight'}, '下午好，今天想做些什么？'))))),
         React.createElement('input', {id:'input',placeholder:'输入消息…',className:'gamma-composer bg-background',style:{padding:24}}))));
     };
+    function FullField() {
+      const [container, setContainer] = React.useState(null);
+      return React.createElement('main', {id:'panel',ref:setContainer,className:'relative isolate flex h-full flex-col overflow-hidden',style:{height:'100vh'}},
+        React.createElement('header', {style:{height:40,flexShrink:0}}, '新会话'),
+        React.createElement('div', {id:'column',className:'flex min-h-0 flex-1 flex-col w-full mx-auto',style:{maxWidth:560}},
+          React.createElement('div', {id:'field',className:'relative flex min-h-0 flex-1'},
+            React.createElement(CodeFieldBackground, {container}),
+            React.createElement(Conversation, null, React.createElement(ConversationContent, {className:'h-full'},
+              React.createElement('div', {className:'welcome-empty-state flex h-full items-center justify-center'},
+                React.createElement('h1', null, '下午好'))))),
+          React.createElement('input', {id:'input',placeholder:'输入消息…',className:'gamma-composer bg-background',style:{padding:24}})));
+    }
+    window.mountFullField = () => flushSync(() => root.render(React.createElement(FullField)));
     window.fieldSample = () => {
       const canvas = document.querySelector('canvas');
       const data = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
@@ -59,6 +72,47 @@ afterAll(async () => { await renderer?.dispose() })
 interface Sample { sum: number; pixels: number; contrastPixels: number; width: number; height: number; pointer: string; opacity: string; hidden: string }
 
 describe('Given 新会话的字符流场背景', () => {
+  test('When 内容栏限宽 Then 背景覆盖面板两侧、标题和输入区且不遮挡控件', async () => {
+    const result = await renderer.run<{ covers: boolean; limited: boolean; behind: boolean; focused: boolean; ripple: boolean }>(`
+      window.mountFullField();
+      await new Promise(resolve => setTimeout(resolve, 160));
+      const panel = document.getElementById('panel');
+      const canvas = document.querySelector('canvas');
+      const bounds = canvas.getBoundingClientRect();
+      const area = panel.getBoundingClientRect();
+      const input = document.getElementById('input');
+      const inputBounds = input.getBoundingClientRect();
+      const behind = document.elementFromPoint(inputBounds.x+20,inputBounds.y+20) === input;
+      input.focus();
+      const before = window.fieldSample().sum;
+      panel.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,isPrimary:true,clientX:20,clientY:area.bottom-20}));
+      return {
+        covers:bounds.x===area.x && bounds.y===area.y && bounds.width===area.width && bounds.height===area.height,
+        limited:document.getElementById('column').getBoundingClientRect().width===560 && area.width>560,
+        behind,focused:document.activeElement===input,ripple:window.fieldSample().sum!==before
+      };
+    `, { screenshot: artifacts ? join(artifacts, 'code-field-full-panel.png') : undefined })
+    expect(result.covers).toBe(true)
+    expect(result.limited).toBe(true)
+    expect(result.behind).toBe(true)
+    expect(result.focused).toBe(true)
+    expect(result.ripple).toBe(true)
+  }, 30_000)
+
+  test('When 全覆盖面板缩窄 Then 背景只覆盖本面板且不溢出至相邻区域', async () => {
+    const result = await renderer.run<{ width: number; left: number; right: number; panelRight: number }>(`
+      window.mountFullField();
+      const panel = document.getElementById('panel');
+      panel.style.width='320px'; panel.style.marginLeft='100px';
+      await new Promise(resolve => setTimeout(resolve, 160));
+      const bounds = document.querySelector('canvas').getBoundingClientRect();
+      return {width:bounds.width,left:bounds.left,right:bounds.right,panelRight:panel.getBoundingClientRect().right};
+    `)
+    expect(result.width).toBe(320)
+    expect(result.left).toBe(100)
+    expect(result.right).toBe(result.panelRight)
+  }, 30_000)
+
   for (const dark of [true, false]) {
     test(`When 使用${dark ? '深' : '浅'}色主题 Then 字符持续变化且输入框仍可聚焦`, async () => {
       const result = await renderer.run<{ before: Sample; after: Sample; focused: boolean }>(`
