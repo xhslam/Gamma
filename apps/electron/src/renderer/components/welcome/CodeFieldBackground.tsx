@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { CODE_FIELD_MAX_RIPPLES, CODE_FIELD_RIPPLE_LIFETIME, sampleCodeFieldRipple } from './code-field-ripple'
 import type { CodeFieldRipple } from './code-field-ripple'
 import './code-field-background.css'
@@ -13,8 +14,13 @@ interface HoverPoint {
   at: number
 }
 
+interface CodeFieldBackgroundProps {
+  /** 全尺寸会话面板，避免背景受消息栏限宽和输入区高度约束。 */
+  container?: HTMLElement | null
+}
+
 /** 固定字符网格上的柔和流场：只改变亮度与少量字符，不做下落雨。 */
-export function CodeFieldBackground(): React.ReactElement {
+export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}): React.ReactElement {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
 
   React.useEffect(() => {
@@ -166,7 +172,8 @@ export function CodeFieldBackground(): React.ReactElement {
       surface?.removeEventListener('pointermove', handlePointerMove, true)
       surface?.removeEventListener('pointerleave', handlePointerLeave)
     }
-  }, [])
+  }, [container])
 
-  return <canvas ref={canvasRef} className="code-field-background" aria-hidden="true" />
+  const canvas = <canvas ref={canvasRef} className="code-field-background" style={container ? { zIndex: -1 } : undefined} aria-hidden="true" />
+  return container ? createPortal(canvas, container) : canvas
 }
