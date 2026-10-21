@@ -233,13 +233,13 @@ function createInactiveQueueError(): Error & { code: string } {
  */
 export class PiQueuedMessageAdmissionGate {
   private open = true
-  private readonly pending = new Set<Promise<void>>()
+  private readonly pending = new Set<Promise<unknown>>()
 
   assertOpen(): void {
     if (!this.open) throw createInactiveQueueError()
   }
 
-  async admit(enqueue: () => Promise<void>): Promise<void> {
+  async admit(enqueue: () => Promise<unknown>): Promise<void> {
     this.assertOpen()
     const operation = Promise.resolve().then(enqueue)
     this.pending.add(operation)
@@ -306,7 +306,7 @@ export class PiQueuedMessageReceiptTracker {
     })
   }
 
-  async submit(enqueue: () => Promise<void>, isCurrent: () => boolean): Promise<void> {
+  async submit(enqueue: () => Promise<unknown>, isCurrent: () => boolean): Promise<void> {
     const receipt: { message?: AgentMessage } = {}
     const wasConsumed = (): boolean => receipt.message !== undefined
       && (this.consumed.has(receipt.message) || this.agent.state.messages.includes(receipt.message))
