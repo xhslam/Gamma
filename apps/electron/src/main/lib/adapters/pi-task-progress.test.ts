@@ -104,6 +104,31 @@ describe('Pi 任务进度同步', () => {
     expect((await executeTaskTool(controller, 'TaskGet', { taskId: 'task-1' }) as { task: GammaTaskItem }).task.activeForm).toBe('正在运行验证')
   })
 
+  test('Given 已恢复三个阶段 When 仅更新中间任务 Then 三项任务仍独立保存在任务表中', async () => {
+    const tasks: [GammaTaskItem, GammaTaskItem, GammaTaskItem] = [
+      { id: 'research', subject: '排查原因', status: 'completed' },
+      { id: 'fix', subject: '实现修复', status: 'pending' },
+      { id: 'verify', subject: '回归验证', status: 'pending' },
+    ]
+    const controller = new GammaTaskProgressController(tasks.map((task) => taskResult('TaskCreate', task)))
+    const result = await executeTaskTool(controller, 'TaskUpdate', { taskId: 'fix', status: 'in_progress' })
+    expect(result).toMatchObject({ task: { ...tasks[1], status: 'in_progress' } })
+    expect([...controller.tasks.values()]).toEqual([tasks[0], { ...tasks[1], status: 'in_progress' }, tasks[2]])
+  })
+
+  test('Given 多次真实创建调用 When 创建第二项 Then 两项 ID 独立且不会互相覆盖', async () => {
+    const controller = new GammaTaskProgressController()
+    const tool = buildGammaProductToolDefinitions({ defineTool }, undefined, controller.tasks).find((item) => item.name === 'TaskCreate')!
+    await tool.execute('create-1', { subject: '排查原因' }, undefined, undefined, {} as ExtensionToolContext)
+    const result = await tool.execute('create-2', { subject: '实现修复' }, undefined, undefined, {} as ExtensionToolContext)
+    expect(result.details).toMatchObject({ task: { id: 'create-2', subject: '实现修复', status: 'pending' } })
+    expect([...controller.tasks.values()]).toMatchObject([
+      { id: 'create-1', subject: '排查原因', status: 'pending' },
+      { id: 'create-2', subject: '实现修复', status: 'pending' },
+    ])
+    expect(controller.tasks.size).toBe(2)
+  })
+
   test('Given 存在废弃分支和压缩记录 When 恢复当前分支 Then 排除废弃更新且保留压缩前的真实任务', () => {
     const manager = SessionManager.inMemory()
     const initialEntryId = manager.appendMessage(taskResult('TaskCreate', activeTask))

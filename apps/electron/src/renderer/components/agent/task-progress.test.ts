@@ -118,3 +118,21 @@ describe('任务进度聚合', () => {
     expect(aggregateTaskItems(activities, false)).toEqual([])
   })
 })
+
+describe('多阶段任务独立聚合', () => {
+  test('given 创建三个独立阶段 when 更新中间阶段 then 保留三项且不覆盖其他任务', () => {
+    const tasks = [
+      { id: 'research', subject: '排查原因', status: 'pending' },
+      { id: 'fix', subject: '实现修复', status: 'pending' },
+      { id: 'verify', subject: '回归验证', status: 'pending' },
+    ]
+    const activities = tasks.map((task) => activity('TaskCreate', { subject: task.subject }, JSON.stringify({ task })))
+    activities.push(activity('TaskUpdate', { taskId: 'research', status: 'completed' }))
+    activities.push(activity('TaskUpdate', { taskId: 'fix', status: 'in_progress', activeForm: '正在修改代码' }))
+    expect(aggregateTaskItems(activities, false)).toMatchObject([
+      { ...tasks[0], status: 'completed' },
+      { ...tasks[1], status: 'in_progress', activeForm: '正在修改代码' },
+      tasks[2],
+    ])
+  })
+})

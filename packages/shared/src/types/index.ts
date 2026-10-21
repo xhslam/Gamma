@@ -65,3 +65,4 @@ export * from './planning'
 export * from './agent-island'
 
 export * from './markdown-workspace'
+export * from './external-agent'

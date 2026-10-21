@@ -1,3 +1,5 @@
+import { AgyActivityPanel, AgyTaskList } from './AgyActivityPanel'
+import { agyOpenTaskIdsAtom, agyTaskViewsAtom, agyTaskKey, openAgyTaskAtom, closeAgyTaskAtom } from '@/atoms/agy-task-atoms'
 import { beginPaneResize } from '@/lib/pane-resize-policy'
 /**
  * SidePanel — Agent 侧面板容器
@@ -862,6 +864,10 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   const terminalTabsMap = useAtomValue(agentTerminalTabsAtom)
   const setTerminalTabsMap = useSetAtom(agentTerminalTabsAtom)
   const terminalTabs = terminalTabsMap.get(sessionId) ?? []
+  const agyOpenIds = useAtomValue(agyOpenTaskIdsAtom).get(sessionId) ?? []
+  const agyViews = useAtomValue(agyTaskViewsAtom)
+  const openAgyTask = useSetAtom(openAgyTaskAtom)
+  const closeAgyTask = useSetAtom(closeAgyTaskAtom)
   const activeTerminalId = getTerminalIdFromSidePanelTab(activeTab)
   const selectedDelegationSession = sideDelegationSessionId
     ? sessions.find((item) => item.id === sideDelegationSessionId && item.parentSessionId === sessionId && !!item.sourceDelegationId) ?? null
@@ -1263,6 +1269,13 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   const workspaceTabs = React.useMemo<WorkspacePanelTab[]>(() => [
     { id: 'files', label: '文件', icon: <FolderOpen className="size-3.5" /> },
     { id: 'changes', label: '改动', icon: <FileDiff className="size-3.5" /> },
+    ...agyOpenIds.map(id => ({
+      id: `agy:${id}` as const,
+      label: agyViews.get(agyTaskKey(sessionId, id))?.task.title || 'agy 任务',
+      icon: <SquareTerminal className="size-3.5" />,
+      closable: true,
+    })),
+    ...(activeTab === 'agy-tasks' || split?.leftTab === 'agy-tasks' || split?.rightTab === 'agy-tasks' ? [{ id: 'agy-tasks' as const, label: '外部任务', icon: <SquareTerminal className="size-3.5" />, closable: true }] : []),
     ...workspaceComponentTabs.map((component) => {
       const meta: Record<WorkspaceComponentTab, { label: string; icon: React.ReactNode }> = {
         todos: { label: 'Todo', icon: <ListTodo className="size-3.5" /> },
@@ -1308,7 +1321,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       closable: true,
       activity: showBrowserActivity && activeBrowserTabId !== tab.tabId && browserState.activeTabId === tab.tabId,
     })) ?? []),
-  ], [activeBrowserTabId, browserState, previewFiles, selectedDelegationSession, selectedDelegationStatus, sessions, showBrowserActivity, sideTemporaryAgents, terminalTabs, workspaceComponentTabs])
+  ], [activeTab, split, agyOpenIds, agyViews, sessionId, activeBrowserTabId, browserState, previewFiles, selectedDelegationSession, selectedDelegationStatus, sessions, showBrowserActivity, sideTemporaryAgents, terminalTabs, workspaceComponentTabs])
   workspaceTabsRef.current = workspaceTabs
 
   React.useEffect(() => {
@@ -1331,6 +1344,12 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
 
   const handleCloseWorkspaceTab = React.useCallback((tab: AgentSidePanelTab) => {
     if (exitSplitInsteadOfClosingBoundTab(tab)) return
+    if (tab.startsWith('agy:')) {
+      closeAgyTask({ sessionId, taskId: tab.slice(4) })
+      returnToPreviousTabAfterClose(tab)
+      return
+    }
+    if (tab === 'agy-tasks') { returnToPreviousTabAfterClose(tab); return }
     const terminalId = getTerminalIdFromSidePanelTab(tab)
     if (terminalId) {
       void window.electronAPI.killTerminal(terminalId).catch(console.error)
@@ -1358,7 +1377,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     if (tab === 'delegation') { handleCloseDelegationTab(); return }
     const browserTabId = getBrowserTabIdFromSidePanelTab(tab)
     if (browserTabId) void handleCloseBrowserTab(browserTabId)
-  }, [exitSplitInsteadOfClosingBoundTab, handleCloseBrowserTab, handleCloseDelegationTab, handleCloseExplorationTab, handleClosePreviewTab, returnToPreviousTabAfterClose, sessionId, setTerminalTabsMap, setWorkspaceComponentTabs])
+  }, [closeAgyTask, exitSplitInsteadOfClosingBoundTab, handleCloseBrowserTab, handleCloseDelegationTab, handleCloseExplorationTab, handleClosePreviewTab, returnToPreviousTabAfterClose, sessionId, setTerminalTabsMap, setWorkspaceComponentTabs])
 
   React.useEffect(() => {
     const handleCloseActiveWorkspaceTab = (event: Event) => {
@@ -1526,6 +1545,12 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     ]
     const hasVisibleSessionAttachedItems = showSessionFiles && hasSessionAttachedItems
     const hasVisibleWorkspaceAttachedItems = showProjectFiles && hasWorkspaceAttachedItems
+
+    if (paneTab.startsWith('agy:')) return <AgyActivityPanel key={paneTab} sessionId={sessionId} taskId={paneTab.slice(4)} />
+    if (paneTab === 'agy-tasks') return <AgyTaskList key={sessionId} sessionId={sessionId} onOpen={taskId => {
+      openAgyTask({ sessionId, taskId })
+      handleWorkspaceTabChange(`agy:${taskId}`)
+    }} />
 
     if (paneTerminal) {
       return (
@@ -1745,6 +1770,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onAddTabMenuOpenChange={setIsAddTabMenuOpen}
             onOpenFile={() => handleWorkspaceTabChange('files')}
             onOpenTerminal={handleOpenTerminal}
+            onOpenAgyTasks={() => handleWorkspaceTabChange('agy-tasks')}
             onOpenWorkspaceComponent={(component) => {
               if (!isWorkspaceComponentEnabled(component)) return
               setWorkspaceComponentTabs((previous) => previous.includes(component) ? previous : [...previous, component])

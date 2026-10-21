@@ -74,6 +74,8 @@ import { validateToolInput } from './agent-tool-input-validator'
 import { isSessionPlanMarkdownPath } from './agent-plan-file-policy'
 import { estimateTokenCount, WRITE_CONTENT_TOKEN_THRESHOLD } from './agent-tool-token-estimator'
 import { buildPiBuiltinTools } from './adapters/pi-builtin-tools'
+import { agyTaskService } from './agy-task-controller'
+import { resolveAgyPermission } from './agy-permission-policy'
 import { buildPiMcpTools } from './adapters/pi-mcp-tools'
 import { buildAgentRuntimeEnv, type AgentRuntimeEnv } from './agent-runtime-env'
 import { isVisibleRunMessage } from './agent-run-message-visibility'
@@ -1407,6 +1409,17 @@ export class AgentOrchestrator {
           })
         }
 
+        // 外派会把提示词交给 agy 自有服务/工具配置，须单次确认，不能落入未知工具默认放行。
+        const agyPermission = resolveAgyPermission(toolName, currentMode, runTriggeredBy)
+        if (agyPermission === 'deny-plan') return { behavior: 'deny' as const, message: '计划模式下不能启动外部 Agent，请先批准实施计划。' }
+        if (agyPermission === 'deny-unattended') return { behavior: 'deny' as const, message: '外部 Agent 只能由前台用户主会话启动。' }
+        if (agyPermission === 'single-approval') {
+          return permissionService.requestSingleApproval(sessionId, toolName, input, options, (request) => {
+            this.eventBus.emit(sessionId, { kind: 'gamma_event', event: { type: 'permission_request', request } })
+          })
+        }
+        if (agyPermission === 'allow') return { behavior: 'allow' as const, updatedInput: input }
+
         // 终端元数据与已缓冲的输出可在计划阶段只读检查；创建、执行、打断或关闭 PTY 都属于可见的本地副作用。
         if (toolName === 'TerminalList' || toolName === 'TerminalRead') return { behavior: 'allow' as const, updatedInput: input }
         if (toolName.startsWith('Terminal') && currentMode === 'plan') {
@@ -2323,7 +2336,7 @@ export class AgentOrchestrator {
     this.queuedMessageUuids.delete(sessionId)
     const abort = this.adapter.abort(sessionId)
     console.log(`[Agent 编排] 已中止会话: ${sessionId}`)
-    return Promise.all([abort, computerStopped]).then(() => {})
+    return Promise.all([abort, computerStopped, agyTaskService.stopSession(sessionId)]).then(() => {})
   }
 
   /** 删除会话专用：等待已发出的底层中止请求完成，再移除持久化文件。 */

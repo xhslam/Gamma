@@ -39,6 +39,9 @@ describe('Given 旧 Chat 与 Agent 混合入口状态', () => {
   test('When 侧栏旧值为 chat Then 文件页回退且有效分屏保留', () => {
     expect(normalizeAgentSidePanelTab('chat')).toBe('files')
     expect(normalizeAgentSidePanelTab('preview:doc')).toBe('preview:doc')
+    expect(normalizeAgentSidePanelTab('agy:task')).toBe('agy:task')
+    expect(normalizeAgentSidePanelTab('agy-tasks')).toBe('agy-tasks')
+    expect(normalizeAgentSidePanelTab('agy:')).toBe('files')
     const leftTab = normalizeAgentSidePanelTab('chat')
     const repaired = sanitizeRightWorkspaceSplit({ leftTab, rightTab: 'changes', focusedPane: 'left', ratio: 0.5 }, new Set<AgentSidePanelTab>(['files', 'changes']))
     expect(repaired.activeTab).toBe('files')

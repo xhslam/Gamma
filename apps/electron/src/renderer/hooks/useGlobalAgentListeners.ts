@@ -8,6 +8,7 @@
  */
 
 import { useEffect } from 'react'
+import { useAgyTaskListeners } from './useAgyTaskListeners'
 import { unstable_batchedUpdates } from 'react-dom'
 import { useStore } from 'jotai'
 import {
@@ -580,6 +581,7 @@ function payloadToLegacyEvents(payload: AgentStreamPayload): AgentEvent[] {
 }
 
 export function useGlobalAgentListeners(): void {
+  useAgyTaskListeners()
   const store = useStore()
 
   useEffect(() => {

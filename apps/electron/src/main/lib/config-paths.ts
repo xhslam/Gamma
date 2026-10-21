@@ -9,7 +9,7 @@ import { join, basename } from 'node:path'
 import { mkdirSync, existsSync, cpSync, rmSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { rmSyncWithRetry } from './fs-retry'
-import { migrateLegacyCoachSkillDirectory } from './legacy-skill-renames'
+import { migrateLegacyBuiltinSkillDirectories } from './legacy-skill-renames'
 
 /**
  * 获取配置目录名称
@@ -490,7 +490,8 @@ export function seedDefaultSkills(): void {
     : join(__dirname, '../default-skills')
   const userDir = getDefaultSkillsDir()
 
-  migrateLegacyCoachSkillDirectory(userDir)
+  const migrations = migrateLegacyBuiltinSkillDirectories(userDir)
+  const blockedSlugs = new Set(migrations.filter((result) => !['absent', 'migrated'].includes(result.status)).map((result) => result.currentSlug))
   removeRetiredDefaultSkills(userDir)
 
   if (!existsSync(bundledDir)) {
@@ -502,7 +503,7 @@ export function seedDefaultSkills(): void {
     const entries = readdirSync(bundledDir, { withFileTypes: true })
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory() || blockedSlugs.has(entry.name)) continue
 
       const source = join(bundledDir, entry.name)
       const target = join(userDir, entry.name)

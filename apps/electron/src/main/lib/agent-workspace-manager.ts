@@ -14,7 +14,7 @@ import { rmSyncWithRetry, renameIfDestinationAbsentWithRetry, renameWithRetry } 
 import { getLocalProjectRootStatus } from './project-root-health'
 import { writeJsonFileAtomic, readJsonFileSafe, writeTextFileAtomic } from './safe-file'
 import { assertPublicMemoryFilePath } from './automatic-memory-file-policy'
-import { GAMMA_COACH_SKILL_SLUG, LEGACY_COACH_SKILL_SLUG, migrateLegacyCoachSkillDirectory } from './legacy-skill-renames'
+import { isHistoricalBuiltinSkillSlug, isLegacyBuiltinSkillSlug, migrateLegacyBuiltinSkillDirectoriesInParents } from './legacy-skill-renames'
 import { randomUUID } from 'node:crypto'
 import { join, resolve, relative, isAbsolute, dirname, basename } from 'node:path'
 import {
@@ -249,7 +249,7 @@ function copyDefaultSkills(workspaceSlug: string, options: { throwOnError?: bool
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name) || entry.name === LEGACY_COACH_SKILL_SLUG) continue
+      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name) || isLegacyBuiltinSkillSlug(entry.name) || isHistoricalBuiltinSkillSlug(entry.name)) continue
       const source = join(defaultDir, entry.name)
       const target = join(targetDir, entry.name)
       try {
@@ -542,7 +542,7 @@ export function upgradeDefaultSkillsInWorkspaces(): void {
   try {
     const entries = readdirSync(defaultDir, { withFileTypes: true })
     for (const entry of entries) {
-      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name) || entry.name === LEGACY_COACH_SKILL_SLUG) continue
+      if (!entry.isDirectory() || isRetiredDefaultSkill(entry.name) || isLegacyBuiltinSkillSlug(entry.name) || isHistoricalBuiltinSkillSlug(entry.name)) continue
       const sourcePath = join(defaultDir, entry.name)
       defaultSkills.set(entry.name, {
         version: parseSkillVersion(sourcePath),
@@ -556,19 +556,24 @@ export function upgradeDefaultSkillsInWorkspaces(): void {
   const index = readIndex()
 
   for (const workspace of index.workspaces) {
+    const workspacePath = join(getAgentWorkspacesDir(), workspace.slug)
+    if (existsSync(workspacePath)) {
+      const stat = lstatSync(workspacePath)
+      if (!stat.isDirectory() || stat.isSymbolicLink()) {
+        console.warn(`[Agent 工作区] 默认 Skills 同步跳过非普通工作区目录: ${workspace.slug}`)
+        continue
+      }
+    }
     removeRetiredDefaultSkillsFromWorkspace(workspace)
-    if (defaultSkills.size === 0) continue
 
     const activeDir = getWorkspaceSkillsDir(workspace.slug)
     const inactiveDir = getInactiveSkillsDir(workspace.slug)
-    const coachMigrations = [
-      migrateLegacyCoachSkillDirectory(activeDir, { conflictingParentDirs: [inactiveDir] }),
-      migrateLegacyCoachSkillDirectory(inactiveDir, { conflictingParentDirs: [activeDir] }),
-    ]
+    const migrations = migrateLegacyBuiltinSkillDirectoriesInParents([activeDir, inactiveDir])
+    const blockedSlugs = new Set(migrations.filter((result) => !['absent', 'migrated'].includes(result.status)).map((result) => result.currentSlug))
 
     for (const [slug, info] of defaultSkills) {
       // 未解决的改名冲突保留双方内容；失败时也不把旧 inactive Skill 自动启用。
-      if (slug === GAMMA_COACH_SKILL_SLUG && coachMigrations.some((result) => result.status === 'conflict' || result.status === 'invalid' || result.status === 'failed')) continue
+      if (blockedSlugs.has(slug)) continue
       const activePath = join(activeDir, slug)
       const inactivePath = join(inactiveDir, slug)
 
@@ -889,7 +894,7 @@ export function getDefaultSkillSlugs(): string[] {
 
   try {
     return readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name !== LEGACY_COACH_SKILL_SLUG)
+      .filter((entry) => entry.isDirectory() && !isLegacyBuiltinSkillSlug(entry.name))
       .map((entry) => entry.name)
   } catch {
     return []

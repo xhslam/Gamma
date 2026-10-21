@@ -1,5 +1,6 @@
 export type StopGenerationTarget =
   | { kind: 'agent'; sessionId: string }
+  | { kind: 'agy'; sessionId: string; taskId: string }
 
 interface SessionTabLike {
   type: string
@@ -23,6 +24,7 @@ export function clearStopGenerationTarget(target: StopGenerationTarget): void {
   if (
     lastInteractedStopTarget?.kind === target.kind
     && lastInteractedStopTarget.sessionId === target.sessionId
+    && (target.kind !== 'agy' || (lastInteractedStopTarget.kind === 'agy' && lastInteractedStopTarget.taskId === target.taskId))
   ) {
     lastInteractedStopTarget = null
   }
@@ -45,6 +47,9 @@ export function resolveStopGenerationTarget(
   if (!activeTab) return null
 
   if (activeTab.type === 'agent' || activeTab.type === 'preview') {
+    if (activeAgentSidePanelTab?.startsWith('agy:') && activeAgentSidePanelTab.length > 4) {
+      return { kind: 'agy', sessionId: activeTab.sessionId, taskId: activeAgentSidePanelTab.slice(4) }
+    }
     const delegatedChildSessionId = activeAgentSidePanelTab === 'delegation'
       && activeDelegation?.type === 'agent'
       ? activeDelegation.sessionId
@@ -66,12 +71,13 @@ export function getStopGenerationTarget(event: Event): StopGenerationTarget | nu
 
   const candidate = detail as Partial<StopGenerationTarget>
   if (
-    (candidate.kind !== 'agent')
+    (candidate.kind !== 'agent' && candidate.kind !== 'agy')
     || typeof candidate.sessionId !== 'string'
     || candidate.sessionId.length === 0
   ) {
     return null
   }
 
+  if (candidate.kind === 'agy' && (typeof candidate.taskId !== 'string' || !candidate.taskId)) return null
   return candidate as StopGenerationTarget
 }

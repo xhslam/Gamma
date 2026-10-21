@@ -103,3 +103,73 @@ describe('默认 Coach 改名迁移', () => {
     expect(readdirSync(unrelated)).toEqual([])
   })
 })
+
+// 历史模板已不在新版 bundle，仍必须迁移用户已有安装。
+describe('历史内置 Skills 改名', () => {
+  test('Given 四个旧模板与自建同前缀 Skill When 迁移 Then 逐个改名、完整备份且不碰自建 Skill', async () => {
+    const { migrateLegacyBuiltinSkillDirectories, LEGACY_BUILTIN_SKILL_RENAMES } = await import('./legacy-skill-renames')
+    const parent = join(fixtureRoot, 'skills-inactive')
+    const historical = LEGACY_BUILTIN_SKILL_RENAMES.slice(1)
+    for (const { legacySlug } of historical) createCoach(parent, legacySlug)
+    const custom = createCoach(parent, 'proma-my-own-tool')
+    const results = migrateLegacyBuiltinSkillDirectories(parent)
+    for (const { legacySlug, currentSlug } of historical) {
+      const result = results.find((item) => item.legacySlug === legacySlug)!
+      expect(result.status).toBe('migrated')
+      expect(readFileSync(join(parent, currentSlug, 'SKILL.md'), 'utf8')).toContain(`name: ${currentSlug}`)
+      expect(readFileSync(join(parent, currentSlug, 'custom.txt'), 'utf8')).toBe('用户补充内容')
+      expect(readFileSync(join(result.backupPath!, 'SKILL.md'), 'utf8')).toContain(`name: ${legacySlug}`)
+      expect(existsSync(join(parent, legacySlug))).toBe(false)
+    }
+    expect(readFileSync(join(custom, 'SKILL.md'), 'utf8')).toContain('name: proma-my-own-tool')
+    expect(migrateLegacyBuiltinSkillDirectories(parent).every((item) => item.status === 'absent')).toBe(true)
+    expect(readdirSync(join(fixtureRoot, '.legacy-skill-backups', 'skills-inactive'))).toHaveLength(4)
+  })
+
+  test('Given 引用 Markdown 与外部 Markdown 链接 When 改名 Then 更新目录内引用且不改链接目标', async () => {
+    const { migrateLegacyBuiltinSkillDirectories } = await import('./legacy-skill-renames')
+    const parent = join(fixtureRoot, 'skills')
+    const legacy = createCoach(parent, 'proma-build-ai-app')
+    createCoach(parent, 'proma-cloud-sdk')
+    mkdirSync(join(legacy, 'references'))
+    writeFileSync(join(legacy, 'references', 'guide.md'), '使用 `proma-cloud-sdk` 调用服务')
+    const external = join(fixtureRoot, 'external.md')
+    writeFileSync(external, '使用 `proma-cloud-sdk` 调用服务')
+    symlinkSync(external, join(legacy, 'references', 'external.md'))
+    const result = migrateLegacyBuiltinSkillDirectories(parent).find((item) => item.legacySlug === 'proma-build-ai-app')!
+    expect(result.status).toBe('migrated')
+    expect(readFileSync(join(parent, 'gamma-build-ai-app', 'references', 'guide.md'), 'utf8')).toContain('gamma-cloud-sdk')
+    expect(readFileSync(external, 'utf8')).toContain('proma-cloud-sdk')
+    expect(readFileSync(join(result.backupPath!, 'references', 'guide.md'), 'utf8')).toContain('proma-cloud-sdk')
+  })
+})
+
+
+test('Given 依赖 Skill 的 Markdown 链接无效 When 其余 Skill 改名 Then 保留可用旧依赖引用', async () => {
+  const { migrateLegacyBuiltinSkillDirectories } = await import('./legacy-skill-renames')
+  const parent = join(fixtureRoot, 'skills')
+  const build = createCoach(parent, 'proma-build-ai-app')
+  writeFileSync(join(build, 'guide.md'), '读取 `proma-cloud-sdk`，调用 proma_cloud。')
+  const cloud = createCoach(parent, 'proma-cloud-sdk')
+  const external = join(fixtureRoot, 'external-cloud.md')
+  writeFileSync(external, 'name: proma-cloud-sdk')
+  rmSync(join(cloud, 'SKILL.md'))
+  symlinkSync(external, join(cloud, 'SKILL.md'))
+  const results = migrateLegacyBuiltinSkillDirectories(parent)
+  expect(results.find((item) => item.legacySlug === 'proma-build-ai-app')?.status).toBe('migrated')
+  expect(results.find((item) => item.legacySlug === 'proma-cloud-sdk')?.status).toBe('invalid')
+  expect(readFileSync(join(parent, 'gamma-build-ai-app', 'guide.md'), 'utf8')).toContain('`proma-cloud-sdk`')
+  expect(existsSync(join(parent, 'gamma-cloud-sdk'))).toBe(false)
+  expect(readFileSync(external, 'utf8')).toBe('name: proma-cloud-sdk')
+})
+
+test('Given 工作区根是外部链接 When 迁移 Then 外部 Skill 和备份位置均不写入', async () => {
+  const { migrateLegacyBuiltinSkillDirectories } = await import('./legacy-skill-renames')
+  const external = join(fixtureRoot, 'external')
+  const legacy = createCoach(join(external, 'skills'), 'proma-build-ai-app')
+  symlinkSync(external, join(fixtureRoot, 'linked-workspace'), 'dir')
+  const results = migrateLegacyBuiltinSkillDirectories(join(fixtureRoot, 'linked-workspace', 'skills'))
+  expect(results.find((item) => item.legacySlug === 'proma-build-ai-app')?.status).toBe('invalid')
+  expect(readFileSync(join(legacy, 'SKILL.md'), 'utf8')).toContain('name: proma-build-ai-app')
+  expect(existsSync(join(external, '.legacy-skill-backups'))).toBe(false)
+})
