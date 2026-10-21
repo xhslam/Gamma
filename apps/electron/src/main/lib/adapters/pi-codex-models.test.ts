@@ -15,7 +15,7 @@ const credentialStore: CredentialStore = {
   async delete() {},
 }
 const latestModel: Model<Api> = {
-  id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', provider: 'openai-codex',
+  id: 'gamma-fixture-online-only', name: '本地在线目录夹具', provider: 'openai-codex',
   api: 'openai-codex-responses', baseUrl: 'https://chatgpt.com/backend-api',
   reasoning: true, input: ['text', 'image'], contextWindow: 272_000, maxTokens: 128_000,
   cost: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },

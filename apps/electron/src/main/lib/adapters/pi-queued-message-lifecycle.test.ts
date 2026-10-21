@@ -108,6 +108,7 @@ describe('Given Pi 运行期间追加消息', () => {
       entered.resolve()
       await resume.promise
       session.agent.steer({ role: 'user', content: text, timestamp: 1 })
+      return 'queued'
     }
     const pending = adapter.sendQueuedMessage('session', message)
     await entered.promise
@@ -143,6 +144,7 @@ describe('Given Pi 运行期间追加消息', () => {
     session.steer = async () => {
       active.disposed = true
       sessions.delete('session')
+      return 'handled'
     }
     await adapter.sendQueuedMessage('session', message)
     expect(session.agent.state.messages).toEqual([])
@@ -157,6 +159,7 @@ describe('Given Pi 运行期间追加消息', () => {
       entered.resolve()
       await releaseInput.promise
       steering.push(text)
+      return 'queued'
     }
     const queue = {
       get pendingMessageCount() { return steering.length },
@@ -300,7 +303,7 @@ describe('Given Pi 运行期间追加消息', () => {
       active.session.steer = async (...args) => {
         inputEntered.resolve()
         await releaseInput.promise
-        await steer(...args)
+        return await steer(...args)
       }
       const drain = active.queuedMessageAdmission.drainAndClose.bind(active.queuedMessageAdmission)
       active.queuedMessageAdmission.drainAndClose = async () => { settling.resolve(); await drain() }

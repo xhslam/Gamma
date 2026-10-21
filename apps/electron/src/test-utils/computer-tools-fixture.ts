@@ -1,5 +1,5 @@
 import { Type } from 'typebox'
-import type { ToolDefinition, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import type { ToolDefinition, ExtensionToolContext } from '@earendil-works/pi-coding-agent'
 import type { ComputerExecuteParams } from '../main/lib/computer-controller'
 import { loadIsolatedModule } from './isolated-module'
 import { createComputerFixture } from './computer-fixture'
@@ -13,5 +13,5 @@ export function createComputerToolsFixture(options?: Parameters<typeof createCom
   const sdk = { defineTool: (definition: ToolDefinition) => definition } as unknown as Parameters<typeof buildPiComputerTools>[0]
   const tools = buildPiComputerTools(sdk, fixture.binding, 'user', fixture.controller)
   const computer = tools.find(tool => tool.name === 'computer')!
-  return { ...fixture, tools, execute: (params: ComputerExecuteParams) => computer.execute('synthetic-tool-call', params, undefined, undefined, {} as ExtensionContext) }
+  return { ...fixture, tools, execute: (params: ComputerExecuteParams) => computer.execute('synthetic-tool-call', params, undefined, undefined, {} as ExtensionToolContext) }
 }

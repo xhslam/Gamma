@@ -868,7 +868,10 @@ export async function getCodexCatalogModels(): Promise<PiCatalogModel[]> {
   const { getModels } = await loadPiAiCompat()
   const cached = await new CodexModelStore().read('openai-codex')
   const models = new Map<string, PiCatalogModel>(getModels('openai-codex').map((model) => [model.id, model]))
-  for (const model of cached?.models ?? []) models.set(model.id, model)
+  for (const model of cached?.models ?? []) {
+    // Pi 1.x 的缓存目录也包含图片和分类模型；会话选择只接收聊天模型。
+    if (model.type === undefined || model.type === 'chat') models.set(model.id, model)
+  }
   return mergeCodexModels([...models.values()]).filter(isSupportedCodexModel)
 }
 

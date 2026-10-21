@@ -6,7 +6,7 @@ import {
   SessionManager,
   type Extension,
   type ExtensionAPI,
-  type ExtensionContext,
+  type ExtensionToolContext,
   type ModelRegistry,
 } from '@earendil-works/pi-coding-agent'
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
@@ -35,7 +35,7 @@ function branchMessages(manager: SessionManager): unknown[] {
 async function executeTaskTool(controller: GammaTaskProgressController, name: string, input: Record<string, unknown>): Promise<unknown> {
   const tool = buildGammaProductToolDefinitions({ defineTool }, undefined, controller.tasks).find((definition) => definition.name === name)
   if (!tool) throw new Error(`测试工具未注册: ${name}`)
-  const result = await tool.execute(`call-${name}`, input, undefined, undefined, {} as ExtensionContext)
+  const result = await tool.execute(`call-${name}`, input, undefined, undefined, {} as ExtensionToolContext)
   return result.details
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import type { ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent'
+import type { ExtensionToolContext, ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { buildPiWebTools, type PiWebToolDependencies } from './pi-web-tools'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
@@ -37,7 +37,7 @@ function findTool(dependencies: PiWebToolDependencies, name: string): ToolDefini
 }
 
 async function executeTool(tool: ToolDefinition, params: Record<string, unknown>, signal?: AbortSignal) {
-  return tool.execute('web-call', params, signal, undefined, {} as ExtensionContext)
+  return tool.execute('web-call', params, signal, undefined, {} as ExtensionToolContext)
 }
 
 function resultText(result: Awaited<ReturnType<typeof executeTool>>): string {
