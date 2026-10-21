@@ -377,8 +377,8 @@ export interface AppSettings {
   autoCleanupArchivedDays?: number
   /**
    * Agent 代创建 git commit / PR 时是否附加 Gamma 推广标识。
-   * 默认 true：commit trailer `Made-with: Gamma`，PR body 末尾含 https://proma.cool 与 https://github.com/proma-ai/Proma。
-   * 关闭后不注入任何 Gamma 归因，并覆盖 Claude SDK 默认 Co-Authored-By。
+   * 默认 true：commit trailer `Made-with: Gamma`，PR body 末尾链接到 https://github.com/xhslam/Gamma。
+   * 关闭后不注入任何 Gamma 归因。
    */
   gitAttributionEnabled?: boolean
   /** macOS 原生 Agent 灵动岛偏好。 */

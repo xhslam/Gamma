@@ -1119,8 +1119,8 @@ export function buildGammaProductToolDefinitions(
     sdk.defineTool({
       name: 'TaskCreate',
       label: '创建任务',
-      description: '创建一个可见进度任务，用于多步骤或长耗时工作。',
-      promptSnippet: '创建一个可见进度任务。',
+      description: '创建一个可见进度阶段。复杂工作应按可独立验收的阶段分别创建任务，后续用 TaskUpdate 更新对应阶段。',
+      promptSnippet: '为复杂工作分别创建多个可验收阶段，不把整个计划塞进一个反复改名的任务。',
       parameters: Type.Object({
         subject: Type.String({ description: '任务标题。' }),
         description: Type.Optional(Type.String({ description: '任务说明。' })),

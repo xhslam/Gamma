@@ -20,6 +20,7 @@ import {
   getAgentSessionMessagesPath,
   getAgentSessionWorkspacePath,
   getAgentWorkspacePath,
+  getAgentWorkspacesDir,
   getSdkConfigDir,
 } from './config-paths'
 import {
@@ -47,6 +48,7 @@ import type {
 import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@gamma/shared'
 // 旧格式 → SDKMessage 的转换逻辑下沉到 @gamma/session-core 作为唯一真源，避免主进程与渲染层各存一份。
 import { convertLegacyMessage } from '@gamma/session-core'
+import { normalizeLegacyBuiltinSkillActivation } from './legacy-skill-activations'
 import { assertEnabledModelForChannel } from './agent-model-selection'
 import { copyForkWorkspaceFiles } from './agent-fork-workspace-copy'
 
@@ -168,7 +170,14 @@ function normalizePersistedSDKMessage(parsed: unknown): SDKMessage {
   if (parsed && typeof parsed === 'object' && 'role' in parsed && !('type' in parsed)) {
     return convertLegacyMessage(parsed as AgentMessage)
   }
-  return parsed as SDKMessage
+  const message = parsed as SDKMessage
+  if (message?.type !== 'user') return message
+  const activations = message.skill_activations as SkillActivation[] | undefined
+  if (!Array.isArray(activations) || !activations.length) return message
+  return {
+    ...message,
+    skill_activations: activations.map((activation) => normalizeLegacyBuiltinSkillActivation(activation, getAgentWorkspacesDir())),
+  }
 }
 
 function migrateLegacyPermissionMode(index: AgentSessionsIndex): boolean {

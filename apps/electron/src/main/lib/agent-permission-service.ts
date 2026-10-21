@@ -368,6 +368,8 @@ export class AgentPermissionService {
    */
   private buildDescription(toolName: string, input: Record<string, unknown>): string {
     switch (toolName) {
+      case 'AgyStart':
+        return '启动外部 Agent · agy：提示词将发送给 agy 自有服务；遵循其已有权限配置，不是文件或网络沙箱。'
       case 'Bash':
         return typeof input.command === 'string'
           ? `执行命令: ${input.command.slice(0, 200)}`

@@ -36,9 +36,9 @@ export function restoreAgentOnlyTabState(state: unknown, agentSessionIds: Readon
 /** 旧问答页和非法侧栏值必须落到可见文件页，不能留空。 */
 export function normalizeAgentSidePanelTab(tab: unknown): AgentSidePanelTab {
   if (typeof tab !== 'string') return 'files'
-  if (['files', 'changes', 'temporary-agent', 'delegation', 'todos', 'calendar', 'automations', 'skills', 'mcp', 'memory', 'markdown'].includes(tab)) {
+  if (['files', 'changes', 'temporary-agent', 'delegation', 'todos', 'calendar', 'automations', 'skills', 'mcp', 'memory', 'markdown', 'agy-tasks'].includes(tab)) {
     return tab as AgentSidePanelTab
   }
-  if (/^(exploration|browser|preview|terminal):.+$/.test(tab)) return tab as AgentSidePanelTab
+  if (/^(exploration|browser|preview|terminal|agy):.+$/.test(tab)) return tab as AgentSidePanelTab
   return 'files'
 }

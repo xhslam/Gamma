@@ -91,6 +91,7 @@ import {
 import { updateSettings } from '../settings-service'
 import type { ProductivityToolsSettings } from '../../../types'
 import { buildPiWebTools } from './pi-web-tools'
+import { buildPiAgyTools } from './pi-agy-tools'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 
@@ -1628,6 +1629,9 @@ export async function buildPiBuiltinTools(
   } catch (error) {
     console.error('[Pi 桥接] 注入 Worktree 选择工具失败:', error)
   }
+
+  // 外部 CLI 以独立可观察任务运行，不伪造 Pi 协作会话，也不升级其权限。
+  tools.push(...buildPiAgyTools(ctx))
 
   // Agent 终端以可见 PTY 承接直接执行；无用户在场的自动任务/子 Agent 不会获得该能力。
   try {

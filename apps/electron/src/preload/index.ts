@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   AutomaticMemorySnapshot,
@@ -142,6 +142,9 @@ import type {
   ResolvePlanningNativeSyncConflictInput,
   PlanningSyncProfile,
   SavePlanningSyncProfileInput,
+  AgyTask,
+  AgyTaskSnapshot,
+  AgyTaskUpdate,
   AgentTerminalCloseEvent,
   AgentTerminalOpenEvent,
   TerminalCreateInput,
@@ -204,6 +207,12 @@ export interface ElectronAPI {
    * 用户安装完 Git / Node 后触发，强制刷新缓存
    */
   reinitRuntime: () => Promise<RuntimeStatus>
+
+  // ===== 外部 Agent · agy =====
+  listAgyTasks: (sessionId: string) => Promise<AgyTask[]>
+  readAgyTask: (sessionId: string, taskId: string, afterSequence?: number) => Promise<AgyTaskSnapshot>
+  stopAgyTask: (sessionId: string, taskId: string) => Promise<AgyTask>
+  onAgyTaskUpdate: (callback: (update: AgyTaskUpdate) => void) => () => void
 
   // ===== 本地终端 =====
   createTerminal: (input: TerminalCreateInput) => Promise<TerminalState>
@@ -1258,6 +1267,15 @@ const electronAPI: ElectronAPI = {
 
   reinitRuntime: () => {
     return ipcRenderer.invoke(IPC_CHANNELS.REINIT_RUNTIME)
+  },
+
+  listAgyTasks: (sessionId: string) => ipcRenderer.invoke(AGY_IPC_CHANNELS.LIST, sessionId),
+  readAgyTask: (sessionId: string, taskId: string, afterSequence?: number) => ipcRenderer.invoke(AGY_IPC_CHANNELS.READ, sessionId, taskId, afterSequence),
+  stopAgyTask: (sessionId: string, taskId: string) => ipcRenderer.invoke(AGY_IPC_CHANNELS.STOP, sessionId, taskId),
+  onAgyTaskUpdate: (callback: (update: AgyTaskUpdate) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, update: AgyTaskUpdate): void => callback(update)
+    ipcRenderer.on(AGY_IPC_CHANNELS.UPDATE, listener)
+    return () => ipcRenderer.removeListener(AGY_IPC_CHANNELS.UPDATE, listener)
   },
 
   createTerminal: (input: TerminalCreateInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.CREATE, input),

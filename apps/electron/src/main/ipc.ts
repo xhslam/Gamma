@@ -18,6 +18,8 @@ import { getAutomaticMemorySnapshot, updateAutomaticMemorySettings, editAutomati
 import type { AutomaticMemorySettings } from '@gamma/shared'
 import { registerMarkdownWorkspaceIpc } from './lib/markdown-workspace-ipc'
 import { registerComputerIpc } from './lib/computer-ipc'
+import { AGY_IPC_CHANNELS } from '@gamma/shared'
+import { agyTaskService } from './lib/agy-task-controller'
 import { withFileMutationQueue, version as computeMemoryVersion } from './lib/memory'
 
 import type {
@@ -1363,6 +1365,19 @@ export function registerIpcHandlers(): void {
       throw new Error('仅主窗口可以操作本地终端。')
     }
   }
+  // 外部任务不向 renderer 暴露启动接口；历史/停止仅允许主窗口与所属会话。
+  ipcMain.handle(AGY_IPC_CHANNELS.LIST, (event, sessionId: string) => {
+    assertMainTerminalRenderer(event.sender.id)
+    return agyTaskService.list(sessionId)
+  })
+  ipcMain.handle(AGY_IPC_CHANNELS.READ, (event, sessionId: string, taskId: string, afterSequence?: number) => {
+    assertMainTerminalRenderer(event.sender.id)
+    return agyTaskService.read(sessionId, taskId, afterSequence)
+  })
+  ipcMain.handle(AGY_IPC_CHANNELS.STOP, async (event, sessionId: string, taskId: string) => {
+    assertMainTerminalRenderer(event.sender.id)
+    return agyTaskService.stop(sessionId, taskId)
+  })
   const assertMainSettingsRenderer = (senderId: number): void => {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.webContents.id !== senderId) {
@@ -2502,6 +2517,7 @@ export function registerIpcHandlers(): void {
       clearAgentQueuedMessages(id)
       await browserController.close(id)
       closeTerminalsForSession(id)
+      await agyTaskService.stopSession(id)
       deleteAgentSession(id)
       releaseAttachedFileWatchers(attachedFiles)
     }
@@ -2763,6 +2779,7 @@ export function registerIpcHandlers(): void {
         // A headless/delegated run can be in preflight before it appears active.
         await stopAgentAndDrain(sessionId)
         closeTerminalsForSession(sessionId)
+        await agyTaskService.stopSession(sessionId)
         await browserController.close(sessionId)
         deleteAgentSession(sessionId)
       }

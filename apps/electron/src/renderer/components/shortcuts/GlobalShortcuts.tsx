@@ -134,7 +134,7 @@ export function GlobalShortcuts(): null {
       if (
         isActiveAgentSidePanelOpen
         && activeAgentSidePanelTab
-        && (isWorkspaceComponentTab(activeAgentSidePanelTab) || activeAgentSidePanelTab.startsWith('preview:') || activeAgentSidePanelTab.startsWith('browser:') || activeAgentSidePanelTab.startsWith('exploration:') || activeAgentSidePanelTab === 'delegation' || activeAgentSidePanelTab.startsWith('terminal:'))
+        && (isWorkspaceComponentTab(activeAgentSidePanelTab) || activeAgentSidePanelTab.startsWith('preview:') || activeAgentSidePanelTab.startsWith('browser:') || activeAgentSidePanelTab.startsWith('exploration:') || activeAgentSidePanelTab === 'delegation' || activeAgentSidePanelTab.startsWith('terminal:') || activeAgentSidePanelTab.startsWith('agy:') || activeAgentSidePanelTab === 'agy-tasks')
       ) {
         window.dispatchEvent(new CustomEvent(CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT, {
           detail: { sessionId: activeTab.sessionId },
@@ -209,7 +209,14 @@ export function GlobalShortcuts(): null {
           activeAgentSidePanelTab,
           activeAgentSidePanelSplit,
         )
-      const target = lastTarget && (!lastTargetIsDelegated || delegatedTargetVisible)
+      const lastAgyTargetVisible = lastTarget?.kind !== 'agy' || (
+        activeTab?.sessionId === lastTarget.sessionId && isActiveAgentSidePanelOpen && (
+          activeAgentSidePanelTab === `agy:${lastTarget.taskId}`
+          || activeAgentSidePanelSplit?.leftTab === `agy:${lastTarget.taskId}`
+          || activeAgentSidePanelSplit?.rightTab === `agy:${lastTarget.taskId}`
+        )
+      )
+      const target = lastTarget && lastAgyTargetVisible && (!lastTargetIsDelegated || delegatedTargetVisible)
         ? lastTarget
         : resolveStopGenerationTarget(
             activeTab,

@@ -705,7 +705,7 @@ export function getDelegationTabLabel(title: string | null | undefined): string 
 
 export type AgentSidePanelBaseTab = 'files' | 'changes' | 'temporary-agent' | 'delegation' | WorkspaceComponentTab
 /** 工作区组件、每个 Pi 探索分支、协作子 Agent、浏览器网页和文件预览都处于右侧工作区顶栏。 */
-export type AgentSidePanelTab = AgentSidePanelBaseTab | `exploration:${string}` | `browser:${string}` | `preview:${string}` | `terminal:${string}`
+export type AgentSidePanelTab = AgentSidePanelBaseTab | `exploration:${string}` | `browser:${string}` | `preview:${string}` | `terminal:${string}` | `agy:${string}` | 'agy-tasks'
 
 /** 用户主动进入这些项目级能力时，Agent 后续的改动提示不得抢走当前视图。 */
 export function isUserPriorityWorkspaceComponentTab(

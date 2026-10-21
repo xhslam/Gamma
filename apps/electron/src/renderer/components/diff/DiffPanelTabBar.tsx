@@ -58,6 +58,7 @@ interface DiffPanelTabBarProps {
   onAddTabMenuOpenChange?: (open: boolean) => void
   onOpenFile: () => void
   onOpenTerminal?: () => void
+  onOpenAgyTasks?: () => void
   onOpenWorkspaceComponent?: (component: WorkspaceComponentTab) => void
   productivityTools?: ProductivityToolsSettings
   /** 仅当前右侧 Tab 需要的紧凑动作，渲染于标签列表之后，不影响内容区布局。 */
@@ -80,6 +81,7 @@ export function DiffPanelTabBar({
   onAddTabMenuOpenChange,
   onOpenFile,
   onOpenTerminal,
+  onOpenAgyTasks,
   onOpenWorkspaceComponent,
   productivityTools = { todosEnabled: true, calendarEnabled: true },
   activeTabAction,
@@ -516,6 +518,7 @@ export function DiffPanelTabBar({
               <FolderOpen className="size-3.5" />
               打开文件
             </DropdownMenuItem>
+            {onOpenAgyTasks && <DropdownMenuItem onSelect={onOpenAgyTasks}><SquareTerminal className="size-3.5" />外部任务 · agy</DropdownMenuItem>}
             {onOpenTerminal && (
               <DropdownMenuItem onSelect={onOpenTerminal}>
                 <SquareTerminal className="size-3.5" />

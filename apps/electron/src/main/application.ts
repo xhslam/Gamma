@@ -38,6 +38,7 @@ import { seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
 import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
 import { stopAllTerminals } from './lib/terminal-service'
+import { agyTaskService } from './lib/agy-task-controller'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
 import { browserController } from './lib/browser-controller'
 import { computerController } from './lib/computer-service'
@@ -845,6 +846,7 @@ app.on('before-quit', () => {
   // 中止所有活跃的 Agent 和终端子进程
   stopAllAgents()
   void stopAllTerminals()
+  agyTaskService.shutdown()
   browserController.dispose()
   // 清理更新器定时器
   cleanupUpdater()

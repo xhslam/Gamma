@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { SDKContentBlock, SDKMessage } from '@gamma/shared'
+import { aggregateTaskItems } from './task-progress'
 import { buildTaskProgressData } from './SDKMessageRenderer'
 
 const taskUpdate: SDKContentBlock = {
@@ -40,4 +41,26 @@ describe('任务工具执行结果提取', () => {
     const activity = buildTaskProgressData([taskUpdate], [resultMessage('已更新', false, { task })]).taskActivities[0]
     expect(activity).toMatchObject({ done: true, isError: false, result: JSON.stringify({ task }) })
   })
+})
+
+test('given SDK 中创建了三个阶段 when 提取工具结果并更新其中一项 then 展示三项真实进度', () => {
+  const tasks = [
+    { id: 'first', subject: '第一阶段', status: 'pending' },
+    { id: 'task-1', subject: '第二阶段', status: 'pending' },
+    { id: 'third', subject: '第三阶段', status: 'pending' },
+  ]
+  const blocks: SDKContentBlock[] = tasks.map((task) => ({
+    type: 'tool_use', id: `create-${task.id}`, name: 'TaskCreate', input: { subject: task.subject },
+  }))
+  const messages = tasks.map((task) => ({
+    type: 'user', message: { content: [{
+      type: 'tool_result', tool_use_id: `create-${task.id}`, content: JSON.stringify({ task }),
+    }] },
+  } as SDKMessage))
+  blocks.push(taskUpdate)
+  messages.push(resultMessage(JSON.stringify({ task: { ...tasks[1], status: 'completed' } })))
+  const data = buildTaskProgressData(blocks, messages)
+  expect(aggregateTaskItems(data.taskActivities, false)).toMatchObject([
+    tasks[0], { ...tasks[1], status: 'completed' }, tasks[2],
+  ])
 })
