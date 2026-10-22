@@ -10,7 +10,7 @@
 
 import { atom } from 'jotai'
 
-export type ActiveView = 'conversations' | 'planning' | 'agent-skills' | 'markdown'
+export type ActiveView = 'conversations' | 'planning' | 'agent-skills' | 'markdown' | 'agy-terminal'
 export type AgentSkillsCapabilityTab = 'skills' | 'mcp' | 'memory'
 
 /** 当前活跃视图（不持久化，每次启动默认显示对话） */

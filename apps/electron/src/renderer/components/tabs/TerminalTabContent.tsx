@@ -30,11 +30,15 @@ export interface TerminalTabContentProps {
   cwd?: string
   /** 右侧工作区统一关闭 Tab；普通卸载只分离 DOM，不关闭 PTY/解析器。 */
   terminateOnUnmount?: boolean
+  /** 项目级终端已由专用入口创建；挂载绝不能再创建 shell。 */
+  existingOnly?: boolean
+  /** 仅用户主动显示的交互终端请求焦点；异步恢复不能抢走后来选中的其他输入框。 */
+  autoFocus?: boolean
 }
 
 interface TerminalView {
   sessionId: string
-  attach(host: HTMLElement, onError: (message: string | null) => void): () => void
+  attach(host: HTMLElement, onError: (message: string | null) => void, autoFocus?: boolean): () => void
   dispose(): void
   hasSelection(): boolean
   copySelection(): Promise<void>
@@ -47,7 +51,7 @@ interface TerminalView {
 const terminalViews = new TerminalViewRegistry<TerminalView>()
 
 /** 对非当前会话的终端也保留解析器，确保 TUI 的 DSR/DA 查询始终能获得回应。 */
-export function retainTerminalViews(tabs: ReadonlyMap<string, readonly { terminalId: string; cwd?: string }[]>): void {
+export function retainTerminalViews(tabs: ReadonlyMap<string, readonly { terminalId: string; cwd?: string; existingOnly?: boolean }[]>): void {
   const retainedIds = new Set<string>()
   for (const [sessionId, terminals] of tabs) {
     for (const tab of terminals) {
@@ -58,7 +62,7 @@ export function retainTerminalViews(tabs: ReadonlyMap<string, readonly { termina
   terminalViews.retainOnly(retainedIds)
 }
 
-function ensureTerminalView(input: Pick<TerminalTabContentProps, 'terminalId' | 'sessionId' | 'cwd'>, initialHost?: HTMLElement): TerminalView {
+function ensureTerminalView(input: Pick<TerminalTabContentProps, 'terminalId' | 'sessionId' | 'cwd' | 'existingOnly'>, initialHost?: HTMLElement): TerminalView {
   return terminalViews.acquire(input.terminalId, input.sessionId, () => createTerminalView(input, initialHost))
 }
 
@@ -83,7 +87,7 @@ export function fileToBase64(file: File): Promise<string> {
   })
 }
 
-function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabContentProps, 'terminalId' | 'sessionId' | 'cwd'>, initialHost?: HTMLElement): TerminalView {
+function createTerminalView({ terminalId, sessionId, cwd, existingOnly }: Pick<TerminalTabContentProps, 'terminalId' | 'sessionId' | 'cwd' | 'existingOnly'>, initialHost?: HTMLElement): TerminalView {
   const element = document.createElement('div')
   element.className = 'h-full min-h-0 w-full min-w-0'
   initialHost?.appendChild(element)
@@ -114,6 +118,18 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
   let dimensions: { cols: number; rows: number } | undefined
   let fitFrame = 0
   let attachmentGeneration = 0
+  let focusRequest: { host: HTMLElement; origin: Element | null; generation: number } | undefined
+  const focusWhenReady = (): void => {
+    const request = focusRequest
+    if (!request || disposed || exited || !restored || !host) return
+    if (request.host !== host || request.generation !== attachmentGeneration) { focusRequest = undefined; return }
+    if (!host.isConnected || host.offsetParent === null || host.clientWidth <= 0 || host.clientHeight <= 0) return
+    const active = document.activeElement
+    // 用户在启动/恢复期间转到别处时，迟到的 PTY 和动画完成不得夺回光标。
+    if (active && active !== document.body && active !== request.origin && !host.contains(active)) { focusRequest = undefined; return }
+    focusRequest = undefined
+    terminal.focus()
+  }
   let pasteTail = Promise.resolve()
   const selectionListeners = new Set<(hasSelection: boolean) => void>()
 
@@ -131,6 +147,7 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
         dimensions = { cols, rows }
         void window.electronAPI.resizeTerminal({ terminalId, cols, rows }).catch((error: unknown) => reportError('终端尺寸同步失败', error))
       }
+      focusWhenReady()
     } catch {
       // 字体尚未完成测量时等待下一次布局变化。
     }
@@ -153,7 +170,7 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
     restored = true
     terminal.options.disableStdin = exited
     if (pendingExitCode !== undefined) showExit(pendingExitCode)
-    // 异步恢复不能抢走用户在其他输入框或另一个 Pane 的焦点。
+    focusWhenReady()
   }
   const disposeInput = terminal.onData((data) => {
     if (disposed || exited) return
@@ -350,8 +367,9 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
 
   // 首次可见挂载先测量真实行列，避免 ConPTY 从 80×24 重排交互光标。
   fit()
-  dimensions = { cols: terminal.cols, rows: terminal.rows }
-  const creation = window.electronAPI.createTerminal({ terminalId, sessionId, cwd, cols: terminal.cols, rows: terminal.rows })
+  // 既有 PTY 可能按 100×30 启动。DOM 已 fit 不等于 PTY 已 resize，首次 ready 必须同步一次。
+  dimensions = undefined
+  const creation = existingOnly ? Promise.resolve() : window.electronAPI.createTerminal({ terminalId, sessionId, cwd, cols: terminal.cols, rows: terminal.rows })
   void (async () => {
     try {
       await creation
@@ -383,8 +401,12 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
 
   return {
     sessionId,
-    attach(nextHost, onError) {
+    attach(nextHost, onError, autoFocus = false) {
       attachmentGeneration++
+      const origin = document.activeElement
+      const editingElsewhere = origin instanceof HTMLElement && !nextHost.contains(origin)
+        && origin.matches('input, textarea, [contenteditable="true"], [role="textbox"]')
+      focusRequest = autoFocus && !editingElsewhere ? { host: nextHost, origin, generation: attachmentGeneration } : undefined
       pasteTail = Promise.resolve()
       host = nextHost
       errorListener = onError
@@ -393,7 +415,7 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
       resizeObserver.disconnect()
       resizeObserver.observe(nextHost)
       fit()
-      fitFrame = requestAnimationFrame(fit)
+      fitFrame = requestAnimationFrame(() => { fit(); focusWhenReady() })
       // 鼠标进入空白区域也应将焦点交给当前终端。
       const focus = (): void => terminal.focus()
       nextHost.addEventListener('pointerdown', focus)
@@ -401,6 +423,7 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
         nextHost.removeEventListener('pointerdown', focus)
         if (host !== nextHost) return
         attachmentGeneration++
+        focusRequest = undefined
         pasteTail = Promise.resolve()
         host = undefined
         errorListener = undefined
@@ -456,7 +479,7 @@ function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabCont
 }
 
 /** UI 卸载只分离 DOM；解析资源由全部终端 Tab 的生命周期统一回收。 */
-export function TerminalTabContent({ terminalId, sessionId, cwd, terminateOnUnmount = true }: TerminalTabContentProps): React.ReactElement {
+export function TerminalTabContent({ terminalId, sessionId, cwd, existingOnly, autoFocus = false, terminateOnUnmount = true }: TerminalTabContentProps): React.ReactElement {
   const hostRef = React.useRef<HTMLDivElement>(null)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
   const [hasSelection, setHasSelection] = React.useState(false)
@@ -468,9 +491,9 @@ export function TerminalTabContent({ terminalId, sessionId, cwd, terminateOnUnmo
     const host = hostRef.current
     if (!host) return
     const generation = ++lifecycleGenerationRef.current
-    const view = ensureTerminalView({ terminalId, sessionId, cwd }, host)
+    const view = ensureTerminalView({ terminalId, sessionId, cwd, existingOnly }, host)
     activeViewRef.current = view
-    const detach = view.attach(host, setErrorMessage)
+    const detach = view.attach(host, setErrorMessage, autoFocus)
     const unsubSelection = view.onSelectionChange(setHasSelection)
     setHasSelection(view.hasSelection())
 
@@ -484,7 +507,7 @@ export function TerminalTabContent({ terminalId, sessionId, cwd, terminateOnUnmo
         void window.electronAPI.killTerminal(terminalId).catch(console.error)
       })
     }
-  }, [cwd, sessionId, terminalId, terminateOnUnmount])
+  }, [autoFocus, cwd, existingOnly, sessionId, terminalId, terminateOnUnmount])
 
   const handleCopy = React.useCallback(async () => {
     await activeViewRef.current?.copySelection()

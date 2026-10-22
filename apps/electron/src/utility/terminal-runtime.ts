@@ -12,6 +12,7 @@ import {
   type TerminalState,
 } from '@gamma/shared'
 import { resolveTerminalShell } from './terminal-shell-resolver'
+import { resolveAgyTerminalLaunch } from './agy-terminal-launch'
 
 type MessagePortLike = {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -27,6 +28,7 @@ type ParentPortLike = {
 
 type RuntimeTerminalCreateInput = TerminalCreateInput & {
   strictCwd?: boolean
+  launchAgy?: boolean
 }
 
 type RuntimeRequest =
@@ -116,14 +118,15 @@ function createTerminal(input: RuntimeTerminalCreateInput, attemptId: number): v
   }
   const profile = isTerminalProfile(input.profile) ? input.profile : 'default'
   try {
-    const shell = resolveTerminalShell(profile)
     const cwd = getSafeCwd(input.cwd, input.strictCwd === true)
+    const agy = input.launchAgy === true ? resolveAgyTerminalLaunch() : undefined
+    const shell = agy ? { file: agy.file, args: agy.args, title: 'AGY' } : resolveTerminalShell(profile)
     const pty = spawn(shell.file, shell.args, {
       name: 'xterm-256color',
       cols: normalizeDimension(input.cols),
       rows: normalizeDimension(input.rows),
       cwd,
-      env: { ...process.env, TERM: 'xterm-256color' },
+      env: agy?.env ?? { ...process.env, TERM: 'xterm-256color' },
     })
     const state: TerminalState = {
       terminalId: input.terminalId,

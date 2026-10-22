@@ -130,6 +130,17 @@ function normalizeSafePath(root: string, filePath: string): string | null {
 const MAX_CONCURRENT_GIT_COMMANDS = 6
 /** 未追踪文件并发读取上限，避免大量新文件占满文件系统线程池。 */
 const MAX_CONCURRENT_UNTRACKED_FILE_READS = 6
+/** 头部探测长度：足以判定二进制，又不为每个产物读取整份正文。 */
+const UNTRACKED_HEAD_BYTES = 8 * 1024
+/** 文本文件分块长度，避免一次性分配整文件缓冲区。 */
+const UNTRACKED_READ_CHUNK_BYTES = 256 * 1024
+/**
+ * 单轮扫描允许读取的未追踪文件总字节。
+ *
+ * 打包产物、生成物等大量未追踪文件并不需要精确行数；超出预算后只返回文件条目、
+ * 不再读正文，避免一次刷新读掉数百 MB 拖慢整个主进程和代码审查面板。
+ */
+const MAX_UNTRACKED_SCAN_BYTES = 32 * 1024 * 1024
 
 class AsyncSemaphore {
   private active = 0
@@ -346,7 +357,11 @@ function isPathInsideRoot(root: string, target: string): boolean {
  * 路径校验与 I/O 均在受限队列内异步执行；使用 LF 字节计数以匹配 Git 对 CRLF
  * 文本的统计，没有末尾 LF 的非空内容仍算一行。
  */
-async function countUntrackedFileAdditions(realGitRoot: string, filePath: string): Promise<number> {
+interface UntrackedScanBudget {
+  remainingBytes: number
+}
+
+async function countUntrackedFileAdditions(realGitRoot: string, filePath: string, budget: UntrackedScanBudget): Promise<number> {
   return untrackedFileReadSemaphore.run(async () => {
     const fullPath = resolveUntrackedFilePath(realGitRoot, filePath)
     if (!fullPath) return 0
@@ -378,15 +393,45 @@ async function countUntrackedFileAdditions(realGitRoot: string, filePath: string
           || !isPathInsideRoot(realGitRoot, currentRealPath)
         ) return 0
 
-        const content = Buffer.alloc(fileStat.size)
-        const { bytesRead } = await fileHandle.read(content, 0, content.length, 0)
-        if (bytesRead === 0 || content.subarray(0, bytesRead).includes(0)) return 0
+        if (fileStat.size === 0) return 0
+
+        // 先读头部判定二进制：未追踪文件常见 exe/pak/dll 等产物，
+        // 若整份读入后才检查 NUL，会为几百 MB 的二进制白读一遍磁盘。
+        const headLength = Math.min(fileStat.size, UNTRACKED_HEAD_BYTES)
+        if (headLength > budget.remainingBytes) return 0
+        const head = Buffer.allocUnsafe(headLength)
+        const { bytesRead: headBytes } = await fileHandle.read(head, 0, headLength, 0)
+        if (headBytes === 0) return 0
+        budget.remainingBytes -= headBytes
+        const headChunk = head.subarray(0, headBytes)
+        if (headChunk.includes(0)) return 0
 
         let lines = 0
-        for (let index = 0; index < bytesRead; index += 1) {
-          if (content[index] === 0x0a) lines += 1
+        let lastByte = -1
+        for (let index = 0; index < headBytes; index += 1) {
+          if (headChunk[index] === 0x0a) lines += 1
         }
-        return lines + (content[bytesRead - 1] === 0x0a ? 0 : 1)
+        lastByte = headChunk[headBytes - 1]!
+        let position = headBytes
+
+        // 文本文件分块统计换行；预算不足时放弃该文件，不返回半截行数。
+        const chunk = Buffer.allocUnsafe(UNTRACKED_READ_CHUNK_BYTES)
+        while (position < fileStat.size) {
+          const length = Math.min(chunk.length, fileStat.size - position)
+          if (length > budget.remainingBytes) return 0
+          const { bytesRead } = await fileHandle.read(chunk, 0, length, position)
+          if (bytesRead === 0) break
+          budget.remainingBytes -= bytesRead
+          const slice = chunk.subarray(0, bytesRead)
+          if (slice.includes(0)) return 0
+          for (let index = 0; index < bytesRead; index += 1) {
+            if (slice[index] === 0x0a) lines += 1
+          }
+          lastByte = slice[bytesRead - 1]!
+          position += bytesRead
+        }
+
+        return lines + (lastByte === 0x0a ? 0 : 1)
       } finally {
         await fileHandle.close()
       }
@@ -413,12 +458,13 @@ async function buildUntrackedFileEntries(gitRoot: string, filePaths: string[]): 
     return entries
   }
 
+  const budget: UntrackedScanBudget = { remainingBytes: MAX_UNTRACKED_SCAN_BYTES }
   let nextIndex = 0
   const worker = async (): Promise<void> => {
     while (nextIndex < entries.length) {
       const index = nextIndex
       nextIndex += 1
-      entries[index]!.additions = await countUntrackedFileAdditions(realGitRoot, entries[index]!.filePath)
+      entries[index]!.additions = await countUntrackedFileAdditions(realGitRoot, entries[index]!.filePath, budget)
     }
   }
   await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_UNTRACKED_FILE_READS, entries.length) }, worker))

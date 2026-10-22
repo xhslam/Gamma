@@ -215,6 +215,7 @@ export interface ElectronAPI {
   onAgyTaskUpdate: (callback: (update: AgyTaskUpdate) => void) => () => void
 
   // ===== 本地终端 =====
+  openProjectAgyTerminal: (input: import('@gamma/shared').ProjectAgyTerminalInput) => Promise<import('@gamma/shared').ProjectAgyTerminalState>
   createTerminal: (input: TerminalCreateInput) => Promise<TerminalState>
   writeTerminal: (input: TerminalInput) => Promise<void>
   resizeTerminal: (input: TerminalResizeInput) => Promise<void>
@@ -1280,6 +1281,7 @@ const electronAPI: ElectronAPI = {
     return () => ipcRenderer.removeListener(AGY_IPC_CHANNELS.UPDATE, listener)
   },
 
+  openProjectAgyTerminal: (input: import('@gamma/shared').ProjectAgyTerminalInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.OPEN_PROJECT_AGY, input),
   createTerminal: (input: TerminalCreateInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.CREATE, input),
   writeTerminal: (input: TerminalInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.INPUT, input),
   resizeTerminal: (input: TerminalResizeInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.RESIZE, input),

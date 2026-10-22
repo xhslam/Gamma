@@ -5,7 +5,7 @@ import { loadIsolatedModule } from '../../../test-utils/isolated-module'
 
 function setup() {
   const atoms = { agentDiffPanelTabAtom: 'active-tabs', agentTerminalTabsAtom: 'terminals', currentAgentSessionIdAtom: 'session', currentSessionSidePanelOpenAtom: 'open' }
-  const state = new Map<string, unknown>([['terminals', new Map()], ['active-tabs', new Map()], ['session', 's1']])
+  const state = new Map<string, unknown>([['terminals', new Map()], ['active-tabs', new Map()], ['session', 's1'], ['project-terminals', new Map()]])
   let opened!: (event: AgentTerminalOpenEvent) => void
   let closed!: (event: AgentTerminalCloseEvent) => void
   const effects: Array<() => void | (() => void)> = []
@@ -18,9 +18,11 @@ function setup() {
   const module = loadIsolatedModule<{ TerminalLifecycleObserver(): null }>(`${import.meta.dir}/TerminalLifecycleObserver.tsx`, {
     react: { useEffect: (effect: () => void | (() => void)) => effects.push(effect) },
     jotai: { useStore: () => store, useAtomValue: (atom: string) => store.get(atom) },
+    '@/atoms/project-agy-terminal-atoms': { projectAgyTerminalsAtom: 'project-terminals' },
     '@/atoms/agent-atoms': { ...atoms, getTerminalSidePanelTab: (id: string) => `terminal:${id}` },
     './TerminalTabContent': { retainTerminalViews: (tabs: unknown) => { retained = tabs } },
   }, { window: { electronAPI: {
+    onTerminalExit: () => () => { unsubscribed++ },
     onAgentTerminalOpen: (listener: typeof opened) => { opened = listener; return () => { unsubscribed++ } },
     onAgentTerminalClose: (listener: typeof closed) => { closed = listener; return () => { unsubscribed++ } },
   } } })
@@ -39,7 +41,7 @@ describe('全局终端生命周期监听', () => {
     context.closed({ sessionId: 's2', terminalId: 't2' })
     expect((context.state.get('terminals') as Map<string, unknown[]>).has('s2')).toBe(false)
     context.cleanup()
-    expect(context.unsubscribed()).toBe(2)
+    expect(context.unsubscribed()).toBe(3)
   })
 
   test('Given 当前会话打开终端 When 重复打开并关闭 Then Tab 幂等且活动视图回到文件', () => {

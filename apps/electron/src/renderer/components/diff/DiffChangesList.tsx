@@ -7,6 +7,7 @@
 import * as React from 'react'
 import { Box, ChevronDown, ChevronRight, FolderSearch, Search, SquareTerminal, Undo2, X } from 'lucide-react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,7 +20,7 @@ import { detectIsWindows } from '@/lib/platform'
 import type { SessionFileChange } from '@/lib/session-file-changes'
 import { buildDiffFileTree } from './diff-file-tree'
 import { getDiffProjectTitle } from './diff-project-title'
-import type { DiffFileTreeNode } from './diff-file-tree'
+import type { DiffFileTreeDirectoryNode, DiffFileTreeNode } from './diff-file-tree'
 import { collectDiffChangeSources, DIFF_CHANGE_SOURCE_CONFIG } from './diff-change-sources'
 
 interface GitFileEntry {
@@ -46,6 +47,16 @@ interface FileGroup {
   totalDeletions: number
   tree: Array<DiffFileTreeNode<GitFileEntry>>
 }
+
+/** 虚拟列表统一行高：文件与目录行 32px，仓库分组行略高。 */
+const ROW_HEIGHT = 32
+const GROUP_ROW_HEIGHT = 38
+
+/** 扁平化后的可见行；只渲染这些行，不再递归挂载整棵改动树。 */
+type DiffVisibleRow =
+  | { kind: 'group'; key: string; group: FileGroup; height: number }
+  | { kind: 'directory'; key: string; gitRoot: string; node: DiffFileTreeDirectoryNode<GitFileEntry>; depth: number; stateKey: string; collapsed: boolean; height: number }
+  | { kind: 'file'; key: string; gitRoot: string; file: GitFileEntry; depth: number; height: number }
 
 interface DiffChangesListProps {
   /** Git 仓库根目录 */
@@ -238,7 +249,6 @@ export const DiffChangesList = React.memo(function DiffChangesList({
       return next
     })
   }, [])
-
   // 按 Git 仓库分组（在所有 hooks 之后、条件返回之前调用）
   const { fileGroups, matchedFilesCount } = React.useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
@@ -280,6 +290,63 @@ export const DiffChangesList = React.memo(function DiffChangesList({
   const shouldShowSearch = isGitRepo && (hasAnyChanges || searchQuery.length > 0)
   const shouldShowWorktreeSelector = isGitRepo && Boolean(workspaceSlug || (worktreeRepoPaths?.length ?? 0) > 0)
 
+  // ===== 可见行虚拟化 =====
+  // 打包产物、生成目录会让未跟踪文件轻松过千；只渲染视口附近的行，
+  // 避免每次刷新重建整棵树，也避免 AGY 写文件时与终端争抢主线程。
+  const forceExpanded = searchQuery.trim().length > 0
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const virtualListRef = React.useRef<HTMLDivElement>(null)
+  const [listScrollMargin, setListScrollMargin] = React.useState(0)
+
+  const visibleRows = React.useMemo<DiffVisibleRow[]>(() => {
+    const rows: DiffVisibleRow[] = []
+    const pushNodes = (nodes: DiffFileTreeNode<GitFileEntry>[], gitRoot: string, depth: number): void => {
+      for (const node of nodes) {
+        if (node.kind === 'file') {
+          rows.push({ kind: 'file', key: `${gitRoot}:${node.path}`, gitRoot, file: node.entry, depth, height: ROW_HEIGHT })
+          continue
+        }
+        const stateKey = `${gitRoot}:${node.path}`
+        const collapsed = !forceExpanded && collapsedDirs.has(stateKey)
+        rows.push({ kind: 'directory', key: stateKey, gitRoot, node, depth, stateKey, collapsed, height: ROW_HEIGHT })
+        if (!collapsed) pushNodes(node.children, gitRoot, depth + 1)
+      }
+    }
+    for (const group of fileGroups) {
+      rows.push({ kind: 'group', key: group.gitRoot, group, height: GROUP_ROW_HEIGHT })
+      pushNodes(group.tree, group.gitRoot, 0)
+    }
+    return rows
+  }, [collapsedDirs, fileGroups, forceExpanded])
+
+  const rowVirtualizer = useVirtualizer({
+    count: visibleRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => visibleRows[index]?.height ?? ROW_HEIGHT,
+    getItemKey: (index) => visibleRows[index]?.key ?? index,
+    overscan: 12,
+    scrollMargin: listScrollMargin,
+  })
+
+  // 列表上方还有 Worktree 选择器、搜索框和非 Git 改动，先测量其后内容起点。
+  React.useLayoutEffect(() => {
+    const scroller = scrollContainerRef.current
+    const list = virtualListRef.current
+    if (!scroller || !list) return
+    const measure = (): void => {
+      const next = Math.max(0, Math.round(
+        list.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop,
+      ))
+      setListScrollMargin((previous) => (previous === next ? previous : next))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(list)
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [hasGitChanges, isEmpty, searchQuery, nonGitFileChanges.length, shouldShowWorktreeSelector])
+
   /** 在系统文件管理器中显示目录。 */
   const handleShowDirectoryInFolder = React.useCallback((directoryPath: string) => {
     void window.electronAPI.showInFolder(directoryPath, { sessionId, unrestricted: true }).catch((error) => {
@@ -290,7 +357,7 @@ export const DiffChangesList = React.memo(function DiffChangesList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} data-testid="diff-changes-scroll" className="min-h-0 flex-1 overflow-y-auto">
       {/* Worktree 分支选择器仅作用于 Git 改动。 */}
       {shouldShowWorktreeSelector && (
         <WorktreeSelector
@@ -357,163 +424,120 @@ export const DiffChangesList = React.memo(function DiffChangesList({
         </div>
       )}
       {hasGitChanges && !isEmpty && (
-        <>
-          {fileGroups.map((group) => {
+        <div
+          ref={virtualListRef}
+          data-testid="diff-changes-virtual-list"
+          className="relative w-full"
+          style={{ height: rowVirtualizer.getTotalSize() }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const row = visibleRows[virtualRow.index]
+            if (!row) return null
             return (
-              <div key={group.gitRoot} className="py-1">
-                <div className="group flex items-center gap-1.5 px-3 py-1.5 text-[14px] font-medium text-muted-foreground">
-                  <span className="min-w-0 flex-1 truncate">{group.dirName}</span>
-                  {group.sources.map((source) => {
-                    const config = DIFF_CHANGE_SOURCE_CONFIG[source]
-                    return (
-                      <span key={source} className={cn('shrink-0 rounded px-1 py-0.5 text-[11px] leading-none', config.color)}>
-                        {config.label}
-                      </span>
-                    )
-                  })}
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] font-normal tabular-nums">
-                    <span className="text-muted-foreground/60">{group.fileCount} 个文件</span>
-                    {group.totalAdditions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{group.totalAdditions}</span>}
-                    {group.totalDeletions > 0 && <span className="text-red-600 dark:text-red-400">-{group.totalDeletions}</span>}
-                  </span>
-                  {onOpenDirectoryTerminal && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={`在 ${group.dirName} 打开终端`}
-                          title={`在 ${group.dirName} 打开终端`}
-                          className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
-                          onClick={() => onOpenDirectoryTerminal(group.gitRoot, group.dirName)}
-                        >
-                          <SquareTerminal className="size-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">在右侧标签中打开终端</TooltipContent>
-                    </Tooltip>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label={`在文件夹中显示 ${group.dirName}`}
-                        title={`在文件夹中显示 ${group.dirName}`}
-                        className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
-                        onClick={() => handleShowDirectoryInFolder(group.gitRoot)}
-                      >
-                        <FolderSearch className="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">在文件夹中显示</TooltipContent>
-                  </Tooltip>
-                </div>
-                {group.tree.map((node) => (
-                  <GitFileTreeNode
-                    key={`${group.gitRoot}:${node.path}`}
-                    node={node}
-                    depth={0}
-                    gitRoot={group.gitRoot}
-                    dirPath={dirPath}
-                    selectedFilePath={selectedFilePath}
-                    unseenFiles={unseenFiles}
-                    collapsedDirs={collapsedDirs}
-                    forceExpanded={searchQuery.trim().length > 0}
-                    onToggle={toggleDir}
-                    onFileClick={(file, absPath) => {
-                      markFileAsSeen(absPath)
-                      onFileClick(file.filePath, file.status === 'untracked', file.gitRoot)
-                    }}
-                    onRevert={(file) => handleRevert(file.filePath, file.gitRoot)}
+              <div
+                key={virtualRow.key}
+                className="absolute left-0 top-0 w-full"
+                style={{ height: row.height, transform: `translateY(${virtualRow.start - listScrollMargin}px)` }}
+              >
+                {row.kind === 'group' ? (
+                  <DiffGroupHeader
+                    group={row.group}
                     onOpenDirectoryTerminal={onOpenDirectoryTerminal}
                     onShowDirectoryInFolder={handleShowDirectoryInFolder}
                   />
-                ))}
+                ) : row.kind === 'directory' ? (
+                  <DirectoryRow
+                    node={row.node}
+                    depth={row.depth}
+                    collapsed={row.collapsed}
+                    stateKey={row.stateKey}
+                    gitRoot={row.gitRoot}
+                    onToggle={toggleDir}
+                    onOpenDirectoryTerminal={onOpenDirectoryTerminal}
+                    onShowDirectoryInFolder={handleShowDirectoryInFolder}
+                  />
+                ) : (
+                  (() => {
+                    const file = row.file
+                    const absPath = `${row.gitRoot || dirPath}/${file.filePath}`.replace(/\/+/g, '/')
+                    return (
+                      <FileRow
+                        file={file}
+                        depth={row.depth}
+                        dirPath={dirPath}
+                        isSelected={absPath === selectedFilePath || file.filePath === selectedFilePath}
+                        isUnseen={unseenFiles.has(absPath)}
+                        onClick={() => {
+                          markFileAsSeen(absPath)
+                          onFileClick(file.filePath, file.status === 'untracked', file.gitRoot)
+                        }}
+                        onRevert={file.status === 'untracked' ? undefined : () => handleRevert(file.filePath, file.gitRoot)}
+                      />
+                    )
+                  })()
+                )}
               </div>
             )
           })}
-        </>
+        </div>
       )}
       </div>
     </div>
   )
 })
 
-function GitFileTreeNode({
-  node,
-  depth,
-  gitRoot,
-  dirPath,
-  selectedFilePath,
-  unseenFiles,
-  collapsedDirs,
-  forceExpanded,
-  onToggle,
-  onFileClick,
-  onRevert,
+/** 每个缩进层级一条竖向引导线；虚拟化后每行自带引导，保持层级感知。 */
+function RowGuides({ depth }: { depth: number }): React.ReactElement | null {
+  if (depth <= 0) return null
+  return (
+    <>
+      {Array.from({ length: depth }, (_, level) => (
+        <span
+          key={level}
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 top-0 w-px bg-border/70"
+          style={{ left: 23 + level * 16 }}
+        />
+      ))}
+    </>
+  )
+}
+
+/** Git 仓库分组标题行（项目名、徽标、统计与目录操作）。 */
+function DiffGroupHeader({
+  group,
   onOpenDirectoryTerminal,
   onShowDirectoryInFolder,
 }: {
-  node: DiffFileTreeNode<GitFileEntry>
-  depth: number
-  gitRoot: string
-  dirPath: string
-  selectedFilePath?: string
-  unseenFiles: Set<string>
-  collapsedDirs: Set<string>
-  forceExpanded: boolean
-  onToggle: (path: string) => void
-  onFileClick: (file: GitFileEntry, absPath: string) => void
-  onRevert: (file: GitFileEntry) => void
+  group: FileGroup
   onOpenDirectoryTerminal?: (directoryPath: string, directoryName: string) => void
   onShowDirectoryInFolder: (directoryPath: string) => void
 }): React.ReactElement {
-  if (node.kind === 'file') {
-    const file = node.entry
-    const absPath = `${file.gitRoot || dirPath}/${file.filePath}`.replace(/\/+/g, '/')
-    return (
-      <FileRow
-        file={file}
-        depth={depth}
-        isSelected={absPath === selectedFilePath || file.filePath === selectedFilePath}
-        isUnseen={unseenFiles.has(absPath)}
-        onClick={() => onFileClick(file, absPath)}
-        onRevert={file.status === 'untracked' ? undefined : () => onRevert(file)}
-        dirPath={dirPath}
-      />
-    )
-  }
-
-  const stateKey = `${gitRoot}:${node.path}`
-  const isCollapsed = !forceExpanded && collapsedDirs.has(stateKey)
-  const directoryPath = `${gitRoot}/${node.path}`.replace(/\/+/g, '/')
-  const rowPaddingLeft = 8 + depth * 16
-  const guideLeft = 23 + depth * 16
-
   return (
-    <div className="relative">
-      <div className="group mx-2 flex h-8 items-center gap-1.5 rounded-md pr-2 text-[13px] font-medium text-foreground/75 transition-colors hover:bg-accent/50">
-      <button
-        type="button"
-        aria-expanded={!isCollapsed}
-        title={node.name}
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-        style={{ paddingLeft: rowPaddingLeft }}
-        onClick={() => onToggle(stateKey)}
-      >
-        <ChevronRight
-          className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', !isCollapsed && 'rotate-90')}
-        />
-        <span className="min-w-0 flex-1 truncate">{node.name}</span>
-      </button>
+    <div className="group flex h-full items-center gap-1.5 border-b border-border/40 px-3 text-[14px] font-medium text-muted-foreground">
+      <span className="min-w-0 flex-1 truncate">{group.dirName}</span>
+      {group.sources.map((source) => {
+        const config = DIFF_CHANGE_SOURCE_CONFIG[source]
+        return (
+          <span key={source} className={cn('shrink-0 rounded px-1 py-0.5 text-[11px] leading-none', config.color)}>
+            {config.label}
+          </span>
+        )
+      })}
+      <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] font-normal tabular-nums">
+        <span className="text-muted-foreground/60">{group.fileCount} 个文件</span>
+        {group.totalAdditions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{group.totalAdditions}</span>}
+        {group.totalDeletions > 0 && <span className="text-red-600 dark:text-red-400">-{group.totalDeletions}</span>}
+      </span>
       {onOpenDirectoryTerminal && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              aria-label={`在 ${node.name} 打开终端`}
-              title={`在 ${node.name} 打开终端`}
-              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
-              onClick={() => onOpenDirectoryTerminal(directoryPath, node.name)}
+              aria-label={`在 ${group.dirName} 打开终端`}
+              title={`在 ${group.dirName} 打开终端`}
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
+              onClick={() => onOpenDirectoryTerminal(group.gitRoot, group.dirName)}
             >
               <SquareTerminal className="size-3.5" />
             </button>
@@ -525,44 +549,89 @@ function GitFileTreeNode({
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`在文件夹中显示 ${node.name}`}
-            title={`在文件夹中显示 ${node.name}`}
-            className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
-            onClick={() => onShowDirectoryInFolder(directoryPath)}
+            aria-label={`在文件夹中显示 ${group.dirName}`}
+            title={`在文件夹中显示 ${group.dirName}`}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
+            onClick={() => onShowDirectoryInFolder(group.gitRoot)}
           >
             <FolderSearch className="size-3.5" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="left">在文件夹中显示</TooltipContent>
       </Tooltip>
-      </div>
-      {!isCollapsed && (
-        <div className="relative">
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute bottom-1 top-0 w-px bg-border/70"
-            style={{ left: guideLeft }}
+    </div>
+  )
+}
+
+/** 改动目录行；子项由扁平化后的可见行列表渲染，不再递归挂载。 */
+function DirectoryRow({
+  node,
+  depth,
+  collapsed,
+  stateKey,
+  gitRoot,
+  onToggle,
+  onOpenDirectoryTerminal,
+  onShowDirectoryInFolder,
+}: {
+  node: DiffFileTreeDirectoryNode<GitFileEntry>
+  depth: number
+  collapsed: boolean
+  stateKey: string
+  gitRoot: string
+  onToggle: (path: string) => void
+  onOpenDirectoryTerminal?: (directoryPath: string, directoryName: string) => void
+  onShowDirectoryInFolder: (directoryPath: string) => void
+}): React.ReactElement {
+  const directoryPath = `${gitRoot}/${node.path}`.replace(/\/+/g, '/')
+  return (
+    <div className="relative h-full">
+      <RowGuides depth={depth} />
+      <div className="group mx-2 flex h-full items-center gap-1.5 rounded-md pr-2 text-[13px] font-medium text-foreground/75 transition-colors hover:bg-accent/50">
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          title={node.name}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          style={{ paddingLeft: 8 + depth * 16 }}
+          onClick={() => onToggle(stateKey)}
+        >
+          <ChevronRight
+            className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', !collapsed && 'rotate-90')}
           />
-          {node.children.map((child) => (
-            <GitFileTreeNode
-              key={`${gitRoot}:${child.path}`}
-              node={child}
-              depth={depth + 1}
-              gitRoot={gitRoot}
-              dirPath={dirPath}
-              selectedFilePath={selectedFilePath}
-              unseenFiles={unseenFiles}
-              collapsedDirs={collapsedDirs}
-              forceExpanded={forceExpanded}
-              onToggle={onToggle}
-              onFileClick={onFileClick}
-              onRevert={onRevert}
-              onOpenDirectoryTerminal={onOpenDirectoryTerminal}
-              onShowDirectoryInFolder={onShowDirectoryInFolder}
-            />
-          ))}
-        </div>
-      )}
+          <span className="min-w-0 flex-1 truncate">{node.name}</span>
+        </button>
+        {onOpenDirectoryTerminal && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`在 ${node.name} 打开终端`}
+                title={`在 ${node.name} 打开终端`}
+                className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
+                onClick={() => onOpenDirectoryTerminal(directoryPath, node.name)}
+              >
+                <SquareTerminal className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">在右侧标签中打开终端</TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={`在文件夹中显示 ${node.name}`}
+              title={`在文件夹中显示 ${node.name}`}
+              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/70 hover:text-foreground active:scale-[0.96]"
+              onClick={() => onShowDirectoryInFolder(directoryPath)}
+            >
+              <FolderSearch className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">在文件夹中显示</TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   )
 }
@@ -797,7 +866,9 @@ function FileRow({
   const hasLineChanges = file.additions > 0 || file.deletions > 0
 
   return (
-    <div
+    <div className="relative h-full">
+      <RowGuides depth={depth} />
+      <div
       role="button"
       tabIndex={0}
       className={cn(
@@ -862,6 +933,7 @@ function FileRow({
       )}
 
       <GitStatusMarker status={file.status} className={hasLineChanges ? 'ml-2' : 'ml-auto'} />
+      </div>
     </div>
   )
 }

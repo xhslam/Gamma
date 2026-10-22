@@ -98,3 +98,34 @@ describe('git diff scan cache', () => {
     }
   })
 })
+
+describe('untracked file line counting', () => {
+  test('counts text lines and skips binary content without reporting bogus additions', async () => {
+    writeFileSync(join(repoPath, 'notes.txt'), 'alpha\nbeta\ngamma\n')
+    writeFileSync(join(repoPath, 'blob.bin'), Buffer.from([0x41, 0x00, 0x42, 0x0a]))
+    invalidateGitDiffCache(repoPath)
+
+    const result = await getUnstagedChanges(repoPath)
+    const additions = new Map(result.untrackedFiles.map((file) => [file.filePath, file.additions]))
+
+    expect(additions.get('notes.txt')).toBe(3)
+    expect(additions.get('blob.bin')).toBe(0)
+  })
+
+  test('stops reading untracked bodies once the per-scan budget is exhausted', async () => {
+    // 40 × ~1.2MB 文本超过 32MiB 预算，后面的文件不再读正文但依旧出现在列表里。
+    const body = 'line\n'.repeat(200_000)
+    for (let index = 0; index < 40; index += 1) {
+      writeFileSync(join(repoPath, `bulk-${String(index).padStart(2, '0')}.txt`), body)
+    }
+    invalidateGitDiffCache(repoPath)
+
+    const result = await getUnstagedChanges(repoPath)
+    const bulk = result.untrackedFiles.filter((file) => file.filePath.startsWith('bulk-'))
+    const counted = bulk.filter((file) => file.additions > 0)
+
+    expect(bulk).toHaveLength(40)
+    expect(counted.length).toBeGreaterThan(0)
+    expect(counted.length).toBeLessThan(40)
+  }, 60_000)
+})

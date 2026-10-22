@@ -32,6 +32,7 @@ import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { AgentView } from '@/components/agent/AgentView'
 const MarkdownWorkspaceView = React.lazy(() => import('@/components/markdown-workspace/MarkdownWorkspaceView'))
+const ProjectAgyTerminalView = React.lazy(() => import('@/components/tabs/ProjectAgyTerminalView').then(module => ({ default: module.ProjectAgyTerminalView })))
 import {
   currentSessionSidePanelOpenAtom,
   agentFileSourceFilterMapAtom,
@@ -119,6 +120,7 @@ import { getDelegatedChildSessionStatus, getDelegationStatusIconClass } from '@/
 import { markSessionCompletionViewed } from '@/lib/agent-completion-presence'
 import { rememberStopGenerationTarget } from '@/lib/stop-generation-target'
 import { TerminalTabContent } from '@/components/tabs/TerminalTabContent'
+import { TabErrorBoundary } from '@/components/tabs/TabErrorBoundary'
 import { shouldShowBothFileSources } from './file-panel-layout'
 import {
   clampRightWorkspaceSplitRatio,
@@ -1285,6 +1287,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
         mcp: { label: 'MCP', icon: <ServerCog className="size-3.5" /> },
         memory: { label: '项目记忆', icon: <Brain className="size-3.5" /> },
         markdown: { label: 'Markdown', icon: <BookOpen className="size-3.5" /> },
+        'agy-terminal': { label: 'AGY', icon: <SquareTerminal className="size-3.5" /> },
       }
       return { id: component, ...meta[component], closable: true }
     }),
@@ -1609,6 +1612,18 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       ) : (
         <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">等待项目初始化...</div>
       )
+    ) : paneTab === 'agy-terminal' ? (
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <TabErrorBoundary key={`project-agy:${currentWorkspaceId}`} sessionId={sessionId}>
+          <React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载 AGY 终端…</div>}>
+            <ProjectAgyTerminalView
+              workspaceId={currentWorkspaceId}
+              active={isOpen && (!split || getFocusedRightWorkspaceTab(split) === 'agy-terminal')}
+              embedded
+            />
+          </React.Suspense>
+        </TabErrorBoundary>
+      </div>
     ) : paneTab === 'markdown' ? (
       <div className="min-h-0 flex-1 overflow-hidden"><React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载 Markdown 工作区…</div>}><MarkdownWorkspaceView key={currentWorkspaceId + ':' + sessionId} workspaceId={currentWorkspaceId ?? undefined} sessionId={sessionId} /></React.Suspense></div>
     ) : paneTab === 'changes' ? (

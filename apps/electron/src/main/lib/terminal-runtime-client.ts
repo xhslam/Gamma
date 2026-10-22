@@ -25,6 +25,7 @@ type PendingCreate = {
 
 type RuntimeTerminalCreateInput = TerminalCreateInput & {
   strictCwd?: boolean
+  launchAgy?: boolean
 }
 
 type RuntimeMessage =
@@ -62,7 +63,7 @@ export class TerminalRuntimeClient {
     return () => this.exitListeners.delete(listener)
   }
 
-  async create(input: TerminalCreateInput, options: { strictCwd?: boolean } = {}): Promise<TerminalState> {
+  async create(input: TerminalCreateInput, options: { strictCwd?: boolean; launchAgy?: boolean } = {}): Promise<TerminalState> {
     const startup = this.start()
     const generation = this.generation
     await startup
@@ -84,9 +85,7 @@ export class TerminalRuntimeClient {
       rejectCreate(new Error('终端创建超时，请重试'))
     }, STARTUP_TIMEOUT_MS)
     this.pendingCreates.set(input.terminalId, { attemptId, promise, resolve: resolveCreate, reject: rejectCreate, timeout })
-    const runtimeInput: RuntimeTerminalCreateInput = options.strictCwd
-      ? { ...input, strictCwd: true }
-      : input
+    const runtimeInput: RuntimeTerminalCreateInput = { ...input, strictCwd: options.strictCwd === true, launchAgy: options.launchAgy === true }
     try {
       port.postMessage({ type: 'terminal.create', input: runtimeInput, attemptId })
     } catch (error) {
