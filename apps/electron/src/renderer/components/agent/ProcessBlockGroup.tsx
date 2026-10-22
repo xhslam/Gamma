@@ -1,30 +1,29 @@
 import * as React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getToolDisplayName, getToolIcon } from './tool-utils'
+import { ProcessTimelineStep } from './ProcessTimelineStep'
+import './process-timeline.css'
 import type {
+  SDKMessage,
   SDKContentBlock,
-  SDKToolUseBlock,
   SDKTextBlock,
   SDKThinkingBlock,
 } from '@gamma/shared'
 
 interface ProcessBlockGroupProps {
   blocks: SDKContentBlock[]
+  allMessages?: SDKMessage[]
   isStreaming?: boolean
   /** 惰性生成过程项；流式与历史态均渲染完整内容。 */
   renderChildren: () => React.ReactNode
-  // 该过程组是否为整条消息的末尾项：是则流式中保留最后一段为正常显示，
-  // 否则（最终答案已作为后续兄弟块外置）整组统一弱化。
-  isMessageTail?: boolean
 }
 
-const MAX_PROCESS_GROUP_ICONS = 4
+const EMPTY_MESSAGES: SDKMessage[] = []
 const PROCESS_GROUP_VIEWPORT_HEIGHT = 320
 const PROCESS_GROUP_LIVE_CHILD_WINDOW = 4
 const PROCESS_GROUP_COLLAPSE_DURATION_MS = 500
 const PROCESS_GROUP_AUTO_COLLAPSE_SOUND_DELAY_MS = 900
-const PROCESS_GROUP_AUTO_COLLAPSE_COUNTDOWN_SECONDS = 3
+const PROCESS_GROUP_AUTO_COLLAPSE_DELAY_MS = 3000
 const PROCESS_GROUP_FOLLOW_BOTTOM_THRESHOLD = 24
 const PROGRESS_SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '])
 
@@ -118,37 +117,9 @@ export function stabilizeProcessBlockReferences(
 }
 
 function buildProcessGroupSummary(blocks: SDKContentBlock[]): string {
-  let toolCount = 0
-  let messageCount = 0
-
-  for (const block of blocks) {
-    if (block.type === 'tool_use') {
-      toolCount += 1
-    } else if (block.type === 'thinking' || block.type === 'text') {
-      messageCount += 1
-    }
-  }
-
-  const parts: string[] = []
-  if (toolCount > 0) parts.push(`${toolCount} 次工具调用`)
-  if (messageCount > 0) parts.push(`${messageCount} 条消息`)
-  const summary = parts.join('，') || '过程'
-  return `执行过程：${summary}`
-}
-
-export function buildProcessGroupToolNames(blocks: SDKContentBlock[]): string[] {
-  const toolNames: string[] = []
-  const seen = new Set<string>()
-
-  for (const block of blocks) {
-    if (block.type !== 'tool_use') continue
-    const toolBlock = block as SDKToolUseBlock
-    if (seen.has(toolBlock.name)) continue
-    seen.add(toolBlock.name)
-    toolNames.push(toolBlock.name)
-  }
-
-  return toolNames
+  const tools = blocks.filter((block) => block.type === 'tool_use').length
+  const thoughts = blocks.filter((block) => block.type === 'thinking').length
+  return `${tools} 次工具调用 · ${thoughts} 条思考`
 }
 
 type ProcessGroupDisplayMode = 'collapsed' | 'expanded'
@@ -192,14 +163,14 @@ const StableProcessChild = React.memo(
   (previous, next) => previous.child === next.child,
 )
 
-export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessageTail = false }: ProcessBlockGroupProps): React.ReactElement {
+export function ProcessBlockGroup({ blocks, allMessages = EMPTY_MESSAGES, isStreaming, renderChildren }: ProcessBlockGroupProps): React.ReactElement {
+  const contentId = React.useId()
   const initialDisplayMode: ProcessGroupDisplayMode = !isStreaming
     ? 'collapsed'
     : 'expanded'
   const [displayMode, setDisplayMode] = React.useState<ProcessGroupDisplayMode>(initialDisplayMode)
   const [shouldRenderContent, setShouldRenderContent] = React.useState(initialDisplayMode !== 'collapsed')
   const [keepProgressViewport, setKeepProgressViewport] = React.useState(!!isStreaming)
-  const [collapseCountdown, setCollapseCountdown] = React.useState<number | null>(null)
   const userToggledRef = React.useRef(false)
   const followLatestRef = React.useRef(true)
   const smoothScrollTargetRef = React.useRef<number | null>(null)
@@ -228,7 +199,6 @@ export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessa
     clearAutoCollapseTimers()
 
     if (isStreaming) {
-      setCollapseCountdown(null)
       setKeepProgressViewport(true)
       if (!wasStreamingRef.current) {
         userToggledRef.current = false
@@ -253,24 +223,14 @@ export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessa
       return
     }
 
-    const soundDelayTimer = window.setTimeout(() => {
-      setCollapseCountdown(PROCESS_GROUP_AUTO_COLLAPSE_COUNTDOWN_SECONDS)
-
-      for (let second = PROCESS_GROUP_AUTO_COLLAPSE_COUNTDOWN_SECONDS - 1; second >= 1; second--) {
-        const elapsed = (PROCESS_GROUP_AUTO_COLLAPSE_COUNTDOWN_SECONDS - second) * 1000
-        autoCollapseTimersRef.current.push(window.setTimeout(() => setCollapseCountdown(second), elapsed))
-      }
-
-      autoCollapseTimersRef.current.push(window.setTimeout(() => {
-        setCollapseCountdown(null)
-        setDisplayMode('collapsed')
-        autoCollapseTimersRef.current.push(window.setTimeout(
-          () => setKeepProgressViewport(false),
-          PROCESS_GROUP_COLLAPSE_DURATION_MS,
-        ))
-      }, PROCESS_GROUP_AUTO_COLLAPSE_COUNTDOWN_SECONDS * 1000))
-    }, PROCESS_GROUP_AUTO_COLLAPSE_SOUND_DELAY_MS)
-    autoCollapseTimersRef.current.push(soundDelayTimer)
+    const timer = window.setTimeout(() => {
+      setDisplayMode('collapsed')
+      autoCollapseTimersRef.current.push(window.setTimeout(
+        () => setKeepProgressViewport(false),
+        PROCESS_GROUP_COLLAPSE_DURATION_MS,
+      ))
+    }, PROCESS_GROUP_AUTO_COLLAPSE_SOUND_DELAY_MS + PROCESS_GROUP_AUTO_COLLAPSE_DELAY_MS)
+    autoCollapseTimersRef.current.push(timer)
 
     return clearAutoCollapseTimers
   }, [clearAutoCollapseTimers, isStreaming])
@@ -388,10 +348,6 @@ export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessa
     () => buildProcessGroupSummary(blocks),
     [blocks],
   )
-  const toolNames = React.useMemo(() => buildProcessGroupToolNames(blocks), [blocks])
-  const visibleToolNames = toolNames.slice(0, MAX_PROCESS_GROUP_ICONS)
-  const hiddenToolCount = Math.max(0, toolNames.length - visibleToolNames.length)
-
   // 只让最近几项参与高频更新；旧项保留在 DOM 中供用户滚动查看，但冻结其 React 子树。
   const renderContentChildren = (): React.ReactNode => {
     const childArray = React.Children.toArray(visibleChildren)
@@ -412,11 +368,16 @@ export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessa
       }
 
       const isLast = i === childArray.length - 1
-      const dimmed = isStreaming && !(isMessageTail && isLast)
       return (
-        <div key={key} className={cn(dimmed && 'opacity-80')}>
+        <ProcessTimelineStep
+          key={key}
+          block={blocks[i]!}
+          allMessages={allMessages}
+          isStreaming={isStreaming}
+          isLast={isLast}
+        >
           <StableProcessChild child={stableChild} />
-        </div>
+        </ProcessTimelineStep>
       )
     })
 
@@ -427,57 +388,35 @@ export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessa
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="process-timeline">
       <button
         type="button"
-        className={cn(
-          'flex max-w-full items-center gap-2 py-0.5 text-left transition-opacity group',
-          'hover:opacity-70',
-        )}
+        data-process-group-toggle=""
+        aria-expanded={isContentExpanded}
+        aria-controls={contentId}
+        className="process-timeline-toggle"
+        aria-label={`执行过程：${summary}`}
         onClick={() => {
           userToggledRef.current = true
           clearAutoCollapseTimers()
-          setCollapseCountdown(null)
           if (!isStreaming) setKeepProgressViewport(false)
           setDisplayMode((previous) => previous === 'collapsed' ? 'expanded' : 'collapsed')
         }}
       >
         <ChevronRight
           className={cn(
-            'size-3 shrink-0 text-muted-foreground/40 transition-transform duration-150',
+            'size-3 shrink-0 transition-transform duration-150',
             isContentExpanded && 'rotate-90',
           )}
         />
-        <span className="min-w-0 truncate text-[14px] text-muted-foreground">{summary}</span>
-        {collapseCountdown !== null && (
-          <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground/50">
-            （{collapseCountdown}）
-          </span>
-        )}
-        {visibleToolNames.length > 0 && (
-          <span className="flex shrink-0 items-center gap-1 text-muted-foreground/60">
-            {visibleToolNames.map((toolName) => {
-              const ToolIcon = getToolIcon(toolName)
-              return (
-                <ToolIcon
-                  key={toolName}
-                  className="size-3.5"
-                  aria-label={getToolDisplayName(toolName)}
-                />
-              )
-            })}
-            {hiddenToolCount > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground/60">
-                +{hiddenToolCount}
-              </span>
-            )}
-          </span>
-        )}
+        <span className="min-w-0 truncate">{summary}</span>
       </button>
 
       {shouldRenderContent && (
         <div
           ref={contentRef}
+          id={contentId}
+          aria-hidden={!isContentExpanded}
           data-agent-history-selection-excluded={isContentExpanded ? undefined : 'true'}
           className={cn(
             'overflow-hidden focus:outline-none',
@@ -498,7 +437,7 @@ export function ProcessBlockGroup({ blocks, isStreaming, renderChildren, isMessa
               : `opacity ${PROCESS_GROUP_COLLAPSE_DURATION_MS}ms ease-in-out`,
           }}
         >
-          <div ref={contentInnerRef} className="space-y-2">
+          <div ref={contentInnerRef} className="pl-1">
             {renderContentChildren()}
           </div>
         </div>

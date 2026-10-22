@@ -536,25 +536,31 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
       <MessageContent>
         <TurnFileMapProvider map={turnFileMap}>
         <div className={cn('space-y-2')}>
-          {renderItems.map((item, itemIndex) => {
+          {renderItems.map((item) => {
             if (item.type === 'block') {
               return renderTopLevelBlock(item.item.block, item.item.index)
             }
 
-            const groupBlocks = item.items.map((groupItem) => groupItem.block)
+            // 不为浮层接管的任务工具或不支持的内容块生成空时间线节点。
+            const visibleItems = item.items.filter(({ block }) =>
+              block.type === 'text' || block.type === 'thinking'
+              || (block.type === 'tool_use' && !TASK_TOOL_NAMES.has((block as SDKToolUseBlock).name)),
+            )
+            if (visibleItems.length === 0) return null
+            const groupBlocks = visibleItems.map((groupItem) => groupItem.block)
             const firstIndex = item.items[0]?.index ?? 0
             const groupKey = `process-${firstIndex}`
             return (
               <ProcessBlockGroup
                 key={groupKey}
                 blocks={groupBlocks}
+                allMessages={allMessages}
                 isStreaming={isStreaming}
-                renderChildren={() => item.items.map((groupItem) => (
+                renderChildren={() => visibleItems.map((groupItem) => (
                   <React.Fragment key={groupItem.index}>
                     {renderProcessGroupBlock(groupItem.block, groupItem.index)}
                   </React.Fragment>
                 ))}
-                isMessageTail={itemIndex === renderItems.length - 1}
               />
             )
           })}
