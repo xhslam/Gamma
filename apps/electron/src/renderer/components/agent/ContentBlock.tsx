@@ -18,10 +18,8 @@ import {
   MessageSquareText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { MessageResponse, useMessageSessionId } from '@/components/ai-elements/message'
-import { useAtomValue } from 'jotai'
-import { allPendingPermissionRequestsAtom } from '@/atoms/agent-atoms'
-import { getToolIcon, extractFilePath, getToolExecutionPresentation } from './tool-utils'
+import { MessageResponse } from '@/components/ai-elements/message'
+import { getToolIcon, extractFilePath } from './tool-utils'
 import { getToolPhrase, getToolResultSummary, shouldShowToolKindLabel } from './tool-phrase'
 import { ToolResultRenderer } from './tool-result-renderers'
 import { PreviewOpenButton } from './tool-result-renderers/preview-open-button'
@@ -29,54 +27,17 @@ import { getTaskGetStatusLabel, parseTaskGetResult, type ParsedTaskGetResult } f
 import { parseTaskListResult, type ParsedTaskListItem } from './tool-result-renderers/task-list-result'
 import { formatDuration } from './AgentMessages'
 import { useSmoothStream } from '@gamma/ui'
+import { useToolExecution } from './use-tool-execution'
+import { ProcessTimelineContext, ProcessTimelineStep } from './ProcessTimelineStep'
+import { ProcessTimelineText, ProcessTimelineTool } from './ProcessTimelineContent'
 import type {
   SDKContentBlock,
   SDKMessage,
   SDKTextBlock,
   SDKToolUseBlock,
   SDKThinkingBlock,
-  SDKUserMessage,
-  SDKToolResultBlock,
   SDKSystemMessage,
 } from '@gamma/shared'
-
-// ===== useToolResult Hook =====
-
-interface ToolResultData {
-  result?: string
-  isError?: boolean
-}
-
-/** 在 allMessages 中查找匹配 toolUseId 的工具结果 */
-function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResultData | null {
-  return React.useMemo(() => {
-    for (const msg of allMessages) {
-      if (msg.type !== 'user') continue
-      const userMsg = msg as SDKUserMessage
-      const contentBlocks = userMsg.message?.content
-      if (!Array.isArray(contentBlocks)) continue
-
-      for (const block of contentBlocks) {
-        if (block.type === 'tool_result') {
-          const resultBlock = block as SDKToolResultBlock
-          if (resultBlock.tool_use_id === toolUseId) {
-            let result: string | undefined
-            if (typeof resultBlock.content === 'string') {
-              result = resultBlock.content
-            } else if (Array.isArray(resultBlock.content)) {
-              result = (resultBlock.content as Array<{ type: string; text?: string }>)
-                .filter((c) => c.type === 'text' && typeof c.text === 'string')
-                .map((c) => c.text)
-                .join('\n')
-            }
-            return { result, isError: resultBlock.is_error }
-          }
-        }
-      }
-    }
-    return null
-  }, [toolUseId, allMessages])
-}
 
 // ===== useSubAgentMeta Hook =====
 
@@ -337,7 +298,7 @@ interface ToolUseBlockProps {
 
 function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed = false, childBlocks, basePath, isStreaming }: ToolUseBlockProps): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
-  const toolResult = useToolResult(block.id, allMessages)
+  const { result: toolResult, presentation } = useToolExecution(block.id, allMessages, isStreaming)
   const resultText = toolResult?.result
   const isError = toolResult?.isError === true
   const shouldShowResult = !!resultText
@@ -356,13 +317,6 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
   // Agent/Task 子代理内容默认折叠
   const [childrenExpanded, setChildrenExpanded] = React.useState(false)
 
-  // 终态只来自按 tool_use_id 关联的真实结果；停止流式不代表工具成功。
-  const messageSessionId = useMessageSessionId()
-  const pendingPermissions = useAtomValue(allPendingPermissionRequestsAtom)
-  const pendingApproval = messageSessionId !== undefined && pendingPermissions.get(messageSessionId)
-    ?.some((request) => request.toolUseId === block.id)
-  const presentation = getToolExecutionPresentation({ result: toolResult, isStreaming, approval: pendingApproval ? 'pending' : undefined })
-
   const isFailed = isError || presentation.status === 'error'
   const phrase = getToolPhrase(block.name, block.input, isFailed)
   const ToolIcon = getToolIcon(block.name)
@@ -378,7 +332,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
       aria-live="polite"
       aria-atomic="true"
       data-tool-execution-status={presentation.status}
-      className={cn('shrink-0 text-[11px] tabular-nums', presentation.tone === 'error' ? 'text-destructive/80' : presentation.tone === 'active' ? 'text-primary/80' : 'text-muted-foreground/65')}
+      className={cn('shrink-0 text-[11px] tabular-nums', presentation.tone === 'error' ? 'text-destructive/80' : presentation.tone === 'success' ? 'text-emerald-600 dark:text-emerald-400' : presentation.tone === 'active' ? 'text-primary/80' : 'text-muted-foreground/65')}
     >
       {presentation.label}
     </span>
@@ -585,6 +539,28 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
   )
 }
 
+/** 时间线详情沿用现有结果渲染器；收起行不出现状态文字或额外控件。 */
+function TimelineToolUseBlock({ block, allMessages, childBlocks, basePath, isStreaming }: ToolUseBlockProps): React.ReactElement {
+  const { result, presentation } = useToolExecution(block.id, allMessages, isStreaming)
+  return (
+    <ProcessTimelineTool block={block} presentation={presentation} result={result?.result}>
+      {(block.name === 'Agent' || block.name === 'Task') && typeof block.input.prompt === 'string' && (
+        <p className="whitespace-pre-wrap break-words">{block.input.prompt}</p>
+      )}
+      {childBlocks?.map((childBlock, index) => (
+        <ProcessTimelineStep key={index} block={childBlock} allMessages={allMessages} isStreaming={isStreaming} isLast={index === childBlocks.length - 1}>
+          <ContentBlock block={childBlock} allMessages={allMessages} basePath={basePath} isStreaming={isStreaming} />
+        </ProcessTimelineStep>
+      ))}
+      {result?.result ? (
+        <ToolResultRenderer toolName={block.name} input={block.input} result={result.result} isError={result.isError === true} basePath={basePath} />
+      ) : !childBlocks?.length ? (
+        <pre className="overflow-auto whitespace-pre-wrap break-words font-mono">{JSON.stringify(block.input, null, 2)}</pre>
+      ) : null}
+    </ProcessTimelineTool>
+  )
+}
+
 // ===== 思考块（默认折叠，Thinking 标签 + 虚线边框） =====
 
 interface ThinkingBlockProps {
@@ -699,6 +675,16 @@ function StreamingTextBlock({
 // ===== ContentBlock 主组件 =====
 
 export function ContentBlock({ block, allMessages, basePath, basePaths, animate = false, index = 0, dimmed = false, childBlocks, isStreaming }: ContentBlockProps): React.ReactElement | null {
+  const timelineBlock = React.useContext(ProcessTimelineContext)
+  if (timelineBlock !== null) {
+    if (block.type === 'tool_use') {
+      return <TimelineToolUseBlock block={block as SDKToolUseBlock} allMessages={allMessages} childBlocks={childBlocks} basePath={basePath} isStreaming={isStreaming} />
+    }
+    if (block.type === 'thinking' || block.type === 'text') {
+      const text = block.type === 'thinking' ? (block as SDKThinkingBlock).thinking : (block as SDKTextBlock).text
+      return <ProcessTimelineText text={text} thinking={block.type === 'thinking'} />
+    }
+  }
   // text 块 — 主要内容，不受 dimmed 影响
   if (block.type === 'text') {
     const textBlock = block as SDKTextBlock
