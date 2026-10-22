@@ -27,7 +27,9 @@ export function buildPiAgyTools(ctx: PiBuiltinToolsContext): ToolDefinition[] {
       }, { additionalProperties: false }),
       async execute(id, params, signal) {
         const task = agyTaskService.start(ctx.sessionId, params as AgyTaskStartInput, id, signal, ctx.allowedRoots ?? [])
-        return result({ task, note: '已启动，不代表完成；调用 AgyWait 收敛。活动记录只覆盖 CLI 上报事件，不是完整系统审计。' })
+        return result({ task, note: task.status === 'failed'
+          ? 'CLI 启动失败，请先检查 task.error；本次任务未成功执行，不会自动重试或放宽权限。'
+          : '外部任务已创建，启动状态以 task.status 为准，不代表完成；调用 AgyWait 收敛。活动记录只覆盖 CLI 上报事件，不是完整系统审计。' })
       },
     },
     {

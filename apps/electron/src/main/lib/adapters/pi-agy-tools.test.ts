@@ -34,6 +34,10 @@ describe('Given Pi 原生 agy 工具桥接', () => {
       await defs[4].execute('stop-id',{taskId:'task'});
       expect(calls[3]).toEqual(['stop','owner','task']);
       expect(JSON.stringify(defs[0].parameters)).not.toContain('skip-permissions');
+      task.status = 'failed';
+      const failed = await defs[0].execute('failed-id',{prompt:'hello'},signal);
+      expect(JSON.stringify(failed)).toContain('CLI 启动失败');
+      expect(JSON.stringify(failed)).not.toContain('已启动');
       console.log('AGY_TOOLS_OK');
     `
     const child = spawnSync(process.execPath, ['--eval', script], { encoding: 'utf8', timeout: 20_000 })

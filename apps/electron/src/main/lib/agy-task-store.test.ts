@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgyTask } from '@gamma/shared'
@@ -35,16 +35,41 @@ describe('Given 外部任务私有分段日志', () => {
     store.save(task, [{ sequence: 2, timestamp: 2, kind: 'text', text: 'b' }])
     expect(store.read(task).events.map(event => event.text)).toEqual(['a', 'b'])
   })
-  test('When 路径穿越、symlink 或日志损坏 Then 拒绝越界且可读取有效事件', () => {
+  test('When 路径穿越或日志损坏 Then 拒绝越界且可读取有效事件', () => {
     const { store, task, root } = setup()
     expect(() => store.get('../escape')).toThrow()
     store.save(task, [])
     writeFileSync(join(root, 'tasks', task.id, '0.jsonl'), '{broken}\n' + JSON.stringify({ sequence: 1, timestamp: 1, kind: 'text', text: '保留' }) + '\n')
     expect(store.read(task).events[0]?.text).toBe('保留')
+    expect(() => store.read(task, -1)).toThrow()
+  })
+  test('When 临时 Schema 写入与清理 Then 使用受控任务目录且不影响日志', () => {
+    const { store, task } = setup()
+    store.save(task, [])
+    const path = store.writeSchemaInput(task.id, '{"type":"object"}')
+    expect(readFileSync(path, 'utf8')).toBe('{"type":"object"}')
+    store.clearSchemaInput(task.id)
+    store.clearSchemaInput(task.id)
+    expect(existsSync(path)).toBe(false)
+    expect(store.get(task.id)?.id).toBe(task.id)
+    expect(() => store.writeSchemaInput('../escape', '{}')).toThrow()
+  })
+  test('When 任务目录是 symlink 或 Windows junction Then 拒绝跟随目录写 Schema', () => {
+    const { root, store } = setup()
+    const target = join(root, 'outside'); mkdirSync(target)
+    symlinkSync(target, join(root, 'tasks', 'linked-task'), process.platform === 'win32' ? 'junction' : 'dir')
+    expect(() => store.writeSchemaInput('linked-task', '{}')).toThrow('不安全')
+    expect(existsSync(join(target, 'input-schema.json'))).toBe(false)
+  })
+  test.skipIf(process.platform === 'win32')('When 日志或 Schema 文件是 symlink Then 不覆盖目标文件（需 POSIX 文件链接权限）', () => {
+    const { store, task, root } = setup()
+    store.save(task, [])
     const target = join(root, 'target.txt'); writeFileSync(target, '不覆盖')
     symlinkSync(target, join(root, 'tasks', task.id, '1.jsonl'))
     expect(() => store.save(task, [{ sequence: 101, timestamp: 1, kind: 'text' }])).toThrow()
+    symlinkSync(target, join(root, 'tasks', task.id, 'input-schema.json'))
+    expect(() => store.writeSchemaInput(task.id, '{}')).toThrow('不安全')
+    expect(() => store.clearSchemaInput(task.id)).toThrow('不安全')
     expect(readFileSync(target, 'utf8')).toBe('不覆盖')
-    expect(() => store.read(task, -1)).toThrow()
   })
 })

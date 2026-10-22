@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -14,21 +14,30 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 const output = (value: object) => `console.log(${JSON.stringify(JSON.stringify(value))});`
-function setup(source: string) {
+function setup(source: string, options: { executable?: string; missingAtSpawn?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gamma-agy-service-')); roots.push(root)
   const updates: AgyTaskUpdate[] = []
   let spawnCount = 0
   let args: string[] = []
+  let command = ''
+  let schemaPath: string | undefined
+  let schemaContent: string | undefined
   const service = new AgyTaskService({
+    executable: options.executable ?? process.execPath,
     context(sessionId) { if (!['owner', 'other'].includes(sessionId)) throw new Error('会话不存在'); return { workbench: root, allowedRoots: [root] } },
     notify(update) { updates.push(update) },
-    spawn(_command, argv, options) {
-      spawnCount++; args = argv as string[]
-      return spawn(process.execPath, ['-e', source], options)
+    spawn(bin, argv, spawnOptions) {
+      spawnCount++; args = [...argv]; command = bin
+      const schemaIndex = args.indexOf('--json-schema')
+      if (schemaIndex >= 0) {
+        schemaPath = args[schemaIndex + 1]
+        schemaContent = readFileSync(schemaPath!, 'utf8')
+      }
+      return spawn(options.missingAtSpawn ? join(root, 'disappeared.exe') : process.execPath, ['-e', source], spawnOptions)
     },
   })
   services.push(service)
-  return { root, service, updates, get spawnCount() { return spawnCount }, get args() { return args } }
+  return { root, service, updates, get spawnCount() { return spawnCount }, get args() { return args }, get command() { return command }, get schemaPath() { return schemaPath }, get schemaContent() { return schemaContent } }
 }
 
 const success = output({ event: 'init', init: { permission_mode: 'request-review', cwd: '/fixture' } })
@@ -39,7 +48,7 @@ describe('Given 受管 agy 外部任务', () => {
   test('When 收到流式结果并正常退出 Then 才标记完成并保存历史', async () => {
     const fixture = setup(success)
     const task = fixture.service.start('owner', { prompt: '仅回复你好' }, 'call-1')
-    expect(task.status).toBe('running')
+    expect(task.status).toBe('starting')
     const final = await fixture.service.wait('owner', task.id, 5)
     expect(final.status).toBe('completed')
     expect(final.response).toBe('你好')
@@ -52,6 +61,41 @@ describe('Given 受管 agy 外部任务', () => {
     const again = fixture.service.start('owner', { prompt: '同一次工具重放' }, 'call-1')
     expect(again.id).toBe(task.id)
     expect(fixture.spawnCount).toBe(1)
+  })
+  test('When JSON Schema 含多行、元字符且接近上限 Then 原子文件传递并在终态清理', async () => {
+    const fixture = setup(success)
+    const schema = JSON.stringify({ type: 'object', description: '中文 & %PATH% !\n' + 'x'.repeat(29000) }, null, 2)
+    const task = fixture.service.start('owner', { prompt: '测试', schema }, 'schema')
+    expect(fixture.command).toBe(process.execPath)
+    expect(fixture.schemaContent).toBe(schema)
+    expect(existsSync(fixture.schemaPath!)).toBe(true)
+    expect(fixture.args).not.toContain(schema)
+    expect((await fixture.service.wait('owner', task.id, 5)).status).toBe('completed')
+    expect(existsSync(fixture.schemaPath!)).toBe(false)
+  })
+  test('When 显式路径无效或文件在 spawn 前消失 Then 失败原因可操作且不会重试', async () => {
+    const missing = setup(success, { executable: join(tmpdir(), 'gamma-not-installed', 'agy.exe') })
+    const notStarted = missing.service.start('owner', { prompt: '测试' }, 'missing')
+    expect(notStarted.status).toBe('failed')
+    expect(notStarted.error).toContain('AGY_BIN')
+    expect(missing.spawnCount).toBe(0)
+    const race = setup(success, { missingAtSpawn: true })
+    const task = race.service.start('owner', { prompt: '测试', schema: '{"type":"object"}' }, 'race')
+    const final = await race.service.wait('owner', task.id, 5)
+    expect(final.status).toBe('failed')
+    expect(final.error).toContain('ENOENT')
+    expect(final.error).toContain('AGY_BIN')
+    expect(race.spawnCount).toBe(1)
+    expect(existsSync(race.schemaPath!)).toBe(false)
+  })
+  test('When 提示词含中文、多行和 shell 元字符 Then 通过 UTF-8 stdin 原样传递', async () => {
+    const fixture = setup('let text="";process.stdin.setEncoding("utf8");process.stdin.on("data",chunk=>text+=chunk);process.stdin.on("end",()=>console.log(JSON.stringify({event:"result",result:{status:"SUCCESS",response:text}})));')
+    const prompt = '中文提示词\n第二行 & %PATH% $(echo never)'
+    const task = fixture.service.start('owner', { prompt }, 'stdin')
+    const final = await fixture.service.wait('owner', task.id, 5)
+    expect(final.status).toBe('completed')
+    expect(final.response).toBe(prompt)
+    expect(fixture.args).not.toContain(prompt)
   })
   test('When 工具失败但模型成功总结 Then 子步骤错误与整体完成分开展示', async () => {
     const fixture = setup(output({ event: 'step_update', step_update: { step_type: 'tool', state: 'ERROR', step_index: 1, tool_name: 'read_file', tool_info: { error: { message: 'file does not exist' } } } }) + success)
