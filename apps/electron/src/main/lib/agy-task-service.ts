@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { spawn as spawnProcess } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgyActivityEvent, AgyTask, AgyTaskStartInput, AgyTaskStatus, AgyTaskUpdate } from '@gamma/shared'
 import { AgyTaskStore, AGY_MAX_EVENTS, AGY_MAX_LOG_BYTES } from './agy-task-store'
 import { AgyStreamParser, redactAgyText, redactAgyValue } from './agy-stream-parser'
 import { resolveAgentTerminalCwd } from './terminal-agent-policy'
+import { createAgyEnvironment, createAgyInvocation, formatAgyLaunchError, resolveAgyExecutable } from './agy-process-launch'
 
 export interface AgyTaskContext {
   workbench: string
@@ -40,6 +40,7 @@ interface LiveTask {
   drainTimer?: ReturnType<typeof setTimeout>
   removeAbort?: () => void
   stderrTail: string
+  hasSchemaInput?: boolean
 }
 
 const ACTIVE = new Set<AgyTaskStatus>(['starting', 'running', 'stopping'])
@@ -107,17 +108,27 @@ export class AgyTaskService {
     this.dependencies.notify({ task: { ...task }, events: [], reveal: true })
     const args = ['--output-format', 'stream-json', '--disable-slash-commands', '--print-timeout', `${seconds}s`]
     if (input.model) args.push('--model', input.model)
-    if (input.schema) args.push('--json-schema', input.schema)
-    // 不继承 Electron/Agent 注入的密钥环境；agy 自有账号配置仍由 CLI 自己读取。
-    const env: NodeJS.ProcessEnv = {}
-    for (const name of ['HOME', 'USERPROFILE', 'PATH', 'TMPDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL', 'USER', 'LOGNAME', 'SystemRoot', 'COMSPEC']) {
-      if (process.env[name]) env[name] = process.env[name]
-    }
+    let executable: string | undefined
     try {
-      const child = (this.dependencies.spawn ?? spawnProcess)(this.dependencies.executable ?? join(homedir(), '.local', 'bin', process.platform === 'win32' ? 'agy.exe' : 'agy'), args, {
+      executable = resolveAgyExecutable({ executable: this.dependencies.executable })
+      // 不把任意 JSON 放进 cmd 命令行，也避免 Windows 8191/32767 字符上限与多行转义。
+      if (input.schema) {
+        const path = store.writeSchemaInput(task.id, input.schema)
+        run.hasSchemaInput = true
+        args.push('--json-schema', path)
+      }
+      const env = createAgyEnvironment()
+      const invocation = createAgyInvocation(executable, args, env)
+      const child = (this.dependencies.spawn ?? spawnProcess)(invocation.command, invocation.args, {
         cwd, env, shell: false, detached: process.platform !== 'win32', stdio: 'pipe', windowsHide: true,
+        windowsVerbatimArguments: invocation.windowsVerbatimArguments,
       }) as ChildProcessWithoutNullStreams
       run.child = child
+      child.once('spawn', () => {
+        if (run.finished || run.stopStatus) return
+        task.status = 'running'
+        this.flush(run)
+      })
       child.stdout.on('data', (chunk: Buffer) => { if (!run.finished) run.parser.push(chunk) })
       child.stderr.on('data', (chunk: Buffer) => {
         if (run.finished) return
@@ -139,8 +150,9 @@ export class AgyTaskService {
         }
       })
       child.on('error', error => {
-        task.error = redactAgyText(`无法启动 agy：${error.message}`)
-        this.finish(run, 'failed')
+        if (run.finished) return
+        task.error = redactAgyText(formatAgyLaunchError(error, executable, cwd))
+        this.finish(run, run.stopStatus ?? 'failed')
       })
       child.on('exit', (code: number | null) => {
         task.exitCode = code ?? undefined
@@ -160,8 +172,7 @@ export class AgyTaskService {
       child.stdin.on('error', error => {
         if (!run.finished && !run.result) { task.error = redactAgyText(`agy 输入失败：${error.message}`); this.requestStop(run, 'failed') }
       })
-      child.stdin.end(input.prompt)
-      task.status = 'running'
+      child.stdin.end(input.prompt, 'utf8')
       run.timeout = setTimeout(() => this.requestStop(run, 'timed_out'), seconds * 1000 + 5000)
       const abort = (): void => { if (!run.finished) this.requestStop(run, 'cancelled') }
       signal?.addEventListener('abort', abort, { once: true })
@@ -169,7 +180,7 @@ export class AgyTaskService {
       if (signal?.aborted) abort()
       this.flush(run)
     } catch (error) {
-      task.error = redactAgyText(error instanceof Error ? error.message : String(error))
+      task.error = redactAgyText(formatAgyLaunchError(error, executable, cwd))
       this.finish(run, 'failed')
     }
     return { ...task }
@@ -280,6 +291,11 @@ export class AgyTaskService {
     clearTimeout(run.killTimer)
     clearTimeout(run.drainTimer)
     run.removeAbort?.()
+    if (run.hasSchemaInput) {
+      try { run.store.clearSchemaInput(run.task.id) } catch {
+        this.append(run, { kind: 'warning', text: '临时 Schema 文件清理失败，仍保留在当前任务的私有目录。' })
+      }
+    }
     run.task.status = status
     run.task.completedAt = Date.now()
     run.finished = true

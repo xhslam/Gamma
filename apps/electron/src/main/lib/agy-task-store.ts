@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgyActivityEvent, AgyTask, AgyTaskSnapshot } from '@gamma/shared'
 import { writeTextFileAtomic } from './safe-file'
@@ -53,6 +53,20 @@ export class AgyTaskStore {
     const meta = join(dir, 'task.json')
     this.assertRegular(meta)
     writeTextFileAtomic(meta, JSON.stringify(task), 0o600)
+  }
+
+  /** 仅接受已创建任务的私有输入；使用原子写封装，禁止跟随用户放置的 symlink。 */
+  writeSchemaInput(id: string, schema: string): string {
+    const path = join(this.taskDir(id), 'input-schema.json')
+    this.assertRegular(path)
+    writeTextFileAtomic(path, schema, 0o600)
+    return path
+  }
+
+  clearSchemaInput(id: string): void {
+    const path = join(this.taskDir(id), 'input-schema.json')
+    this.assertRegular(path)
+    if (existsSync(path)) unlinkSync(path)
   }
 
   get(id: string): AgyTask | undefined {
