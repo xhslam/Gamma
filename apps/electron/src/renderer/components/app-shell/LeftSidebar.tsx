@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen, TerminalSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SearchDialog } from './SearchDialog'
@@ -534,7 +534,8 @@ function deleteSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   return next
 }
 
-export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.ReactElement {
+/** 隔离父工作区的宽度与栏目更新；自身 atom、state 和 props 仍正常触发渲染。 */
+export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
   const setPlanningTab = useSetAtom(planningTabAtom)
@@ -905,6 +906,16 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     }
     setActiveView('conversations')
     openWorkspaceComponent('markdown')
+  }, [currentAgentSessionId, openWorkspaceComponent, setActiveView])
+
+  /** 与 Markdown 一致：优先作为右侧可拖动栏目打开；无会话时保留全屏兜底。 */
+  const handleOpenAgyTerminal = React.useCallback((): void => {
+    setActiveView('conversations')
+    if (!currentAgentSessionId) {
+      setActiveView('agy-terminal')
+      return
+    }
+    openWorkspaceComponent('agy-terminal')
   }, [currentAgentSessionId, openWorkspaceComponent, setActiveView])
 
   const handleOpenCapabilityComponent = React.useCallback((component: 'skills' | 'mcp' | 'memory'): void => {
@@ -2644,6 +2655,12 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
       {/* 项目级组件：每一行直接打开对应的右侧工作区 Tab。 */}
       <nav aria-label="工作区" className="shrink-0 px-2 pt-1">
+        <WorkspaceComponentSidebarEntry
+          label="AGY"
+          icon={<TerminalSquare size={16} />}
+          active={activeView === 'agy-terminal' || isWorkspaceComponentActive('agy-terminal')}
+          onClick={handleOpenAgyTerminal}
+        />
         <WorkspaceComponentSidebarEntry label="Markdown" icon={<BookOpen size={16} />} active={activeView === 'markdown' || isWorkspaceComponentActive('markdown')} onClick={handleOpenMarkdown} />
         {productivityTools.todosEnabled && (
           <WorkspaceComponentSidebarEntry
@@ -2816,7 +2833,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       <SearchDialog />
     </div>
   )
-}
+})
 
 // ===== 列表项操作按钮（时间 / 归档 / 更多菜单） =====
 

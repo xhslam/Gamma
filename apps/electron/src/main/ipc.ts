@@ -157,6 +157,8 @@ import type {
 import type { UserProfile, AppSettings, UpdateAppSettings } from '../types'
 import { getRuntimeStatus, getGitRepoStatus, reinitializeRuntime } from './lib/runtime-init'
 import { browserController } from './lib/browser-controller'
+import { ProjectAgyTerminalService } from './lib/project-agy-terminal-service'
+import { requireTerminalCwd } from './lib/terminal-cwd'
 import { acknowledgeTerminalOutput, attachTerminalOutputConsumer, closeTerminalsForSession, createTerminal, getTerminalSnapshot, killTerminal, resizeTerminal, writeTerminal } from './lib/terminal-service'
 import { saveTerminalPastedImage, getTerminalClipboardContent } from './lib/terminal-clipboard-service'
 import { getMainWindow } from './lib/main-window-store'
@@ -1384,6 +1386,20 @@ export function registerIpcHandlers(): void {
       throw new Error('仅主窗口可以访问 Slack Bot 设置。')
     }
   }
+  const projectAgyTerminals = new ProjectAgyTerminalService({
+    resolveCwd: (workspaceId) => {
+      const workspace = getAgentWorkspace(workspaceId)
+      if (!workspace) throw new Error('项目不存在')
+      return requireTerminalCwd(getProjectFilesPath(workspace.slug))
+    },
+    create: (input) => createTerminal(input, { strictCwd: true, launchAgy: true }),
+    snapshot: getTerminalSnapshot,
+    kill: killTerminal,
+  })
+  ipcMain.handle(TERMINAL_IPC_CHANNELS.OPEN_PROJECT_AGY, async (event, input: import('@gamma/shared').ProjectAgyTerminalInput) => {
+    assertMainTerminalRenderer(event.sender.id)
+    return projectAgyTerminals.open(input)
+  })
   ipcMain.handle(TERMINAL_IPC_CHANNELS.CREATE, async (event, input) => {
     assertMainTerminalRenderer(event.sender.id)
     if (!input.sessionId || !getAgentSessionMeta(input.sessionId)) {
@@ -2789,6 +2805,7 @@ export function registerIpcHandlers(): void {
       if (affectedAutomationIds.length > 0) {
         broadcastAutomationsChanged()
       }
+      projectAgyTerminals.close(id)
       deleteAgentWorkspace(id)
 
       releaseAttachedFileWatchers(deletedAttachedFiles)

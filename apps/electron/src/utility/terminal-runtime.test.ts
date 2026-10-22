@@ -21,6 +21,8 @@ function setup() {
   let receive!: (event: { data: unknown }) => void
   const sent: RuntimeEvent[] = []
   const ptys: FakePty[] = []
+  const spawns: Array<{ file: string; args: string[] | string; options: { cwd: string; env: Record<string, string>; name: string; cols: number; rows: number } }> = []
+  let agyMissing = false
   const timers = new Map<number, () => void>()
   let timerId = 0
   const port = { on: (_type: string, listener: typeof receive) => { receive = listener }, start() {}, close() {}, postMessage: (event: RuntimeEvent) => sent.push(event) }
@@ -29,7 +31,14 @@ function setup() {
     'node:os': { homedir: () => '/project' },
     '@gamma/shared': shared,
     './terminal-shell-resolver': { resolveTerminalShell: () => ({ file: '/bin/zsh', args: ['-l'], title: 'zsh' }) },
-    'node-pty': { spawn: () => {
+    './agy-terminal-launch': {
+      resolveAgyTerminalLaunch: () => {
+        if (agyMissing) throw new Error('未找到 agy')
+        return { file: '/trusted/agy', args: ['--dangerously-skip-permissions'], env: { PATH: '/trusted', TERM: 'xterm-256color' } }
+      },
+    },
+    'node-pty': { spawn: (file: string, args: string[] | string, options: { cwd: string; env: Record<string, string>; name: string; cols: number; rows: number }) => {
+      spawns.push({ file, args, options })
       let onData!: (data: string) => void
       let onExit!: (event: { exitCode: number }) => void
       const pty = {
@@ -53,10 +62,24 @@ function setup() {
   const request = (data: unknown): void => receive({ data })
   const create = (terminalId = 't1') => request({ type: 'terminal.create', attemptId: ptys.length + 1, input: { terminalId, sessionId: 's1', cwd: '/project', cols: 80, rows: 24 } })
   const flush = (): void => { const pending = [...timers.values()]; timers.clear(); pending.forEach((callback) => callback()) }
-  return { sent, ptys, timers, request, create, flush }
+  return { sent, ptys, timers, request, create, flush, spawns, hideAgy: () => { agyMissing = true } }
 }
 
 describe('终端 PTY 输出及实例隔离', () => {
+  test('Given 专用 AGY 入口 When 创建 PTY Then 直接启动 CLI 固定参数而非向 shell 注入命令', () => {
+    const context = setup()
+    context.request({ type: 'terminal.create', attemptId: 1, input: { terminalId: 'agy', sessionId: 'project-agy:a', cwd: '/project', cols: 100, rows: 30, strictCwd: true, launchAgy: true } })
+    expect(context.spawns[0]).toEqual({ file: '/trusted/agy', args: ['--dangerously-skip-permissions'], options: { name: 'xterm-256color', cols: 100, rows: 30, cwd: '/project', env: { PATH: '/trusted', TERM: 'xterm-256color' } } })
+    context.create('shell')
+    expect(context.spawns[1]?.file).toBe('/bin/zsh')
+  })
+  test('Given AGY 未安装 When 创建项目终端 Then 返回明确错误且不回退成 shell', () => {
+    const context = setup()
+    context.hideAgy()
+    context.request({ type: 'terminal.create', attemptId: 1, input: { terminalId: 'agy', sessionId: 'project-agy:a', cwd: '/project', cols: 80, rows: 24, strictCwd: true, launchAgy: true } })
+    expect(context.spawns).toHaveLength(0)
+    expect(context.sent.at(-1)).toMatchObject({ type: 'terminal.error', message: 'Error: 未找到 agy' })
+  })
   test('Given 连续输出和退出 When 主进程逐批 ACK Then 输出按序完整排空后发送退出', () => {
     const context = setup()
     context.create()

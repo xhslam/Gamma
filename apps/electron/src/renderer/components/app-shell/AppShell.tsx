@@ -117,7 +117,7 @@ export function AppShell(): React.ReactElement {
       return changed ? next : previous
     })
   }, [activeView, productivityTools.calendarEnabled, productivityTools.todosEnabled, setActiveView, setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
-  const showRightPanel = !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown'
+  const showRightPanel = !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown' && activeView !== 'agy-terminal'
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 左侧栏展开宽度固定；折叠状态仍由按钮、快捷键和右侧工作区布局控制。

@@ -1,5 +1,5 @@
 import type { PersistedTabState, TabItem } from '@/atoms/tab-atoms'
-import type { AgentSidePanelTab } from '@/atoms/agent-atoms'
+import { isWorkspaceComponentTab, type AgentSidePanelTab } from '@/atoms/agent-atoms'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
@@ -36,7 +36,9 @@ export function restoreAgentOnlyTabState(state: unknown, agentSessionIds: Readon
 /** 旧问答页和非法侧栏值必须落到可见文件页，不能留空。 */
 export function normalizeAgentSidePanelTab(tab: unknown): AgentSidePanelTab {
   if (typeof tab !== 'string') return 'files'
-  if (['files', 'changes', 'temporary-agent', 'delegation', 'todos', 'calendar', 'automations', 'skills', 'mcp', 'memory', 'markdown', 'agy-tasks'].includes(tab)) {
+  // 项目组件使用同一份注册表：不能出现 Tab 可见但路由归一化又回退为 files 的断层。
+  if (isWorkspaceComponentTab(tab)) return tab
+  if (['files', 'changes', 'temporary-agent', 'delegation', 'agy-tasks'].includes(tab)) {
     return tab as AgentSidePanelTab
   }
   if (/^(exploration|browser|preview|terminal|agy):.+$/.test(tab)) return tab as AgentSidePanelTab

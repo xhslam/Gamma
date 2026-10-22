@@ -7,6 +7,7 @@
 
 export const TERMINAL_IPC_CHANNELS = {
   CREATE: 'terminal:create',
+  OPEN_PROJECT_AGY: 'terminal:open-project-agy',
   INPUT: 'terminal:input',
   RESIZE: 'terminal:resize',
   KILL: 'terminal:kill',
@@ -46,6 +47,19 @@ export interface TerminalCreateInput {
   profile?: TerminalProfile
   cols: number
   rows: number
+}
+
+export interface ProjectAgyTerminalInput {
+  workspaceId: string
+  /** UI 必须先说明并取得用户对跳过全部工具权限检查的确认。 */
+  skipPermissionsConfirmed: boolean
+}
+
+export interface ProjectAgyTerminalState extends TerminalState {
+  workspaceId: string
+  /** 项目级资源归属，不属于任何 Agent 会话。 */
+  ownerId: string
+  exitCode?: number
 }
 
 export interface TerminalInput {

@@ -18,6 +18,7 @@ import { WelcomeView } from '@/components/welcome/WelcomeView'
 import { useTrackSessionView } from '@/hooks/useTrackSessionView'
 import { TabBar } from './TabBar'
 import { TabContent } from './TabContent'
+import { ProjectAgyTerminalView } from './ProjectAgyTerminalView'
 import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
@@ -38,7 +39,8 @@ import {
   browserStateMapAtom,
 } from '@/atoms/browser-atoms'
 
-export function MainArea(): React.ReactElement {
+/** 右侧栏目布局变化不应重跑对话主区；主区自己的 atom 订阅不受 memo 影响。 */
+export const MainArea = React.memo(function MainArea(): React.ReactElement {
   useTrackSessionView()
 
   const tabs = useAtomValue(tabsAtom)
@@ -154,6 +156,8 @@ export function MainArea(): React.ReactElement {
             automationFormOpen ? <AutomationFormView /> : <PlanningView />
           ) : activeView === 'agent-skills' ? (
             <AgentSkillsView />
+          ) : activeView === 'agy-terminal' ? (
+            <ProjectAgyTerminalView />
           ) : activeView === 'markdown' ? (
             <React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载 Markdown 工作区…</div>}><MarkdownWorkspaceView /></React.Suspense>
           ) : (
@@ -172,4 +176,4 @@ export function MainArea(): React.ReactElement {
       </div>
     </Panel>
   )
-}
+})

@@ -10,6 +10,18 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
+  test('When 点击 AGY 入口 Then 与 Markdown 一样作为右侧工作区栏目打开且不改选会话', async () => {
+    expect(await renderer.run<{ view: string; workspace: string; agent: string; workspaceTab: string; componentTabs: string[]; current: string }>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount();
+      const button = [...document.querySelectorAll('button')].find(item => item.textContent.trim() === 'AGY');
+      if (!button) throw new Error('侧栏缺少 AGY 入口');
+      button.click(); await api.until(() => fixture.state().workspaceTab === 'agy-terminal');
+      const state = fixture.state(), current = button.getAttribute('aria-current');
+      fixture.root.unmount();
+      return { view: state.view, workspace: state.workspace, agent: state.agent, workspaceTab: state.workspaceTab, componentTabs: state.componentTabs, current };
+    `)).toEqual({ view: 'conversations', workspace: 'project-a', agent: 'parent', workspaceTab: 'agy-terminal', componentTabs: ['agy-terminal'], current: 'page' })
+  }, 30_000)
+
   test('When 未悬浮会话行且没有归档历史 Then 归档操作和已归档入口仍然可见可点击', async () => {
     const result = await renderer.run<{ actionVisible: boolean; entryVisible: boolean; opened: boolean; returned: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ width: 240 });
@@ -206,7 +218,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return { brand, titleFits, labels, states, components: state.componentTabs, session: state.agent, project: state.workspace, view: state.view, hasLegacyPromotion };
     `)
     expect(result).toEqual({
-      brand: 'Gamma', titleFits: true, labels: ['Markdown', 'Todo', '日程', '项目记忆', '定时任务', 'MCP/Skills'],
+      brand: 'Gamma', titleFits: true, labels: ['AGY', 'Markdown', 'Todo', '日程', '项目记忆', '定时任务', 'MCP/Skills'],
       states: [
         { label: 'Markdown', tab: 'markdown', current: 'page' }, { label: 'Todo', tab: 'todos', current: 'page' },
         { label: '日程', tab: 'calendar', current: 'page' }, { label: '项目记忆', tab: 'memory', current: 'page' },

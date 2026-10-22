@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { restoreAgentOnlyTabState, normalizeAgentSidePanelTab } from './agent-only-state'
 import { sanitizeRightWorkspaceSplit } from './right-workspace-split'
 import { getStopGenerationTarget, resolveStopGenerationTarget } from './stop-generation-target'
-import type { AgentSidePanelTab } from '@/atoms/agent-atoms'
+import { WORKSPACE_COMPONENT_TABS, type AgentSidePanelTab } from '@/atoms/agent-atoms'
 import type { TabItem } from '@/atoms/tab-atoms'
 
 const agent = (id: string): TabItem => ({ id, type: 'agent', sessionId: id, title: id })
@@ -34,6 +34,11 @@ describe('Given 旧 Chat 与 Agent 混合入口状态', () => {
   test('When 状态无效或重复 Then 不恢复非法标签也不抛错', () => {
     expect(restoreAgentOnlyTabState(null, new Set())).toEqual({ tabs: [], activeTabId: null })
     expect(restoreAgentOnlyTabState({ tabs: [null, {}, agent('agent-a'), agent('agent-a')] }, new Set(['agent-a'])).tabs).toHaveLength(1)
+  })
+
+  test('When 任一已注册项目组件进入真实右侧容器 Then 保留选择，不误回退到文件', () => {
+    for (const component of WORKSPACE_COMPONENT_TABS) expect(normalizeAgentSidePanelTab(component)).toBe(component)
+    expect(normalizeAgentSidePanelTab('unregistered-component')).toBe('files')
   })
 
   test('When 侧栏旧值为 chat Then 文件页回退且有效分屏保留', () => {

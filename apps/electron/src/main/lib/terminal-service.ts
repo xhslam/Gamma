@@ -82,7 +82,7 @@ export function hasLiveTerminals(): boolean {
 
 export async function createTerminal(
   input: TerminalCreateInput,
-  options: { strictCwd?: boolean } = {},
+  options: { strictCwd?: boolean; launchAgy?: boolean } = {},
 ): Promise<TerminalState> {
   assertComputerExecutionAllowed()
   initialize()
@@ -98,7 +98,9 @@ export async function createTerminal(
   // Initialize the replay buffer before the runtime can emit the first shell output.
   terminalOutputBuffers.set(input.terminalId, { output: '', sequence: 0, startOffset: 0, endOffset: 0 })
   const creation = terminalRuntimeClient.create({
-    ...input,
+    terminalId: input.terminalId,
+    sessionId: input.sessionId,
+    profile: input.profile,
     cwd,
     cols: normalizeDimension(input.cols),
     rows: normalizeDimension(input.rows),
