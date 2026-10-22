@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -43,4 +43,55 @@ macTest('Given纯离线入口 When编译并运行--self-test Then安全锁存/�
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+}, 150_000)
+
+macTest('Given 生产Engine watchdog When 列窗及prepare超过100ms Then 不误停且停止入口丢失仍立即暂停', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'gamma-computer-engine-'))
+  try {
+    const plan = computerUseBuildPlan({ appDir, platform: 'darwin', hostArch: process.arch })!
+    // 编译原版 Engine/安全门/协议；只替换 UI 与入口，桌面读取和绑定使用无副作用的延迟 fixture。
+    writeFileSync(resolve(directory, 'NativeUI.swift'), `
+import Foundation
+final class NativeUI {
+  var onStop: (String) -> Void = { _ in }
+  var hasVisibleStop = false
+  func setStatus(_ text: String) { hasVisibleStop = true }
+  func hideStop() { hasVisibleStop = false }
+  func cancelAll() { hideStop() }
+}
+`)
+    writeFileSync(resolve(directory, 'main.swift'), `
+import Foundation
+func pump(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
+func require(_ condition: Bool) { if !condition { exit(2) } }
+func scenario(_ method: String, disappear: Bool) throws {
+  let engine = Engine(readWindows: { Thread.sleep(forTimeInterval: 0.25); return [] }, prepareAction: { _,_,_ in Thread.sleep(forTimeInterval: 0.25); throw NativeFailure("stale-element-ref", "fixture") })
+  engine.start()
+  let token = try engine.gate.begin(LeaseParams(leaseId: "fixture", epoch: 1, deadline: Date().timeIntervalSince1970 * 1000 + 10000))
+  try engine.gate.finishSelection(nil, token: token); engine.gate.setListenerHealthy(true)
+  try engine.gate.save(Snapshot(id: "obs", epoch: 1, fence: token, created: ProcessInfo.processInfo.systemUptime, width: 10, height: 10, axDigest: ""))
+  let request: [String: Any] = ["id": "test-" + method + "-" + String(disappear), "method": method, "params": ["leaseId": "fixture", "epoch": 1, "actionId": "a", "action": ["kind": "wait", "observationId": "obs"]]]
+  engine.handle(try JSONSerialization.data(withJSONObject: request))
+  require(engine.ui.hasVisibleStop)
+  pump(0.12)
+  require(engine.gate.isActive)
+  if disappear { engine.ui.hideStop() }
+  pump(0.24)
+  require(engine.gate.isActive != disappear)
+  require(!engine.ui.hasVisibleStop)
+  engine.stop("fixture结束"); pump(0.02)
+}
+try scenario("listWindows", disappear: false)
+try scenario("prepare", disappear: false)
+try scenario("listWindows", disappear: true)
+print("ENGINE_WATCHDOG_PASSED")
+`)
+    const names = readdirSync(plan.sourceDir).filter(name => name.endsWith('.swift') && !['NativeUI.swift', 'main.swift'].includes(name)).sort()
+    const output = resolve(directory, 'engine-test')
+    execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-warnings-as-errors', '-target', plan.target, ...names.map(name => resolve(plan.sourceDir, name)), resolve(directory, 'NativeUI.swift'), resolve(directory, 'main.swift'), '-o', output], { timeout: 120_000 })
+    const result = execFileSync(output, [], { encoding: 'utf8', timeout: 10_000 })
+    expect(result).toContain('ENGINE_WATCHDOG_PASSED')
+    expect(result).toContain('stale-element-ref')
+    expect(result).toContain('test-listWindows-false')
+  } finally { rmSync(directory, { recursive: true, force: true }) }
 }, 150_000)

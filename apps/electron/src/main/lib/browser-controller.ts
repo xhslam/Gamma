@@ -49,7 +49,9 @@ function sanitizeDownloadFilename(raw: string): string {
 }
 
 type CdpResponse = Record<string, unknown>
-type RefEntry = { backendNodeId: number; generation: number; label: string; editable: boolean }
+interface FrameRoute { frameId: string; sessionId?: string; parent?: FrameRoute }
+interface RefEntry { backendNodeId: number; generation: number; label: string; editable: boolean; frame: FrameRoute }
+interface FrameAXNode { node: Record<string, unknown>; frame: FrameRoute }
 type BrowserWaitCondition = { kind: 'url' | 'text' | 'selector'; value: string }
 type BrowserTabRecord = {
   tabId: string
@@ -74,6 +76,7 @@ type BrowserTabRecord = {
   lastActivityAt: number
   /** 页面声明的 HTTP(S) favicon；仅用于 renderer 标签图标。 */
   favicon: string | null
+  frameSessions?: Map<string, string>
   highlightTimer?: ReturnType<typeof setTimeout>
   lastBounds?: BrowserViewLayout['bounds']
   /** 仅记录当前实际挂载的 owner；隐藏时 detach，但保留 WebContents 及页面状态。 */
@@ -702,6 +705,7 @@ export class BrowserController {
       this.invalidateTabDocument(tab)
       this.updateNavigationState(browserSession, tab)
     })
+    view.webContents.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame) => { if (!isMainFrame) this.invalidateTabDocument(tab) })
     view.webContents.on('did-navigate-in-page', () => { tab.popupInitialNavigationPending = false; this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
     view.webContents.on('destroyed', () => {
       if (!browserSession.tabs.has(tab.tabId)) return
@@ -720,7 +724,15 @@ export class BrowserController {
       }
       this.emit(browserSession)
     })
-    try { view.webContents.debugger.attach('1.3') } catch (error) { console.warn('[受管浏览器] CDP attach 失败:', error) }
+    view.webContents.debugger.on('message', (_event, method, params) => {
+      if (['Page.frameNavigated', 'Page.frameDetached'].includes(method)) this.invalidateTabDocument(tab)
+      if (method === 'Target.detachedFromTarget') {
+        for (const [frameId, sessionId] of tab.frameSessions ?? []) if (sessionId === params.sessionId) {
+          tab.frameSessions?.delete(frameId); this.invalidateTabDocument(tab)
+        }
+      }
+    })
+    try { view.webContents.debugger.attach('1.3'); void this.cdp(tab, 'Page.enable').catch(() => undefined) } catch (error) { console.warn('[受管浏览器] CDP attach 失败:', error) }
     browserSession.tabs.set(tabId, tab)
     if (!browserSession.activeTabId) browserSession.activeTabId = tabId
     if (claimAsAgent) browserSession.agentTabId = tabId
@@ -740,13 +752,13 @@ export class BrowserController {
    * CDP 在页面进程卡死时可能永久不返回。超时后重连 debugger，避免一个 Observe
    * 卡住整个 Agent turn，也让下一次 Browser* 调用能使用新的通道继续工作。
    */
-  private async cdp(tab: BrowserTabRecord, method: string, params?: Record<string, unknown>, timeoutMs?: number, signal?: AbortSignal): Promise<CdpResponse> {
+  private async cdp(tab: BrowserTabRecord, method: string, params?: Record<string, unknown>, timeoutMs?: number, signal?: AbortSignal, sessionId?: string): Promise<CdpResponse> {
     throwIfBrowserOperationAborted(signal)
     const debuggerClient = tab.view.webContents.debugger
     if (!debuggerClient.isAttached()) throw new Error('浏览器调试通道不可用。')
     try {
       return await withBrowserCdpTimeout(
-        () => debuggerClient.sendCommand(method, params) as Promise<CdpResponse>,
+        () => debuggerClient.sendCommand(method, params, sessionId) as Promise<CdpResponse>,
         method,
         timeoutMs,
         signal,
@@ -760,6 +772,7 @@ export class BrowserController {
   private recoverDebugger(tab: BrowserTabRecord, timedOutMethod: string): void {
     // 重连会使所有 backend node/ref 的有效性不可判定。
     this.invalidateTabDocument(tab)
+    tab.frameSessions?.clear()
     const debuggerClient = tab.view.webContents.debugger
     try {
       if (debuggerClient.isAttached()) debuggerClient.detach()
@@ -771,21 +784,22 @@ export class BrowserController {
   }
 
   /** 通过 CDP Overlay 渲染临时高亮，不向第三方页面注入脚本或修改 DOM。 */
-  private async highlightAgentTarget(tab: BrowserTabRecord, backendNodeId: number): Promise<void> {
+  private async highlightAgentTarget(tab: BrowserTabRecord, target: RefEntry): Promise<void> {
     if (tab.highlightTimer) clearTimeout(tab.highlightTimer)
     try {
-      await this.cdp(tab, 'Overlay.enable')
+      await this.cdp(tab, 'DOM.enable', {}, undefined, undefined, target.frame.sessionId)
+      await this.cdp(tab, 'Overlay.enable', {}, undefined, undefined, target.frame.sessionId)
       await this.cdp(tab, 'Overlay.highlightNode', {
-        backendNodeId,
+        backendNodeId: target.backendNodeId,
         highlightConfig: {
           showInfo: false,
           contentColor: { r: 59, g: 130, b: 246, a: 0.16 },
           borderColor: { r: 59, g: 130, b: 246, a: 0.95 },
         },
-      })
+      }, undefined, undefined, target.frame.sessionId)
       tab.highlightTimer = setTimeout(() => {
         tab.highlightTimer = undefined
-        void this.cdp(tab, 'Overlay.hideHighlight').catch(() => undefined)
+        void this.cdp(tab, 'Overlay.hideHighlight', {}, undefined, undefined, target.frame.sessionId).catch(() => undefined)
       }, ACTION_HIGHLIGHT_DURATION_MS)
     } catch (error) {
       console.warn('[受管浏览器] 无法渲染 Agent 操作高亮:', error)
@@ -1326,6 +1340,93 @@ export class BrowserController {
     return this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, (operationSignal) => this.observeInternal(browserSession, tab, requestedMaxElements, operationSignal))
   }
 
+  /** 枚举每个 frame 的 AX 树；跨进程 iframe 使用独立 CDP session，引用不跨 target 复用。 */
+  private async frameAXNodes(tab: BrowserTabRecord, depth: number, signal?: AbortSignal): Promise<FrameAXNode[]> {
+    const result: FrameAXNode[] = []
+    const generation = tab.generation
+    let count = 0
+    const routes = new Map<string, FrameRoute>()
+    const visit = async (tree: unknown, parent?: FrameRoute, sessionOverride?: string): Promise<void> => {
+      this.assertCurrentDocument(tab, generation, signal)
+      if (!tree || typeof tree !== 'object' || ++count > 64) throw new Error('页面 frame 数量超过观察预算。')
+      const record = tree as Record<string, unknown>
+      const frameInfo = record.frame as Record<string, unknown> | undefined
+      if (typeof frameInfo?.id !== 'string') throw new Error('无法验证 frame 身份。')
+      const frame: FrameRoute = { frameId: frameInfo.id, sessionId: sessionOverride ?? parent?.sessionId, parent }
+      let response: CdpResponse
+      try {
+        response = await this.cdp(tab, 'Accessibility.getFullAXTree', { depth, frameId: frame.frameId }, BROWSER_OBSERVE_TIMEOUT_MS, signal, frame.sessionId)
+      } catch (error) {
+        if (!parent || error instanceof BrowserCdpTimeoutError || error instanceof BrowserOperationAbortedError) throw error
+        // OOPIF 的 frameId 同时是 iframe targetId；只连接来自已验证 frame tree 的身份。
+        const sessions = tab.frameSessions ??= new Map()
+        let sessionId = sessions.get(frame.frameId)
+        if (!sessionId) {
+          const attached = await this.cdp(tab, 'Target.attachToTarget', { targetId: frame.frameId, flatten: true }, undefined, signal)
+          if (typeof attached.sessionId !== 'string') throw new Error('无法连接 iframe 调试通道。')
+          sessionId = attached.sessionId; sessions.set(frame.frameId, sessionId)
+          await this.cdp(tab, 'Page.enable', {}, undefined, signal, sessionId)
+        }
+        frame.sessionId = sessionId
+        response = await this.cdp(tab, 'Accessibility.getFullAXTree', { depth, frameId: frame.frameId }, BROWSER_OBSERVE_TIMEOUT_MS, signal, sessionId)
+      }
+      routes.set(frame.frameId, frame)
+      for (const node of Array.isArray(response.nodes) ? response.nodes : []) {
+        if (node && typeof node === 'object') result.push({ node: node as Record<string, unknown>, frame })
+      }
+      for (const child of Array.isArray(record.childFrames) ? record.childFrames : []) await visit(child, frame)
+    }
+    const tree = await this.cdp(tab, 'Page.getFrameTree', {}, undefined, signal)
+    await visit(tree.frameTree)
+    // Chromium 的 Page.getFrameTree 不含 OOPIF；只沿已验证的 parentFrameId 扩展本 Tab 子树。
+    const targets = await this.cdp(tab, 'Target.getTargets', {}, undefined, signal)
+    const pending = (Array.isArray(targets.targetInfos) ? targets.targetInfos : []).filter((value): value is Record<string, unknown> => !!value && typeof value === 'object' && value.type === 'iframe')
+    for (let pass = 0; pass < 64 && pending.length; pass++) {
+      let progressed = false
+      for (let index = pending.length - 1; index >= 0; index--) {
+        const target = pending[index]!
+        if (typeof target.targetId !== 'string') continue
+        if (routes.has(target.targetId)) { pending.splice(index, 1); continue }
+        const parentId = typeof target.parentFrameId === 'string' ? target.parentFrameId : target.parentId
+        const parent = typeof parentId === 'string' ? routes.get(parentId) : undefined
+        if (!parent) continue
+        const sessions = tab.frameSessions ??= new Map()
+        let sessionId = sessions.get(target.targetId)
+        if (!sessionId) {
+          const attached = await this.cdp(tab, 'Target.attachToTarget', { targetId: target.targetId, flatten: true }, undefined, signal)
+          if (typeof attached.sessionId !== 'string') throw new Error('无法连接 iframe 调试通道。')
+          sessionId = attached.sessionId; sessions.set(target.targetId, sessionId)
+          await this.cdp(tab, 'Page.enable', {}, undefined, signal, sessionId)
+        }
+        const childTree = await this.cdp(tab, 'Page.getFrameTree', {}, undefined, signal, sessionId)
+        await visit(childTree.frameTree, parent, sessionId)
+        pending.splice(index, 1); progressed = true
+      }
+      if (!progressed) break
+    }
+    for (const [frameId, sessionId] of tab.frameSessions ?? []) {
+      if (!routes.has(frameId)) {
+        tab.frameSessions?.delete(frameId)
+        await this.cdp(tab, 'Target.detachFromTarget', { sessionId }, undefined, signal).catch(() => undefined)
+      }
+    }
+    this.assertCurrentDocument(tab, generation, signal)
+    return result
+  }
+
+  /** 有界的节点查询和选区操作；远程对象始终释放，不把 DOM 对象泄漏到模型上下文。 */
+  private async inspectNode(tab: BrowserTabRecord, target: RefEntry, functionDeclaration: string, args: unknown[] = [], signal?: AbortSignal): Promise<unknown> {
+    const sessionId = target.frame.sessionId
+    const resolved = await this.cdp(tab, 'DOM.resolveNode', { backendNodeId: target.backendNodeId }, undefined, signal, sessionId)
+    const objectId = (resolved.object as Record<string, unknown> | undefined)?.objectId
+    if (typeof objectId !== 'string') throw new Error('目标节点已失效，请重新观察。')
+    try {
+      const response = await this.cdp(tab, 'Runtime.callFunctionOn', { objectId, functionDeclaration, arguments: args.map(value => ({ value })), returnByValue: true }, undefined, signal, sessionId)
+      if (response.exceptionDetails) throw new Error('无法核验目标节点，请重新观察。')
+      return (response.result as Record<string, unknown> | undefined)?.value
+    } finally { await this.cdp(tab, 'Runtime.releaseObject', { objectId }, undefined, undefined, sessionId).catch(() => undefined) }
+  }
+
   private async observeInternal(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, requestedMaxElements?: number, signal?: AbortSignal): Promise<BrowserObservation> {
     try {
       throwIfBrowserOperationAborted(signal)
@@ -1333,19 +1434,18 @@ export class BrowserController {
       // 全量 AX tree 在富文本编辑器、长列表和复杂 SPA 中会非常大；限制深度以保留主页面交互层，
       // 同时避免 Chromium 为整棵树做序列化而长时间阻塞。
       const observeDepth = resolveBrowserObserveAxDepth(maxElements)
-      const response = await this.cdp(tab, 'Accessibility.getFullAXTree', { depth: observeDepth }, BROWSER_OBSERVE_TIMEOUT_MS, signal)
-      throwIfBrowserOperationAborted(signal)
-      const nodes = Array.isArray(response.nodes) ? response.nodes : []
-      const candidates: Array<{ backendNodeId: number; role: string; name: string; editable: boolean }> = []
+      const nodes = await this.frameAXNodes(tab, observeDepth, signal)
+      const candidates: Array<{ backendNodeId: number; role: string; name: string; editable: boolean; frame: FrameRoute }> = []
       for (const node of nodes) {
         if (!node || typeof node !== 'object') continue
-        const ax = node as Record<string, unknown>
+        const ax = node.node
+        const frame = node.frame
         const backendNodeId = typeof ax.backendDOMNodeId === 'number' ? ax.backendDOMNodeId : 0
         const role = textValue(ax.role)
         const name = textValue(ax.name)
         const editable = isEditableAxNode(ax)
         if (!backendNodeId || !role || (!name && !editable && !['button', 'textbox', 'link', 'checkbox', 'combobox'].includes(role))) continue
-        candidates.push({ backendNodeId, role, name: name.slice(0, browserObservationNameLimit(role)), editable })
+        candidates.push({ backendNodeId, frame, role, name: name.slice(0, browserObservationNameLimit(role)), editable })
       }
 
       const selected = prioritizeBrowserObservationCandidates(candidates, maxElements)
@@ -1356,6 +1456,7 @@ export class BrowserController {
         const ref = `r${tab.generation}-${elements.length + 1}`
         tab.refs.set(ref, {
           backendNodeId: candidate.backendNodeId,
+          frame: candidate.frame,
           generation: tab.generation,
           label: candidate.name ? `${candidate.role}「${candidate.name.slice(0, 80)}」` : candidate.role,
           editable: candidate.editable,
@@ -1384,13 +1485,12 @@ export class BrowserController {
     return this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, async (operationSignal) => {
       // Filter the AX tree before applying the observation ranking/cap so Find can discover a matching
       // element that was absent from the compact BrowserObserve output.
-      const response = await this.cdp(tab, 'Accessibility.getFullAXTree', { depth: resolveBrowserObserveAxDepth(400) }, BROWSER_OBSERVE_TIMEOUT_MS, operationSignal)
-      throwIfBrowserOperationAborted(operationSignal)
-      const nodes = Array.isArray(response.nodes) ? response.nodes : []
-      const candidates: Array<{ backendNodeId: number; role: string; name: string; editable: boolean }> = []
+      const nodes = await this.frameAXNodes(tab, resolveBrowserObserveAxDepth(400), operationSignal)
+      const candidates: Array<{ backendNodeId: number; role: string; name: string; editable: boolean; frame: FrameRoute }> = []
       for (const node of nodes) {
         if (!node || typeof node !== 'object') continue
-        const ax = node as Record<string, unknown>
+        const ax = node.node
+        const frame = node.frame
         const backendNodeId = typeof ax.backendDOMNodeId === 'number' ? ax.backendDOMNodeId : 0
         const candidateRole = textValue(ax.role)
         const candidateName = textValue(ax.name)
@@ -1400,7 +1500,7 @@ export class BrowserController {
         const normalizedName = candidateName.toLowerCase()
         const nameMatches = !name || (query.exact ? normalizedName === name : normalizedName.includes(name))
         if (!roleMatches || !nameMatches) continue
-        candidates.push({ backendNodeId, role: candidateRole, name: candidateName.slice(0, browserObservationNameLimit(candidateRole)), editable })
+        candidates.push({ backendNodeId, frame, role: candidateRole, name: candidateName.slice(0, browserObservationNameLimit(candidateRole)), editable })
         if (candidates.length >= maxResults) break
       }
       tab.generation++
@@ -1410,6 +1510,7 @@ export class BrowserController {
         const ref = `r${tab.generation}-${elements.length + 1}`
         tab.refs.set(ref, {
           backendNodeId: candidate.backendNodeId,
+          frame: candidate.frame,
           generation: tab.generation,
           label: candidate.name ? `${candidate.role}「${candidate.name.slice(0, 80)}」` : candidate.role,
           editable: candidate.editable,
@@ -1429,25 +1530,59 @@ export class BrowserController {
   }
 
   private async centerForRef(tab: BrowserTabRecord, ref: string, signal?: AbortSignal, generation = tab.generation): Promise<{ x: number; y: number }> {
+    const target = this.resolveRef(tab, ref)
     this.assertCurrentDocument(tab, generation, signal)
-    const { backendNodeId } = this.resolveRef(tab, ref)
-    // AX ref 可能来自懒加载列表的视口外节点。滚动后重新读取 box，不能复用旧坐标。
-    await this.cdp(tab, 'DOM.scrollIntoViewIfNeeded', { backendNodeId }, undefined, signal)
+    await this.cdp(tab, 'DOM.scrollIntoViewIfNeeded', { backendNodeId: target.backendNodeId }, undefined, signal, target.frame.sessionId)
+    // 两次布局采样后才投递；遮挡、禁用或动画中的控件均拒绝，交给下一次观察重新规划。
+    const readPoint = async (): Promise<{ x: number; y: number }> => {
+      const raw = await this.inspectNode(tab, target, `function() {
+        const r = this.getBoundingClientRect(), s = getComputedStyle(this);
+        return { x:r.x+r.width/2, y:r.y+r.height/2, width:r.width, height:r.height,
+          enabled:this.isConnected && !this.matches(':disabled,[aria-disabled="true"]') && !this.closest('[inert]') && s.visibility==='visible' && Number(s.opacity)>0 };
+      }`, [], signal) as { x: number; y: number; width: number; height: number; enabled: boolean }
+      if (!raw?.enabled || !(raw.width > 0 && raw.height > 0) || !Number.isFinite(raw.x) || !Number.isFinite(raw.y)) throw new Error('目标不可见或已禁用，请重新观察。')
+      return { x: raw.x, y: raw.y }
+    }
+    const before = await readPoint()
+    await new Promise<void>(resolve => setTimeout(resolve, 80))
     this.assertCurrentDocument(tab, generation, signal)
-    const box = await this.cdp(tab, 'DOM.getBoxModel', { backendNodeId }, undefined, signal)
+    let point = await readPoint()
+    if (Math.abs(before.x - point.x) > 0.5 || Math.abs(before.y - point.y) > 0.5) throw new Error('目标布局尚未稳定，请重新观察。')
+    const hit = async (node: RefEntry, p: { x: number; y: number }): Promise<void> => {
+      const matched = await this.inspectNode(tab, node, `function(x,y) {
+        let hit = this.ownerDocument.elementFromPoint(x,y);
+        while(hit && hit.shadowRoot && hit.shadowRoot.elementFromPoint(x,y) && hit.shadowRoot.elementFromPoint(x,y)!==hit) hit=hit.shadowRoot.elementFromPoint(x,y);
+        return !!hit && (hit===this || this.contains(hit));
+      }`, [p.x, p.y], signal)
+      if (matched !== true) throw new Error('目标被其他元素遮挡或不在视口内，未投递点击；请重新观察。')
+    }
+    await hit(target, point)
+    let frame = target.frame
+    while (frame.parent) {
+      const parent = frame.parent
+      const owner = await this.cdp(tab, 'DOM.getFrameOwner', { frameId: frame.frameId }, undefined, signal, parent.sessionId)
+      if (typeof owner.backendNodeId !== 'number') throw new Error('iframe 已改变，请重新观察。')
+      const ownerRef: RefEntry = { ...target, backendNodeId: owner.backendNodeId, frame: parent }
+      const geometry = await this.inspectNode(tab, ownerRef, `function() {
+        const r=this.getBoundingClientRect(),sx=r.width/this.offsetWidth,sy=r.height/this.offsetHeight;
+        let aligned=true;
+        for(let e=this;e;e=e.parentElement){const t=getComputedStyle(e).transform;if(t!=='none'){const m=new DOMMatrixReadOnly(t);if(!m.is2D || Math.abs(m.b)>0.0001 || Math.abs(m.c)>0.0001 || m.a<=0 || m.d<=0)aligned=false;}}
+        return { x:r.x+this.clientLeft*sx,y:r.y+this.clientTop*sy,sx,sy,aligned };
+      }`, [], signal) as { x: number; y: number; sx: number; sy: number; aligned: boolean }
+      if (!geometry?.aligned || !Number.isFinite(geometry.sx) || !Number.isFinite(geometry.sy) || geometry.sx <= 0 || geometry.sy <= 0) throw new Error('iframe 存在变换，无法安全换算坐标，请使用其他定位方式。')
+      point = { x: point.x * geometry.sx + geometry.x, y: point.y * geometry.sy + geometry.y }
+      await hit(ownerRef, point)
+      frame = parent
+    }
     this.assertCurrentDocument(tab, generation, signal)
-    const model = box.model as Record<string, unknown> | undefined
-    const quad = Array.isArray(model?.content) ? model.content : []
-    if (quad.length < 8 || !quad.every((value) => typeof value === 'number')) throw new Error('目标元素当前不可点击，请重新观察页面。')
-    return { x: ((quad[0] as number) + (quad[2] as number) + (quad[4] as number) + (quad[6] as number)) / 4, y: ((quad[1] as number) + (quad[3] as number) + (quad[5] as number) + (quad[7] as number)) / 4 }
+    return point
   }
 
   private async clickRef(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, ref: string, signal?: AbortSignal): Promise<RefEntry> {
     const generation = tab.generation
     const target = this.resolveRef(tab, ref)
+    await this.highlightAgentTarget(tab, target)
     const { x, y } = await this.centerForRef(tab, ref, signal, generation)
-    this.assertCurrentDocument(tab, generation, signal)
-    await this.highlightAgentTarget(tab, target.backendNodeId)
     this.assertCurrentDocument(tab, generation, signal)
     await this.cdp(tab, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }, undefined, signal)
     this.assertCurrentDocument(tab, generation, signal)
@@ -1474,7 +1609,7 @@ export class BrowserController {
       const generation = tab.generation
       const target = this.resolveRef(tab, ref)
       const { x, y } = await this.centerForRef(tab, ref, operationSignal, generation)
-      await this.highlightAgentTarget(tab, target.backendNodeId)
+      await this.highlightAgentTarget(tab, target)
       this.assertCurrentDocument(tab, generation, operationSignal)
       await this.cdp(tab, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, undefined, operationSignal)
       this.trace(browserSession, tab, 'hover', `悬停 ${target.label}`, 'dispatched')
@@ -1494,7 +1629,7 @@ export class BrowserController {
       const source = this.resolveRef(tab, sourceRef)
       const target = this.resolveRef(tab, targetRef)
       const start = await this.centerForRef(tab, sourceRef, operationSignal, generation)
-      await this.highlightAgentTarget(tab, source.backendNodeId)
+      await this.highlightAgentTarget(tab, source)
       this.assertCurrentDocument(tab, generation, operationSignal)
       await this.cdp(tab, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: start.x, y: start.y, button: 'left', clickCount: 1 }, undefined, operationSignal)
       try {
@@ -1516,7 +1651,7 @@ export class BrowserController {
     const response = await this.cdp(tab, 'Accessibility.getPartialAXTree', {
       backendNodeId: target.backendNodeId,
       fetchRelatives: false,
-    }, undefined, signal)
+    }, undefined, signal, target.frame.sessionId)
     const nodes = Array.isArray(response.nodes) ? response.nodes : []
     const current = nodes.find((node) => (
       node
@@ -1536,19 +1671,32 @@ export class BrowserController {
       const generation = tab.generation
       const target = this.resolveRef(tab, ref)
       if (!target.editable) throw new Error('目标元素不是可编辑字段，请重新观察后选择 input、textarea 或 contenteditable。')
-      await this.highlightAgentTarget(tab, target.backendNodeId)
+      await this.highlightAgentTarget(tab, target)
       this.assertCurrentDocument(tab, generation, operationSignal)
-      await this.cdp(tab, 'DOM.scrollIntoViewIfNeeded', { backendNodeId: target.backendNodeId }, undefined, operationSignal)
+      await this.cdp(tab, 'DOM.scrollIntoViewIfNeeded', { backendNodeId: target.backendNodeId }, undefined, operationSignal, target.frame.sessionId)
       this.assertCurrentDocument(tab, generation, operationSignal)
-      await this.cdp(tab, 'DOM.focus', { backendNodeId: target.backendNodeId }, undefined, operationSignal)
+      await this.cdp(tab, 'DOM.focus', { backendNodeId: target.backendNodeId }, undefined, operationSignal, target.frame.sessionId)
       this.assertCurrentDocument(tab, generation, operationSignal)
       await this.assertEditableFocus(tab, target, operationSignal)
-      const selectAllModifier = process.platform === 'darwin' ? 4 : 2
-      await this.cdp(tab, 'Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: selectAllModifier }, undefined, operationSignal)
+      // 直接绑定目标的选区，不依赖操作系统快捷键或当前窗口是否拥有键盘焦点。
+      // 仅改变选区；实际编辑仍由 Chromium Input 产生 beforeinput/input 事件。
+      const selected = await this.inspectNode(tab, target, `function() {
+        if (!this.isConnected || this.readOnly || this.disabled) return false;
+        if ('value' in this) {
+          this.select();
+          return this.selectionStart === 0 && this.selectionEnd === this.value.length;
+        }
+        if (!this.isContentEditable) return false;
+        const selection=this.ownerDocument.getSelection(),range=this.ownerDocument.createRange();
+        range.selectNodeContents(this); selection.removeAllRanges(); selection.addRange(range);
+        return selection.anchorNode===this && selection.focusNode===this;
+      }`, [], operationSignal)
+      if (selected !== true) throw new Error('无法验证字段的完整选区，未投递输入；请重新观察。')
       this.assertCurrentDocument(tab, generation, operationSignal)
-      await this.cdp(tab, 'Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: selectAllModifier }, undefined, operationSignal)
+      await this.cdp(tab, 'Input.insertText', { text }, undefined, operationSignal, target.frame.sessionId)
       this.assertCurrentDocument(tab, generation, operationSignal)
-      await this.cdp(tab, 'Input.insertText', { text }, undefined, operationSignal)
+      const actual = await this.inspectNode(tab, target, `function() { return 'value' in this ? this.value : this.textContent === '' ? '' : this.innerText; }`, [], operationSignal)
+      if (actual !== text) throw new Error('输入已投递，但字段值与预期不一致；请重新观察，不得盲目重试。')
       this.trace(browserSession, tab, 'fill', `在 ${target.label} 输入 ${Array.from(text).length} 个字符（已脱敏）`, 'dispatched')
       return structuredClone(this.buildState(browserSession))
     })
@@ -1639,7 +1787,7 @@ export class BrowserController {
     return this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, async (operationSignal) => {
       await this.clickRef(browserSession, tab, ref, operationSignal)
       const wait = waitFor ? await this.waitForInternal(browserSession, tab, waitFor, timeoutMs, operationSignal) : null
-      this.trace(browserSession, tab, 'act', wait ? `点击后等待${waitFor?.kind}条件` : '点击操作', wait?.matched === false ? 'failed' : 'verified')
+      this.trace(browserSession, tab, 'act', wait ? `点击后等待${waitFor?.kind}条件` : '点击操作', wait === null ? 'dispatched' : wait.matched ? 'verified' : 'failed')
       return { state: structuredClone(this.buildState(browserSession)), wait }
     })
   }
@@ -1724,16 +1872,16 @@ export class BrowserController {
       const target = this.resolveRef(tab, ref)
       const files = await this.assertUploadPaths(browserSession, filePaths)
       this.assertCurrentDocument(tab, generation, operationSignal)
-      const response = await this.cdp(tab, 'DOM.describeNode', { backendNodeId: target.backendNodeId, depth: 0 }, undefined, operationSignal)
+      const response = await this.cdp(tab, 'DOM.describeNode', { backendNodeId: target.backendNodeId, depth: 0 }, undefined, operationSignal, target.frame.sessionId)
       const node = response.node as Record<string, unknown> | undefined
       const nodeName = typeof node?.nodeName === 'string' ? node.nodeName.toLowerCase() : ''
       const attributes = Array.isArray(node?.attributes) ? node.attributes : []
       const typeIndex = attributes.findIndex((value) => value === 'type')
       const inputType = typeIndex >= 0 && typeof attributes[typeIndex + 1] === 'string' ? String(attributes[typeIndex + 1]).toLowerCase() : ''
       if (nodeName !== 'input' || inputType !== 'file') throw new Error('目标不是 file input，请先重新观察页面并选择文件上传控件。')
-      await this.highlightAgentTarget(tab, target.backendNodeId)
+      await this.highlightAgentTarget(tab, target)
       this.assertCurrentDocument(tab, generation, operationSignal)
-      await this.cdp(tab, 'DOM.setFileInputFiles', { files, backendNodeId: target.backendNodeId }, undefined, operationSignal)
+      await this.cdp(tab, 'DOM.setFileInputFiles', { files, backendNodeId: target.backendNodeId }, undefined, operationSignal, target.frame.sessionId)
       this.trace(browserSession, tab, 'upload', `已选择 ${files.length} 个上传文件（文件名已脱敏）`, 'dispatched')
       return structuredClone(this.buildState(browserSession))
     })

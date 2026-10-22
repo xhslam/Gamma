@@ -17,11 +17,12 @@ import { Button } from '@/components/ui/button'
 
 export function ComputerModals(): React.ReactElement {
   const [appAuthReq, setAppAuthReq] = React.useState<ComputerAppAuthRequest | null>(null)
+  const [appError, setAppError] = React.useState<string | null>(null)
   const [riskReq, setRiskReq] = React.useState<ComputerRiskConfirmRequest | null>(null)
 
   React.useEffect(() => {
     const unsubApp = window.electronAPI.onComputerAppAuthRequested((req) => {
-      setAppAuthReq(req)
+      setAppError(null); setAppAuthReq(req)
     })
     const unsubRisk = window.electronAPI.onComputerRiskConfirmRequested((req) => {
       setRiskReq(req)
@@ -35,9 +36,10 @@ export function ComputerModals(): React.ReactElement {
 
   const handleAppDecision = async (decision: ComputerAppAuthDecision) => {
     if (!appAuthReq) return
-    const id = appAuthReq.requestId
-    setAppAuthReq(null)
-    await window.electronAPI.decideComputerAppAuth(id, decision)
+    const request = appAuthReq
+    setAppAuthReq(null); setAppError(null)
+    try { await window.electronAPI.decideComputerAppAuth(request.requestId, decision) }
+    catch { setAppAuthReq(request); setAppError('授权决定未送达，请重试；尚未保存此选择。') }
   }
 
   const handleRiskDecision = async (confirmed: boolean) => {
@@ -50,7 +52,7 @@ export function ComputerModals(): React.ReactElement {
   return (
     <>
       {/* 按应用授权 */}
-      <Dialog open={!!appAuthReq} onOpenChange={(open) => { if (!open) void handleAppDecision('denied') }}>
+      <Dialog open={!!appAuthReq} onOpenChange={(open) => { if (!open) void handleAppDecision('cancelled') }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -76,18 +78,20 @@ export function ComputerModals(): React.ReactElement {
               </div>
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              允许后 Agent 可以通过鼠标和键盘向该应用发送操作。您随时可以在桌面状态控件中停止，风险策略可在通用设置中调整。
+              允许后 Agent 可以通过鼠标和键盘向该应用发送操作。您随时可以在桌面状态控件中停止，风险策略和已保存的应用授权可在通用设置中调整。
             </p>
           </div>
 
-          <DialogFooter className="flex-row items-center justify-end gap-2 sm:justify-end">
+          {appError && <p role="alert" className="text-xs text-destructive">{appError}</p>}
+          <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2 sm:justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => void handleAppDecision('cancelled')}>取消</Button>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => void handleAppDecision('denied')}
             >
-              拒绝
+              总是拒绝
             </Button>
             <Button
               type="button"

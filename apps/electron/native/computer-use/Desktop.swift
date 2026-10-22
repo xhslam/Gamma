@@ -123,6 +123,12 @@ func gammaUIContains(_ point: CGPoint) -> Bool {
     }
     return false
 }
+func captureDimensions(width: Double, height: Double, maxEdge: Int = 1280) -> (Int, Int) {
+    guard width.isFinite, height.isFinite, width > 0, height > 0 else { return (2, 2) }
+    let edge = max(2, min(1920, maxEdge))
+    let scale = Double(edge) / max(width, height)
+    return (max(2, min(edge, Int((width * scale).rounded()))), max(2, min(edge, Int((height * scale).rounded()))))
+}
 func captureDisplay(targetWidth: Int = 1280, completion: @escaping (Result<(Data, DisplayResult, Int, Int), Error>) -> Void) {
     guard CGPreflightScreenCaptureAccess() else { completion(.failure(NativeFailure("permission-required", "屏幕录制权限未授予或已撤销"))); return }
     if #available(macOS 14.2, *) {
@@ -133,7 +139,8 @@ func captureDisplay(targetWidth: Int = 1280, completion: @escaping (Result<(Data
             let excluded = content.applications.filter { isGammaPID($0.processID) }
             let filter = SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: [])
             let config = SCStreamConfiguration()
-            config.width = targetWidth; config.height = max(2, Int((Double(targetWidth) * bounds.height / bounds.width).rounded()))
+            let (width, height) = captureDimensions(width: bounds.width, height: bounds.height, maxEdge: targetWidth)
+            config.width = width; config.height = height
             config.showsCursor = false; config.capturesAudio = false; config.scalesToFit = true
             SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) { image, error in
                 guard error == nil, let image else { completion(.failure(NativeFailure("capture-failed", "主屏截图失败"))); return }

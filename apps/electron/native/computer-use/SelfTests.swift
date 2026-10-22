@@ -14,6 +14,14 @@ func runSelfTests() throws -> Int {
     try expect(isUnscopedAXSurface(role: "AXSheet", subrole: "", depth: 1), "Given附属sheet，Then不继承窗口授权")
     try expect(isUnscopedAXSurface(role: "AXWindow", subrole: "AXDialog", depth: 2), "Given附属对话框，Then拒绝读取及引用")
     try expect(!isUnscopedAXSurface(role: "AXWindow", subrole: "", depth: 0), "Given所选根窗口，Then允许验证")
+    for (width, height) in [(2560.0, 1440.0), (1080.0, 2560.0), (5120.0, 1440.0), (1.0, 100000.0)] {
+        let (w, h) = captureDimensions(width: width, height: height)
+        try expect(w >= 2 && h >= 2 && w <= 1280 && h <= 1280, "Given横竖或超宽显示器，Then截图两边均符合协议预算")
+    }
+    let (portraitW, portraitH) = captureDimensions(width: 1080, height: 2560)
+    try expect(portraitH == 1280 && abs(Double(portraitW) / Double(portraitH) - 1080.0 / 2560.0) < 0.001, "Given竖屏，Then等比缩放长边")
+    let invalidSize = captureDimensions(width: .infinity, height: 0)
+    try expect(invalidSize.0 == 2 && invalidSize.1 == 2, "Given无效几何，Then不产生溢出图像")
     var now: TimeInterval = 100
     let gate = SafetyGate(clock: { now })
     let lease = LeaseParams(leaseId: "lease-a", epoch: 7, deadline: 61_000)

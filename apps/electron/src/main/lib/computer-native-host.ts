@@ -113,7 +113,7 @@ export class ComputerNativeHost implements ComputerHost {
     return child
   }
   call(method: string, params: Record<string, unknown> = {}, timeoutMs = 10_000): Promise<unknown> {
-    if (!['status', 'requestPermission', 'resolveApp', 'select', 'observe', 'screenshot', 'listWindows', 'listApps', 'prepare', 'confirmation', 'perform'].includes(method)) return Promise.reject(new Error('未允许的原生方法'))
+    if (!['status', 'requestPermission', 'resolveApp', 'select', 'observe', 'screenshot', 'listWindows', 'listApps', 'prepare', 'confirmation', 'perform', 'previewFrame'].includes(method)) return Promise.reject(new Error('未允许的原生方法'))
     if (this.stopping) return Promise.reject(new Error('原生 helper 正在停止'))
     const id = randomUUID()
     const line = JSON.stringify({ id, method, params }) + '\n'

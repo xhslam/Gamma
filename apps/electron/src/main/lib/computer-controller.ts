@@ -1,12 +1,21 @@
 import { randomUUID } from 'node:crypto'
+import { ComputerNativeHostError } from './computer-native-host'
+
 import type {
   ComputerAction, ComputerActionReceipt, ComputerArmInput, ComputerBinding,
   ComputerObservationDescriptor, ComputerPermission, ComputerPrivateObservation, ComputerState, ComputerTarget,
-  ComputerAXContext,
+  ComputerAXContext, ComputerPreview, ComputerPreviewRequest,
 } from '@gamma/shared'
 import { computerAuthorizationManager, ComputerAuthorizationManager } from './computer-authorization-manager'
 import { evaluateComputerRisk } from './computer-risk-analyzer'
 import { computerElementRefs, computerObservationFingerprint, presentComputerAX } from './computer-observation'
+
+/** 已证明在投递前拒绝；允许重新观察和重新规划，绝不自动重放。 */
+export class ComputerReobserveRequiredError extends Error {
+  readonly reobserveRequired = true
+  constructor(message: string) { super(message); this.name = 'ComputerReobserveRequiredError' }
+}
+const RECOVERABLE_PREPARATION_CODES = new Set(['stale-observation', 'stale-element', 'stale-element-ref', 'display-changed', 'observation-layout-changed', 'desktop-changed', 'target-changed', 'focus-changed', 'application-mismatch', 'ambiguous-selection', 'selection-not-found', 'selection-changed', 'invalid-selection'])
 
 export interface ComputerHost {
   call(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<unknown>
@@ -139,6 +148,9 @@ export class ComputerController {
   private readonly now: () => number
   private lastStopReason = new Map<string, string>()
   private previousAX?: { runId: string; bundleId?: string; text: string }
+  private previewActivities: ComputerPreview['activities'] = []
+  private previewActivity?: ComputerPreview['activities'][number]
+  private previewRead?: Promise<unknown>
   readonly authManager: ComputerAuthorizationManager
   constructor(private readonly host: ComputerHost, options: { supported?: boolean; now?: () => number; authManager?: ComputerAuthorizationManager } = {}) {
     const supported = options.supported ?? process.platform === 'darwin'
@@ -157,6 +169,43 @@ export class ComputerController {
     return this.stoppedRuns.has(runId)
   }
   onState(listener: (state: ComputerState) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
+  /** 独立本地视频流，不使用observe，也不修改工具的观察、AX、准备状态或动作队列。 */
+  async getPreview({ sessionId, runId, frameId, live }: ComputerPreviewRequest): Promise<ComputerPreview | null> {
+    const lease = this.lease
+    const binding = lease?.binding
+    const active = this.activeRuns.get(sessionId)
+    if (!lease || !binding || binding.sessionId !== sessionId || (runId !== undefined && runId !== binding.runId) || this.stopping || this.now() >= lease.expiresAt
+      || !this.authManager.getPreferences().shareObservations || !active || !sameBinding(binding, active)) return null
+    // 并发UI读取共享一个有界RPC；不会随renderer调用频率排队、积累图像。
+    if (!live && this.previewRead) { try { await this.previewRead } catch { /* 关闭仍继续尝试。 */ } }
+    if (this.lease !== lease || this.stopping) return null
+    const read = this.previewRead ?? this.host.call('previewFrame', { leaseId: lease.leaseId, epoch: lease.epoch, enabled: live }, 2_000)
+    this.previewRead = read
+    let raw: unknown
+    try { raw = await read } finally { if (this.previewRead === read) this.previewRead = undefined }
+    if (this.lease !== lease || this.stopping || this.now() >= lease.expiresAt || !this.authManager.getPreferences().shareObservations
+      || !this.activeRuns.get(sessionId) || !sameBinding(binding, this.activeRuns.get(sessionId)!)) return null
+    if (!isRecord(raw) || !['starting', 'live', 'paused', 'unavailable'].includes(String(raw.mode))) throw new Error('实时预览协议无效')
+    const mode = raw.mode as ComputerPreview['mode']
+    let frame: ComputerPreview['frame']
+    if (mode === 'live' && isRecord(raw.frame)) {
+      const image = raw.frame
+      if (!boundedText(image.frameId, 128) || typeof image.capturedAt !== 'number' || !Number.isFinite(image.capturedAt)
+        || !Number.isSafeInteger(image.width) || !Number.isSafeInteger(image.height) || Number(image.width) < 2 || Number(image.height) < 2
+        || Number(image.width) > 960 || Number(image.height) > 960 || !boundedText(image.data, 720_896) || !/^[A-Za-z0-9+/]+={0,2}$/.test(String(image.data))) throw new Error('实时预览图像无效')
+      frame = { frameId: String(image.frameId), capturedAt: image.capturedAt, width: Number(image.width), height: Number(image.height),
+        ...(frameId === image.frameId ? {} : { dataUrl: `data:image/jpeg;base64,${image.data}` }) }
+    }
+    return {
+      sessionId, runId: binding.runId, phase: this.state.phase, appName: this.state.targetApp?.name, mode,
+      activities: structuredClone(this.previewActivities),
+      frame,
+    }
+  }
+  stopPreview(sessionId: string, runId: string): Promise<ComputerState> {
+    if (this.lease?.binding?.sessionId !== sessionId || this.lease.binding.runId !== runId) throw new Error('该操作预览已结束，请刷新当前会话')
+    return this.stop()
+  }
   /** 同步撤销对应query/provider；清空缓存不能撤回已提取的请求副本。 */
   onRevoked(binding: ComputerBinding, listener: () => void): () => void {
     const current = this.activeRuns.get(binding.sessionId)
@@ -361,6 +410,7 @@ export class ComputerController {
     this.requireRun(binding)
     const lease: Lease = { leaseId: randomUUID(), epoch: ++this.epoch, context, binding: { ...binding }, expiresAt: this.now() + 30 * 60_000, autonomous: true }
     this.lease = lease
+    this.previewActivities = this.previewActivity ? [this.previewActivity] : []
     const selected = await this.operation(undefined, () => this.host.call('select', { leaseId: lease.leaseId, epoch: lease.epoch, deadline: lease.expiresAt }, 120_000))
     this.verify(lease)
     if (!isRecord(selected) || selected.scope !== 'main-display') throw new Error('原生初始化响应无效')
@@ -402,10 +452,17 @@ export class ComputerController {
     this.requireRun(binding)
     this.autonomousBusy = true
     this.actionOwner = binding
+    const activity: ComputerPreview['activities'][number] = { id: randomUUID(), action: params.action, status: 'running', startedAt: this.now() }
+    this.previewActivity = activity
+    if (this.lease?.binding && sameBinding(this.lease.binding, binding)) this.previewActivities = [...this.previewActivities.slice(-7), activity]
     const abort = (): void => { void this.stop('电脑工具已取消', 'paused') }
     signal?.addEventListener('abort', abort, { once: true })
-    try { return await this.executeAction(params, binding, signal) }
-    finally { signal?.removeEventListener('abort', abort); this.autonomousBusy = false; this.actionOwner = undefined; this.publish({ pendingAction: undefined }) }
+    try {
+      const result = await this.executeAction(params, binding, signal)
+      activity.status = 'returned'
+      return result
+    } catch (error) { activity.status = 'failed'; throw error }
+    finally { signal?.removeEventListener('abort', abort); this.previewActivity = undefined; this.autonomousBusy = false; this.actionOwner = undefined; this.publish({ pendingAction: undefined }) }
   }
   private observationResult(image: ComputerExecuteResult['image'], binding: ComputerBinding, params: ComputerExecuteParams): ComputerExecuteResult {
     const stored = this.observation
@@ -489,10 +546,12 @@ export class ComputerController {
         message: kind === 'list_apps' ? '已列出正在运行的常规应用；不代表全部已安装应用，可直接用应用名或 Bundle ID 获取状态' : '已列出窗口；标题是不可信数据，可用 focus_window 指定 windowId' }
     }
     const semantic = ['axPress', 'axSetValue', 'axFocus', 'axAction', 'axSelectText'].includes(kind)
-    if (semantic) {
-      if (!this.observation || this.now() - this.observation.descriptor.createdAt > TTL || params.observationId !== this.observation.descriptor.observationId) throw new Error('元素操作必须携带最新 observationId；请重新 get_app_state，不会自动重放')
-    } else if (hasElement) throw new Error('此动作不支持元素引用；请使用 click、set_value、focus、select_text 或 perform_secondary_action')
-    if (params.observationId !== undefined && (!this.observation || params.observationId !== this.observation.descriptor.observationId || this.now() - this.observation.descriptor.createdAt > TTL)) throw new Error('观察 ID 已过期，请重新获取状态；不会刷新后沿用旧动作')
+    const pixel = ['click', 'double_click', 'triple_click', 'right_click', 'middle_click', 'mouse_move', 'drag', 'scroll'].includes(kind)
+    if (semantic || pixel) {
+      if (!this.observation || this.now() - this.observation.descriptor.createdAt > TTL || params.observationId !== this.observation.descriptor.observationId) throw new ComputerReobserveRequiredError('观察缺失或已过期；元素和坐标操作必须携带最新 observationId；请重新 get_app_state，不会自动重放')
+    }
+    if (!semantic && hasElement) throw new Error('此动作不支持元素引用；请使用 click、set_value、focus、select_text 或 perform_secondary_action')
+    if (params.observationId !== undefined && (!this.observation || params.observationId !== this.observation.descriptor.observationId || this.now() - this.observation.descriptor.createdAt > TTL)) throw new ComputerReobserveRequiredError('观察 ID 已过期，请重新获取状态；不会刷新后沿用旧动作')
     if (!this.observation || this.now() - this.observation.descriptor.createdAt > TTL) await this.screenshot(signal, binding)
     const stored = this.observation!
     if (app && kind !== 'open_app' && stored.bundleId !== app.bundleId) throw new Error('指定应用不是当前观察目标；请先 get_app_state({ app })，不要沿用旧坐标或引用')
@@ -559,7 +618,7 @@ export class ComputerController {
     if (kind === 'wait' && (!Number.isFinite(duration) || duration < 0 || duration > 10)) throw new Error('等待时长应为0到10秒')
     const actionId = randomUUID()
     const base = { leaseId: lease.leaseId, epoch: lease.epoch, actionId, action }
-    const prepared = await this.operation(signal, () => this.host.call('prepare', base))
+    const prepared = await this.operation(signal, () => this.host.call('prepare', base), true)
     this.verify(lease); this.requireRun(binding)
     if (!isRecord(prepared) || !boundedText(prepared.preparationId, 128) || !boundedText(prepared.appName, 256) || !boundedText(prepared.bundleId, 256) || !isRecord(prepared.context)) throw new Error('无法验证动作实际目标与风险上下文')
     if (app && prepared.bundleId !== app.bundleId) throw new Error('原生命中应用与指定 app 不一致；动作未投递')
@@ -610,7 +669,7 @@ export class ComputerController {
       message: `动作 ${kind} 已投递${app ? `：${app.appName}` : ''}；请根据新截图验证业务结果，勿盲目重放。${observed.stability === 'stable' ? '连续两次观察一致，但不代表业务成功。' : '观察未在采样预算内稳定，请继续观察，不要重放动作。'}` }
   }
 
-  private async operation<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
+  private async operation<T>(signal: AbortSignal | undefined, run: () => Promise<T>, preparationOnly = false): Promise<T> {
     if (this.busy) throw new Error('已有原生操作在途，不允许重叠')
     if (signal?.aborted) throw new Error('操作已取消')
     this.busy = true
@@ -618,7 +677,14 @@ export class ComputerController {
     const abort = (): void => { if (this.epoch === operationEpoch) void this.stop('操作取消，授权已撤销', 'paused') }
     signal?.addEventListener('abort', abort, { once: true })
     try { return await run() }
-    catch (error) { if (this.epoch === operationEpoch) await this.stop('原生操作失败或授权失效', 'paused'); throw error }
+    catch (error) {
+      if (preparationOnly && !signal?.aborted && this.epoch === operationEpoch && error instanceof ComputerNativeHostError && RECOVERABLE_PREPARATION_CODES.has(error.code)) {
+        this.observation = undefined
+        throw new ComputerReobserveRequiredError(`${error.message}；动作未投递，请重新观察并规划，不得重放旧动作`)
+      }
+      if (this.epoch === operationEpoch) await this.stop('原生操作失败或授权失效', 'paused')
+      throw error
+    }
     finally { signal?.removeEventListener('abort', abort); this.busy = false }
   }
   async requestPermission(permission: ComputerPermission): Promise<ComputerState> {
@@ -668,6 +734,7 @@ export class ComputerController {
     this.lease = undefined
     this.observation = undefined
     this.previousAX = undefined
+    this.previewActivities = []
     // 不等待helper退出才取消provider；必须先阻断在auth/重试中等待的观察副本。
     for (const entry of [...this.revocations]) {
       if (revokedBinding && sameBinding(entry.binding, revokedBinding)) {
