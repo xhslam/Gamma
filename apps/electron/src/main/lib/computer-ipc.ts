@@ -5,6 +5,7 @@ import {
   type ComputerArmInput,
   type ComputerPermission,
   type ComputerUsePreferences,
+  type ComputerPreviewRequest,
 } from '@gamma/shared'
 import { getMainWindow } from './main-window-store'
 import { computerAuthorizationManager, computerController } from './computer-service'
@@ -23,6 +24,19 @@ export function registerComputerIpc(): void {
     verify(event)
     if (sessionId !== undefined && (typeof sessionId !== 'string' || sessionId.length > 128)) throw new Error('无效会话')
     return computerController.getState(sessionId)
+  })
+  const validId = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 128
+  ipcMain.handle(COMPUTER_IPC_CHANNELS.GET_PREVIEW, (event, input: ComputerPreviewRequest) => {
+    verify(event)
+    if (!input || Object.keys(input).some(key => !['sessionId', 'runId', 'frameId', 'live'].includes(key)) || !validId(input.sessionId)
+      || typeof input.live !== 'boolean' || (input.runId !== undefined && !validId(input.runId)) || (input.frameId !== undefined && !validId(input.frameId))) throw new Error('无效预览上下文')
+    const window = getMainWindow()
+    return computerController.getPreview({ ...input, live: input.live && !!window?.isVisible() && !window?.isMinimized() })
+  })
+  ipcMain.handle(COMPUTER_IPC_CHANNELS.STOP_PREVIEW, (event, sessionId: string, runId: string) => {
+    verify(event)
+    if (!validId(sessionId) || !validId(runId)) throw new Error('无效预览上下文')
+    return computerController.stopPreview(sessionId, runId)
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.ARM, (event, input: ComputerArmInput) => {
     verify(event, true)
@@ -45,7 +59,7 @@ export function registerComputerIpc(): void {
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.DECIDE_APP_AUTH, (event, requestId: string, decision: ComputerAppAuthDecision) => {
     verify(event, true)
-    if (typeof requestId !== 'string' || requestId.length > 128 || !['once', 'always', 'denied'].includes(decision)) throw new Error('无效授权决定')
+    if (typeof requestId !== 'string' || requestId.length > 128 || !['once', 'always', 'denied', 'cancelled'].includes(decision)) throw new Error('无效授权决定')
     return computerAuthorizationManager.resolveAppAuth(requestId, decision)
   })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.DECIDE_RISK_CONFIRM, (event, requestId: string, confirmed: boolean) => {

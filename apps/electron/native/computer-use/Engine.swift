@@ -8,8 +8,15 @@ final class Engine {
     let ui = NativeUI()
     let owner = OwnerLock()
     let dispatcher = EventDispatcher()
+    private let preview = DesktopPreview()
     let worker = DispatchQueue(label: "com.gamma.computer-use.worker", qos: .userInitiated)
     private let ax = AccessibilityWorker()
+    private let readWindows: () throws -> [Target]
+    private let prepareAction: (PerformParams, Snapshot, AccessibilityWorker) throws -> PreparedAction
+    init(readWindows: @escaping () throws -> [Target] = desktopWindows,
+         prepareAction: @escaping (PerformParams, Snapshot, AccessibilityWorker) throws -> PreparedAction = { try bindAction($0, snapshot: $1, ax: $2) }) {
+        self.readWindows = readWindows; self.prepareAction = prepareAction
+    }
     private lazy var monitor = SafetyMonitor(gate: gate) { [weak self] reason in self?.stop(reason) }
     // 只在串行worker读写，stop通过fence立即使其失效，不等待AX返回。
     private var prepared: PreparedAction?
@@ -31,7 +38,7 @@ final class Engine {
         }
     }
     @discardableResult func stop(_ reason: String) -> Bool {
-        let active = gate.stop(); dispatcher.releaseAll()
+        let active = gate.stop(); preview.stop(); dispatcher.releaseAll()
         mutex.lock(); if workCount == 0 { owner.release() }; mutex.unlock()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -42,8 +49,19 @@ final class Engine {
         if active { writer.emit(StoppedEvent(reason: String(reason.prefix(200)))) }
         return active
     }
-    private func startWork(_ token: UInt64) throws { try gate.startWork(token); mutex.lock(); workCount += 1; mutex.unlock() }
-    private func endWork() { gate.endWork(); mutex.lock(); workCount -= 1; if !gate.isActive && workCount == 0 { owner.release() }; mutex.unlock() }
+    private func startWork(_ token: UInt64) throws {
+        // 先在主线程建立独立停止入口，再令 watchdog 将本次工作视为活动。
+        try gate.startWork(token)
+        let begin = { [self] in
+            ui.setStatus("正在准备桌面操作")
+            mutex.lock(); workCount += 1; mutex.unlock()
+        }
+        if Thread.isMainThread { begin() } else { DispatchQueue.main.sync(execute: begin) }
+    }
+    private func hideStopIfIdle() {
+        DispatchQueue.main.async { [self] in if !isExecutingAction && !gate.isConfirming { ui.hideStop() } }
+    }
+    private func endWork() { gate.endWork(); mutex.lock(); workCount -= 1; if !gate.isActive && workCount == 0 { owner.release() }; mutex.unlock(); hideStopIfIdle() }
     private func done(_ id: String) { mutex.lock(); outstanding.remove(id); mutex.unlock() }
     private func failure(_ id: String, _ error: Error) { writer.failure(id, error); done(id) }
     private func success<T: Encodable>(_ id: String, _ value: T) { writer.success(id, value); done(id) }
@@ -89,20 +107,24 @@ final class Engine {
                 let p = try JSONDecoder().decode(Request<ResolveAppParams>.self, from: data).params
                 worker.async { [self] in do { success(envelope.id, try resolveApplication(p.appName).1) } catch { failure(envelope.id, error) } }
             case "select": try select(envelope.id, JSONDecoder().decode(Request<LeaseParams>.self, from: data).params)
+            case "previewFrame":
+                let p = try JSONDecoder().decode(Request<PreviewParams>.self, from: data).params
+                let (_, token) = try gate.current(BoundParams(leaseId: p.leaseId, epoch: p.epoch))
+                success(envelope.id, try preview.read(p, token: token, gate: gate))
             case "observe", "screenshot":
                 let p = try JSONDecoder().decode(Request<BoundParams>.self, from: data).params
                 let (_, token) = try gate.current(p); try startWork(token); observe(envelope.id, p: p, token: token)
             case "listWindows":
                 let p = try JSONDecoder().decode(Request<BoundParams>.self, from: data).params
                 try withWork(envelope.id, p) { [self] token in
-                    let windows = try desktopWindows(); try gate.checkDispatch(token)
+                    let windows = try readWindows(); try gate.checkDispatch(token)
                     success(envelope.id, WindowListResult(windows: windows))
                 }
             case "prepare":
                 let p = try JSONDecoder().decode(Request<PerformParams>.self, from: data).params
                 try withWork(envelope.id, BoundParams(leaseId: p.leaseId, epoch: p.epoch)) { [self] token in
                     let snapshot = try gate.inspect(p)
-                    let binding = try bindAction(p, snapshot: snapshot, ax: ax)
+                    let binding = try prepareAction(p, snapshot, ax)
                     try gate.checkDispatch(token); prepared = binding
                     state("已准备 · \(binding.appName) · \(p.action.kind)")
                     success(envelope.id, PreparationResult(preparationId: binding.id, appName: binding.appName, bundleId: binding.bundleId, context: binding.context))
@@ -136,7 +158,6 @@ final class Engine {
             defer { endWork() }
             do {
                 try gate.check(token); try monitor.start()
-                DispatchQueue.main.sync { [self] in self.ui.hideStop() }
                 try gate.finishSelection(nil, token: token); try gate.checkDispatch(token)
                 success(id, Selected())
             } catch { stop("桌面初始化失败"); failure(id, error) }
@@ -159,7 +180,7 @@ final class Engine {
                     worker.async { [self] in
                         defer {
                             endWork()
-                            DispatchQueue.main.async { [self] in self.ui.hideStop() }
+                            hideStopIfIdle()
                         }
                         do {
                             try gate.checkDispatch(token)
@@ -178,7 +199,7 @@ final class Engine {
                 }
             } catch {
                 endWork()
-                DispatchQueue.main.async { [self] in self.ui.hideStop() }
+                hideStopIfIdle()
                 failure(id, error)
             }
         }
@@ -217,7 +238,7 @@ final class Engine {
         var dispatched = false
         defer {
             prepared = nil
-            DispatchQueue.main.async { [self] in self.ui.hideStop() }
+            hideStopIfIdle()
         }
         do {
             guard let binding = prepared, binding.id == p.preparationId, samePreparedRequest(binding.request, p) else { throw NativeFailure("preparation-required", "必须使用同一动作、actionId和preparationId") }

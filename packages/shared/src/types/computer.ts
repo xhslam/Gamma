@@ -1,4 +1,4 @@
-/** 原生桌面控制契约；观察原图与 AX 内容不属于 renderer/持久化状态。 */
+/** 原生桌面控制契约；观察原图与 AX 内容不属于持久化状态。 */
 export type ComputerPhase = 'disabled' | 'armed' | 'authorizing' | 'active' | 'paused' | 'stopping' | 'error' | 'unsupported'
 export interface ComputerBinding {
   sessionId: string
@@ -68,8 +68,28 @@ export interface ComputerArmInput {
   shareObservations: boolean
 }
 
+/** 仅供可信聊天界面临时展示；不进入工具回执、历史、日志或同步。 */
+export interface ComputerPreview {
+  sessionId: string
+  runId: string
+  phase: ComputerPhase
+  appName?: string
+  mode: 'starting' | 'live' | 'paused' | 'unavailable'
+  /** 监控帧不能作为工具 observationId；只在本机显示，不送入模型。 */
+  frame?: { frameId: string; capturedAt: number; width: number; height: number; dataUrl?: string }
+  activities: { id: string; action: string; status: 'running' | 'returned' | 'failed'; startedAt: number }[]
+}
+export interface ComputerPreviewRequest {
+  sessionId: string
+  runId?: string
+  frameId?: string
+  live: boolean
+}
+
 export const COMPUTER_IPC_CHANNELS = {
   GET_STATE: 'computer:get-state',
+  GET_PREVIEW: 'computer:get-preview',
+  STOP_PREVIEW: 'computer:stop-preview',
   STOP: 'computer:stop',
   RESUME: 'computer:resume',
   ARM: 'computer:arm',
@@ -85,7 +105,7 @@ export const COMPUTER_IPC_CHANNELS = {
 
 export type ComputerRiskPolicy = 'strict' | 'standard' | 'relaxed'
 export type ComputerRiskLevel = 'low' | 'medium' | 'high'
-export type ComputerAppAuthDecision = 'always' | 'once' | 'denied'
+export type ComputerAppAuthDecision = 'always' | 'once' | 'denied' | 'cancelled'
 
 export interface ComputerAXContext {
   appName?: string

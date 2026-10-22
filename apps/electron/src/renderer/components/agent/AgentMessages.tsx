@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import { ComputerUsePreview } from '../computer-use/ComputerUsePreview'
 import { AutomaticMemoryNotice } from '@/components/agent-skills/AutomaticMemoryNotice'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { RotateCw, AlertTriangle, CheckCircle2, Ban, ChevronDown, ChevronRight } from 'lucide-react'
@@ -1257,6 +1258,7 @@ export const AgentMessages = React.memo(function AgentMessages({
 
             </>
           )}
+        <ComputerUsePreview key={sessionId} sessionId={sessionId} />
         <AutomaticMemoryNotice kind="agent" sessionId={sessionId} />
         </ConversationContent>
         <ScrollMinimap items={minimapItems} searchMessages={searchMessages} />

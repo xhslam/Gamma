@@ -137,7 +137,8 @@ describe('Given 持久截图外发同意与失败关闭', () => {
   test('When 应用确认抛错、高风险确认抛错 Then 绝不自动允许', async () => {
     const manager = create()
     manager.setUiHandlers({ appAuth: async () => { throw new Error('UI unavailable') }, riskConfirm: async () => { throw new Error('UI unavailable') } })
-    await expect(manager.ensureAppAuthorized('Unknown', 'example.unknown')).rejects.toThrow('拒绝')
+    await expect(manager.ensureAppAuthorized('Unknown', 'example.unknown')).rejects.toThrow('未完成')
+    expect(manager.checkAppAuthorization('Unknown', 'example.unknown')).toBe('pending')
     expect(await manager.confirmRiskAction({ requestId: 'risk', title: '提交', reason: '提交', actionKind: 'click', authMethod: 'dialog' })).toBe(false)
   })
   test('When 等待中的应用授权被停止 Then 立即拒绝且迟到UI答复失效', async () => {
@@ -155,4 +156,53 @@ describe('Given 持久截图外发同意与失败关闭', () => {
     expect(() => manager.updatePreferences({ shareObservations: 'yes' } as unknown as Parameters<typeof manager.updatePreferences>[0])).toThrow()
     expect(() => manager.resolveRiskConfirm('id', 'false' as unknown as boolean)).toThrow()
   })
+})
+
+describe('Given 可恢复的本地应用授权', () => {
+  const create = () => new ComputerAuthorizationManager(join(tmpdir(), `gamma-app-consent-${randomUUID()}.json`))
+  test('When 授权UI失败后重试 Then 不保存拒绝且能够再次询问', async () => {
+    const manager = create()
+    manager.setUiHandlers({ appAuth: async () => { throw new Error('不可用') } })
+    await expect(manager.ensureAppAuthorized('Example', 'example.app')).rejects.toThrow('未完成')
+    expect(manager.getPreferences().allowedApps).toEqual({})
+    manager.setUiHandlers({ appAuth: async () => 'always' })
+    expect(await manager.ensureAppAuthorized('Example', 'example.app')).toBe(true)
+  })
+  test('When UI超时 Then 只拒绝本次且迟到答复不能保存', async () => {
+    const manager = create()
+    let requestId = ''
+    manager.onAppAuthRequested(request => { requestId = request.requestId })
+    const original = globalThis.setTimeout
+    globalThis.setTimeout = ((callback: () => void) => original(callback, 1)) as typeof setTimeout
+    try {
+      await expect(manager.ensureAppAuthorized('Example', 'example.app')).rejects.toThrow('未完成')
+      expect(manager.checkAppAuthorization('Example', 'example.app')).toBe('pending')
+      expect(manager.resolveAppAuth(requestId, 'always')).toBe(false)
+    } finally { globalThis.setTimeout = original }
+  })
+  test('When 恢复单项询问 Then 重载后该项消失且其他决定保留', () => {
+    const path = join(tmpdir(), `gamma-revoke-${randomUUID()}.json`)
+    const manager = new ComputerAuthorizationManager(path)
+    manager.recordAppDecision('One', 'always', 'app.one')
+    manager.recordAppDecision('Two', 'denied', 'app.two')
+    manager.updatePreferences({ allowedApps: { 'app.two': 'denied' } })
+    const reloaded = new ComputerAuthorizationManager(path)
+    expect(reloaded.checkAppAuthorization('One', 'app.one')).toBe('pending')
+    expect(reloaded.checkAppAuthorization('Two', 'app.two')).toBe('denied')
+    manager.updatePreferences({ shareObservations: true })
+    manager.updatePreferences({ shareObservations: false })
+    expect(new ComputerAuthorizationManager(path).getPreferences().shareObservations).toBe(false)
+  })
+})
+
+test('Given 关闭应用授权弹窗或监听器故障 When 请求结束 Then 只取消本次且不持久拒绝', async () => {
+  for (const broken of [false, true]) {
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-dismiss-${randomUUID()}.json`))
+    manager.onAppAuthRequested(request => {
+      if (broken) throw new Error('UI断开')
+      manager.resolveAppAuth(request.requestId, 'cancelled')
+    })
+    await expect(manager.ensureAppAuthorized('App', 'app.example')).rejects.toThrow('未完成')
+    expect(manager.getPreferences().allowedApps).toEqual({})
+  }
 })

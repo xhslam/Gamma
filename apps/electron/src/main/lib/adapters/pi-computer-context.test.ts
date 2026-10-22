@@ -101,8 +101,9 @@ describe('Given 桌面观察请求前临时注入', () => {
     const compacted = compactComputerScreenshots(messages, 2)
     const json = JSON.stringify(compacted)
 
-    // 最早的两张截图 (1, 2) 被替换为文字说明
-    expect(json).not.toContain('SCREENSHOT_1')
+    // 用户附件保持原样，只删除最早的 computer 截图。
+    expect(json).toContain('SCREENSHOT_1')
+    expect(JSON.stringify(messages)).toContain('SCREENSHOT_2')
     expect(json).not.toContain('SCREENSHOT_2')
     // 最近的两张截图 (3, 4) 完整保留
     expect(json).toContain('SCREENSHOT_3')
@@ -111,3 +112,13 @@ describe('Given 桌面观察请求前临时注入', () => {
   })
 })
 
+
+test('Given 用户、read、browser 图片与多张桌面截图 When 压缩 Then 仅清理桌面截图且不修改原消息', () => {
+  const images: AgentMessage[] = [1, 2, 3].map(timestamp => ({ role: 'user', timestamp, content: [{ type: 'image', data: `USER_${timestamp}`, mimeType: 'image/png' }] }))
+  for (const toolName of ['read', 'BrowserScreenshot', 'computer', 'computer', 'computer']) images.push({ role: 'toolResult', toolName, timestamp: images.length, toolCallId: String(images.length), isError: false, content: [{ type: 'image', data: `${toolName}_${images.length}`, mimeType: 'image/png' }] })
+  const original = JSON.stringify(images)
+  const compact = JSON.stringify(compactComputerScreenshots(images))
+  for (const data of ['USER_1', 'USER_2', 'USER_3', 'read_3', 'BrowserScreenshot_4', 'computer_6', 'computer_7']) expect(compact).toContain(data)
+  expect(compact).not.toContain('computer_5')
+  expect(JSON.stringify(images)).toBe(original)
+})

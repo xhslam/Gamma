@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { ComputerBinding } from '@gamma/shared'
-import { buildPiComputerTools } from './pi-computer-tools'
+import { Type } from 'typebox'
+import { ComputerReobserveRequiredError } from '../computer-controller'
+import { loadIsolatedModule } from '../../../test-utils/isolated-module'
+const { buildPiComputerTools } = loadIsolatedModule<typeof import('./pi-computer-tools')>(`${import.meta.dir}/pi-computer-tools.ts`, { typebox: { Type }, '../computer-controller': { ComputerReobserveRequiredError }, '../computer-service': { computerController: {} } })
 import type { ComputerController } from '../computer-controller'
 
 describe('Pi computer 工具中断结果与错误处理', () => {

@@ -44,7 +44,7 @@ export function compactComputerScreenshots(messages: AgentMessage[], maxScreensh
 
   for (let m = 0; m < messages.length; m++) {
     const msg = messages[m]
-    if (msg && (msg.role === 'toolResult' || msg.role === 'user') && 'content' in msg && Array.isArray(msg.content)) {
+    if (msg && msg.role === 'toolResult' && msg.toolName === 'computer' && 'content' in msg && Array.isArray(msg.content)) {
       for (let b = 0; b < msg.content.length; b++) {
         const block = msg.content[b]
         if (block && typeof block === 'object' && 'type' in block && block.type === 'image') {
@@ -62,7 +62,7 @@ export function compactComputerScreenshots(messages: AgentMessage[], maxScreensh
   const pruneSet = new Set(imageLocations.slice(0, pruneCount).map(loc => `${loc.msgIndex}:${loc.blockIndex}`))
 
   return messages.map((msg, m) => {
-    if (msg && (msg.role === 'toolResult' || msg.role === 'user') && 'content' in msg && Array.isArray(msg.content)) {
+    if (msg && msg.role === 'toolResult' && msg.toolName === 'computer' && 'content' in msg && Array.isArray(msg.content)) {
       let modified = false
       const nextContent = msg.content.map((block, b) => {
         if (pruneSet.has(`${m}:${b}`)) {

@@ -256,7 +256,9 @@ export interface ElectronAPI {
   /** 获取独立预览窗口数据 */
   getDetachedPreviewData: (previewId: string) => Promise<DetachedPreviewWindowData | null>
 
-  // ===== 原生桌面控制：可信本地UI，观察数据不经 renderer =====
+  // ===== 原生桌面控制：仅当前会话可读取临时预览，不进入历史 =====
+  getComputerPreview: (input: import('@gamma/shared').ComputerPreviewRequest) => Promise<import('@gamma/shared').ComputerPreview | null>
+  stopComputerPreview: (sessionId: string, runId: string) => Promise<import('@gamma/shared').ComputerState>
   getComputerState: (sessionId?: string) => Promise<import('@gamma/shared').ComputerState>
   armComputer: (input: import('@gamma/shared').ComputerArmInput) => Promise<import('@gamma/shared').ComputerState>
   stopComputer: () => Promise<import('@gamma/shared').ComputerState>
@@ -1352,6 +1354,8 @@ const electronAPI: ElectronAPI = {
   },
 
   getComputerState: (sessionId?: string) => ipcRenderer.invoke('computer:get-state', sessionId),
+  getComputerPreview: (input: import('@gamma/shared').ComputerPreviewRequest) => ipcRenderer.invoke('computer:get-preview', input),
+  stopComputerPreview: (sessionId: string, runId: string) => ipcRenderer.invoke('computer:stop-preview', sessionId, runId),
   armComputer: (input: import('@gamma/shared').ComputerArmInput) => ipcRenderer.invoke('computer:arm', input),
   stopComputer: () => ipcRenderer.invoke('computer:stop'),
   resumeComputer: () => ipcRenderer.invoke('computer:resume'),

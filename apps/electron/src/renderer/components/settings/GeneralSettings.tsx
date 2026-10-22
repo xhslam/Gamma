@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '../ui/select'
 import { UserAvatar } from '@/components/session/UserAvatar'
+import { ComputerAuthorizationSetting } from '@/components/computer-use/ComputerAuthorizationSetting'
 import { ComputerRiskPolicySetting } from '@/components/computer-use/ComputerRiskPolicySetting'
 import { userProfileAtom } from '@/atoms/user-profile'
 import {
@@ -297,6 +298,7 @@ export function GeneralSettings(): React.ReactElement {
             <span className="text-[13px] text-foreground/40">简体中文</span>
           </SettingsRow>
           <ComputerRiskPolicySetting />
+          <ComputerAuthorizationSetting />
           <SettingsToggle
             label="Todo"
             description="显示 Todo 入口，并允许 Agent 使用 Todo 相关工具"

@@ -15,7 +15,7 @@ interface ConsentHandlers {
   observationConsent?: (signal?: AbortSignal) => Promise<boolean>
 }
 const normalizeKey = (value: string): string => value.trim().toLowerCase()
-const validDecision = (value: unknown): value is ComputerAppAuthDecision => ['once', 'always', 'denied'].includes(String(value))
+const validDecision = (value: unknown): value is ComputerAppAuthDecision => ['once', 'always', 'denied', 'cancelled'].includes(String(value))
 const defaults = (): ComputerUsePreferences => ({ riskPolicy: 'standard', systemPermissionsDismissed: false, shareObservations: false, allowedApps: {} })
 
 /** 持久授权与单轮执行分开；无人响应、超时、UI 故障一律拒绝。 */
@@ -27,7 +27,7 @@ export class ComputerAuthorizationManager {
   private revision = 0
   private waits = new Set<AbortController>()
   private preferenceListeners = new Set<(preferences: ComputerUsePreferences) => void>()
-  private pendingAppAuth = new Map<string, (decision: ComputerAppAuthDecision) => void>()
+  private pendingAppAuth = new Map<string, (decision: ComputerAppAuthDecision | undefined) => void>()
   private pendingRiskConfirm = new Map<string, (confirmed: boolean) => void>()
   private appAuthListeners = new Set<(req: ComputerAppAuthRequest) => void>()
   private riskConfirmListeners = new Set<(req: ComputerRiskConfirmRequest) => void>()
@@ -69,12 +69,19 @@ export class ComputerAuthorizationManager {
     }
     if (partial.allowedApps !== undefined) {
       if (!partial.allowedApps || typeof partial.allowedApps !== 'object' || Array.isArray(partial.allowedApps)) throw new Error('无效应用授权')
+      // 完整替换授权表，允许本地设置撤销单项决定。
+      next.allowedApps = {}
       for (const [key, value] of Object.entries(partial.allowedApps)) {
         if (!key.trim() || key.length > 256 || !['always', 'denied'].includes(value)) throw new Error('无效应用授权')
         next.allowedApps[normalizeKey(key)] = value
       }
     }
     writeJsonFileAtomic(this.getConfigPath(), { ...next, authorizationVersion: 2 })
+    if (partial.allowedApps !== undefined) {
+      for (const keys of this.once.values()) for (const key of keys) {
+        if ((this.preferences.allowedApps[key] !== undefined && next.allowedApps[key] === undefined) || next.allowedApps[key] === 'denied') keys.delete(key)
+      }
+    }
     this.preferences = next
     this.revision++
     for (const listener of this.preferenceListeners) listener(this.getPreferences())
@@ -123,7 +130,7 @@ export class ComputerAuthorizationManager {
     this.generation++
     for (const wait of this.waits) wait.abort()
     this.waits.clear()
-    for (const resolve of this.pendingAppAuth.values()) resolve('denied')
+    for (const resolve of this.pendingAppAuth.values()) resolve(undefined)
     for (const resolve of this.pendingRiskConfirm.values()) resolve(false)
     this.pendingAppAuth.clear(); this.pendingRiskConfirm.clear()
   }
@@ -135,15 +142,15 @@ export class ComputerAuthorizationManager {
     if (keys.some(key => this.preferences.allowedApps[key] === 'always' || this.once.get(scope)?.has(key))) return 'allowed'
     return 'pending'
   }
-  recordAppDecision(appName: string, decision: ComputerAppAuthDecision, bundleId?: string, scope = 'local'): void {
-    if (!validDecision(decision)) throw new Error('无效应用授权决定')
+  recordAppDecision(appName: string, decision: Exclude<ComputerAppAuthDecision, 'cancelled'>, bundleId?: string, scope = 'local'): void {
+    if (!validDecision(decision) || String(decision) === 'cancelled') throw new Error('无效应用授权决定')
     const keys = (bundleId ? [bundleId] : [appName]).map(normalizeKey)
     if (decision === 'once') {
       const allowed = this.once.get(scope) ?? new Set<string>()
       for (const key of keys) allowed.add(key)
       this.once.set(scope, allowed)
     } else {
-      this.updatePreferences({ allowedApps: Object.fromEntries(keys.map(key => [key, decision])) })
+      this.updatePreferences({ allowedApps: { ...this.preferences.allowedApps, ...Object.fromEntries(keys.map(key => [key, decision])) } })
     }
   }
   async ensureObservationConsent(): Promise<void> {
@@ -169,24 +176,26 @@ export class ComputerAuthorizationManager {
     if (current === 'denied') throw new Error(`用户已明确拒绝操作应用: ${appName}`)
     const generation = this.generation
     const request: ComputerAppAuthRequest = { requestId: randomUUID(), appName, bundleId }
-    let decision: ComputerAppAuthDecision = 'denied'
+    let decision: ComputerAppAuthDecision | undefined
     try {
-      if (this.handlers.appAuth) decision = await this.waitForDecision(() => this.handlers.appAuth!(request), 'denied')
+      if (this.handlers.appAuth) decision = await this.waitForDecision(() => this.handlers.appAuth!(request), undefined)
       else if (this.appAuthListeners.size) {
-        decision = await new Promise<ComputerAppAuthDecision>(resolve => {
-          const finish = (value: ComputerAppAuthDecision): void => { clearTimeout(timer); this.pendingAppAuth.delete(request.requestId); resolve(value) }
-          const timer = setTimeout(() => finish('denied'), 120_000)
+        decision = await new Promise<ComputerAppAuthDecision | undefined>(resolve => {
+          const finish = (value: ComputerAppAuthDecision | undefined): void => { clearTimeout(timer); this.pendingAppAuth.delete(request.requestId); resolve(value) }
+          const timer = setTimeout(() => finish(undefined), 120_000)
           this.pendingAppAuth.set(request.requestId, finish)
-          for (const listener of this.appAuthListeners) { try { listener(request) } catch { /* 等待超时拒绝。 */ } }
+          let delivered = false
+          for (const listener of this.appAuthListeners) { try { listener(request); delivered = true } catch { /* 未送达不代表用户拒绝。 */ } }
+          if (!delivered) finish(undefined)
         })
       } else {
         const response = await this.waitForDecision(signal => this.showLocalDialog({ type: 'question', title: '应用控制授权', message: `Agent 请求操作应用：${appName}`,
-          detail: bundleId ?? appName, buttons: ['本次允许', '总是允许', '拒绝'], defaultId: 2, cancelId: 2 }, signal), 2)
-        decision = response === 0 ? 'once' : response === 1 ? 'always' : 'denied'
+          detail: bundleId ?? appName, buttons: ['本次允许', '总是允许', '总是拒绝', '取消'], defaultId: 3, cancelId: 3 }, signal), 3)
+        decision = response === 0 ? 'once' : response === 1 ? 'always' : response === 2 ? 'denied' : undefined
       }
-    } catch { decision = 'denied' }
+    } catch { decision = undefined }
     if (generation !== this.generation) throw new Error('应用授权等待已被停止')
-    if (!validDecision(decision)) decision = 'denied'
+    if (!validDecision(decision) || decision === 'cancelled') throw new Error('本次应用授权未完成，请重试；未保存任何应用决定')
     this.recordAppDecision(appName, decision, bundleId, scope)
     if (decision === 'denied') throw new Error(`用户拒绝了操作应用 ${appName} 的请求`)
     return true
