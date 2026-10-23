@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { setConfigHomeForTest } from '../config-paths'
 import {
   computeSnapshotHash,
+  SUMMARY_SCHEMA_VERSION,
   loadSnapshotFromCache,
   loadSummaryFromCache,
   saveSnapshotToCache,
@@ -89,7 +90,7 @@ describe('Conversation Reference Cache (Snapshots & Summaries)', () => {
       sourceConversationId: 'sess_456',
       snapshotUpToMessageId: 'msg_10',
       contentHash: 'hash_abc',
-      version: 'v1',
+      version: SUMMARY_SCHEMA_VERSION,
       createdAt: 1700000001000,
       summary: '【目标】重构缓存\n【关键结论】使用原子文件写入\n【重要决定】无需外部数据库',
     }
