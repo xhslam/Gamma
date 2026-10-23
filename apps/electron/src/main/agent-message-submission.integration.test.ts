@@ -96,7 +96,12 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
     // 仍执行真实 Main 引用授权函数；此队列生命周期用例没有引用或重试落盘数据。
     outbox: { list: () => [] },
     getRetryReferenceSnapshot: () => undefined,
-    captureReferenceSnapshot: () => [],
+    captureReferenceSnapshot: (sessionId: string, ids?: string[]) => {
+      if (ids && ids.includes('unauthorized-canary')) throw new Error('发送引用未获授权，请重新确认引用')
+      return []
+    },
+    isReferencePreparationError: (err: unknown) => err instanceof Error && (err.message.includes('引用') || err.message.includes('未获授权') || err.message.includes('快照')),
+    emitReferenceWarning: () => undefined,
     randomUUID,
     console: { error: () => undefined, warn: () => undefined },
     ipcMain: { handle: (_channel: string, callback: SendHandler) => { handler = callback } },
@@ -487,6 +492,28 @@ describe('Given renderer 经真实 SEND_MESSAGE IPC 提交到主进程', () => {
       await flushSubmissionMicrotasks()
       expect(harness.runs.map(({ input }) => input.userMessageUuid)).toEqual(['first', 'second'])
       expect(harness.queue().map(({ input }) => input.queueMessageId)).toEqual(['third'])
+    } finally { await harness.dispose() }
+  })
+  test('When 提交携带未授权引用 Then 真实 IPC 返回 sent 且正文保留、降级为无引用执行', async () => {
+    const harness = createSubmissionHarness()
+    try {
+      const response = await harness.send({
+        ...message('faulty-ref-user'),
+        userMessage: '重要提问内容',
+        rawUserMessage: '重要提问内容',
+        additionalDirectories: ['/path/to/extra'],
+        contextRefIds: ['unauthorized-canary'],
+      })
+      expect(response).toEqual({ disposition: 'sent' })
+      await flushSubmissionMicrotasks()
+      expect(harness.runs.length).toBe(1)
+      const run = harness.runs[0]!
+      expect(run.input.userMessageUuid).toBe('faulty-ref-user')
+      expect(run.input.userMessage).toBe('重要提问内容')
+      expect(run.input.rawUserMessage).toBe('重要提问内容')
+      expect(run.input.additionalDirectories).toEqual(['/path/to/extra'])
+      expect(run.input.contextRefIds).toEqual([])
+      expect(run.input.contextRefs).toEqual([])
     } finally { await harness.dispose() }
   })
 })

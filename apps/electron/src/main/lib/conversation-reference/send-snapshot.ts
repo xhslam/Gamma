@@ -1,8 +1,52 @@
 import type { AgentContextRef } from '@gamma/shared'
 import { getAgentContextRefs, getAgentSessionSDKMessages } from '../agent-session-manager'
 
+export interface ReferenceWarningNotice {
+  sessionId: string
+  warning: string
+}
+
+type ReferenceWarningListener = (notice: ReferenceWarningNotice) => void
+const warningListeners = new Set<ReferenceWarningListener>()
+
+export function registerReferenceWarningListener(listener: ReferenceWarningListener): () => void {
+  warningListeners.add(listener)
+  return () => {
+    warningListeners.delete(listener)
+  }
+}
+
+export function emitReferenceWarning(notice: ReferenceWarningNotice): void {
+  for (const listener of warningListeners) {
+    try {
+      listener(notice)
+    } catch (e) {
+      console.error('[ReferenceWarningListener] 异常:', e)
+    }
+  }
+}
+
+export function isReferencePreparationError(err: unknown): boolean {
+  if (!err) return false
+  if (err instanceof Error) {
+    const msg = err.message
+    return msg.includes('引用')
+      || msg.includes('快照')
+      || msg.includes('未获授权')
+      || msg.includes('重试的原用户消息不存在')
+      || msg.includes('重试的错误消息不存在')
+  }
+  return false
+}
+
+export interface PrepareAgentReferenceOptions {
+  savedRefs?: AgentContextRef[]
+  onWarning?: (warning: string) => void
+}
+
 /** 只接受 Main 当前已授权的 refId；不信任 renderer 传来的源路径、标题或快照描述。 */
 export function captureReferenceSnapshot(sessionId: string, ids?: string[]): AgentContextRef[] {
+  if (Array.isArray(ids) && ids.length === 0) return []
   const refs = getAgentContextRefs(sessionId)
   if (ids === undefined) return structuredClone(refs)
   if (!Array.isArray(ids) || ids.length > 5 || new Set(ids).size !== ids.length
@@ -13,6 +57,60 @@ export function captureReferenceSnapshot(sessionId: string, ids?: string[]): Age
     return structuredClone(ref)
   })
 }
+
+/** 保存、初次提交、失败状态回写均复用同一 Main 冻结描述。 */
+export function prepareAgentReferenceInput<
+  T extends {
+    sessionId: string
+    contextRefIds?: string[]
+    contextRefs?: AgentContextRef[]
+    retryOfUserMessageUuid?: string
+    retryOfErrorUuid?: string
+  }
+>(
+  input: T,
+  messageIdOrOptions?: string | PrepareAgentReferenceOptions,
+  fallbackWarningCallback?: (warning: string) => void
+): T {
+  const options: PrepareAgentReferenceOptions = typeof messageIdOrOptions === 'object' && messageIdOrOptions !== null
+    ? messageIdOrOptions
+    : { onWarning: fallbackWarningCallback }
+
+  // 显式 [] 短路：若明确传 [] 且不是重试，不读任何引用存储或缓存，保持零额外开销
+  if (Array.isArray(input.contextRefIds) && input.contextRefIds.length === 0 && !input.retryOfUserMessageUuid && !input.retryOfErrorUuid) {
+    return { ...input, contextRefIds: [], contextRefs: [] }
+  }
+
+  try {
+    const saved = options.savedRefs
+    const refs = saved
+      ?? getRetryReferenceSnapshot(input.sessionId, input.retryOfUserMessageUuid, input.retryOfErrorUuid)
+      ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds)
+    return {
+      ...input,
+      contextRefIds: refs.map((ref) => ref.refId),
+      contextRefs: structuredClone(refs),
+    }
+  } catch (err: unknown) {
+    if (isReferencePreparationError(err)) {
+      const warning = `引用准备失败（${err instanceof Error ? err.message : String(err)}），已转为无引用继续发送`
+      console.warn(`[AgentReference] ${warning}`)
+      options.onWarning?.(warning)
+      emitReferenceWarning({ sessionId: input.sessionId, warning })
+      // 关键：保留原 input 的所有业务 payload（正文、附件、身份等），但明确将引用权限清空为 []
+      // 下游通过 input.contextRefs ?? captureReferenceSnapshot(...) 处理时，
+      // 因为 contextRefs 是 []，下游 ?? 绝对不会触发，绝不读回 composer 里的引用！
+      return {
+        ...input,
+        contextRefIds: [],
+        contextRefs: [],
+      }
+    }
+    // 非引用异常：绝不能吞，必须继续抛出
+    throw err
+  }
+}
+
 
 /** 重试使用当时用户消息的快照；旧历史没有引用字段时明确为空。 */
 export function getRetryReferenceSnapshot(sessionId: string, userUuid?: string, errorUuid?: string): AgentContextRef[] | undefined {
