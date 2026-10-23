@@ -95,21 +95,9 @@ export interface InjectConversationReferencesContextOptions<T> {
   signal?: AbortSignal
 }
 
-/**
- * 在每轮推理前，动态解析并注入会话引用上下文
- */
-export async function injectConversationReferencesContext<
-  T extends { role: string; content?: unknown; timestamp?: number }
->(options: InjectConversationReferencesContextOptions<T>): Promise<T[]> {
-  const { sessionId, modelId, contextWindow, messages, signal } = options
-  const activeRefs = options.contextRefs ?? getAgentContextRefs(sessionId)
-  if (signal?.aborted || !activeRefs || activeRefs.length === 0) {
-    return [...messages]
-  }
-
-  const budgetTokens = Math.floor(inferBudgetContextWindow(modelId, contextWindow) * DEFAULT_BUDGET_RATIO)
+/** 注入与后台预算共用同一只读数据解析，缺失/归属/冻结边界一并计入。 */
+export function resolveReferencedConversationData(activeRefs: readonly AgentContextRef[]): ReferencedConversationData[] {
   const resolvedDataList: ReferencedConversationData[] = []
-  const modelSummaries = new Map<string, string>()
 
   for (const ref of activeRefs) {
     // 校验源会话是否仍存在；源会话被删除或归属不符时记录不可用原因，计入预算注入不可用提示
@@ -228,6 +216,25 @@ export async function injectConversationReferencesContext<
       previousReferencedTitles: prevTitles.length > 0 ? prevTitles : undefined,
     })
   }
+
+  return resolvedDataList
+}
+
+/**
+ * 在每轮推理前，动态解析并注入会话引用上下文
+ */
+export async function injectConversationReferencesContext<
+  T extends { role: string; content?: unknown; timestamp?: number }
+>(options: InjectConversationReferencesContextOptions<T>): Promise<T[]> {
+  const { sessionId, modelId, contextWindow, messages, signal } = options
+  const activeRefs = options.contextRefs ?? getAgentContextRefs(sessionId)
+  if (signal?.aborted || !activeRefs || activeRefs.length === 0) {
+    return [...messages]
+  }
+
+  const budgetTokens = Math.floor(inferBudgetContextWindow(modelId, contextWindow) * DEFAULT_BUDGET_RATIO)
+  const resolvedDataList = resolveReferencedConversationData(activeRefs)
+  const modelSummaries = new Map<string, string>()
 
   if (resolvedDataList.length === 0) {
     return [...messages]

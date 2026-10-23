@@ -697,7 +697,7 @@ export async function resolvePiReasoningCapability(
   })
 }
 
-async function resolvePiModelDefaults(input: PiAgentQueryOptions): Promise<PiModelDefaults> {
+async function resolvePiModelDefaults(input: Pick<PiAgentQueryOptions, 'provider' | 'model'>): Promise<PiModelDefaults> {
   const catalogModel = input.model ? await findPiCatalogModel(input.provider, input.model) : undefined
   const codexAlignedCapabilities = getCodexAlignedGPT5Capabilities(input.model)
   const api = resolvePiApi(input.provider)
@@ -734,6 +734,11 @@ async function resolvePiModelDefaults(input: PiAgentQueryOptions): Promise<PiMod
             ? MIMO_V26_FAMILY_MAX_TOKENS
             : DEFAULT_MAX_TOKENS)),
   }
+}
+
+/** 后台引用预算复用实际注册策略；仅查询本地目录，不发送模型请求。 */
+export async function resolvePiBudgetContextWindow(provider: ProviderType, modelId?: string): Promise<number> {
+  return (await resolvePiModelDefaults({ provider, model: stripLegacyAgentSdkContextSuffix(modelId) })).contextWindow
 }
 
 export function normalizePiBaseUrl(baseUrl: string | undefined, provider: ProviderType, api = normalizePiApi(provider)): string | undefined {

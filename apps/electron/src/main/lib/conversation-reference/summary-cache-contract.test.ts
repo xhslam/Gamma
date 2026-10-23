@@ -77,7 +77,7 @@ describe('Given 分块摘要缓存的版本、归属和质量契约', () => {
     const hash = computeSummaryHash(ref.sourceConversationId, messages)
     expect(loadSummaryFromCache(ref.sourceConversationId, 'm20', hash)).toContain(SUMMARY_FALLBACK_PREFIX)
     let reopenCalls = 0
-    const reopened = { namespace: 'quality_reopen', getMessages: () => messages, generate: async () => { reopenCalls++; return null } }
+    const reopened = { namespace: 'quality_reopen', forceTier: 'B' as const, getMessages: () => messages, generate: async () => { reopenCalls++; return null } }
     expect(reconcileReferenceSummaries('target', [ref], 'test_channel', 'test_model', reopened)[ref.refId]).toBe('fallback')
     await new Promise(resolve => setTimeout(resolve, 10))
     expect(reopenCalls).toBe(1)
