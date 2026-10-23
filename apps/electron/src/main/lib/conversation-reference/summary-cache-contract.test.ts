@@ -69,7 +69,7 @@ describe('Given 分块摘要缓存的版本、归属和质量契约', () => {
     const ref: AgentContextRef = { refId: 'ref_quality', sourceConversationId: 'quality_source', sourceProjectId: 'p', titleAtAttach: '合成源', mode: 'snapshot', snapshotUpToMessageId: 'm20', snapshotAt: Date.now(), messageCount: messages.length }
     let calls = 0
     const generate = (input: Parameters<typeof getOrGenerateConversationSummary>[0]) => getOrGenerateConversationSummary({ ...input, deps: { generateText: async ({ prompt }) => { calls++; if (prompt.includes(CHUNK_SUMMARY_PROMPT)) throw new Error('合成分块失败'); return '合成头尾回退摘要' } } })
-    const deps = { namespace: 'quality_first', getMessages: () => messages, generate }
+    const deps = { namespace: 'quality_first', forceTier: 'B' as const, getMessages: () => messages, generate }
     reconcileReferenceSummaries('target', [ref], 'test_channel', 'test_model', deps)
     await new Promise(resolve => setTimeout(resolve, 30))
     expect(reconcileReferenceSummaries('target', [ref], 'test_channel', 'test_model', deps)[ref.refId]).toBe('fallback')

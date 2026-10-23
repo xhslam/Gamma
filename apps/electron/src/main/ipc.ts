@@ -2647,7 +2647,12 @@ export function registerIpcHandlers(): void {
       }
       const refs = getAgentContextRefs(sessionId)
       const target = getAgentSessionMeta(sessionId)
-      return { refs, summaryStatuses: reconcileReferenceSummaries(sessionId, refs, target?.channelId, target?.modelId) }
+      const summaryResult = reconcileReferenceSummaries(sessionId, refs, target?.channelId, target?.modelId)
+      return {
+        refs,
+        summaryStatuses: summaryResult.summaryStatuses ?? summaryResult,
+        summaryProgresses: summaryResult.summaryProgresses,
+      }
     }
   )
 

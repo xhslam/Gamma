@@ -957,12 +957,19 @@ export interface AgentContextRefDetail {
 export interface GetAgentContextRefsRequest {
   sessionId: string
 }
-export type ReferenceSummaryStatus = 'running' | 'ready' | 'fallback'
+export interface ReferenceSummaryProgress {
+  completed: number
+  total: number
+}
+
+export type ReferenceSummaryStatus = 'running' | 'ready' | 'fallback' | `running:${number}/${number}`
 
 export interface GetContextRefsResponse {
   refs: AgentContextRef[]
   /** 后台摘要状态；旧版调用方可忽略。 */
   summaryStatuses?: Record<string, ReferenceSummaryStatus>
+  /** 真实分块摘要进度 (x/y) */
+  summaryProgresses?: Record<string, ReferenceSummaryProgress>
 }
 export type GetContextRefsRequest = GetAgentContextRefsRequest
 
