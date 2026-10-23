@@ -3631,6 +3631,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
             {/* 会话引用 Chips 条 */}
             <ConversationReferenceChips
+              sessionId={sessionId}
               refs={currentContextRefs}
               onRemoveRef={handleRemoveContextRef}
               onToggleMode={handleToggleRefMode}

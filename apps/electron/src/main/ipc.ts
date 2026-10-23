@@ -278,6 +278,7 @@ import {
   updateAgentContextRefs,
   getAgentContextRefDetail,
 } from './lib/agent-session-manager'
+import { reconcileReferenceSummaries } from './lib/conversation-reference/background-summary'
 import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce, cancelQueuedAgentSend } from './lib/agent-send-outbox-service'
 import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
@@ -2643,7 +2644,9 @@ export function registerIpcHandlers(): void {
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(sessionId) || sessionId.includes('..')) {
         return { refs: [] }
       }
-      return { refs: getAgentContextRefs(sessionId) }
+      const refs = getAgentContextRefs(sessionId)
+      const target = getAgentSessionMeta(sessionId)
+      return { refs, summaryStatuses: reconcileReferenceSummaries(sessionId, refs, target?.channelId, target?.modelId) }
     }
   )
 
@@ -2661,6 +2664,8 @@ export function registerIpcHandlers(): void {
       if (!Array.isArray(req.refs) && !Array.isArray(req.contextRefs)) throw new Error('引用列表必须为数组')
       const rawRefs = Array.isArray(req.refs) ? req.refs : req.contextRefs!
       const updated = updateAgentContextRefs(sessionId, rawRefs)
+      const target = getAgentSessionMeta(sessionId)
+      reconcileReferenceSummaries(sessionId, updated, target?.channelId, target?.modelId)
       return { refs: updated }
     }
   )

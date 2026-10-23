@@ -14,8 +14,8 @@ beforeAll(async () => {
     const sessions=Array.from({length:36},(_,i)=>({id:'source-'+i,title:'测试会话-'+i,workspaceId:i<20?'project-a':'project-b',createdAt:now,updatedAt:now+i}));
     store.set(agentSessionsAtom,sessions);
     store.set(agentWorkspacesAtom,[{id:'project-a',name:'当前测试项目',slug:'a'},{id:'project-b',name:'跨项目测试',slug:'b'}]);
-    window.requests=[];
-    window.electronAPI={getContextRefDetail:async ({sourceSessionId})=>{
+    window.requests=[]; window.summaryState='running';
+    window.electronAPI={getContextRefs:async ()=>({refs:[],summaryStatuses:{r1:window.summaryState}}),getContextRefDetail:async ({sourceSessionId})=>{
       await new Promise(r=>setTimeout(r,15)); window.requests.push(sourceSessionId);
       return {detail:{sourceConversationId:sourceSessionId,sourceProjectId:'project-a',title:sourceSessionId,lastCompleteMessageId:'m1',messageCount:42,estTokens:1234,firstMessagePreview:'预览-'+sourceSessionId,updatedAt:now,exists:true}};
     }};
@@ -26,7 +26,7 @@ beforeAll(async () => {
       window.fixture={setOpen,setRefs};
       return React.createElement(React.Fragment,null,
         React.createElement('output',{id:'confirmed'},JSON.stringify(refs)),
-        React.createElement(ConversationReferenceChips,{refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
+        React.createElement(ConversationReferenceChips,{sessionId:'current',refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
         React.createElement(ReferencedConversationsMessageCard,{refs}),
         React.createElement(ConversationReferenceDialog,{open,onOpenChange:setOpen,currentSessionId:'current',currentWorkspaceId:'project-a',initialRefs:refs,onConfirm:async next=>setRefs(next)}));}
     createRoot(document.getElementById('root')).render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement(Fixture))));
@@ -35,6 +35,16 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 隔离数据与真实 Chromium 引用组件', () => {
+  test('When后台摘要状态改变 Then chip依次显示摘要中、已就绪与失败回退', async () => {
+    const result = await renderer.run(`
+      await window.wait(100);window.fixture.setOpen(false);window.fixture.setRefs([{refId:'r1',sourceConversationId:'source-0',sourceProjectId:'project-a',titleAtAttach:'fixture',mode:'snapshot'}]);await window.wait(100);
+      const running=document.querySelector('[role="status"]')?.textContent;
+      window.summaryState='ready';await window.wait(2200);const ready=document.querySelector('[role="status"]')?.textContent;
+      window.summaryState='fallback';await window.wait(2200);const fallback=document.querySelector('[role="status"]')?.textContent;
+      return {running,ready,fallback};
+    `)
+    expect(result).toEqual({running:'摘要中',ready:'已就绪',fallback:'失败回退'})
+  }, 20_000)
   test('When 异步加载超过30条并首次Enter Then 详情不遗漏且首项可选', async () => {
     const result = await renderer.run(`
       await window.wait(500); const input=document.querySelector('[role="dialog"] input'); input.focus();

@@ -21,9 +21,11 @@ import {
   ABSOLUTE_TIER_A_TOKEN_LIMIT,
   MAX_CONTEXT_REFS,
   type AgentContextRef,
+  type ReferenceSummaryStatus,
 } from '@gamma/shared'
 
 export interface ConversationReferenceChipsProps {
+  sessionId?: string
   refs: AgentContextRef[]
   onRemoveRef: (refId: string) => void
   onToggleMode: (refId: string) => void
@@ -35,6 +37,7 @@ export interface ConversationReferenceChipsProps {
 }
 
 export function ConversationReferenceChips({
+  sessionId,
   refs,
   onRemoveRef,
   onToggleMode,
@@ -43,6 +46,27 @@ export function ConversationReferenceChips({
   maxBudgetTokens = DEFAULT_BUDGET_TOKENS,
 }: ConversationReferenceChipsProps): React.ReactElement | null {
   const agentSessions = useAtomValue(agentSessionsAtom)
+  const [summaryStatuses, setSummaryStatuses] = React.useState<Record<string, ReferenceSummaryStatus>>({})
+  const refKey = refs.map((ref) => ref.refId).join(',')
+  React.useEffect(() => {
+    if (!sessionId || !refKey) return
+    let disposed = false
+    let pending = false
+    const poll = async (): Promise<void> => {
+      if (pending) return
+      pending = true
+      try {
+        const result = await window.electronAPI.getContextRefs({ sessionId })
+        if (!disposed) setSummaryStatuses(result.summaryStatuses ?? {})
+      } catch {
+        // 状态请求失败不阻止输入或发送，下次轮询自动恢复。
+      } finally { pending = false }
+    }
+    setSummaryStatuses({})
+    void poll()
+    const timer = setInterval(() => void poll(), 2_000)
+    return () => { disposed = true; clearInterval(timer) }
+  }, [sessionId, refKey])
 
   if (refs.length === 0) return null
 
@@ -143,6 +167,12 @@ export function ConversationReferenceChips({
               {isDeleted && (
                 <span className="text-[10px] text-destructive/80 font-normal">
                   源对话已删除
+                </span>
+              )}
+
+              {!isDeleted && sessionId && (
+                <span className="text-[10px] text-muted-foreground" role="status">
+                  {summaryStatuses[ref.refId] === 'ready' ? '已就绪' : summaryStatuses[ref.refId] === 'fallback' ? '失败回退' : '摘要中'}
                 </span>
               )}
 
