@@ -932,18 +932,31 @@ export interface AgentContextRefDetail {
 export interface GetAgentContextRefsRequest {
   sessionId: string
 }
+export interface GetContextRefsResponse {
+  refs: AgentContextRef[]
+}
+export type GetContextRefsRequest = GetAgentContextRefsRequest
 
 /** 更新会话上下文引用请求 */
 export interface UpdateAgentContextRefsRequest {
   sessionId: string
-  contextRefs: AgentContextRef[]
+  contextRefs?: AgentContextRef[]
+  refs?: AgentContextRef[]
 }
+export interface UpdateContextRefsResponse {
+  refs: AgentContextRef[]
+}
+export type UpdateContextRefsRequest = UpdateAgentContextRefsRequest
 
 /** 获取上下文引用详情请求 */
 export interface GetAgentContextRefDetailRequest {
   sourceSessionId: string
-  currentSessionId: string
+  currentSessionId?: string
 }
+export interface GetContextRefDetailResponse {
+  detail: AgentContextRefDetail
+}
+export type GetContextRefDetailRequest = GetAgentContextRefDetailRequest
 
 // ===== Agent 消息搜索 =====
 

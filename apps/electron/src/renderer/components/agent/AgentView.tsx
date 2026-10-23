@@ -18,7 +18,11 @@ import * as React from 'react'
 import { flushSync, unstable_batchedUpdates } from 'react-dom'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, ListTodo, Paperclip } from 'lucide-react'
+import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, ListTodo, Paperclip, Plus, MessageSquareText } from 'lucide-react'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { ConversationReferenceChips } from './ConversationReferenceChips'
+import { ConversationReferenceDialog } from './ConversationReferenceDialog'
+import type { AgentContextRef, AgentContextRefMode } from '@gamma/shared'
 import { AgentMessages, type AgentHistoryQuoteNavigationRequest } from './AgentMessages'
 import { AgentHeader } from './AgentHeader'
 import { AgentMessageQueue } from './AgentMessageQueue'
@@ -466,6 +470,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const [defaultChannelId, setDefaultChannelId] = useAtom(agentChannelIdAtom)
   const [defaultModelId, setDefaultModelId] = useAtom(agentModelIdAtom)
   const sessions = useAtomValue(agentSessionsAtom)
+  const setAgentSessions = useSetAtom(agentSessionsAtom)
   const planningGroups = useAtomValue(todoPlanningGroupsAtom)
   const [todoDialogOpen, setTodoDialogOpen] = React.useState(false)
   const [todoDraftTitle, setTodoDraftTitle] = React.useState('')
@@ -500,6 +505,44 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const currentWorkspaceId = React.useMemo(() => {
     return sessionMeta?.workspaceId ?? globalWorkspaceId
   }, [sessionMeta?.workspaceId, globalWorkspaceId])
+
+  const currentContextRefs: AgentContextRef[] = React.useMemo(
+    () => sessionMeta?.contextRefs ?? [],
+    [sessionMeta?.contextRefs]
+  )
+  const [referenceDialogOpen, setReferenceDialogOpen] = React.useState(false)
+
+  const handleUpdateContextRefs = React.useCallback(async (nextRefs: AgentContextRef[]): Promise<void> => {
+    setAgentSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, contextRefs: nextRefs } : s))
+    )
+    try {
+      await window.electronAPI.updateContextRefs({ sessionId, refs: nextRefs })
+    } catch (error) {
+      console.error('[AgentView] 更新引用会话失败:', error)
+      toast.error('保存引用会话失败')
+    }
+  }, [sessionId, setAgentSessions])
+
+  const handleRemoveContextRef = React.useCallback((refId: string): void => {
+    const nextRefs = currentContextRefs.filter((r) => r.refId !== refId)
+    void handleUpdateContextRefs(nextRefs)
+  }, [currentContextRefs, handleUpdateContextRefs])
+
+  const handleToggleRefMode = React.useCallback((refId: string): void => {
+    const nextRefs = currentContextRefs.map((r) => {
+      if (r.refId !== refId) return r
+      return { ...r, mode: (r.mode === 'live' ? 'snapshot' : 'live') as AgentContextRefMode }
+    })
+    void handleUpdateContextRefs(nextRefs)
+  }, [currentContextRefs, handleUpdateContextRefs])
+
+  const handleBackspaceEmpty = React.useCallback((): boolean => {
+    if (currentContextRefs.length === 0) return false
+    const nextRefs = currentContextRefs.slice(0, -1)
+    void handleUpdateContextRefs(nextRefs)
+    return true
+  }, [currentContextRefs, handleUpdateContextRefs])
   const [pendingPrompt, setPendingPrompt] = useAtom(agentPendingPromptAtom)
   const [pendingFiles, setPendingFiles] = useAtom(agentPendingFilesAtomFamily(sessionId))
   const [queuedMessages, setQueuedMessages] = useAtom(agentMessageQueueAtomFamily(sessionId))
@@ -566,7 +609,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const suggestionsMap = useAtomValue(agentPromptSuggestionsAtom)
   const suggestion = suggestionsMap.get(sessionId) ?? null
   const setPromptSuggestions = useSetAtom(agentPromptSuggestionsAtom)
-  const setAgentSessions = useSetAtom(agentSessionsAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId))
   const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
@@ -2378,6 +2420,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         parent_tool_use_id: null,
         uuid: outboxMessageId,
         _createdAt: Date.now(),
+        ...(currentContextRefs.length > 0 && { contextRefs: currentContextRefs }),
       } as unknown as SDKMessage
       optimisticMessage = tempUserSDKMsg
       appendOptimisticPersistedMessage(tempUserSDKMsg)
@@ -3226,21 +3269,40 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     {
       key: 'attach-content',
       node: (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={inputToolbarButtonClass}
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={inputToolbarButtonClass}
+                  aria-label="添加附件或引用对话"
+                >
+                  <Plus className="size-[17px]" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>添加附件或引用对话</p></TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" side="top" className="w-48">
+            <DropdownMenuItem
               onClick={() => void handleAttachContent()}
-              aria-label="附加文件或文件夹"
+              className="flex items-center gap-2 cursor-pointer text-xs"
             >
-              <Paperclip className="size-[17px]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top"><p>附加文件或文件夹</p></TooltipContent>
-        </Tooltip>
+              <Paperclip className="size-3.5" />
+              <span>附加文件或文件夹</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setReferenceDialogOpen(true)}
+              className="flex items-center gap-2 cursor-pointer text-xs"
+            >
+              <MessageSquareText className="size-3.5 text-sky-500" />
+              <span>引用对话...</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
     {
@@ -3513,6 +3575,18 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               </div>
             )}
 
+            {/* 会话引用 Chips 条 */}
+            <ConversationReferenceChips
+              refs={currentContextRefs}
+              onRemoveRef={handleRemoveContextRef}
+              onToggleMode={handleToggleRefMode}
+              onOpenSelector={() => setReferenceDialogOpen(true)}
+              isOverBudget={
+                currentContextRefs.length > 3 ||
+                currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > 70000
+              }
+            />
+
             <AgentScopedRichTextInput
               ref={richTextInputRef}
               sessionId={sessionId}
@@ -3543,6 +3617,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               sessionAttachedDirs={sessionMentionPaths}
               sendWithCmdEnter={sendWithCmdEnter}
               onAgentHistoryQuoteClick={handleAgentHistoryQuoteClick}
+              onBackspaceEmpty={handleBackspaceEmpty}
+              onOpenConversationReference={() => setReferenceDialogOpen(true)}
             />
 
           </div>
@@ -3608,6 +3684,15 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <ConversationReferenceDialog
+      open={referenceDialogOpen}
+      onOpenChange={setReferenceDialogOpen}
+      currentSessionId={sessionId}
+      currentWorkspaceId={currentWorkspaceId || undefined}
+      initialRefs={currentContextRefs}
+      onConfirm={handleUpdateContextRefs}
+    />
     </SkillMentionNamesProvider>
   )
 }

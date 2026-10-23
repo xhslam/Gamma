@@ -27,6 +27,7 @@ export function createFileMentionSuggestion(
   attachedDirsRef?: React.RefObject<string[]>,
   mentionItemCountRef?: React.MutableRefObject<number>,
   sessionAttachedDirsRef?: React.RefObject<string[]>,
+  onOpenConversationReferenceRef?: React.RefObject<(() => void) | undefined>,
 ): Omit<SuggestionOptions<FileIndexEntry>, 'editor'> {
   let missingWorkspaceToastShown = false
   // Esc 抑制：记录被 Esc 关闭的触发片段文本。
@@ -115,6 +116,11 @@ export function createFileMentionSuggestion(
           if (!isSuggestionTriggerPresent(props.editor, props.range, '@')) return
           props.command({ id: resolveFileMentionPath(item, workspacePathRef.current), label: item.name })
         }
+        const handleOpenRef = () => {
+          props.editor.commands.deleteRange(props.range)
+          cleanup()
+          onOpenConversationReferenceRef?.current?.()
+        }
         renderer = new ReactRenderer(FileMentionList, {
           props: {
             listId: combobox?.listId,
@@ -122,6 +128,7 @@ export function createFileMentionSuggestion(
             sessionEntries,
             workspaceEntries,
             onSelect: selectItem,
+            onOpenConversationReference: onOpenConversationReferenceRef?.current ? handleOpenRef : undefined,
           },
           editor: props.editor,
         })

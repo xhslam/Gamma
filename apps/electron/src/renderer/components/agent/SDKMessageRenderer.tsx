@@ -19,6 +19,8 @@ import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbo
 import { ContentBlock } from './ContentBlock'
 import { TurnFileChangesSummary, buildTurnFileNameMap } from './TurnFileChangesSummary'
 import { TurnSkillUsageSummary } from './TurnSkillUsageSummary'
+import { ReferencedConversationsMessageCard } from './ReferencedConversationsMessageCard'
+import type { AgentContextRef } from '@gamma/shared'
 import { ProcessBlockGroup, buildAssistantTurnRenderItems } from './ProcessBlockGroup'
 import { extractToolResultText, TASK_TOOL_NAMES } from './task-progress'
 import { normalizeThinkTagsInContentBlocks } from './thinking-tag-parser'
@@ -947,6 +949,7 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
   const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
   const nonImageFiles = attachedFiles.filter((f) => !isImageFile(f.filename))
   const meta = extractMeta(message as unknown as SDKMessage)
+  const contextRefs = (message as unknown as { contextRefs?: AgentContextRef[] }).contextRefs
 
   const handleImageEditComplete = React.useCallback((editedDataUrl: string): void => {
     const base64 = editedDataUrl.split(',')[1]
@@ -1019,6 +1022,10 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
         </div>
       </div>
       <MessageContent>
+        {/* 引用会话小卡片 */}
+        {contextRefs && contextRefs.length > 0 && (
+          <ReferencedConversationsMessageCard refs={contextRefs} />
+        )}
         {/* 引用文件 Chip */}
         {quotes.filter((quote) => quote.sourceType !== 'agent-history').length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">

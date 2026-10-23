@@ -190,6 +190,10 @@ interface RichTextInputProps {
   sendWithCmdEnter?: boolean
   /** 点击 Agent 历史引用 chip 时，用其消息范围触发定位与高亮。 */
   onAgentHistoryQuoteClick?: (quote: QuotedSelection) => void
+  /** 空输入框时按 Backspace 的拦截回调（用于删除末尾引用 Chip 等场景） */
+  onBackspaceEmpty?: () => boolean
+  /** 打开引用对话选择器 */
+  onOpenConversationReference?: () => void
   className?: string
 }
 
@@ -242,10 +246,16 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   onHtmlChange,
   sendWithCmdEnter = false,
   onAgentHistoryQuoteClick,
+  onBackspaceEmpty,
+  onOpenConversationReference,
 }: RichTextInputProps, ref: React.Ref<RichTextInputHandle>): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(false)
   const inputIdRef = useRef(voiceInputId ?? `rich-text-input-${Math.random().toString(36).slice(2)}`)
   const voicePreviewRef = useRef<VoiceDictationPreviewRange | null>(null)
+  const onBackspaceEmptyRef = useRef(onBackspaceEmpty)
+  onBackspaceEmptyRef.current = onBackspaceEmpty
+  const onOpenConversationReferenceRef = useRef(onOpenConversationReference)
+  onOpenConversationReferenceRef.current = onOpenConversationReference
   // 手动折叠状态：用户主动折叠输入框
   const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false)
   // 跟踪 isExpanded 最新值（对比后再 setState，避免每键无谓 setState 触发重渲染）
@@ -384,6 +394,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       attachedDirsRef,
       mentionItemCountRef,
       sessionAttachedDirsRef,
+      onOpenConversationReferenceRef,
     ),
     [],
   )
@@ -916,8 +927,16 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           return true
         }
 
-        // Backspace：空列表项时退出列表
+        // Backspace：空输入框时允许拦截（删除末尾 Chip 等），空列表项时退出列表
         if (event.key === 'Backspace') {
+          if (editorRef.current?.isEmpty && onBackspaceEmptyRef.current) {
+            const handled = onBackspaceEmptyRef.current()
+            if (handled) {
+              event.preventDefault()
+              return true
+            }
+          }
+
           const { state } = view
           const { $from } = state.selection
           let isInList = false

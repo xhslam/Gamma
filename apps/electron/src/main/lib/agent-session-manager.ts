@@ -1631,19 +1631,20 @@ export function getAgentContextRefs(sessionId: string): AgentContextRef[] {
 /**
  * 更新指定会话的上下文引用列表（安全规范化：最多5个、去重、排除自引用）
  */
-export function updateAgentContextRefs(sessionId: string, contextRefs: AgentContextRef[]): void {
-  const sanitized = (contextRefs ?? []).slice(0, 5)
+export function updateAgentContextRefs(sessionId: string, contextRefs: AgentContextRef[]): AgentContextRef[] {
   const seen = new Set<string>()
   const filtered: AgentContextRef[] = []
 
-  for (const ref of sanitized) {
+  for (const ref of (contextRefs ?? [])) {
     if (!ref.sourceConversationId || ref.sourceConversationId === sessionId) continue
     if (seen.has(ref.sourceConversationId)) continue
     seen.add(ref.sourceConversationId)
     filtered.push(ref)
+    if (filtered.length >= 5) break
   }
 
   updateAgentSessionMeta(sessionId, { contextRefs: filtered })
+  return filtered
 }
 
 /**
@@ -1651,13 +1652,13 @@ export function updateAgentContextRefs(sessionId: string, contextRefs: AgentCont
  */
 export function getAgentContextRefDetail(
   sourceSessionId: string,
-  currentSessionId: string,
+  currentSessionId?: string,
 ): AgentContextRefDetail {
-  if (sourceSessionId === currentSessionId) {
+  if (currentSessionId && sourceSessionId === currentSessionId) {
     return {
       sourceConversationId: sourceSessionId,
       sourceProjectId: '',
-      title: '',
+      title: '不能引用当前对话',
       messageCount: 0,
       estTokens: 0,
       updatedAt: 0,
@@ -1670,7 +1671,7 @@ export function getAgentContextRefDetail(
     return {
       sourceConversationId: sourceSessionId,
       sourceProjectId: '',
-      title: '',
+      title: '已删除的会话',
       messageCount: 0,
       estTokens: 0,
       updatedAt: 0,
