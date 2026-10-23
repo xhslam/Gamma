@@ -44,7 +44,11 @@ import type {
   AgentCwdMode,
   AgentActiveWorktree,
   SessionWorkbenchLayout,
+  AgentContextRef,
+  AgentContextRefDetail,
 } from '@gamma/shared'
+import { defaultTokenEstimator, getSDKMessageId, type NormalizedReferencedMessage } from './conversation-reference/context-builder'
+import { normalizeSDKMessage } from './conversation-reference/pi-tools'
 import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@gamma/shared'
 // 旧格式 → SDKMessage 的转换逻辑下沉到 @gamma/session-core 作为唯一真源，避免主进程与渲染层各存一份。
 import { convertLegacyMessage } from '@gamma/session-core'
@@ -638,7 +642,7 @@ export function getAgentSessionSDKMessages(id: string): SDKMessage[] {
  */
 export function updateAgentSessionMeta(
   id: string,
-  updates: Partial<Pick<AgentSessionMeta, 'title' | 'channelId' | 'modelId' | 'sdkSessionId' | 'piSessionFile' | 'piEntryBindings' | 'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'workspaceId' | 'activeWorktree' | 'pinned' | 'starred' | 'archived' | 'isDraft' | 'attachedDirectories' | 'attachedFiles' | 'forkSourceDir' | 'explorationParentSessionId' | 'explorationSourceMessageId' | 'explorationSourceLabel' | 'explorationTitleInitializedAt' | 'stoppedByUser' | 'permissionMode' | 'completedButUnconfirmed' | 'sourceAutomationId' | 'automationGraduated' | 'parentSessionId' | 'rootSessionId' | 'sourceDelegationId' | 'delegationRole' | 'delegationStatus' | 'delegationDepth' | 'delegationGoal'>>,
+  updates: Partial<Pick<AgentSessionMeta, 'title' | 'channelId' | 'modelId' | 'sdkSessionId' | 'piSessionFile' | 'piEntryBindings' | 'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'workspaceId' | 'activeWorktree' | 'pinned' | 'starred' | 'archived' | 'isDraft' | 'attachedDirectories' | 'attachedFiles' | 'forkSourceDir' | 'explorationParentSessionId' | 'explorationSourceMessageId' | 'explorationSourceLabel' | 'explorationTitleInitializedAt' | 'stoppedByUser' | 'permissionMode' | 'completedButUnconfirmed' | 'sourceAutomationId' | 'automationGraduated' | 'parentSessionId' | 'rootSessionId' | 'sourceDelegationId' | 'delegationRole' | 'delegationStatus' | 'delegationDepth' | 'delegationGoal' | 'contextRefs'>>,
 ): AgentSessionMeta {
   const index = readIndex()
   const idx = index.sessions.findIndex((s) => s.id === id)
@@ -1613,3 +1617,106 @@ export async function searchAgentSessionReferences(input: AgentSessionReferenceS
 
   return results
 }
+
+// ===== Agent 会话上下文引用 (Conversation Reference) =====
+
+/**
+ * 获取指定会话的全部上下文引用列表
+ */
+export function getAgentContextRefs(sessionId: string): AgentContextRef[] {
+  const meta = getAgentSessionMeta(sessionId)
+  return meta?.contextRefs ?? []
+}
+
+/**
+ * 更新指定会话的上下文引用列表（安全规范化：最多5个、去重、排除自引用）
+ */
+export function updateAgentContextRefs(sessionId: string, contextRefs: AgentContextRef[]): void {
+  const sanitized = (contextRefs ?? []).slice(0, 5)
+  const seen = new Set<string>()
+  const filtered: AgentContextRef[] = []
+
+  for (const ref of sanitized) {
+    if (!ref.sourceConversationId || ref.sourceConversationId === sessionId) continue
+    if (seen.has(ref.sourceConversationId)) continue
+    seen.add(ref.sourceConversationId)
+    filtered.push(ref)
+  }
+
+  updateAgentSessionMeta(sessionId, { contextRefs: filtered })
+}
+
+/**
+ * 获取被引用会话的详细快照/预览信息
+ */
+export function getAgentContextRefDetail(
+  sourceSessionId: string,
+  currentSessionId: string,
+): AgentContextRefDetail {
+  if (sourceSessionId === currentSessionId) {
+    return {
+      sourceConversationId: sourceSessionId,
+      sourceProjectId: '',
+      title: '',
+      messageCount: 0,
+      estTokens: 0,
+      updatedAt: 0,
+      exists: false,
+    }
+  }
+
+  const meta = getAgentSessionMeta(sourceSessionId)
+  if (!meta) {
+    return {
+      sourceConversationId: sourceSessionId,
+      sourceProjectId: '',
+      title: '',
+      messageCount: 0,
+      estTokens: 0,
+      updatedAt: 0,
+      exists: false,
+    }
+  }
+
+  const sdkMessages = getAgentSessionSDKMessages(sourceSessionId)
+  let lastCompleteMessageId: string | undefined
+  const normalizedList: NormalizedReferencedMessage[] = []
+  let firstMessagePreview: string | undefined
+
+  for (let i = 0; i < sdkMessages.length; i++) {
+    const msg = sdkMessages[i]!
+    const norm = normalizeSDKMessage(msg)
+    if (!norm) continue
+
+    if (!firstMessagePreview && norm.role === 'user' && norm.content.trim()) {
+      firstMessagePreview = norm.content.trim().slice(0, 100)
+    }
+
+    // 若末尾是正在生成中的 assistant 且未结束，不作为完整消息
+    if (i === sdkMessages.length - 1 && norm.role === 'assistant') {
+      const assistantRaw = (msg as { message?: { stopReason?: string } }).message
+      if (assistantRaw && !assistantRaw.stopReason && !norm.content) {
+        continue
+      }
+    }
+
+    normalizedList.push(norm)
+    lastCompleteMessageId = getSDKMessageId(msg)
+  }
+
+  const estTokens = defaultTokenEstimator(normalizedList.map((m) => m.content).join('\n'))
+
+  return {
+    sourceConversationId: sourceSessionId,
+    sourceProjectId: meta.workspaceId ?? '',
+    title: meta.title,
+    lastCompleteMessageId,
+    messageCount: normalizedList.length,
+    estTokens,
+    firstMessagePreview,
+    updatedAt: meta.updatedAt,
+    exists: true,
+    archived: meta.archived,
+  }
+}
+
