@@ -32,7 +32,7 @@ interface ProductionService {
 }
 
 function productionFunction(source: string, name: string): string {
-  const declaration = source.match(new RegExp(`(?:export )?(?:async )?function ${name}\\([\\s\\S]*?\\n\\}`))?.[0]
+  const declaration = source.match(new RegExp(`(?:export )?(?:async )?function ${name}(?:<[^\\n]*>)?\\([\\s\\S]*?\\n\\}`))?.[0]
   if (!declaration) throw new Error(`未找到生产函数 ${name}`)
   return declaration.replace(/^export /, '')
 }
@@ -43,7 +43,9 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
   const registration = ipcSource.match(/  ipcMain\.handle\(\s*AGENT_IPC_CHANNELS\.SEND_MESSAGE,[\s\S]*?\n  \)/)?.[0]
   if (!registration) throw new Error('未找到生产 SEND_MESSAGE IPC 注册入口')
   const serviceSource = readFileSync(new URL('./lib/agent-service.ts', import.meta.url), 'utf8')
+  const referenceSource = readFileSync(new URL('./lib/agent-send-outbox-service.ts', import.meta.url), 'utf8')
   const source = [
+    productionFunction(referenceSource, 'prepareAgentReferenceInput'),
     productionFunction(serviceSource, 'reserveAgentSessionStart'),
     productionFunction(serviceSource, 'runAgent'),
     productionFunction(serviceSource, 'runAgentHeadless'),
@@ -91,6 +93,10 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
       || coordinator.snapshot(sessionId).some(({ input }) => input.queueMessageId === messageId),
   })
   const dependencies = {
+    // 仍执行真实 Main 引用授权函数；此队列生命周期用例没有引用或重试落盘数据。
+    outbox: { list: () => [] },
+    getRetryReferenceSnapshot: () => undefined,
+    captureReferenceSnapshot: () => [],
     randomUUID,
     console: { error: () => undefined, warn: () => undefined },
     ipcMain: { handle: (_channel: string, callback: SendHandler) => { handler = callback } },

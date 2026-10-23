@@ -26,7 +26,7 @@ const createQueueClass = new Function('dependencies', `
     getAgentSessionMeta, getAgentWorkspace, browserController, buildDynamicContext,
     buildReferencedSessionsPrompt, buildReferencedPlanningPrompt, recallAutomaticMemory,
     randomUUID, appendSDKMessages, enqueueAutomaticMemory, isAgentSessionDeleting,
-    isMissingActiveQueueChannelError,
+    isMissingActiveQueueChannelError, captureReferenceSnapshot,
   } = dependencies;
   ${queueClass}
   return QueueSubject;
@@ -48,6 +48,8 @@ function fixture(sendQueuedMessage: QueueSubject['adapter']['sendQueuedMessage']
   const persisted: SDKMessage[] = []
   const clearedActivations: string[] = []
   const Subject = createQueueClass({
+    // 本用例只验证队列运行代际；引用使用明确空快照，绝不读取真实用户配置。
+    captureReferenceSnapshot: () => [],
     getAgentSessionMeta: () => undefined,
     getAgentWorkspace: () => undefined,
     browserController: { getUserContext: () => undefined },
