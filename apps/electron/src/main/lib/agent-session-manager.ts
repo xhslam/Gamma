@@ -46,9 +46,15 @@ import type {
   SessionWorkbenchLayout,
   AgentContextRef,
   AgentContextRefDetail,
+  AgentContextRefMode,
 } from '@gamma/shared'
-import { defaultTokenEstimator, getSDKMessageId, type NormalizedReferencedMessage } from './conversation-reference/context-builder'
-import { normalizeSDKMessage } from './conversation-reference/pi-tools'
+import { MAX_CONTEXT_REFS } from '@gamma/shared'
+import {
+  defaultTokenEstimator,
+  normalizeCompleteSDKMessages,
+  formatNormalizedMessage,
+} from './conversation-reference/context-builder'
+import { saveSnapshotToCache, computeSnapshotHash } from './conversation-reference/ref-cache'
 import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@gamma/shared'
 // 旧格式 → SDKMessage 的转换逻辑下沉到 @gamma/session-core 作为唯一真源，避免主进程与渲染层各存一份。
 import { convertLegacyMessage } from '@gamma/session-core'
@@ -642,7 +648,7 @@ export function getAgentSessionSDKMessages(id: string): SDKMessage[] {
  */
 export function updateAgentSessionMeta(
   id: string,
-  updates: Partial<Pick<AgentSessionMeta, 'title' | 'channelId' | 'modelId' | 'sdkSessionId' | 'piSessionFile' | 'piEntryBindings' | 'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'workspaceId' | 'activeWorktree' | 'pinned' | 'starred' | 'archived' | 'isDraft' | 'attachedDirectories' | 'attachedFiles' | 'forkSourceDir' | 'explorationParentSessionId' | 'explorationSourceMessageId' | 'explorationSourceLabel' | 'explorationTitleInitializedAt' | 'stoppedByUser' | 'permissionMode' | 'completedButUnconfirmed' | 'sourceAutomationId' | 'automationGraduated' | 'parentSessionId' | 'rootSessionId' | 'sourceDelegationId' | 'delegationRole' | 'delegationStatus' | 'delegationDepth' | 'delegationGoal' | 'contextRefs'>>,
+  updates: Partial<Pick<AgentSessionMeta, 'title' | 'channelId' | 'modelId' | 'sdkSessionId' | 'piSessionFile' | 'piEntryBindings' | 'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'workspaceId' | 'activeWorktree' | 'pinned' | 'starred' | 'archived' | 'isDraft' | 'attachedDirectories' | 'attachedFiles' | 'forkSourceDir' | 'explorationParentSessionId' | 'explorationSourceMessageId' | 'explorationSourceLabel' | 'explorationTitleInitializedAt' | 'stoppedByUser' | 'permissionMode' | 'completedButUnconfirmed' | 'sourceAutomationId' | 'automationGraduated' | 'parentSessionId' | 'rootSessionId' | 'sourceDelegationId' | 'delegationRole' | 'delegationStatus' | 'delegationDepth' | 'delegationGoal'>>,
 ): AgentSessionMeta {
   const index = readIndex()
   const idx = index.sessions.findIndex((s) => s.id === id)
@@ -652,15 +658,17 @@ export function updateAgentSessionMeta(
   }
 
   const existing = index.sessions[idx]!
-  const updateKeys = Object.keys(updates)
+  // 安全约束：通用 updateAgentSessionMeta 严禁绕过 contextRefs 权威校验与快照冻结
+  const { contextRefs: _ignored, ...sanitizedUpdates } = (updates as Record<string, unknown>)
+  const updateKeys = Object.keys(sanitizedUpdates)
   // 星标只是侧栏的视觉标记，不应改变会话的新鲜度或归档状态。
   const isStarredOnly = updateKeys.every((key) => key === 'starred')
   // 非手动归档操作时，若会话已归档则自动恢复为活跃（仅更新 stoppedByUser 或 starred 不触发解归档）
   const isStoppedByUserOnly = updateKeys.every((key) => key === 'stoppedByUser')
-  const autoUnarchive = existing.archived && !('archived' in updates) && !isStoppedByUserOnly && !isStarredOnly
+  const autoUnarchive = existing.archived && !('archived' in sanitizedUpdates) && !isStoppedByUserOnly && !isStarredOnly
   const updated: AgentSessionMeta = {
     ...existing,
-    ...updates,
+    ...sanitizedUpdates,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
   }
@@ -1629,22 +1637,59 @@ export function getAgentContextRefs(sessionId: string): AgentContextRef[] {
 }
 
 /**
- * 更新指定会话的上下文引用列表（安全规范化：最多5个、去重、排除自引用）
+ * 更新指定会话的上下文引用列表（权威创建、校验、去重、并在快照模式下附加时立即原子冻结快照）
  */
 export function updateAgentContextRefs(sessionId: string, contextRefs: AgentContextRef[]): AgentContextRef[] {
+  const validId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(value)
+  if (!validId(sessionId) || !Array.isArray(contextRefs)) throw new Error('无效的会话引用请求')
+  const index = readIndex()
+  const target = index.sessions.find((s) => s.id === sessionId)
+  if (!target) throw new Error('当前会话不存在')
+  const existingBySource = new Map((target.contextRefs ?? []).map((r) => [r.sourceConversationId, r]))
   const seen = new Set<string>()
-  const filtered: AgentContextRef[] = []
-
-  for (const ref of (contextRefs ?? [])) {
-    if (!ref.sourceConversationId || ref.sourceConversationId === sessionId) continue
-    if (seen.has(ref.sourceConversationId)) continue
-    seen.add(ref.sourceConversationId)
-    filtered.push(ref)
-    if (filtered.length >= 5) break
+  const refs: AgentContextRef[] = []
+  for (const item of contextRefs) {
+    if (!item || !validId(item.sourceConversationId) || !['snapshot', 'live'].includes(item.mode)) {
+      throw new Error('引用源 ID 或模式无效')
+    }
+    const sourceId = item.sourceConversationId
+    if (sourceId === sessionId || seen.has(sourceId)) continue
+    seen.add(sourceId)
+    const existing = existingBySource.get(sourceId)
+    const source = index.sessions.find((s) => s.id === sourceId)
+    // 已删除的旧引用可以保留或移除，但不能新增、改模式或伪造元数据。
+    if (!source) {
+      if (existing) refs.push(existing)
+      else throw new Error('引用源会话不存在')
+    } else if (existing && existing.mode === item.mode && existing.sourceProjectId === (source.workspaceId ?? '')) {
+      refs.push(existing)
+    } else {
+      const messages = normalizeCompleteSDKMessages(getAgentSessionSDKMessages(sourceId))
+      const refId = `ref-${randomUUID()}`
+      const lastId = messages.at(-1)?.id
+      const snapshotAt = Date.now()
+      const estTokens = defaultTokenEstimator(messages.map((m) => formatNormalizedMessage(m)).join('\n'))
+      const ref: AgentContextRef = {
+        refId, sourceConversationId: sourceId, sourceProjectId: source.workspaceId ?? '',
+        titleAtAttach: source.title || '无标题会话', mode: item.mode,
+        snapshotUpToMessageId: item.mode === 'snapshot' ? lastId : undefined,
+        snapshotAt: item.mode === 'snapshot' ? snapshotAt : undefined,
+        messageCount: messages.length, estTokens,
+      }
+      // 写入成功后才发布元数据；空快照也冻结，缓存丢失时不重建源内容。
+      if (ref.mode === 'snapshot') saveSnapshotToCache({
+        refId, sourceConversationId: sourceId, sourceProjectId: ref.sourceProjectId,
+        title: ref.titleAtAttach, snapshotUpToMessageId: lastId ?? '', snapshotAt,
+        messageCount: messages.length, estTokens, contentHash: computeSnapshotHash(messages), messages,
+      })
+      refs.push(ref)
+    }
+    if (refs.length >= MAX_CONTEXT_REFS) break
   }
-
-  updateAgentSessionMeta(sessionId, { contextRefs: filtered })
-  return filtered
+  target.contextRefs = refs
+  target.updatedAt = Date.now()
+  writeIndex(index)
+  return refs
 }
 
 /**
@@ -1679,33 +1724,13 @@ export function getAgentContextRefDetail(
     }
   }
 
-  const sdkMessages = getAgentSessionSDKMessages(sourceSessionId)
-  let lastCompleteMessageId: string | undefined
-  const normalizedList: NormalizedReferencedMessage[] = []
-  let firstMessagePreview: string | undefined
+  const normalizedList = normalizeCompleteSDKMessages(getAgentSessionSDKMessages(sourceSessionId))
+  const lastCompleteMessageId = normalizedList.at(-1)?.id
+  const firstMessagePreview = normalizedList.find((m) => m.role === 'user' && m.content.trim())?.content.trim().slice(0, 100)
 
-  for (let i = 0; i < sdkMessages.length; i++) {
-    const msg = sdkMessages[i]!
-    const norm = normalizeSDKMessage(msg)
-    if (!norm) continue
-
-    if (!firstMessagePreview && norm.role === 'user' && norm.content.trim()) {
-      firstMessagePreview = norm.content.trim().slice(0, 100)
-    }
-
-    // 若末尾是正在生成中的 assistant 且未结束，不作为完整消息
-    if (i === sdkMessages.length - 1 && norm.role === 'assistant') {
-      const assistantRaw = (msg as { message?: { stopReason?: string } }).message
-      if (assistantRaw && !assistantRaw.stopReason && !norm.content) {
-        continue
-      }
-    }
-
-    normalizedList.push(norm)
-    lastCompleteMessageId = getSDKMessageId(msg)
-  }
-
-  const estTokens = defaultTokenEstimator(normalizedList.map((m) => m.content).join('\n'))
+  const estTokens = defaultTokenEstimator(
+    normalizedList.map((m) => formatNormalizedMessage(m)).join('\n')
+  )
 
   return {
     sourceConversationId: sourceSessionId,

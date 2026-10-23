@@ -99,7 +99,6 @@ import type {
   UpdateContextRefsResponse,
   GetContextRefDetailRequest,
   GetContextRefDetailResponse,
-  AgentContextRef,
   FeishuConfigInput,
   FeishuConfig,
   FeishuBridgeState,
@@ -2640,11 +2639,15 @@ export function registerIpcHandlers(): void {
       if (!req || typeof req.sessionId !== 'string' || !req.sessionId.trim()) {
         return { refs: [] }
       }
-      return { refs: getAgentContextRefs(req.sessionId.trim()) }
+      const sessionId = req.sessionId.trim()
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(sessionId) || sessionId.includes('..')) {
+        return { refs: [] }
+      }
+      return { refs: getAgentContextRefs(sessionId) }
     }
   )
 
-  // 更新会话的引用列表（上限 5 条，校验白名单及自引用防护）
+  // 更新会话的引用列表（主进程权威创建、校验与快照冻结，不盲信渲染层元数据）
   ipcMain.handle(
     AGENT_IPC_CHANNELS.UPDATE_CONTEXT_REFS,
     async (_, req: UpdateContextRefsRequest): Promise<UpdateContextRefsResponse> => {
@@ -2652,42 +2655,12 @@ export function registerIpcHandlers(): void {
         throw new Error('无效的会话 ID')
       }
       const sessionId = req.sessionId.trim()
-      const rawRefs = Array.isArray(req.refs) ? req.refs : []
-      const MAX_CONTEXT_REFS = 5
-      const seenSources = new Set<string>()
-      const sanitized: AgentContextRef[] = []
-
-      for (const item of rawRefs) {
-        if (!item || typeof item !== 'object') continue
-        const sourceConversationId = typeof item.sourceConversationId === 'string' ? item.sourceConversationId.trim() : ''
-        if (!sourceConversationId) continue
-        // 禁止自引用
-        if (sourceConversationId === sessionId) continue
-        // 去重
-        if (seenSources.has(sourceConversationId)) continue
-        seenSources.add(sourceConversationId)
-
-        // 安全 ID 校验防路径穿越
-        const refId = typeof item.refId === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(item.refId)
-          ? item.refId
-          : `ref-${randomUUID()}`
-
-        sanitized.push({
-          refId,
-          sourceConversationId,
-          sourceProjectId: typeof item.sourceProjectId === 'string' ? item.sourceProjectId : '',
-          titleAtAttach: typeof item.titleAtAttach === 'string' ? item.titleAtAttach : '',
-          mode: item.mode === 'live' ? 'live' : 'snapshot',
-          snapshotUpToMessageId: typeof item.snapshotUpToMessageId === 'string' ? item.snapshotUpToMessageId : undefined,
-          snapshotAt: typeof item.snapshotAt === 'number' ? item.snapshotAt : undefined,
-          messageCount: typeof item.messageCount === 'number' ? item.messageCount : undefined,
-          estTokens: typeof item.estTokens === 'number' ? item.estTokens : undefined,
-        })
-
-        if (sanitized.length >= MAX_CONTEXT_REFS) break
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(sessionId) || sessionId.includes('..')) {
+        throw new Error('会话 ID 格式非法')
       }
-
-      const updated = updateAgentContextRefs(sessionId, sanitized)
+      if (!Array.isArray(req.refs) && !Array.isArray(req.contextRefs)) throw new Error('引用列表必须为数组')
+      const rawRefs = Array.isArray(req.refs) ? req.refs : req.contextRefs!
+      const updated = updateAgentContextRefs(sessionId, rawRefs)
       return { refs: updated }
     }
   )
@@ -2709,7 +2682,21 @@ export function registerIpcHandlers(): void {
           },
         }
       }
-      const detail = getAgentContextRefDetail(req.sourceSessionId.trim())
+      const sourceSessionId = req.sourceSessionId.trim()
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(sourceSessionId) || sourceSessionId.includes('..')) {
+        return {
+          detail: {
+            sourceConversationId: sourceSessionId,
+            sourceProjectId: '',
+            title: '非法会话 ID',
+            messageCount: 0,
+            estTokens: 0,
+            updatedAt: 0,
+            exists: false,
+          },
+        }
+      }
+      const detail = getAgentContextRefDetail(sourceSessionId, typeof req.currentSessionId === 'string' ? req.currentSessionId.trim() : undefined)
       return { detail }
     }
   )

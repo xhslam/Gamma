@@ -104,44 +104,53 @@ function sanitizeFileNamePart(part: string): string {
 }
 
 /**
- * 获取快照缓存文件路径
+ * 获取基于 refId 的不可变快照文件路径
  */
-export function getSnapshotCacheFilePath(sourceSessionId: string, snapshotUpToMessageId: string): string {
-  const safeSession = sanitizeFileNamePart(sourceSessionId)
+export function getSnapshotCacheFilePathByRefId(refId: string): string {
+  const safeRef = sanitizeFileNamePart(refId)
+  return join(getSnapshotCacheDir(), `${safeRef}.json`)
+}
+
+/**
+ * 获取快照缓存文件路径（兼容旧接口）
+ */
+export function getSnapshotCacheFilePath(sourceSessionIdOrRefId: string, snapshotUpToMessageId?: string): string {
+  if (!snapshotUpToMessageId) {
+    return getSnapshotCacheFilePathByRefId(sourceSessionIdOrRefId)
+  }
+  const safeSession = sanitizeFileNamePart(sourceSessionIdOrRefId)
   const safeMsg = sanitizeFileNamePart(snapshotUpToMessageId)
   return join(getSnapshotCacheDir(), `${safeSession}_${safeMsg}.json`)
 }
 
 /**
- * 保存规范化快照到磁盘缓存（原子写）
+ * 原子冻结 refId 快照；错误向调用方传播，防止只保存引用而未冻结内容
  */
 export function saveSnapshotToCache(snapshot: CachedConversationSnapshot): void {
-  try {
-    const filePath = getSnapshotCacheFilePath(snapshot.sourceConversationId, snapshot.snapshotUpToMessageId)
-    writeJsonFileAtomic(filePath, snapshot)
-  } catch (error) {
-    console.warn('[会话引用缓存] 保存快照失败:', error)
-  }
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(snapshot.refId)) throw new Error('无效的快照引用 ID')
+  writeJsonFileAtomic(getSnapshotCacheFilePathByRefId(snapshot.refId), snapshot)
 }
 
 /**
- * 从磁盘读取快照缓存
+ * 按 refId 读取并验证快照摘要；缺失或损坏时返回空，不从源重建
  */
 export function loadSnapshotFromCache(
-  sourceSessionId: string,
-  snapshotUpToMessageId: string,
+  refIdOrSessionId: string,
+  snapshotUpToMessageId?: string,
 ): CachedConversationSnapshot | null {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(refIdOrSessionId)) return null
   try {
-    const filePath = getSnapshotCacheFilePath(sourceSessionId, snapshotUpToMessageId)
-    if (!existsSync(filePath)) return null
-    const raw = readFileSync(filePath, 'utf-8')
-    const parsed = JSON.parse(raw) as CachedConversationSnapshot
-    if (!parsed || parsed.sourceConversationId !== sourceSessionId) {
-      return null
-    }
+    const path = getSnapshotCacheFilePathByRefId(refIdOrSessionId)
+    if (!existsSync(path)) return null
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as CachedConversationSnapshot
+    if (!parsed || parsed.refId !== refIdOrSessionId || !Array.isArray(parsed.messages)
+      || typeof parsed.contentHash !== 'string'
+      || (snapshotUpToMessageId !== undefined && parsed.snapshotUpToMessageId !== snapshotUpToMessageId)
+      || parsed.messages.some((m) => !m || typeof m.id !== 'string' || typeof m.content !== 'string' || !['user', 'assistant', 'tool'].includes(m.role))
+      || computeSnapshotHash(parsed.messages) !== parsed.contentHash) return null
     return parsed
-  } catch (error) {
-    console.warn('[会话引用缓存] 读取快照失败:', error)
+  } catch {
+    console.warn('[会话引用缓存] 快照不可读，已跳过')
     return null
   }
 }

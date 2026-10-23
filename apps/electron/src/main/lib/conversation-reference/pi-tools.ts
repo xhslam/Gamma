@@ -17,12 +17,19 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
 import type { AgentToolResult } from '@earendil-works/pi-agent-core'
 import { Type, type Static } from 'typebox'
 import { getAgentSessionMeta, getAgentSessionSDKMessages } from '../agent-session-manager'
-import { loadSnapshotFromCache, saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
+import {
+  loadSnapshotFromCache,
+  computeSnapshotHash,
+  loadSummaryFromCache,
+} from './ref-cache'
 import {
   formatNormalizedMessage,
-  sanitizeMessageText,
+  normalizeSDKMessage,
+  normalizeCompleteSDKMessages,
   type NormalizedReferencedMessage,
 } from './context-builder'
+
+export { normalizeSDKMessage }
 import type { AgentContextRef, SDKMessage } from '@gamma/shared'
 
 /** 工具输出最大字符上限（防单次工具调用输出过大导致 Token 爆炸） */
@@ -58,136 +65,20 @@ export function getSDKMessageId(m: SDKMessage): string {
 }
 
 /**
- * 将 SDKMessage 规范化为 NormalizedReferencedMessage
- */
-export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage | null {
-  const msgId = getSDKMessageId(m)
-  if (m.type === 'user') {
-    const rawContent = (m as { message?: { content?: unknown } }).message?.content
-    let text = ''
-    if (typeof rawContent === 'string') {
-      text = rawContent
-    } else if (Array.isArray(rawContent)) {
-      text = rawContent
-        .filter((b: { type?: string; text?: string }) => b.type === 'text' && b.text)
-        .map((b: { text?: string }) => b.text!)
-        .join('\n')
-    }
-    return {
-      id: msgId,
-      role: 'user',
-      content: sanitizeMessageText(text),
-    }
-  }
-
-  if (m.type === 'assistant') {
-    const rawContent = (m as { message?: { content?: unknown } }).message?.content
-    let text = ''
-    const toolCalls: Array<{ name: string; keyParam?: string; resultSummary?: string }> = []
-
-    if (typeof rawContent === 'string') {
-      text = rawContent
-    } else if (Array.isArray(rawContent)) {
-      for (const block of rawContent) {
-        if (block.type === 'text' && block.text) {
-          text += (text ? '\n' : '') + block.text
-        } else if (block.type === 'tool_use' && block.name) {
-          const input = (block.input ?? {}) as Record<string, unknown>
-          const keyParam = String(input.file_path ?? input.path ?? input.command ?? input.query ?? input.id ?? '').slice(0, 100)
-          toolCalls.push({
-            name: block.name,
-            keyParam: keyParam || undefined,
-          })
-        }
-      }
-    }
-    return {
-      id: msgId,
-      role: 'assistant',
-      content: sanitizeMessageText(text),
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    }
-  }
-
-  if (m.type === 'tool_result' || m.type === 'tool') {
-    const toolMsg = m as { toolName?: string; name?: string; content?: unknown; output?: unknown }
-    const name = toolMsg.toolName ?? toolMsg.name ?? 'tool'
-    const rawOutput = toolMsg.output ?? toolMsg.content
-    let text = ''
-    if (typeof rawOutput === 'string') {
-      text = rawOutput
-    } else if (Array.isArray(rawOutput)) {
-      text = rawOutput
-        .filter((b: { type?: string; text?: string }) => b.type === 'text' && b.text)
-        .map((b: { text?: string }) => b.text!)
-        .join('\n')
-    } else if (rawOutput && typeof rawOutput === 'object') {
-      text = JSON.stringify(rawOutput)
-    }
-    const cleanOutput = sanitizeMessageText(text).slice(0, 300)
-    return {
-      id: msgId,
-      role: 'tool',
-      content: '',
-      toolCalls: [{
-        name,
-        resultSummary: cleanOutput,
-      }],
-    }
-  }
-
-  return null
-}
-
-/**
- * 获取引用会话的有效规范化消息列表（受 snapshot 截止边界保护）
+ * 获取引用会话的有效规范化消息列表（受 snapshot 截止边界保护，缓存丢失严格 fail-closed）
  */
 export function getReferencedMessagesForRef(ref: AgentContextRef): NormalizedReferencedMessage[] {
-  // 1. 若为 snapshot 模式，优先读取冻结快照缓存
-  if (ref.mode === 'snapshot' && ref.snapshotUpToMessageId) {
-    const cached = loadSnapshotFromCache(ref.sourceConversationId, ref.snapshotUpToMessageId)
-    if (cached) {
-      return cached.messages
-    }
+  if (!VALID_REF_ID_REGEX.test(ref.refId) || !VALID_REF_ID_REGEX.test(ref.sourceConversationId)) return []
+  const source = getAgentSessionMeta(ref.sourceConversationId)
+  if (!source || (source.workspaceId ?? '') !== ref.sourceProjectId) return []
+  if (ref.mode === 'snapshot') {
+    if (!ref.snapshotUpToMessageId) return []
+    const cached = loadSnapshotFromCache(ref.refId)
+    if (!cached || cached.refId !== ref.refId || cached.sourceConversationId !== ref.sourceConversationId
+      || cached.sourceProjectId !== ref.sourceProjectId || cached.snapshotUpToMessageId !== ref.snapshotUpToMessageId) return []
+    return cached.messages
   }
-
-  // 2. 从源会话 JSONL 读取并规范化
-  const rawSDKMessages = getAgentSessionSDKMessages(ref.sourceConversationId)
-  if (rawSDKMessages.length === 0) return []
-
-  const normalizedList: NormalizedReferencedMessage[] = []
-  let reachedSnapshotBoundary = false
-
-  for (const m of rawSDKMessages) {
-    const norm = normalizeSDKMessage(m)
-    if (norm) {
-      normalizedList.push(norm)
-    }
-    const msgId = getSDKMessageId(m)
-    if (ref.mode === 'snapshot' && ref.snapshotUpToMessageId && msgId === ref.snapshotUpToMessageId) {
-      reachedSnapshotBoundary = true
-      break
-    }
-  }
-
-  // 若为快照模式且找到了截止点，保存至缓存以防后续源会话被修改或截断
-  if (ref.mode === 'snapshot' && ref.snapshotUpToMessageId && (reachedSnapshotBoundary || normalizedList.length > 0)) {
-    const meta = getAgentSessionMeta(ref.sourceConversationId)
-    saveSnapshotToCache({
-      refId: ref.refId,
-      sourceConversationId: ref.sourceConversationId,
-      sourceProjectId: ref.sourceProjectId,
-      title: ref.titleAtAttach || meta?.title || ref.sourceConversationId,
-      snapshotUpToMessageId: ref.snapshotUpToMessageId,
-      snapshotAt: ref.snapshotAt ?? Date.now(),
-      messageCount: normalizedList.length,
-      estTokens: ref.estTokens ?? 0,
-      contentHash: computeSnapshotHash(normalizedList),
-      messages: normalizedList,
-    })
-  }
-
-  return normalizedList
+  return normalizeCompleteSDKMessages(getAgentSessionSDKMessages(ref.sourceConversationId))
 }
 
 // ===== 参数 Schemas =====
@@ -237,6 +128,10 @@ export function validateAndFindRef(
     return { error: `引用 ID 格式非法或包含危险字符: ${refId}` }
   }
 
+  if (!currentSessionId || typeof currentSessionId !== 'string') {
+    return { error: '缺少当前会话 ID' }
+  }
+
   const currentMeta = getAgentSessionMeta(currentSessionId)
   if (!currentMeta) {
     return { error: `当前会话不存在: ${currentSessionId}` }
@@ -252,6 +147,11 @@ export function validateAndFindRef(
   const sourceMeta = getAgentSessionMeta(found.sourceConversationId)
   if (!sourceMeta) {
     return { error: `引用的源会话已不存在或已被物理删除: ${found.sourceConversationId}` }
+  }
+
+  // 校验项目归属（防止跨项目伪造或越权）
+  if (found.sourceProjectId !== (sourceMeta.workspaceId ?? '')) {
+    return { error: `引用项目归属异常: 记录工作区 (${found.sourceProjectId}) 与实际工作区 (${sourceMeta.workspaceId}) 不符` }
   }
 
   return { ref: found }
@@ -277,12 +177,22 @@ export function createConversationReferenceExtension(sessionId: string) {
 
         const items = activeRefs.map((r) => {
           const sourceMeta = getAgentSessionMeta(r.sourceConversationId)
+          const messages = getReferencedMessagesForRef(r)
+          const contentHash = computeSnapshotHash(messages)
+          const cachedSummary = r.snapshotUpToMessageId
+            ? loadSummaryFromCache(r.sourceConversationId, r.snapshotUpToMessageId, contentHash)
+            : null
           return {
             id: r.refId,
+            sourceConversationId: r.sourceConversationId,
+            sourceProjectId: r.sourceProjectId,
             title: sourceMeta?.title || r.titleAtAttach,
             mode: r.mode,
-            messageCount: r.messageCount ?? 0,
+            messageCount: messages.length,
+            estTokens: r.estTokens ?? 0,
             snapshotAt: r.snapshotAt ? new Date(r.snapshotAt).toISOString() : undefined,
+            snapshotUpToMessageId: r.snapshotUpToMessageId,
+            summarySnippet: cachedSummary ? cachedSummary.slice(0, 150) + (cachedSummary.length > 150 ? '...' : '') : undefined,
             exists: Boolean(sourceMeta),
           }
         })
@@ -298,6 +208,7 @@ export function createConversationReferenceExtension(sessionId: string) {
       description: '按消息分页读取被引用会话的内容。仅允许读取用户当前主动引用的会话，严格遵守快照截止边界。',
       parameters: ReadReferencedConversationParams,
       async execute(_toolCallId: string, params: ReadReferencedConversationParamsType): Promise<AgentToolResult<undefined>> {
+        if (!params || typeof params !== 'object') return errorResult('无效的工具参数')
         const check = validateAndFindRef(sessionId, params.id)
         if ('error' in check) {
           return errorResult(check.error)
@@ -310,8 +221,11 @@ export function createConversationReferenceExtension(sessionId: string) {
           return ok(`会话 [${ref.titleAtAttach}] 暂无可用历史消息。`)
         }
 
-        const offset = Math.max(0, params.offset ?? 0)
-        const limit = Math.min(Math.max(1, params.limit ?? 10), 50)
+        if ((params.offset !== undefined && (!Number.isSafeInteger(params.offset) || params.offset < 0)) || (params.limit !== undefined && (!Number.isSafeInteger(params.limit) || params.limit < 1 || params.limit > 50))) return errorResult('offset/limit 必须是范围内的整数')
+        const rawOffset = typeof params.offset === 'number' && Number.isFinite(params.offset) ? params.offset : 0
+        const rawLimit = typeof params.limit === 'number' && Number.isFinite(params.limit) ? params.limit : 10
+        const offset = Math.max(0, Math.floor(rawOffset))
+        const limit = Math.min(Math.max(1, Math.floor(rawLimit)), 50)
         const slice = messages.slice(offset, offset + limit)
 
         if (slice.length === 0) {
@@ -344,15 +258,16 @@ export function createConversationReferenceExtension(sessionId: string) {
       description: '在被引用的会话历史中搜索关键词定位深层事实，返回匹配消息及其前后上下文。',
       parameters: SearchReferencedConversationParams,
       async execute(_toolCallId: string, params: SearchReferencedConversationParamsType): Promise<AgentToolResult<undefined>> {
+        if (!params || typeof params !== 'object') return errorResult('无效的工具参数')
         const check = validateAndFindRef(sessionId, params.id)
         if ('error' in check) {
           return errorResult(check.error)
         }
         const ref = check.ref
-        const query = (params.query ?? '').trim().toLowerCase()
-        if (!query) {
+        if (!params.query || typeof params.query !== 'string' || !params.query.trim()) {
           return errorResult('搜索关键词不能为空')
         }
+        const query = params.query.trim().toLowerCase()
 
         const messages = getReferencedMessagesForRef(ref)
         if (messages.length === 0) {

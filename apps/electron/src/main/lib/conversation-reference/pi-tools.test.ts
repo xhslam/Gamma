@@ -3,12 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { setConfigHomeForTest, getAgentSessionsIndexPath, getAgentSessionMessagesPath } from '../config-paths'
+import { getAgentSessionMeta } from '../agent-session-manager'
 import {
   createConversationReferenceExtension,
   getReferencedMessagesForRef,
   normalizeSDKMessage,
   validateAndFindRef,
 } from './pi-tools'
+import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
 import type { AgentContextRef, SDKMessage } from '@gamma/shared'
 
 describe('Conversation Reference Pi Extension Tools & Security', () => {
@@ -119,6 +121,13 @@ describe('Conversation Reference Pi Extension Tools & Security', () => {
       } as SDKMessage)
     }
     writeFileSync(deepMessagesPath, deepMessages.map((m) => JSON.stringify(m)).join('\n') + '\n', 'utf-8')
+    // 附加阶段已冻结的真实缓存；读取阶段不允许从源重建。
+    for (const r of indexData.sessions[0]!.contextRefs ?? []) {
+      const all = r.sourceConversationId === sourceSessionId ? sourceMessages : deepMessages
+      const cutoff = all.findIndex((m) => (m as unknown as { id: string }).id === r.snapshotUpToMessageId)
+      const messages = all.slice(0, cutoff + 1).map(normalizeSDKMessage).filter((m): m is NonNullable<typeof m> => m !== null)
+      saveSnapshotToCache({ ...r, title: r.titleAtAttach, estTokens: 100, contentHash: computeSnapshotHash(messages), messages })
+    }
   })
 
   afterAll(() => {
@@ -147,6 +156,42 @@ describe('Conversation Reference Pi Extension Tools & Security', () => {
       expect(norm!.content).toContain('[base64 data omitted]')
       expect(norm!.content).toContain('Hello')
     })
+
+    it('BDD反例: 正确解析真实 SDK tool_result 形状（在 user.message.content 数组中）及附件元数据', () => {
+      const sdkUserToolResult: SDKMessage = {
+        uuid: 'u2',
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_01ABC',
+              content: 'Successfully executed migration on database with 42 tables created.',
+              is_error: false,
+            },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAA=',
+              },
+            },
+          ],
+        },
+      } as unknown as SDKMessage
+
+      const norm = normalizeSDKMessage(sdkUserToolResult)
+      expect(norm).not.toBeNull()
+      // 提取了 tool_result 块
+      expect(norm!.toolCalls?.length).toBe(1)
+      expect(norm!.toolCalls?.[0]?.name).toBe('toolu_01ABC')
+      expect(norm!.toolCalls?.[0]?.resultSummary).toContain('Successfully executed migration')
+      // 提取了附件元数据并剥离了 base64 数据
+      expect(norm!.attachments?.length).toBe(1)
+      expect(norm!.attachments?.[0]?.type).toBe('image/png')
+      expect(JSON.stringify(norm)).not.toContain('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAA=')
+    })
   })
 
   describe('Security & Whitelist Validation (validateAndFindRef)', () => {
@@ -172,6 +217,26 @@ describe('Conversation Reference Pi Extension Tools & Security', () => {
       const traversal2 = validateAndFindRef(currentSessionId, 'ref/something')
       expect('error' in traversal2).toBe(true)
     })
+
+    it('BDD反例: 严格核验 sourceProjectId 与源会话所属工作区，防止越权伪造', () => {
+      const maliciousRef: AgentContextRef = {
+        refId: 'ref_mismatch',
+        sourceConversationId: sourceSessionId, // 真实 workspaceId 是 'ws_other'
+        sourceProjectId: 'ws_attacker_fake',   // 伪造的 workspaceId
+        titleAtAttach: 'Hacked',
+        mode: 'snapshot',
+      }
+      // 临时注入到当前会话元数据中
+      const meta = getAgentSessionMeta(currentSessionId)
+      meta!.contextRefs!.push(maliciousRef)
+
+      const res = validateAndFindRef(currentSessionId, 'ref_mismatch')
+      expect('error' in res).toBe(true)
+      if ('error' in res) {
+        expect(res.error).toContain('引用项目归属异常')
+      }
+      meta!.contextRefs!.pop()
+    })
   })
 
   describe('Snapshot Boundary Enforcement', () => {
@@ -195,6 +260,35 @@ describe('Conversation Reference Pi Extension Tools & Security', () => {
 
       const allText = messages.map((m) => m.content).join(' ')
       expect(allText).not.toContain('Secret leaked after snapshot')
+    })
+
+    it('BDD反例: 快照缓存缺失且截止ID找不到时严格 Fail Closed，绝不泄露附加后消息', () => {
+      const refMissingCutoff: AgentContextRef = {
+        refId: 'ref_missing_cutoff',
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_other',
+        titleAtAttach: 'Source Missing Cutoff',
+        mode: 'snapshot',
+        snapshotUpToMessageId: 'msg_non_existent_999', // 截止点在源会话不存在
+      }
+
+      const messages = getReferencedMessagesForRef(refMissingCutoff)
+      // 必须 Fail Closed 返回空数组，绝不能因为找不到截止 ID 就回退返回源会话的所有实时消息！
+      expect(messages.length).toBe(0)
+    })
+
+    it('BDD反例: 空快照（无截止ID）在快照模式下始终返回空', () => {
+      const emptyRef: AgentContextRef = {
+        refId: 'ref_empty_snapshot',
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_other',
+        titleAtAttach: 'Empty Snapshot',
+        mode: 'snapshot',
+        snapshotUpToMessageId: undefined,
+      }
+
+      const messages = getReferencedMessagesForRef(emptyRef)
+      expect(messages.length).toBe(0)
     })
   })
 

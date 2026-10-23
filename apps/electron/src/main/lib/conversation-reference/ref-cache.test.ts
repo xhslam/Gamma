@@ -67,8 +67,9 @@ describe('Conversation Reference Cache (Snapshots & Summaries)', () => {
       previousReferencedTitles: ['Prior Notes'],
     }
 
+    snapshot.contentHash = computeSnapshotHash(snapshot.messages)
     saveSnapshotToCache(snapshot)
-    const loaded = loadSnapshotFromCache('sess_123', 'msg_99')
+    const loaded = loadSnapshotFromCache('ref_test_1', 'msg_99')
 
     expect(loaded).not.toBeNull()
     expect(loaded!.refId).toBe('ref_test_1')

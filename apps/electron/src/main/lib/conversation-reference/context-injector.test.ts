@@ -7,7 +7,9 @@ import {
   injectConversationReferencesContext,
   injectReferencedConversationsIntoMessages,
 } from './context-injector'
-import { updateAgentSessionMeta } from '../agent-session-manager'
+import { updateAgentContextRefs } from '../agent-session-manager'
+import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
+import { normalizeSDKMessage } from './context-builder'
 import type { SDKMessage } from '@gamma/shared'
 
 describe('Conversation Reference Context Injector & Compaction Resilience', () => {
@@ -67,6 +69,8 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
       } as SDKMessage,
     ]
     writeFileSync(sourceMessagesPath, sourceMessages.map((m) => JSON.stringify(m)).join('\n') + '\n', 'utf-8')
+    const messages = sourceMessages.map(normalizeSDKMessage).filter((m): m is NonNullable<typeof m> => m !== null)
+    saveSnapshotToCache({ refId: 'ref_inj_1', sourceConversationId: sourceSessionId, sourceProjectId: 'ws_test', title: 'Source Document Discussion', snapshotUpToMessageId: 'src_m1', snapshotAt: Date.now(), messageCount: 1, estTokens: 100, contentHash: computeSnapshotHash(messages), messages })
   })
 
   afterAll(() => {
@@ -144,7 +148,7 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
 
     it('immediately revokes injection on the next turn when user removes the reference', async () => {
       // 用户从会话移除引用
-      updateAgentSessionMeta(testSessionId, { contextRefs: [] })
+      updateAgentContextRefs(testSessionId, [])
 
       const liveMessages = [
         { role: 'user', content: 'What about IPC buffers now?' },
