@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { inferBudgetContextWindow } from '@gamma/shared'
-import { buildModel } from './pi-model-registry'
+import { buildModel, resolvePiBudgetContextWindow } from './pi-model-registry'
 import type { PiAgentQueryOptions } from './pi-agent-adapter'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
@@ -20,6 +20,7 @@ describe('Given 引用预算的实际模型注册链路', () => {
       apiKey: 'fixture-not-a-secret', baseUrl: 'http://127.0.0.1:9',
     } as PiAgentQueryOptions)
     expect(result.model.contextWindow).toBe(128_000)
+    expect(await resolvePiBudgetContextWindow('custom', modelId)).toBe(result.model.contextWindow)
     expect(inferBudgetContextWindow(modelId, result.model.contextWindow)).toBe(inferBudgetContextWindow(modelId))
   })
 

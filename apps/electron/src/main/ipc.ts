@@ -1,3 +1,4 @@
+import { resolvePiBudgetContextWindow } from './lib/adapters/pi-model-registry'
 import { registerReferenceWarningListener } from './lib/conversation-reference/send-snapshot'
 import { prepareAgentReferenceInput } from './lib/agent-send-outbox-service'
 /**
@@ -2656,11 +2657,15 @@ export function registerIpcHandlers(): void {
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(sessionId) || sessionId.includes('..')) {
         return { refs: [] }
       }
-      const refs = getAgentContextRefs(sessionId)
       const target = getAgentSessionMeta(sessionId)
-      const summaryResult = reconcileReferenceSummaries(sessionId, refs, target?.channelId, target?.modelId)
+      const channel = target?.channelId ? getChannelById(target.channelId) : undefined
+      const contextWindow = channel && getAgentContextRefs(sessionId).length > 0 ? await resolvePiBudgetContextWindow(channel.provider, target?.modelId) : undefined
+      const current = getAgentSessionMeta(sessionId)
+      if (current?.channelId !== target?.channelId || current?.modelId !== target?.modelId) return { refs: getAgentContextRefs(sessionId) }
+      const currentRefs = getAgentContextRefs(sessionId)
+      const summaryResult = reconcileReferenceSummaries(sessionId, currentRefs, target?.channelId, target?.modelId, { contextWindow })
       return {
-        refs,
+        refs: currentRefs,
         summaryStatuses: summaryResult.summaryStatuses ?? summaryResult,
         summaryProgresses: summaryResult.summaryProgresses,
       }
@@ -2682,7 +2687,12 @@ export function registerIpcHandlers(): void {
       const rawRefs = Array.isArray(req.refs) ? req.refs : req.contextRefs!
       const updated = updateAgentContextRefs(sessionId, rawRefs)
       const target = getAgentSessionMeta(sessionId)
-      reconcileReferenceSummaries(sessionId, updated, target?.channelId, target?.modelId)
+      const channel = target?.channelId ? getChannelById(target.channelId) : undefined
+      const contextWindow = channel && getAgentContextRefs(sessionId).length > 0 ? await resolvePiBudgetContextWindow(channel.provider, target?.modelId) : undefined
+      const current = getAgentSessionMeta(sessionId)
+      if (current?.channelId === target?.channelId && current?.modelId === target?.modelId) {
+        reconcileReferenceSummaries(sessionId, getAgentContextRefs(sessionId), target?.channelId, target?.modelId, { contextWindow })
+      }
       return { refs: updated }
     }
   )

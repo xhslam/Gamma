@@ -274,3 +274,67 @@ describe('Feature: 后台摘要按预算调度、资源边界控制与真实进�
     })
   })
 })
+
+describe('Given 与正式注入一致的预算门禁', () => {
+  it('When 40000 ASCII字符仍为A或命中旧fallback Then 均不调用模型', async () => {
+    const { SUMMARY_FALLBACK_PREFIX } = await import('./ref-cache')
+    for (const cached of [null, SUMMARY_FALLBACK_PREFIX + ' fixture']) {
+      let calls = 0
+      const deps: BackgroundSummaryDeps = {
+        namespace: crypto.randomUUID(),
+        getMessages: () => [{ id: 'ascii', role: 'user', content: 'A'.repeat(40_000) }],
+        loadSummary: () => cached,
+        inferBudgetWindow: () => 128_000,
+        generate: async () => { calls++; return 'fixture' },
+      }
+      const status = reconcileReferenceSummaries('fixture', [refA], 'local', 'fixture', deps)
+      await tick()
+      expect(calls).toBe(0)
+      expect(status.summaryStatuses[refA.refId]).toBe('ready')
+    }
+  })
+
+  it('When 中英正文、长标题与80k绝对上限变化 Then 与正式builder选档完全一致', async () => {
+    const { buildReferencedContext } = await import('./context-builder')
+    for (const [content, title, window] of [
+      ['A'.repeat(40_000), 'short', 128_000],
+      ['中'.repeat(40_000), 'short', 128_000],
+      ['A'.repeat(40_000), '长'.repeat(40_000), 128_000],
+      ['中'.repeat(65_000), 'short', 1_000_000],
+    ] as const) {
+      let calls = 0
+      const data = { ...refA, title, messages: [{ id: 'msg', role: 'user' as const, content }] }
+      const expected = buildReferencedContext([data], Math.floor(window * 0.35)).tier
+      reconcileReferenceSummaries('fixture', [refA], 'local', 'fixture', {
+        namespace: crypto.randomUUID(), getData: () => [data], inferBudgetWindow: () => window,
+        loadSummary: () => null, generate: async () => { calls++; return 'fixture' },
+      })
+      await tick()
+      expect(calls).toBe(expected === 'B' ? 1 : 0)
+    }
+  })
+
+  it('When 模型窗口从B变为A且已有fallback Then 取消旧任务并忽略迟到进度', async () => {
+    const { SUMMARY_FALLBACK_PREFIX } = await import('./ref-cache')
+    let calls = 0
+    let window = 32_768
+    let capturedSignal: AbortSignal | undefined
+    const pending = Promise.withResolvers<string>()
+    const deps: BackgroundSummaryDeps = {
+      namespace: crypto.randomUUID(),
+      getMessages: () => [{ id: 'cjk', role: 'user', content: '中'.repeat(20_000) }],
+      loadSummary: () => SUMMARY_FALLBACK_PREFIX + ' fixture', inferBudgetWindow: () => window,
+      generate: async (input) => { calls++; capturedSignal = input.signal; return pending.promise },
+    }
+    reconcileReferenceSummaries('fixture', [refA], 'local', 'fixture', deps)
+    await tick()
+    expect(calls).toBe(1)
+    window = 128_000
+    expect(reconcileReferenceSummaries('fixture', [refA], 'local', 'fixture', deps).summaryStatuses[refA.refId]).toBe('ready')
+    expect(capturedSignal?.aborted).toBe(true)
+    pending.resolve('late fixture')
+    await tick()
+    expect(calls).toBe(1)
+    expect(reconcileReferenceSummaries('fixture', [refA], 'local', 'fixture', deps).summaryStatuses[refA.refId]).toBe('ready')
+  })
+})

@@ -1,3 +1,5 @@
+import { buildReferencedContext, type ReferencedConversationData } from './context-builder'
+import { resolveReferencedConversationData } from './context-injector'
 import type { AgentContextRef, ReferenceSummaryProgress, ReferenceSummaryStatus } from '@gamma/shared'
 import {
   DEFAULT_BUDGET_RATIO,
@@ -41,6 +43,8 @@ export interface BackgroundSummaryDeps {
   maxChunksPerRef?: number
   chunkSize?: number
   forceTier?: 'A' | 'B'
+  getData?: (refs: readonly AgentContextRef[]) => ReferencedConversationData[]
+  contextWindow?: number
   inferBudgetWindow?: typeof inferBudgetContextWindow
   budgetRatio?: number
 }
@@ -91,6 +95,12 @@ function pumpSummaryQueue(maxConcurrency: number): void {
   }
 }
 
+function resolveBudgetData(refs: readonly AgentContextRef[], deps: BackgroundSummaryDeps): ReferencedConversationData[] {
+  if (deps.getData) return deps.getData(refs)
+  if (deps.getMessages) return refs.map((ref) => ({ ...ref, title: ref.titleAtAttach, messages: deps.getMessages!(ref) }))
+  return resolveReferencedConversationData(refs)
+}
+
 /** 判断当前引用列表是否需要触发 Tier B 模型摘要 */
 export function shouldTriggerTierBSummary(
   refs: readonly AgentContextRef[],
@@ -99,21 +109,13 @@ export function shouldTriggerTierBSummary(
 ): boolean {
   if (deps.forceTier === 'B') return true
   if (deps.forceTier === 'A') return false
-  const windowTokens = (deps.inferBudgetWindow ?? inferBudgetContextWindow)(modelId)
+  const windowTokens = (deps.inferBudgetWindow ?? inferBudgetContextWindow)(modelId, deps.contextWindow)
   const budgetRatio = deps.budgetRatio ?? DEFAULT_BUDGET_RATIO
   const calculatedBudget = Math.floor(windowTokens * budgetRatio)
   const effectiveBudget = Math.min(calculatedBudget, ABSOLUTE_TIER_A_TOKEN_LIMIT)
 
-  let totalTokens = 0
-  for (const ref of refs) {
-    const messages = (deps.getMessages ?? getReferencedMessagesForRef)(ref)
-    let refTokens = 50
-    for (const m of messages) {
-      refTokens += Math.ceil((m.content?.length ?? 0) * 1.3) + 10
-    }
-    totalTokens += refTokens
-  }
-  return totalTokens > effectiveBudget
+  return buildReferencedContext(resolveBudgetData(refs, deps), effectiveBudget).tier === 'B'
+
 }
 
 /** 只启动后台任务，永不等待模型。相同ref/hash共享任务，删除、切换模式或内容更新使旧任务失效。 */
@@ -145,13 +147,22 @@ export function reconcileReferenceSummaries(
   const progresses: Record<string, ReferenceSummaryProgress> = {}
 
   // 判断是否需要 Tier B 摘要：整体超预算需 B 时才触发
-  const isTierB = shouldTriggerTierBSummary(refs, modelId, deps)
+  const resolvedData = resolveBudgetData(refs, deps)
+  const isTierB = shouldTriggerTierBSummary(refs, modelId, { ...deps, getData: () => resolvedData })
 
-  for (const ref of refs) {
+  for (const [index, ref] of refs.entries()) {
     const key = prefix + ref.refId
-    const messages = (deps.getMessages ?? getReferencedMessagesForRef)(ref)
+    const data = resolvedData[index]!
+    const messages = data.messages
     const hash = computeSummaryHash(ref.sourceConversationId, messages)
     const route = `${channelId ?? ''}:${modelId ?? ''}`
+
+    if (data.unavailableReason) {
+      jobs.get(key)?.controller.abort()
+      jobs.delete(key)
+      statuses[ref.refId] = 'fallback'
+      continue
+    }
 
     // 1. 检查持久缓存
     const cached = (deps.loadSummary ?? loadSummaryFromCache)(
@@ -172,7 +183,7 @@ export function reconcileReferenceSummaries(
     }
 
     // 若无缓存且在有效预算内（Tier A 小引用）：直接 ready，绝不调模型
-    if (!cached && !isTierB) {
+    if (!isTierB) {
       const previous = jobs.get(key)
       if (previous) {
         previous.controller.abort()
