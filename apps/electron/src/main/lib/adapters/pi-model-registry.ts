@@ -11,7 +11,7 @@ import {
   CODEX_GPT_56_CONTEXT_WINDOW,
   CODEX_GPT_6_CONTEXT_WINDOW,
   extractZhipuCodingTeamApiToken,
-  inferContextWindow,
+  inferBudgetContextWindow,
   inferCodexAlignedGPT5ContextWindow,
   getGeminiModelCapability,
   isGpt6AstraFamily,
@@ -710,8 +710,7 @@ async function resolvePiModelDefaults(input: PiAgentQueryOptions): Promise<PiMod
   // MiMo-V2.6 刚发布，Pi catalog 未收录时仍按官方规格注册，避免回落到 64K 默认值。
   // 家族判定复用 shared 的精确 ID 列表，避免 startsWith 宽匹配误伤未来 ID（如 mimo-v2.60）。
   const isCatalogMissingMimoV26Family = !catalogModel && isMimoV26Model(glmModelId)
-  const catalogContextWindow = catalogModel?.contextWindow ?? DEFAULT_CONTEXT_WINDOW
-  const inferredContextWindow = inferContextWindow(input.model) ?? DEFAULT_CONTEXT_WINDOW
+  const modelContextWindow = inferBudgetContextWindow(input.model, catalogModel?.contextWindow)
   const shouldForceAdaptiveThinking = shouldForcePiAdaptiveThinking(api, catalogModel, input.model)
   return {
     api,
@@ -723,8 +722,8 @@ async function resolvePiModelDefaults(input: PiAgentQueryOptions): Promise<PiMod
       : providerSpecificCapabilities?.compat,
     input: catalogModel ? [...catalogModel.input] : ['text', 'image'],
     cost: catalogModel ? { ...catalogModel.cost } : { ...ZERO_MODEL_COST },
-    // Codex 对齐策略优先；其他模型仍保留 catalog 与 shared inference 中更大的已验证能力。
-    contextWindow: codexAlignedCapabilities?.contextWindow ?? Math.max(catalogContextWindow, inferredContextWindow),
+    // Codex 明确对齐策略优先，其余采用有效 catalog 值；未知模型统一保守兜底。
+    contextWindow: codexAlignedCapabilities?.contextWindow ?? modelContextWindow,
     // Pi catalog 缺少时，GLM-5.3 系列仍按官方 128K 输出上限注册。
     maxTokens: isVolcengineGlm5x
       ? VOLCENGINE_GLM_MAX_TOKENS

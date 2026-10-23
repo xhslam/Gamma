@@ -104,7 +104,8 @@ export async function injectConversationReferencesContext<
     return [...messages]
   }
 
-  const budgetTokens = Math.floor(inferBudgetContextWindow(modelId, contextWindow) * DEFAULT_BUDGET_RATIO)  const resolvedDataList: ReferencedConversationData[] = []
+  const budgetTokens = Math.floor(inferBudgetContextWindow(modelId, contextWindow) * DEFAULT_BUDGET_RATIO)
+  const resolvedDataList: ReferencedConversationData[] = []
   const modelSummaries = new Map<string, string>()
 
   for (const ref of activeRefs) {
