@@ -11,6 +11,7 @@ import {
   validateAndFindRef,
 } from './pi-tools'
 import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
+import { buildReferencedContext } from './context-builder'
 import type { AgentContextRef, SDKMessage } from '@gamma/shared'
 
 describe('Conversation Reference Pi Extension Tools & Security', () => {
@@ -313,6 +314,21 @@ describe('Conversation Reference Pi Extension Tools & Security', () => {
       expect(tools.has('list_referenced_conversations')).toBe(true)
       expect(tools.has('read_referenced_conversation')).toBe(true)
       expect(tools.has('search_referenced_conversation')).toBe(true)
+    })
+
+    it('When A裁剪省略深处消息 Then工具仍注册且按占位索引可读取', async () => {
+      const found = validateAndFindRef(currentSessionId, 'ref_deep')
+      if ('error' in found) throw new Error(found.error)
+      const messages = getReferencedMessagesForRef(found.ref)
+      const context = buildReferencedContext([{ ...found.ref, title: found.ref.titleAtAttach, messages }], 600, { forceTier: 'A' })
+      expect(context.tier).toBe('A')
+      expect(context.injectedPrompt).not.toContain('青花瓷-7391')
+      const omitted = context.injectedPrompt.match(/第 (\d+)–(\d+) 条已省略/)
+      expect(omitted).not.toBeNull()
+      expect(Number(omitted![1])).toBeLessThanOrEqual(250)
+      expect(Number(omitted![2])).toBeGreaterThanOrEqual(250)
+      const response = await tools.get('read_referenced_conversation')!.execute('a-truncated', { id: 'ref_deep', offset: 250, limit: 1 })
+      expect(JSON.stringify(response)).toContain('青花瓷-7391')
     })
 
     it('list_referenced_conversations lists active refs', async () => {

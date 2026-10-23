@@ -210,7 +210,7 @@ describe('Conversation Reference Context Builder (Pure Functions)', () => {
       const result = buildReferencedContext([longRef], 400, { forceTier: 'A' })
       expect(result.tier).toBe('A')
       expect(result.injectedPrompt).toContain('Message 0')
-      expect(result.injectedPrompt).toContain('[... 省略中间')
+      expect(result.injectedPrompt).toContain('条已省略，可用 read_referenced_conversation 读取')
       expect(result.injectedPrompt).toContain('Message 19')
 
       const log = result.decisionLogs[0]!
