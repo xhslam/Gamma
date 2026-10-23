@@ -1,11 +1,10 @@
 import type { AgentContextRef } from '@gamma/shared'
 import { getAgentContextRefs, getAgentSessionSDKMessages } from '../agent-session-manager'
-import { redactCredentials } from './context-builder'
+import type { AgentReferenceWarningNotice } from '@gamma/shared'
 
-export interface ReferenceWarningNotice {
-  sessionId: string
-  warning: string
-}
+export type ReferenceWarningNotice = AgentReferenceWarningNotice
+
+export const REFERENCE_FALLBACK_WARNING = '引用准备失败，已转为无引用继续发送'
 
 type ReferenceWarningListener = (notice: ReferenceWarningNotice) => void
 const warningListeners = new Set<ReferenceWarningListener>()
@@ -21,8 +20,8 @@ export function emitReferenceWarning(notice: ReferenceWarningNotice): void {
   for (const listener of warningListeners) {
     try {
       listener(notice)
-    } catch (e) {
-      console.error('[ReferenceWarningListener] 异常:', e)
+    } catch {
+      console.warn('[AgentReference] 无法投递引用降级通知')
     }
   }
 }
@@ -78,7 +77,7 @@ export function prepareAgentReferenceInput<
     : { onWarning: fallbackWarningCallback }
 
   // 显式 [] 短路：若明确传 [] 且不是重试，不读任何引用存储或缓存，保持零额外开销
-  if (Array.isArray(input.contextRefIds) && input.contextRefIds.length === 0 && !input.retryOfUserMessageUuid && !input.retryOfErrorUuid) {
+  if (Array.isArray(input.contextRefIds) && input.contextRefIds.length === 0 && !input.retryOfUserMessageUuid && !input.retryOfErrorUuid && options.savedRefs === undefined) {
     return { ...input, contextRefIds: [], contextRefs: [] }
   }
 
@@ -92,28 +91,32 @@ export function prepareAgentReferenceInput<
       contextRefIds: refs.map((ref) => ref.refId),
       contextRefs: structuredClone(refs),
     }
-  } catch (err: unknown) {
-    if (isReferencePreparationError(err)) {
-      const rawError = err instanceof Error ? err.message : String(err)
-      const safeError = redactCredentials(rawError)
-      const warning = `引用准备失败（${safeError}），已转为无引用继续发送`
-      console.warn(`[AgentReference] ${warning}`)
-      options.onWarning?.(warning)
-      emitReferenceWarning({ sessionId: input.sessionId, warning })
-      // 关键：保留原 input 的所有业务 payload（正文、附件、身份等），但明确将引用权限清空为 []
-      // 下游通过 input.contextRefs ?? captureReferenceSnapshot(...) 处理时，
-      // 因为 contextRefs 是 []，下游 ?? 绝对不会触发，绝不读回 composer 里的引用！
-      return {
-        ...input,
-        contextRefIds: [],
-        contextRefs: [],
-      }
-    }
-    // 非引用异常：绝不能吞，必须继续抛出
-    throw err
+  } catch {
+    // 此边界只包含引用读取/冻结操作，不捕获发送、落盘或调度的业务异常。
+    notifyReferenceFallback(input.sessionId, options.onWarning)
+    return { ...input, contextRefIds: [], contextRefs: [] }
   }
+
 }
 
+
+
+/** 通知失败也不能阻止原消息发送；日志及事件均不携带底层错误内容。 */
+function notifyReferenceFallback(sessionId: string, onWarning?: (warning: string) => void): void {
+  console.warn('[AgentReference] 引用准备失败，继续无引用发送')
+  try { onWarning?.(REFERENCE_FALLBACK_WARNING) } catch {
+    console.warn('[AgentReference] 无法投递引用降级通知')
+  }
+  emitReferenceWarning({ sessionId, warning: REFERENCE_FALLBACK_WARNING })
+}
+
+/** 非桌面入口同样降级；只捕获引用操作，业务执行仍由调用者负责。 */
+export function captureReferenceSnapshotOrEmpty(sessionId: string, ids?: string[]): AgentContextRef[] {
+  try { return captureReferenceSnapshot(sessionId, ids) } catch {
+    notifyReferenceFallback(sessionId)
+    return []
+  }
+}
 
 /** 重试使用当时用户消息的快照；旧历史没有引用字段时明确为空。 */
 export function getRetryReferenceSnapshot(sessionId: string, userUuid?: string, errorUuid?: string): AgentContextRef[] | undefined {

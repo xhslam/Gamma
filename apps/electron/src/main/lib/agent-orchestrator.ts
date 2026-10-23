@@ -1,5 +1,5 @@
 import type { AgentContextRef } from '@gamma/shared'
-import { captureReferenceSnapshot } from './conversation-reference/send-snapshot'
+import { captureReferenceSnapshotOrEmpty } from './conversation-reference/send-snapshot'
 /**
  * AgentOrchestrator — Agent 编排层
  *
@@ -686,7 +686,7 @@ export class AgentOrchestrator {
     extensions: { piCustomTools?: ToolDefinition[] } = {},
   ): Promise<void> {
     const { sessionId, userMessage, rawUserMessage, userMessageUuid, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid } = input
-    const referenceSnapshot = input.contextRefs ?? captureReferenceSnapshot(sessionId, input.contextRefIds)
+    const referenceSnapshot = input.contextRefs ?? captureReferenceSnapshotOrEmpty(sessionId, input.contextRefIds)
     const streamStartedAt = input.startedAt ?? Date.now()
     let userMessagePersisted = false
     let initialUserMessageUuid: string | undefined
@@ -2478,7 +2478,7 @@ export class AgentOrchestrator {
       throw new Error('[Agent 编排] 当前适配器不支持流式追加消息')
     }
 
-    const referenceSnapshot = opts?.contextRefs ?? captureReferenceSnapshot(sessionId)
+    const referenceSnapshot = opts?.contextRefs ?? captureReferenceSnapshotOrEmpty(sessionId)
     // 注入 mention 引用指令（Skill/MCP/会话）— 与 sendMessage 路径保持一致的 prompt 加工
     const meta = getAgentSessionMeta(sessionId)
     const workspaceSlug = meta?.workspaceId

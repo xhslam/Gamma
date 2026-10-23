@@ -9,6 +9,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
+  AgentReferenceWarningNotice,
   AutomaticMemorySnapshot,
   AutomaticMemorySettings,
   AutomaticMemoryChange,
@@ -591,6 +592,7 @@ export interface ElectronAPI {
   enqueueAgentQueuedMessage: (input: AgentDeferredQueueMessageInput) => Promise<void>
   cancelAgentQueuedMessage: (input: AgentCancelQueuedMessageInput) => Promise<boolean>
   moveAgentQueuedMessage: (input: AgentMoveQueuedMessageInput) => Promise<boolean>
+  onAgentReferenceWarning: (callback: (notice: AgentReferenceWarningNotice) => void) => () => void
   onAgentQueuedMessageStatus: (callback: (status: AgentQueuedMessageStatus) => void) => () => void
   /** 获取主进程持有的 deferred queue 快照；用于 renderer 重载恢复队列 UI。 */
   getQueuedAgentMessages: (sessionId: string) => Promise<AgentQueuedMessageSnapshot[]>
@@ -1820,6 +1822,11 @@ const electronAPI: ElectronAPI = {
   },
   getQueuedAgentMessages: (sessionId: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_QUEUED_MESSAGES, sessionId)
+  },
+  onAgentReferenceWarning: (callback: (notice: AgentReferenceWarningNotice) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: AgentReferenceWarningNotice): void => callback(notice)
+    ipcRenderer.on(AGENT_IPC_CHANNELS.REFERENCE_WARNING, listener)
+    return () => { ipcRenderer.removeListener(AGENT_IPC_CHANNELS.REFERENCE_WARNING, listener) }
   },
   onAgentQueuedMessageStatus: (callback: (status: AgentQueuedMessageStatus) => void) => {
     const listener = (_: unknown, status: AgentQueuedMessageStatus): void => callback(status)

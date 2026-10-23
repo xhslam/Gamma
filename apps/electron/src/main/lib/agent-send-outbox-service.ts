@@ -1,6 +1,4 @@
 import {
-  captureReferenceSnapshot,
-  getRetryReferenceSnapshot,
   prepareAgentReferenceInput as prepareReferenceInputCore,
   isReferencePreparationError,
   registerReferenceWarningListener,
@@ -65,25 +63,9 @@ export function prepareAgentReferenceInput<T extends Pick<AgentSendInput, 'sessi
   messageId?: string,
   onWarning?: (warning: string) => void
 ): T {
-  // 显式 [] 短路：没有重试且显式空数组时，不读任何引用存储或缓存，保持零额外开销
-  if (Array.isArray(input.contextRefIds) && input.contextRefIds.length === 0 && !input.retryOfUserMessageUuid && !input.retryOfErrorUuid) {
-    return { ...input, contextRefIds: [], contextRefs: [] }
-  }
-  try {
-    const saved = messageId ? outbox.list(input.sessionId).find((entry) => entry.id === messageId) : undefined
-    const refs = saved?.input.contextRefs ?? getRetryReferenceSnapshot(input.sessionId, input.retryOfUserMessageUuid, input.retryOfErrorUuid) ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds)
-    return { ...input, contextRefIds: refs.map((ref) => ref.refId), contextRefs: structuredClone(refs) }
-  } catch (err: unknown) {
-    if (isReferencePreparationError(err)) {
-      const warning = `引用准备失败（${err instanceof Error ? err.message : String(err)}），已转为无引用继续发送`
-      console.warn(`[AgentReference] ${warning}`)
-      onWarning?.(warning)
-      emitReferenceWarning({ sessionId: input.sessionId, warning })
-      // 保留业务 payload，但明确赋予 contextRefIds: [], contextRefs: []，下游 ?? 不会再次读回 composer
-      return { ...input, contextRefIds: [], contextRefs: [] }
-    }
-    throw err
-  }
+  // 稳定 ID 已保存的 Main 快照优先于当前 composer；outbox 业务错误不能静默吞掉。
+  const saved = messageId ? outbox.list(input.sessionId).find((entry) => entry.id === messageId) : undefined
+  return prepareReferenceInputCore(input, { savedRefs: saved?.input.contextRefs, onWarning })
 }
 export function saveAgentSendOutbox(entry: AgentSendOutboxEntry): void {
   recovery.save({ ...entry, input: prepareAgentReferenceInput(entry.input, entry.id) })

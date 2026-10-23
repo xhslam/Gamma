@@ -1,3 +1,4 @@
+import { registerReferenceWarningListener } from './lib/conversation-reference/send-snapshot'
 import { prepareAgentReferenceInput } from './lib/agent-send-outbox-service'
 /**
  * IPC 处理器模块
@@ -1357,7 +1358,17 @@ async function withOAuthDeviceCodeQr<T extends CodexOAuthDeviceCode | GithubCopi
   }
 }
 
+let cleanupReferenceWarnings: (() => void) | undefined
+
 export function registerIpcHandlers(): void {
+  cleanupReferenceWarnings?.()
+  cleanupReferenceWarnings = registerReferenceWarningListener((notice) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+        window.webContents.send(AGENT_IPC_CHANNELS.REFERENCE_WARNING, notice)
+      }
+    }
+  })
   registerComputerIpc()
   registerMarkdownWorkspaceIpc({
     mainWindow: getMainWindow,

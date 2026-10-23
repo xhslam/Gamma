@@ -43,8 +43,12 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
   const registration = ipcSource.match(/  ipcMain\.handle\(\s*AGENT_IPC_CHANNELS\.SEND_MESSAGE,[\s\S]*?\n  \)/)?.[0]
   if (!registration) throw new Error('未找到生产 SEND_MESSAGE IPC 注册入口')
   const serviceSource = readFileSync(new URL('./lib/agent-service.ts', import.meta.url), 'utf8')
+  const coreSource = new Bun.Transpiler({ loader: 'ts' }).transformSync(readFileSync(new URL('./lib/conversation-reference/send-snapshot.ts', import.meta.url), 'utf8'))
   const referenceSource = readFileSync(new URL('./lib/agent-send-outbox-service.ts', import.meta.url), 'utf8')
   const source = [
+    `const REFERENCE_FALLBACK_WARNING = '引用准备失败，已转为无引用继续发送'`,
+    productionFunction(coreSource, 'notifyReferenceFallback'),
+    productionFunction(coreSource, 'prepareAgentReferenceInput').replace('function prepareAgentReferenceInput(', 'function prepareReferenceInputCore('),
     productionFunction(referenceSource, 'prepareAgentReferenceInput'),
     productionFunction(serviceSource, 'reserveAgentSessionStart'),
     productionFunction(serviceSource, 'runAgent'),
@@ -96,6 +100,7 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
     // 仍执行真实 Main 引用授权函数；此队列生命周期用例没有引用或重试落盘数据。
     outbox: { list: () => [] },
     getRetryReferenceSnapshot: () => undefined,
+    captureReferenceSnapshotOrEmpty: () => [],
     captureReferenceSnapshot: (sessionId: string, ids?: string[]) => {
       if (ids && ids.includes('unauthorized-canary')) throw new Error('发送引用未获授权，请重新确认引用')
       return []

@@ -610,6 +610,12 @@ export function useGlobalAgentListeners(): void {
     /** 正在执行的 git 突变 Bash 命令：toolUseId → sessionId（完成后触发 diff 刷新） */
     const pendingGitMutateTools = new Map<string, string>()
 
+    const cleanupReferenceWarning = window.electronAPI.onAgentReferenceWarning?.((notice) => {
+      if (store.get(agentSessionsAtom).some((session) => session.id === notice.sessionId)) {
+        toast.warning(notice.warning, { id: `reference-fallback-${notice.sessionId}` })
+      }
+    })
+
     const cleanupQueuedMessageStatus = window.electronAPI.onAgentQueuedMessageStatus((status) => {
       unstable_batchedUpdates(() => {
         // 主进程在启动 deferred run 前先发送 started 投影。这里必须先建立完整的
@@ -2158,6 +2164,7 @@ export function useGlobalAgentListeners(): void {
       cleanupActiveWorktreeUpdated()
       cleanupPlaySound()
       cleanupWatchedFileChanges()
+      cleanupReferenceWarning?.()
       cleanupQueuedMessageStatus()
       clearInterval(pruneTimer)
       window.removeEventListener('focus', onWindowFocus)
