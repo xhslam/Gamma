@@ -5,7 +5,7 @@
  * 当前实现：PiAgentAdapter（可选 in-process）与 PiUtilityAdapter（默认 per-session utility runtime）。
  */
 
-import type { SDKMessage } from './agent'
+import type { SDKMessage, AgentContextRef } from './agent'
 
 /** SDK 用户消息（队列消息注入用，匹配 SDK SDKUserMessage 结构） */
 export interface SDKUserMessageInput {
@@ -19,6 +19,7 @@ export interface SDKUserMessageInput {
 
 /** 队列消息注入选项 */
 export interface SendQueuedMessageOptions {
+  contextRefs?: AgentContextRef[]
   /** 先取消当前 turn，再把消息作为新一轮用户输入发送 */
   interrupt?: boolean
   /** 当前用户输入显式引用的 Skill name（兼容历史 slug 已在编排层归一化） */
@@ -34,6 +35,8 @@ export interface SendQueuedMessageOptions {
  * SDK 特定配置通过 Adapter 的扩展输入类型传入。
  */
 export interface AgentQueryInput {
+  /** Main发送接收时冻结的引用，不能回读composer。 */
+  contextRefs?: AgentContextRef[]
   /** 会话 ID */
   sessionId: string
   /** 用户 prompt（已包含上下文注入） */

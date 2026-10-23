@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { GAMMA_PERMISSION_MODES } from '@gamma/shared'
 import type { AgentSendOutboxEntry, AgentSubmitOrEnqueueInput } from '@gamma/shared'
+import { parseReferenceSnapshot } from './conversation-reference/send-snapshot'
 import { writeTextFileAtomic } from './safe-file'
 
 const MAX_OUTBOX_BYTES = 16 * 1024 * 1024
@@ -36,7 +37,7 @@ export function parseSendOutboxEntry(value: unknown, sessionId: string): AgentSe
     sessionId, queueMessageId: value.id, userMessageUuid: value.id,
     channelId: input.channelId, userMessage: input.userMessage, dispatch: input.dispatch,
   }
-  for (const key of ['rawUserMessage', 'modelId', 'workspaceId'] as const) {
+  for (const key of ['rawUserMessage', 'modelId', 'workspaceId', 'retryOfErrorUuid', 'retryOfUserMessageUuid'] as const) {
     if (input[key] !== undefined) {
       if (typeof input[key] !== 'string') throw new Error('失败消息参数类型无效')
       safeInput[key] = input[key]
@@ -48,6 +49,11 @@ export function parseSendOutboxEntry(value: unknown, sessionId: string): AgentSe
       if (!Array.isArray(items) || !items.every((item: unknown) => typeof item === 'string')) throw new Error('失败消息引用无效')
       safeInput[key] = items as string[]
     }
+  }
+  if (input.contextRefs !== undefined) safeInput.contextRefs = parseReferenceSnapshot(input.contextRefs)
+  if (input.contextRefIds !== undefined) {
+    if (!Array.isArray(input.contextRefIds) || input.contextRefIds.length > 5 || !input.contextRefIds.every((id: unknown) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id))) throw new Error('发送引用ID无效')
+    safeInput.contextRefIds = [...input.contextRefIds]
   }
   if (input.permissionModeOverride !== undefined) {
     if (!GAMMA_PERMISSION_MODES.some((mode) => mode === input.permissionModeOverride)) throw new Error('失败消息权限模式无效')

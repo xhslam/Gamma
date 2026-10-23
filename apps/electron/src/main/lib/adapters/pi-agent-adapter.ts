@@ -1,3 +1,4 @@
+import { ReferenceTurnTracker, captureReferenceSnapshot } from '../conversation-reference/send-snapshot'
 /**
  * Pi Agent SDK 适配器
  *
@@ -206,6 +207,7 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
 }
 
 interface ActivePiSession {
+  referenceTurns?: ReferenceTurnTracker
   session?: AgentSession
   resourceLoader?: ResourceLoader
   ready: Promise<AgentSession>
@@ -343,6 +345,7 @@ export class PiQueuedMessageReceiptTracker {
 }
 
 interface PendingInterruptPrompt {
+  referenceKey?: string
   content: string
   skillActivationId?: number
   resolveAccepted: () => void
@@ -577,6 +580,7 @@ function rejectPendingInterruptPrompts(active: ActivePiSession, error: unknown):
   const pending = active.pendingInterruptPrompts.splice(0)
   for (const prompt of pending) {
     active.pendingSkillActivations.discard(prompt.skillActivationId)
+    if (prompt.referenceKey) active.referenceTurns?.discard(prompt.referenceKey)
     prompt.rejectAccepted(error)
   }
 }
@@ -1512,6 +1516,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
 
   async *query(input: PiAgentQueryOptions): AsyncIterable<SDKMessage> {
     const active = createActivePiSession()
+    active.referenceTurns = new ReferenceTurnTracker(input.contextRefs ?? captureReferenceSnapshot(input.sessionId))
     if (input.compactRequest) active.queuedMessageAdmission.close()
     this.activeSessions.set(input.sessionId, active)
     const queue = createAsyncQueue<SDKMessage>()
@@ -1641,7 +1646,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       const extensionFactories = [
         ...(memoryExtension ? [memoryExtension] : []),
         taskProgress.createExtension(),
-        createConversationReferenceExtension(input.sessionId),
+        createConversationReferenceExtension(input.sessionId, active.referenceTurns.get),
         ...(projectInstructionScope ? [projectInstructionScope.createExtension()] : []),
         ...(openAIReasoningProfile
           ? [createOpenAIReasoningRequestExtension({
@@ -1700,6 +1705,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         let transformed = await previousTransformContext?.(messages, signal) ?? messages
         transformed = await injectConversationReferencesContext({
           sessionId: input.sessionId,
+          contextRefs: active.referenceTurns?.get() ?? [],
           channelId: input.channelId,
           modelId: input.model,
           contextWindow: model.contextWindow,
@@ -1836,6 +1842,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             case 'message_start': {
               const prompt = getPiUserMessageText(event.message)
               if (!prompt) break
+              active.referenceTurns?.consume(prompt)
               const pending = active.pendingSkillActivations.consume(prompt)
               if (pending) active.onSkillActivated?.(pending.activations, pending.userMessageUuid)
               break
@@ -2249,6 +2256,8 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       : { content: message.message.content, activations: [] }
     assertCurrentSession()
     const content = preparedPrompt.content
+    const referenceKey = message.uuid ?? randomUUID()
+    active.referenceTurns?.register(referenceKey, content, options?.contextRefs ?? [])
     const skillActivationId = registerPromptSkillActivations(
       active,
       content,
@@ -2257,6 +2266,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     )
     if (active.runtimeGuard?.shouldStopBeforeNextTurn()) {
       active.pendingSkillActivations.discard(skillActivationId)
+      active.referenceTurns?.discard(referenceKey)
       session.agent.clearAllQueues()
       const stopOverride = active.runtimeGuard.getLimitResultOverride()
       throw new Error(stopOverride?.errors[0] ?? 'Agent 已达到运行限制，无法继续追加消息')
@@ -2266,6 +2276,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         active.pendingInterruptPrompts.push({
           content,
           skillActivationId,
+          referenceKey,
           resolveAccepted: resolve,
           rejectAccepted: reject,
         })
@@ -2295,6 +2306,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       })
     } catch (error) {
       active.pendingSkillActivations.discard(skillActivationId)
+      active.referenceTurns?.discard(referenceKey)
       throw error
     }
     options?.onAccepted?.()

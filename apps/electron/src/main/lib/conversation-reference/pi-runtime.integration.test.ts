@@ -15,9 +15,11 @@ describe('Given 真实 Pi、隔离配置与显式对话引用', () => {
     const adapter = new PiAgentAdapter()
     const bodies: string[] = []
     let refId = '', artifact = '', resumeId = ''
+    let removeComposerReferences: () => void = () => {}
     const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
       bodies.push(await request.text())
       const call = bodies.length === 1
+      if (call) removeComposerReferences()
       const delta = call
         ? { role: 'assistant', tool_calls: [{ index: 0, id: 'call_search', type: 'function', function: { name: 'search_referenced_conversation', arguments: JSON.stringify({ id: refId, query: '青花瓷-7391' }) } }] }
         : { role: 'assistant', content: '本地链路验证完成' }
@@ -33,7 +35,9 @@ describe('Given 真实 Pi、隔离配置与显式对话引用', () => {
       ])
       const refs = updateAgentContextRefs(target.id, [{ refId: 'ignored', sourceConversationId: source.id, sourceProjectId: '', titleAtAttach: '', mode: 'snapshot' }])
       refId = refs[0]!.refId
+      removeComposerReferences = () => { updateAgentContextRefs(target.id, []) }
       const input: PiAgentQueryOptions = {
+        contextRefs: refs,
         sessionId: target.id, prompt: '检索引用里的暗号。', model: 'gpt-4o-mini', provider: 'openai',
         baseUrl: `http://127.0.0.1:${server.port}/v1`, apiKey: 'local-fixture-only', cwd: root,
         piAgentDir: join(root, 'agent'), piSessionDir: join(root, 'sessions'), permissionMode: 'bypassPermissions',
@@ -53,7 +57,7 @@ describe('Given 真实 Pi、隔离配置与显式对话引用', () => {
       expect(artifact).not.toBe('')
       expect(readFileSync(artifact, 'utf8')).not.toContain('<referenced_conversations>')
       updateAgentContextRefs(target.id, [])
-      for await (const event of adapter.query({ ...input, prompt: '移除引用后的下一轮。', resumeSessionId: resumeId })) events.push(event)
+      for await (const event of adapter.query({ ...input, contextRefs: [], prompt: '移除引用后的下一轮。', resumeSessionId: resumeId })) events.push(event)
       expect(bodies).toHaveLength(3)
       expect(bodies[2]).not.toContain('<referenced_conversations>')
       expect(events.at(-1)).toMatchObject({ type: 'result', subtype: 'success' })

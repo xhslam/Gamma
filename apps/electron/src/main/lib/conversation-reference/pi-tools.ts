@@ -118,6 +118,7 @@ type SearchReferencedConversationParamsType = Static<typeof SearchReferencedConv
 export function validateAndFindRef(
   currentSessionId: string,
   refId: string,
+  referenceSnapshot?: AgentContextRef[],
 ): { ref: AgentContextRef } | { error: string } {
   if (!refId || typeof refId !== 'string') {
     return { error: '缺少或无效的引用 ID' }
@@ -137,7 +138,7 @@ export function validateAndFindRef(
     return { error: `当前会话不存在: ${currentSessionId}` }
   }
 
-  const activeRefs = currentMeta.contextRefs ?? []
+  const activeRefs = referenceSnapshot ?? currentMeta.contextRefs ?? []
   const found = activeRefs.find((r) => r.refId === trimmed)
   if (!found) {
     return { error: `未授权的引用 ID 或该引用已被用户从本会话移除: ${trimmed}` }
@@ -160,7 +161,7 @@ export function validateAndFindRef(
 /**
  * 创建会话引用扩展工厂 (Pi Extension Factory)
  */
-export function createConversationReferenceExtension(sessionId: string) {
+export function createConversationReferenceExtension(sessionId: string, getReferences?: () => AgentContextRef[]) {
   return function conversationReferenceExtension(pi: ExtensionAPI): void {
     // 工具 1：列出当前会话中引用的所有历史会话
     pi.registerTool({
@@ -170,7 +171,7 @@ export function createConversationReferenceExtension(sessionId: string) {
       parameters: ListReferencedConversationsParams,
       async execute(): Promise<AgentToolResult<undefined>> {
         const meta = getAgentSessionMeta(sessionId)
-        const activeRefs = meta?.contextRefs ?? []
+        const activeRefs = getReferences?.() ?? meta?.contextRefs ?? []
         if (activeRefs.length === 0) {
           return ok('当前会话未附加任何引用的外部会话。')
         }
@@ -209,7 +210,7 @@ export function createConversationReferenceExtension(sessionId: string) {
       parameters: ReadReferencedConversationParams,
       async execute(_toolCallId: string, params: ReadReferencedConversationParamsType): Promise<AgentToolResult<undefined>> {
         if (!params || typeof params !== 'object') return errorResult('无效的工具参数')
-        const check = validateAndFindRef(sessionId, params.id)
+        const check = validateAndFindRef(sessionId, params.id, getReferences?.())
         if ('error' in check) {
           return errorResult(check.error)
         }
@@ -259,7 +260,7 @@ export function createConversationReferenceExtension(sessionId: string) {
       parameters: SearchReferencedConversationParams,
       async execute(_toolCallId: string, params: SearchReferencedConversationParamsType): Promise<AgentToolResult<undefined>> {
         if (!params || typeof params !== 'object') return errorResult('无效的工具参数')
-        const check = validateAndFindRef(sessionId, params.id)
+        const check = validateAndFindRef(sessionId, params.id, getReferences?.())
         if ('error' in check) {
           return errorResult(check.error)
         }
