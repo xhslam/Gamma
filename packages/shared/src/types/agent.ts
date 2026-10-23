@@ -1,5 +1,5 @@
 import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily } from '../utils/model-family'
-import { DEFAULT_CONTEXT_WINDOW } from '../utils/context-window'
+import { inferBudgetContextWindow } from '../utils/context-window'
 import type { ProviderType } from './channel'
 
 /**
@@ -881,13 +881,23 @@ export interface AgentMessage {
 /** 默认会话引用占上下文窗口的比例（35%） */
 export const DEFAULT_BUDGET_RATIO = 0.35
 
-/** 默认总 Token 预算（70,000 tokens） */
-export const DEFAULT_BUDGET_TOKENS = Math.floor(DEFAULT_CONTEXT_WINDOW * DEFAULT_BUDGET_RATIO)
+/** 未知模型的保守默认引用预算（128k窗口的35%）。 */
+export const DEFAULT_BUDGET_TOKENS = Math.floor(inferBudgetContextWindow(undefined) * DEFAULT_BUDGET_RATIO)
 
 /** 最大可附加会话引用数量（5 个） */
 export const MAX_CONTEXT_REFS = 5
 
-/** 触发 Tier B 结构化摘要与检索工具的引用数阈值（>3 个） */
+/**
+ * Tier A 绝对 Token 上限：无论模型窗口多大，引用区块合计不超过 80,000 tokens。
+ * 触发 Tier B 时同样以此为注入总上限。
+ * 当实际预算（modelWindow × ratio）超过此值时，取两者之小。
+ */
+export const ABSOLUTE_TIER_A_TOKEN_LIMIT = 80_000
+
+/**
+ * @deprecated 数量触发已移除（Item 1 修复）。Tier B 仅由总 token 超预算触发，不再由引用数触发。
+ * 保留此常量仅供 UI 旧渲染兼容，不再用于分档逻辑。
+ */
 export const TIER_B_COUNT_THRESHOLD = 3
 
 /** 引用模式：快照模式（默认，冻结规范化内容）或实时模式（每轮读取最新） */

@@ -7,7 +7,7 @@
  * - 单独 x 按钮移除
  * - 源对话被删除时显示灰度警告态与提示
  * - 源对话被重命名时实时展示最新标题，并在 Tooltip 中展示原标题
- * - 超出预算或引用数过多时下方展示黄色温和提示：“部分引用将以摘要形式提供”，不阻止发送
+ * - 超出 Token 预算时下方展示黄色温和提示：“部分引用将以摘要形式提供”，不阻止发送
  */
 
 import * as React from 'react'
@@ -18,8 +18,8 @@ import { cn } from '@/lib/utils'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import {
   DEFAULT_BUDGET_TOKENS,
+  ABSOLUTE_TIER_A_TOKEN_LIMIT,
   MAX_CONTEXT_REFS,
-  TIER_B_COUNT_THRESHOLD,
   type AgentContextRef,
 } from '@gamma/shared'
 
@@ -28,7 +28,7 @@ export interface ConversationReferenceChipsProps {
   onRemoveRef: (refId: string) => void
   onToggleMode: (refId: string) => void
   onOpenSelector?: () => void
-  /** 当前模型是否处于可能需要摘要的超预算或高引用状态 */
+  /** 当前模型是否处于可能需要摘要的超预算状态 */
   isOverBudget?: boolean
   /** 最大预算 Token 常量（用于提示，默认 DEFAULT_BUDGET_TOKENS） */
   maxBudgetTokens?: number
@@ -48,7 +48,9 @@ export function ConversationReferenceChips({
 
   // 总估算 Tokens
   const totalTokens = refs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0)
-  const shouldShowSummaryWarning = isOverBudget || refs.length > TIER_B_COUNT_THRESHOLD || totalTokens > maxBudgetTokens
+  // 超预算警告：仅由 token 总量超预算或 isOverBudget 触发，不再由引用数触发（Item 1 修复）
+  const effectiveBudget = Math.min(maxBudgetTokens, ABSOLUTE_TIER_A_TOKEN_LIMIT)
+  const shouldShowSummaryWarning = isOverBudget || totalTokens > effectiveBudget
 
   return (
     <div className="flex flex-col gap-1.5 px-3 pt-2 pb-1 border-b border-border/30">
@@ -70,7 +72,7 @@ export function ConversationReferenceChips({
               key={ref.refId}
               className={cn(
                 'group inline-flex items-center gap-1.5 h-6 pl-2 pr-1 rounded-md text-xs border transition-all',
-                !isDeleted && (ref.estTokens ?? 0) > maxBudgetTokens / Math.max(1, refs.length) && 'text-amber-600 border-amber-500/50',
+                !isDeleted && (ref.estTokens ?? 0) > effectiveBudget / Math.max(1, refs.length) && 'text-amber-600 border-amber-500/50',
                 isDeleted
                   ? 'bg-muted/40 text-muted-foreground border-dashed border-destructive/30 opacity-80'
                   : 'bg-background/80 hover:bg-muted/60 border-border/70 shadow-xs'

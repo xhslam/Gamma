@@ -221,8 +221,8 @@ describe('Conversation Reference Context Builder (Pure Functions)', () => {
     })
   })
 
-  describe('buildReferencedContext - Tier B (Count > 3 or Exceeds 35% Budget)', () => {
-    it('switches to Tier B when references count > 3 and injects structured summaries', () => {
+  describe('buildReferencedContext - Tier B (Token Budget)', () => {
+    it('When 显式要求B Then 使用结构化摘要与检索提示', () => {
       const refs: ReferencedConversationData[] = Array.from({ length: 4 }, (_, i) => ({
         refId: `ref_${i}`,
         sourceConversationId: `sess_${i}`,
@@ -239,7 +239,7 @@ describe('Conversation Reference Context Builder (Pure Functions)', () => {
         ['ref_0', '【目标】完成认证重构\n【关键结论】采用 JWT+Cookie\n【待办】补充单元测试'],
       ])
 
-      const result = buildReferencedContext(refs, 100_000, { modelSummaries })
+      const result = buildReferencedContext(refs, 100_000, { modelSummaries, forceTier: 'B' })
       expect(result.tier).toBe('B')
       // ref_0 should have structured summary
       expect(result.injectedPrompt).toContain('【目标】完成认证重构')
@@ -396,4 +396,26 @@ describe('Conversation Reference Context Builder (Pure Functions)', () => {
     expect(result.decisionLogs[0]!.estTokens).toBeGreaterThan(result.decisionLogs[1]!.estTokens)
   })
 
+})
+
+describe('Given 仅token预算选档且A有80k硬上限', () => {
+  function fixture(count: number, content: string): ReferencedConversationData[] {
+    return Array.from({ length: count }, (_, i) => ({ refId: `budget_${i}`, sourceConversationId: `source_${i}`, sourceProjectId: 'fixture', title: `引用${i}`, mode: 'snapshot', messages: [{ id: 'm', role: 'user', content }] }))
+  }
+  it('When 四个小引用低于预算 Then 仍为A且包含全文', () => {
+    const result = buildReferencedContext(fixture(4, 'tiny fact'), 10_000)
+    expect(result.tier).toBe('A')
+    expect(result.decisionLogs).toHaveLength(4)
+    expect(result.injectedPrompt.match(/tiny fact/g)).toHaveLength(4)
+  })
+  it('When 模型预算高于80k但全文超绝对上限 Then 为B且输出不超80k', () => {
+    const result = buildReferencedContext(fixture(1, '中'.repeat(80_000)), 350_000)
+    expect(result.tier).toBe('B')
+    expect(result.totalEstTokens).toBeLessThanOrEqual(80_000)
+  })
+  it('When 比例预算更小 Then 由较小的比例预算决定B和最终输出', () => {
+    const result = buildReferencedContext(fixture(1, '中'.repeat(2_000)), 1_000)
+    expect(result.tier).toBe('B')
+    expect(result.totalEstTokens).toBeLessThanOrEqual(1_000)
+  })
 })
