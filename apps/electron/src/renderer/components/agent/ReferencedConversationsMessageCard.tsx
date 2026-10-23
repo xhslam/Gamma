@@ -10,6 +10,8 @@
  */
 
 import * as React from 'react'
+import { useAtomValue } from 'jotai'
+import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { MessageSquareText, ChevronDown, ChevronRight, ExternalLink, Camera, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOpenSession } from '@/hooks/useOpenSession'
@@ -24,11 +26,13 @@ export function ReferencedConversationsMessageCard({
 }: ReferencedConversationsMessageCardProps): React.ReactElement | null {
   const [expanded, setExpanded] = React.useState(false)
   const openSession = useOpenSession()
+  const sessions = useAtomValue(agentSessionsAtom)
 
   if (!refs || refs.length === 0) return null
 
   const handleJump = (ref: AgentContextRef, e: React.MouseEvent): void => {
     e.stopPropagation()
+    if (!sessions.some((s) => s.id === ref.sourceConversationId)) return
     openSession('agent', ref.sourceConversationId, ref.titleAtAttach || '引用会话')
   }
 
@@ -58,9 +62,12 @@ export function ReferencedConversationsMessageCard({
         <div className="px-2.5 pb-2 pt-1 border-t border-border/40 space-y-1.5 bg-background/50">
           {refs.map((ref) => {
             const isLive = ref.mode === 'live'
+            const deleted = !sessions.some((s) => s.id === ref.sourceConversationId)
 
             return (
-              <div
+              <button
+                type="button"
+                disabled={deleted}
                 key={ref.refId}
                 onClick={(e) => handleJump(ref, e)}
                 className="group flex items-center justify-between p-1.5 rounded hover:bg-muted/60 transition-colors cursor-pointer border border-transparent hover:border-border/60"
@@ -72,7 +79,7 @@ export function ReferencedConversationsMessageCard({
                     <Camera className="size-3 text-sky-500 shrink-0" />
                   )}
                   <span className="truncate font-medium text-foreground group-hover:text-primary transition-colors">
-                    {ref.titleAtAttach || '无标题会话'}
+                    {ref.titleAtAttach || '无标题会话'}{deleted ? '（源对话已删除）' : ''}
                   </span>
                   <span className="text-[10px] text-muted-foreground/50 shrink-0">
                     ({isLive ? '实时' : '快照'})
@@ -87,7 +94,7 @@ export function ReferencedConversationsMessageCard({
                   )}
                   <ExternalLink className="size-3 opacity-60 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>

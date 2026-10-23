@@ -1,4 +1,5 @@
 import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily } from '../utils/model-family'
+import { DEFAULT_CONTEXT_WINDOW } from '../utils/context-window'
 import type { ProviderType } from './channel'
 
 /**
@@ -254,6 +255,8 @@ export interface SDKUserMessage {
   isSynthetic?: boolean
   /** Skills successfully loaded for this specific user input. */
   skill_activations?: SkillActivation[]
+  /** 发送本消息时附加的会话引用快照 */
+  contextRefs?: AgentContextRef[]
 }
 
 /** Skill successfully loaded during an Agent turn. */
@@ -874,6 +877,18 @@ export interface AgentMessage {
 }
 
 // ===== Agent 会话上下文引用 (Conversation Reference) =====
+
+/** 默认会话引用占上下文窗口的比例（35%） */
+export const DEFAULT_BUDGET_RATIO = 0.35
+
+/** 默认总 Token 预算（70,000 tokens） */
+export const DEFAULT_BUDGET_TOKENS = Math.floor(DEFAULT_CONTEXT_WINDOW * DEFAULT_BUDGET_RATIO)
+
+/** 最大可附加会话引用数量（5 个） */
+export const MAX_CONTEXT_REFS = 5
+
+/** 触发 Tier B 结构化摘要与检索工具的引用数阈值（>3 个） */
+export const TIER_B_COUNT_THRESHOLD = 3
 
 /** 引用模式：快照模式（默认，冻结规范化内容）或实时模式（每轮读取最新） */
 export type AgentContextRefMode = 'snapshot' | 'live'

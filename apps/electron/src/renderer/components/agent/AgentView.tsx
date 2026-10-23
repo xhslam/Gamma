@@ -16,7 +16,7 @@
 import { getAgentSendRecoveryState, isAgentDraftUnchanged } from '@/lib/agent-send-draft-recovery'
 import * as React from 'react'
 import { flushSync, unstable_batchedUpdates } from 'react-dom'
-import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { toast } from 'sonner'
 import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, ListTodo, Paperclip, Plus, MessageSquareText } from 'lucide-react'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -134,7 +134,19 @@ import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { sendWithCmdEnterAtom } from '@/atoms/shortcut-atoms'
 import { useOpenPreview } from '@/components/diff/preview-opener'
 import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentSendOutboxEntry, AgentSubmitOrEnqueueInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@gamma/shared'
-import { inferContextWindow, inferReasoningTransport, isCodexFastModeSupportedModel, MAX_ATTACHMENT_SIZE, normalizeReasoningCapabilityLevel, normalizeReasoningLevel, resolveReasoningCapability, resolveReasoningProfile } from '@gamma/shared'
+import {
+  DEFAULT_BUDGET_RATIO,
+  inferContextWindow,
+  inferReasoningTransport,
+  isCodexFastModeSupportedModel,
+  MAX_ATTACHMENT_SIZE,
+  MAX_CONTEXT_REFS,
+  normalizeReasoningCapabilityLevel,
+  normalizeReasoningLevel,
+  resolveReasoningCapability,
+  resolveReasoningProfile,
+  TIER_B_COUNT_THRESHOLD,
+} from '@gamma/shared'
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
 import { getFilePanelDragData, INSERT_FILE_MENTION_EVENT, type FilePanelDragItem } from '@/lib/file-panel-drag'
 import {
@@ -510,23 +522,59 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     () => sessionMeta?.contextRefs ?? [],
     [sessionMeta?.contextRefs]
   )
+  const referenceContextWindowAtom = React.useMemo(() => atom((get) => get(agentSessionStreamingStateAtomFamily(sessionId))?.contextWindow), [sessionId])
+  const referenceContextWindow = useAtomValue(referenceContextWindowAtom)
+  const referenceBudget = Math.floor((referenceContextWindow ?? inferContextWindow(agentModelId || undefined) ?? 200_000) * DEFAULT_BUDGET_RATIO)
   const [referenceDialogOpen, setReferenceDialogOpen] = React.useState(false)
+  const [isUpdatingRefs, setIsUpdatingRefs] = React.useState(false)
+  const savedContextRefsRef = React.useRef(currentContextRefs)
+  const updateRefsPendingRef = React.useRef(0)
+  const updateRefsSeqRef = React.useRef(0)
+  const updateRefsQueueRef = React.useRef<Promise<unknown>>(Promise.resolve())
 
   const handleUpdateContextRefs = React.useCallback(async (nextRefs: AgentContextRef[]): Promise<void> => {
+    const seq = ++updateRefsSeqRef.current
+    updateRefsPendingRef.current++
+    setIsUpdatingRefs(true)
+
+    // 乐观更新 UI
     setAgentSessions((prev) =>
       prev.map((s) => (s.id === sessionId ? { ...s, contextRefs: nextRefs } : s))
     )
     try {
-      await window.electronAPI.updateContextRefs({ sessionId, refs: nextRefs })
+      const request = updateRefsQueueRef.current.catch(() => undefined).then(() => window.electronAPI.updateContextRefs({ sessionId, refs: nextRefs }))
+      updateRefsQueueRef.current = request
+      const res = await request
+      savedContextRefsRef.current = res.refs
+      // 串行防竞态：仅在响应匹配最新序号时回填 main 权威返回
+      if (seq === updateRefsSeqRef.current) {
+        if (res && res.refs) {
+          setAgentSessions((prev) =>
+            prev.map((s) => (s.id === sessionId ? { ...s, contextRefs: res.refs } : s))
+          )
+        }
+      }
     } catch (error) {
       console.error('[AgentView] 更新引用会话失败:', error)
       toast.error('保存引用会话失败')
+      if (seq === updateRefsSeqRef.current) {
+        // 失败时回滚乐观变更
+        setAgentSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, contextRefs: savedContextRefsRef.current } : s))
+        )
+      }
+      throw error
+    } finally {
+      updateRefsPendingRef.current--
+      if (seq === updateRefsSeqRef.current) {
+        setIsUpdatingRefs(false)
+      }
     }
-  }, [sessionId, setAgentSessions])
+  }, [sessionId, setAgentSessions, sessionMeta?.contextRefs])
 
   const handleRemoveContextRef = React.useCallback((refId: string): void => {
     const nextRefs = currentContextRefs.filter((r) => r.refId !== refId)
-    void handleUpdateContextRefs(nextRefs)
+    void handleUpdateContextRefs(nextRefs).catch(() => undefined)
   }, [currentContextRefs, handleUpdateContextRefs])
 
   const handleToggleRefMode = React.useCallback((refId: string): void => {
@@ -534,13 +582,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       if (r.refId !== refId) return r
       return { ...r, mode: (r.mode === 'live' ? 'snapshot' : 'live') as AgentContextRefMode }
     })
-    void handleUpdateContextRefs(nextRefs)
+    void handleUpdateContextRefs(nextRefs).catch(() => undefined)
   }, [currentContextRefs, handleUpdateContextRefs])
 
   const handleBackspaceEmpty = React.useCallback((): boolean => {
     if (currentContextRefs.length === 0) return false
     const nextRefs = currentContextRefs.slice(0, -1)
-    void handleUpdateContextRefs(nextRefs)
+    void handleUpdateContextRefs(nextRefs).catch(() => undefined)
     return true
   }, [currentContextRefs, handleUpdateContextRefs])
   const [pendingPrompt, setPendingPrompt] = useAtom(agentPendingPromptAtom)
@@ -870,7 +918,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     () => globalChannels.some((channel) => channel.enabled && channel.models.some((model) => model.enabled)),
     [globalChannels],
   )
-  const isComposerDisabled = isLegacyTranscript || !agentChannelId || !hasAvailableModel
+  const isComposerDisabled = isLegacyTranscript || !agentChannelId || !hasAvailableModel || isUpdatingRefs
   React.useEffect(() => {
     if (!agentChannelId || agentModelId) return
 
@@ -2084,6 +2132,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   /** 发送消息 */
   const handleSend = React.useCallback(async (overrideText?: string, fromEditor = false): Promise<void> => {
     if (sendGuardRef.current.isPending(sessionId)) return
+    if (isUpdatingRefs || updateRefsPendingRef.current > 0) {
+      toast.info('正在保存引用对话变更，请稍候...')
+      return
+    }
     if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
     const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
     const text = (overrideText ?? currentDraft).trim()
@@ -2527,7 +2579,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       }
       await refreshOutbox()
     }
-  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping])
+  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping, isUpdatingRefs])
 
   const handleRestoreOutbox = React.useCallback((entry: AgentSendOutboxEntry): void => {
     if (sendGuardRef.current.isPending(sessionId) || entry.sessionId !== sessionId) return
@@ -3582,9 +3634,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               onToggleMode={handleToggleRefMode}
               onOpenSelector={() => setReferenceDialogOpen(true)}
               isOverBudget={
-                currentContextRefs.length > 3 ||
-                currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > 70000
+                currentContextRefs.length > TIER_B_COUNT_THRESHOLD ||
+                currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > referenceBudget
               }
+              maxBudgetTokens={referenceBudget}
             />
 
             <AgentScopedRichTextInput

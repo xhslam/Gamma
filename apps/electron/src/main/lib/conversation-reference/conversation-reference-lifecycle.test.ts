@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -28,6 +28,8 @@ import {
   deleteAgentSession,
   appendSDKMessages,
 } from '../agent-session-manager'
+import { getReferencedMessagesForRef } from './pi-tools'
+import { getSnapshotCacheFilePathByRefId } from './ref-cache'
 import type { AgentContextRef, SDKMessage } from '@gamma/shared'
 
 describe('Conversation Reference Lifecycle & Validation', () => {
@@ -56,112 +58,69 @@ describe('Conversation Reference Lifecycle & Validation', () => {
     setConfigHomeForTest(undefined)
   })
 
-  describe('Validation & Constraints (Max 5, Dedup, No Self-Ref)', () => {
-    it('enforces maximum 5 references limit', async () => {
-      const targetSession = await createAgentSession('Target Session')
+  function ref(sourceConversationId: string, mode: 'live' | 'snapshot' = 'snapshot'): AgentContextRef {
+    return { refId: 'renderer-forged-id', sourceConversationId, sourceProjectId: 'forged-project', titleAtAttach: 'forged-title', mode, snapshotUpToMessageId: 'forged-cutoff' }
+  }
 
-      const refs: AgentContextRef[] = []
-      for (let i = 1; i <= 8; i++) {
-        refs.push({
-          refId: `ref-${i}`,
-          sourceConversationId: `source-session-${i}`,
-          sourceProjectId: 'ws-1',
-          titleAtAttach: `Source ${i}`,
-          mode: 'snapshot',
-        })
-      }
-
-      const updated = updateAgentContextRefs(targetSession.id, refs)
-      expect(updated.length).toBe(5)
-      expect(updated.map((r) => r.refId)).toEqual(['ref-1', 'ref-2', 'ref-3', 'ref-4', 'ref-5'])
-
-      const persisted = getAgentContextRefs(targetSession.id)
-      expect(persisted.length).toBe(5)
+  describe('权威持久化与约束', () => {
+    it('最多5个并由main生成唯一ID，忽略renderer伪造元数据', async () => {
+      const target = await createAgentSession('Target')
+      const sources = await Promise.all(Array.from({ length: 8 }, (_, i) => createAgentSession(`Source ${i}`)))
+      const updated = updateAgentContextRefs(target.id, sources.map((s) => ref(s.id)))
+      expect(updated).toHaveLength(5)
+      expect(new Set(updated.map((r) => r.refId)).size).toBe(5)
+      expect(updated[0]?.refId).not.toBe('renderer-forged-id')
+      expect(updated[0]?.titleAtAttach).toBe('Source 0')
+      expect(updated[0]?.sourceProjectId).not.toBe('forged-project')
+      expect(updated[0]?.snapshotUpToMessageId).toBeUndefined()
     })
-
-    it('rejects self-referencing attempts', async () => {
-      const targetSession = await createAgentSession('Self Ref Test')
-
-      const refs: AgentContextRef[] = [
-        {
-          refId: 'ref-self',
-          sourceConversationId: targetSession.id, // 自引用！
-          sourceProjectId: 'ws-1',
-          titleAtAttach: 'Self',
-          mode: 'snapshot',
-        },
-        {
-          refId: 'ref-valid',
-          sourceConversationId: 'other-session-123',
-          sourceProjectId: 'ws-1',
-          titleAtAttach: 'Other',
-          mode: 'snapshot',
-        },
-      ]
-
-      const updated = updateAgentContextRefs(targetSession.id, refs)
-      expect(updated.length).toBe(1)
-      expect(updated[0]?.sourceConversationId).toBe('other-session-123')
+    it('去重、禁止自引用，并拒绝不存在/穿越源与非法模式', async () => {
+      const target = await createAgentSession('Target'), source = await createAgentSession('Source')
+      expect(updateAgentContextRefs(target.id, [ref(target.id), ref(source.id), ref(source.id)])).toHaveLength(1)
+      expect(() => updateAgentContextRefs(target.id, [ref('missing')])).toThrow()
+      expect(() => updateAgentContextRefs(target.id, [ref('../escape')])).toThrow()
+      expect(() => updateAgentContextRefs(target.id, [{ ...ref(source.id), mode: 'evil' } as unknown as AgentContextRef])).toThrow()
     })
-
-    it('deduplicates multiple references to the same source session', async () => {
-      const targetSession = await createAgentSession('Dedup Test')
-
-      const refs: AgentContextRef[] = [
-        {
-          refId: 'ref-1',
-          sourceConversationId: 'source-abc',
-          sourceProjectId: 'ws-1',
-          titleAtAttach: 'First Reference',
-          mode: 'snapshot',
-        },
-        {
-          refId: 'ref-2',
-          sourceConversationId: 'source-abc', // 重复引用同一源会话
-          sourceProjectId: 'ws-1',
-          titleAtAttach: 'Second Reference to Same',
-          mode: 'live',
-        },
-      ]
-
-      const updated = updateAgentContextRefs(targetSession.id, refs)
-      expect(updated.length).toBe(1)
-      expect(updated[0]?.refId).toBe('ref-1')
-      expect(updated[0]?.titleAtAttach).toBe('First Reference')
+    it('从磁盘重读保持引用，live切snapshot在切换时冻结，缓存丢失不重建', async () => {
+      const target = await createAgentSession('Target'), source = await createAgentSession('Source')
+      const user = (id: string, text: string): SDKMessage => ({ type: 'user', uuid: id, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } })
+      appendSDKMessages(source.id, [user('m1', 'old')])
+      const live = updateAgentContextRefs(target.id, [ref(source.id, 'live')])[0]!
+      appendSDKMessages(source.id, [user('m2', 'new')])
+      const frozen = updateAgentContextRefs(target.id, [{ ...live, mode: 'snapshot' }])[0]!
+      expect(frozen.refId).not.toBe(live.refId)
+      expect(frozen.snapshotUpToMessageId).toBe('m2')
+      const disk = JSON.parse(readFileSync(getAgentSessionsIndexPath(), 'utf8')) as { sessions: Array<{ id: string; contextRefs: AgentContextRef[] }> }
+      expect(disk.sessions.find((s) => s.id === target.id)?.contextRefs).toEqual([frozen])
+      const before = JSON.stringify(getReferencedMessagesForRef(frozen))
+      appendSDKMessages(source.id, [user('m3', 'later')])
+      expect(JSON.stringify(getReferencedMessagesForRef(frozen))).toBe(before)
+      unlinkSync(getSnapshotCacheFilePathByRefId(frozen.refId))
+      expect(getReferencedMessagesForRef(frozen)).toEqual([])
+      expect(updateAgentContextRefs(target.id, [])).toEqual([])
     })
-  })
-
-  describe('Persistence & Reload Across Sessions', () => {
-    it('persists contextRefs to disk atomically and reloads them cleanly', async () => {
-      const targetSession = await createAgentSession('Persistence Test')
-      const initialRefs: AgentContextRef[] = [
-        {
-          refId: 'ref-persist-1',
-          sourceConversationId: 'source-xyz',
-          sourceProjectId: 'ws-proj-1',
-          titleAtAttach: 'Architectural Blueprint',
-          mode: 'snapshot',
-          snapshotUpToMessageId: 'msg-42',
-          snapshotAt: 1700000000000,
-          messageCount: 15,
-          estTokens: 1200,
-        },
-      ]
-
-      updateAgentContextRefs(targetSession.id, initialRefs)
-
-      // 验证元数据已持久化并可重新加载
-      const meta = getAgentSessionMeta(targetSession.id)
-      expect(meta?.contextRefs).toBeDefined()
-      expect(meta?.contextRefs?.length).toBe(1)
-      expect(meta?.contextRefs?.[0]?.titleAtAttach).toBe('Architectural Blueprint')
-      expect(meta?.contextRefs?.[0]?.mode).toBe('snapshot')
-      expect(meta?.contextRefs?.[0]?.snapshotUpToMessageId).toBe('msg-42')
-
-      // 移除引用并持久化
-      updateAgentContextRefs(targetSession.id, [])
-      const emptyMeta = getAgentSessionMeta(targetSession.id)
-      expect(emptyMeta?.contextRefs).toEqual([])
+    it('live仅读取完整消息，尾部系统事件不能把非空partial伪装成完整', async () => {
+      const target = await createAgentSession('Target'), source = await createAgentSession('Source')
+      appendSDKMessages(source.id, [
+        { type: 'user', uuid: 'u1', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'question' }] } },
+        { type: 'assistant', uuid: 'a1', parent_tool_use_id: null, message: { stop_reason: 'stop', content: [{ type: 'text', text: 'complete' }] } },
+        { type: 'assistant', uuid: 'partial', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'still streaming' }] } },
+        { type: 'system', subtype: 'compact_boundary', uuid: 'system1' } as unknown as SDKMessage,
+      ])
+      const live = updateAgentContextRefs(target.id, [ref(source.id, 'live')])[0]!
+      expect(getReferencedMessagesForRef(live).map((m) => m.id)).toEqual(['u1', 'a1'])
+      const frozen = updateAgentContextRefs(target.id, [{ ...live, mode: 'snapshot' }])[0]!
+      expect(frozen.snapshotUpToMessageId).toBe('a1')
+      expect(getReferencedMessagesForRef(frozen).map((m) => m.id)).toEqual(['u1', 'a1'])
+    })
+    it('移除再附加生成新快照，不与同一源截止点旧内容混淆', async () => {
+      const target = await createAgentSession('Target'), source = await createAgentSession('Source')
+      appendSDKMessages(source.id, [{ type: 'user', uuid: 'm1', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'first' }] } }])
+      const first = updateAgentContextRefs(target.id, [ref(source.id)])[0]!
+      updateAgentContextRefs(target.id, [])
+      const second = updateAgentContextRefs(target.id, [ref(source.id)])[0]!
+      expect(second.refId).not.toBe(first.refId)
+      expect(getReferencedMessagesForRef(second)).toHaveLength(1)
     })
   })
 
@@ -182,7 +141,7 @@ describe('Conversation Reference Lifecycle & Validation', () => {
         uuid: 'assistant-msg-01',
         message: {
           content: [{ type: 'text', text: '好的，我已经为你设计好了 context-builder 模块。' }],
-          stopReason: 'end_turn',
+          stop_reason: 'end_turn',
         },
         _createdAt: Date.now(),
       } as unknown as SDKMessage
@@ -240,6 +199,157 @@ describe('Conversation Reference Lifecycle & Validation', () => {
 
       const detail = getAgentContextRefDetail(sourceSession.id)
       expect(detail.title).toBe('Renamed Title for Reference')
+    })
+
+    it('BDD反例: 附加时立即冻结快照，后续源会话被编辑或追加新消息时快照内容绝对字节稳定', async () => {
+      const sourceSession = await createAgentSession('Stable Source')
+      const targetSession = await createAgentSession('Target With Snapshot')
+
+      // 在源会话中写入初始消息
+      const msg1: SDKMessage = {
+        id: 'msg_initial_1',
+        type: 'user',
+        message: { content: [{ type: 'text', text: 'Original question before attach' }] },
+      } as SDKMessage
+      const msg2: SDKMessage = {
+        id: 'msg_initial_2',
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Original response before attach' }],
+          stop_reason: 'end_turn',
+        },
+      } as SDKMessage
+      appendSDKMessages(sourceSession.id, [msg1, msg2])
+
+      // 附加引用（快照模式）
+      const updatedRefs = updateAgentContextRefs(targetSession.id, [
+        {
+          refId: '',
+          sourceConversationId: sourceSession.id,
+          sourceProjectId: '',
+          titleAtAttach: '',
+          mode: 'snapshot',
+        },
+      ])
+
+      expect(updatedRefs.length).toBe(1)
+      const attachedRef = updatedRefs[0]!
+      expect(attachedRef.snapshotUpToMessageId).toBe('msg_initial_2')
+      expect(attachedRef.messageCount).toBe(2)
+
+      // 此时读取快照
+      const snapshotBefore = getReferencedMessagesForRef(attachedRef)
+      expect(snapshotBefore.length).toBe(2)
+      expect(snapshotBefore[1]?.content).toContain('Original response before attach')
+
+      // 核心验证：源会话随后追加新消息或被修改
+      const msg3: SDKMessage = {
+        id: 'msg_post_attach',
+        type: 'user',
+        message: { content: [{ type: 'text', text: 'New question added AFTER attach' }] },
+      } as SDKMessage
+      const msg4: SDKMessage = {
+        id: 'msg_post_attach_2',
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'New secret response' }], stop_reason: 'end_turn' },
+      } as SDKMessage
+      appendSDKMessages(sourceSession.id, [msg3, msg4])
+
+      // 再次读取该引用的快照消息：必须保持冻结时的 2 条消息，绝对不能读到附加后的新消息！
+      const snapshotAfter = getReferencedMessagesForRef(attachedRef)
+      expect(snapshotAfter.length).toBe(2)
+      expect(snapshotAfter.map((m) => m.id)).toEqual(['msg_initial_1', 'msg_initial_2'])
+      expect(JSON.stringify(snapshotAfter)).toBe(JSON.stringify(snapshotBefore))
+      expect(JSON.stringify(snapshotAfter)).not.toContain('New question added AFTER attach')
+      expect(JSON.stringify(snapshotAfter)).not.toContain('New secret response')
+    })
+
+    it('BDD反例: 通用 updateAgentSessionMeta 严禁绕过 contextRefs 权威管理', async () => {
+      const targetSession = await createAgentSession('Bypass Test Session')
+
+      // 尝试通过 updateAgentSessionMeta 注入非法的 contextRefs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updateAgentSessionMeta(targetSession.id, {
+        title: 'Updated Title',
+        contextRefs: [
+          {
+            refId: 'ref_bypassed_malicious',
+            sourceConversationId: 'foreign_session',
+            sourceProjectId: 'fake_proj',
+            titleAtAttach: 'Hacked',
+            mode: 'snapshot',
+          },
+        ],
+      } as unknown as Parameters<typeof updateAgentSessionMeta>[1])
+
+      // 验证通用更新生效了 title，但 contextRefs 绝未被绕过写入
+      const meta = getAgentSessionMeta(targetSession.id)
+      expect(meta?.title).toBe('Updated Title')
+      expect(meta?.contextRefs).toBeUndefined()
+    })
+
+    it('BDD反例: 末尾生成中的未结束 assistant (无 stop_reason) 绝不计入完整消息快照', async () => {
+      const sourceSession = await createAgentSession('Streaming Source')
+
+      const msg1: SDKMessage = {
+        id: 'user_1',
+        type: 'user',
+        message: { content: [{ type: 'text', text: 'Please generate code' }] },
+      } as SDKMessage
+      const msg2Complete: SDKMessage = {
+        id: 'asst_tool_call',
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Calling tool' },
+            { type: 'tool_use', id: 'tu_1', name: 'bash', input: { command: 'ls' } },
+          ],
+          stop_reason: 'tool_use', // 完整工具调用
+        },
+      } as SDKMessage
+      const msg3StreamingIncomplete: SDKMessage = {
+        id: 'asst_streaming',
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Partial text being streamed right now...' }],
+          // 关键：正在生成中，stop_reason 为 undefined/null
+          stop_reason: undefined,
+        },
+      } as SDKMessage
+
+      appendSDKMessages(sourceSession.id, [msg1, msg2Complete, msg3StreamingIncomplete])
+
+      // 获取详情：最后完整消息 ID 必须是 msg2Complete，不应包含未完成的 msg3
+      const detail = getAgentContextRefDetail(sourceSession.id)
+      expect(detail.lastCompleteMessageId).toBe('asst_tool_call')
+      expect(detail.messageCount).toBe(2) // 仅 user_1 和 asst_tool_call
+    })
+
+    it('BDD反例: 已删除源的引用允许被用户安全移除', async () => {
+      const sourceSession = await createAgentSession('To Delete')
+      const targetSession = await createAgentSession('Target Holder')
+
+      const updated = updateAgentContextRefs(targetSession.id, [
+        {
+          refId: '',
+          sourceConversationId: sourceSession.id,
+          sourceProjectId: '',
+          titleAtAttach: 'Will be deleted',
+          mode: 'snapshot',
+        },
+      ])
+      expect(updated.length).toBe(1)
+      const refId = updated[0]!.refId
+
+      // 物理删除源会话
+      await deleteAgentSession(sourceSession.id)
+
+      // 用户在 UI 上将该已失效引用移除
+      const afterRemoval = updateAgentContextRefs(targetSession.id, [])
+      expect(afterRemoval.length).toBe(0)
+
+      const reloaded = getAgentContextRefs(targetSession.id)
+      expect(reloaded.length).toBe(0)
     })
   })
 })

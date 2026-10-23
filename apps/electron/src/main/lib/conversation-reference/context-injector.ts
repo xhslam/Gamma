@@ -10,10 +10,8 @@ import { getReferencedMessagesForRef } from './pi-tools'
 import { getOrGenerateConversationSummary } from './summary-service'
 import {
   buildReferencedContext,
-  defaultTokenEstimator,
   DEFAULT_BUDGET_RATIO,
   DEFAULT_CONTEXT_WINDOW,
-  TIER_B_COUNT_THRESHOLD,
   type ReferencedConversationData,
 } from './context-builder'
 
@@ -102,7 +100,7 @@ export async function injectConversationReferencesContext<
 >(options: InjectConversationReferencesContextOptions<T>): Promise<T[]> {
   const { sessionId, channelId, modelId, contextWindow, messages, signal } = options
   const activeRefs = getAgentContextRefs(sessionId)
-  if (!activeRefs || activeRefs.length === 0) {
+  if (signal?.aborted || !activeRefs || activeRefs.length === 0) {
     return [...messages]
   }
 
@@ -115,7 +113,7 @@ export async function injectConversationReferencesContext<
   for (const ref of activeRefs) {
     // 校验源会话是否仍存在；源会话被删除时直接跳过，不继续注入失效快照
     const sourceMeta = getAgentSessionMeta(ref.sourceConversationId)
-    if (!sourceMeta) {
+    if (!sourceMeta || ref.sourceProjectId !== (sourceMeta.workspaceId ?? '')) {
       continue
     }
 
@@ -131,7 +129,7 @@ export async function injectConversationReferencesContext<
       refId: ref.refId,
       sourceConversationId: ref.sourceConversationId,
       sourceProjectId: ref.sourceProjectId,
-      title: ref.titleAtAttach || sourceMeta.title,
+      title: sourceMeta.title || ref.titleAtAttach,
       mode: ref.mode,
       snapshotUpToMessageId: ref.snapshotUpToMessageId,
       snapshotAt: ref.snapshotAt,
@@ -144,12 +142,9 @@ export async function injectConversationReferencesContext<
     return [...messages]
   }
 
-  // 粗略估算总 Token，判断是否触发 Tier B 摘要
-  const totalTokensEstimate = resolvedDataList.reduce((sum, r) => {
-    return sum + defaultTokenEstimator(r.messages.map((m) => m.content).join('\n'))
-  }, 0)
-
-  if (resolvedDataList.length > TIER_B_COUNT_THRESHOLD || totalTokensEstimate > budgetTokens) {
+  // 与最终构建使用同一分档决策，工具/附件/包裹开销不能漏算。
+  const initial = buildReferencedContext(resolvedDataList, budgetTokens)
+  if (initial.tier === 'B') {
     // 尝试为每个会话引用获取或生成结构化模型摘要
     for (const refData of resolvedDataList) {
       if (signal?.aborted) break
@@ -165,13 +160,17 @@ export async function injectConversationReferencesContext<
         if (summary) {
           modelSummaries.set(refData.refId, summary)
         }
-      } catch (err) {
-        console.warn(`[会话引用] 为 ${refData.refId} 获取摘要失败:`, err)
+      } catch {
+        console.warn(`[会话引用] 摘要不可用: ${refData.refId}`)
       }
     }
   }
 
-  const result = buildReferencedContext(resolvedDataList, budgetTokens, { modelSummaries })
+  if (signal?.aborted) return [...messages]
+  const result = modelSummaries.size > 0
+    ? buildReferencedContext(resolvedDataList, budgetTokens, { modelSummaries })
+    : initial
+  for (const decision of result.decisionLogs) console.log('[会话引用]', JSON.stringify(decision))
   if (!result.injectedPrompt) {
     return [...messages]
   }

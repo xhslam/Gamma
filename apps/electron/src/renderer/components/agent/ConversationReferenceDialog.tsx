@@ -2,8 +2,8 @@
  * ConversationReferenceDialog — 会话引用多选选择器
  *
  * 两级结构（项目 -> 对话），当前项目优先展示，支持跨项目搜索与多选。
- * 支持键盘导航（上下光标、Enter 切换选择、Esc 关闭）。
- * 展示会话标题、更新时间、消息数与首句预览。
+ * 支持键盘导航（上下光标仅在会话项间移动、Enter 切换选择、Esc 关闭）。
+ * 展示会话标题、更新时间、消息数与首句预览，支持加载态与失败优雅降级。
  * 限制最多同时引用 5 个会话，杜绝自引用与重复引用。
  */
 
@@ -15,10 +15,10 @@ import {
   MessageSquareText,
   Check,
   FolderGit2,
-  Calendar,
   Layers,
   Sparkles,
   Info,
+  Loader2,
 } from 'lucide-react'
 import {
   Dialog,
@@ -34,11 +34,14 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
-import type { AgentContextRef, AgentContextRefDetail, AgentWorkspace, AgentSessionMeta } from '@gamma/shared'
+import {
+  MAX_CONTEXT_REFS,
+  type AgentContextRef,
+  type AgentContextRefDetail,
+  type AgentWorkspace,
+  type AgentSessionMeta,
+} from '@gamma/shared'
 import { toast } from 'sonner'
-
-/** 最大可引用会话数常量 */
-export const MAX_CONTEXT_REFS = 5
 
 export interface ConversationReferenceDialogProps {
   open: boolean
@@ -82,10 +85,15 @@ export function ConversationReferenceDialog({
   const allSessions = useAtomValue(agentSessionsAtom)
   const allWorkspaces = useAtomValue(agentWorkspacesAtom)
 
+  const [retryDetails, setRetryDetails] = React.useState(0)
+  const [saving, setSaving] = React.useState(false)
   const [query, setQuery] = React.useState('')
+  const [projectFilter, setProjectFilter] = React.useState('*')
   const [selectedMap, setSelectedMap] = React.useState<Map<string, AgentContextRef>>(new Map())
-  const [highlightedIndex, setHighlightedIndex] = React.useState(0)
+  const [highlightedIndex, setHighlightedIndex] = React.useState<number>(-1)
   const [detailsCache, setDetailsCache] = React.useState<Record<string, AgentContextRefDetail>>({})
+  const [loadingDetails, setLoadingDetails] = React.useState<Record<string, boolean>>({})
+  const [errorDetails, setErrorDetails] = React.useState<Record<string, boolean>>({})
   const listRef = React.useRef<HTMLDivElement>(null)
 
   // 对话框打开时同步初始引用
@@ -97,7 +105,6 @@ export function ConversationReferenceDialog({
         map.set(ref.sourceConversationId, { ...ref })
       }
       setSelectedMap(map)
-      setHighlightedIndex(0)
     }
   }, [open, initialRefs])
 
@@ -106,41 +113,83 @@ export function ConversationReferenceDialog({
     return allSessions.filter((s) => s.id !== currentSessionId && !s.isDraft && !s.archived)
   }, [allSessions, currentSessionId])
 
-  // 预加载可见会话详情
+  const detailsCacheRef = React.useRef(detailsCache)
+  detailsCacheRef.current = detailsCache
+
+  // 全量/分批异步加载会话详情（支持超过30条，杜绝仅截断30条的问题）
   React.useEffect(() => {
     if (!open) return
     let active = true
 
-    const toFetch = eligibleSessions
-      .slice(0, 30)
-      .filter((s) => !detailsCache[s.id])
+    const missing = eligibleSessions.filter(
+      (s) => !detailsCacheRef.current[s.id]
+    )
 
-    if (toFetch.length === 0) return
+    if (missing.length === 0) return
 
-    Promise.all(
-      toFetch.map(async (s) => {
-        try {
-          const res = await window.electronAPI.getContextRefDetail({ sourceSessionId: s.id })
-          return { id: s.id, detail: res.detail }
-        } catch {
-          return null
-        }
-      })
-    ).then((results) => {
-      if (!active) return
-      setDetailsCache((prev) => {
-        const next = { ...prev }
-        for (const item of results) {
-          if (item) next[item.id] = item.detail
-        }
-        return next
-      })
+    setErrorDetails({})
+    // 标记当前批次为加载中
+    setLoadingDetails((prev) => {
+      const next = { ...prev }
+      for (const s of missing) {
+        next[s.id] = true
+      }
+      return next
     })
+
+    const batchSize = 10
+    const fetchInBatches = async () => {
+      for (let i = 0; i < missing.length; i += batchSize) {
+        if (!active) break
+        const batch = missing.slice(i, i + batchSize)
+        const results = await Promise.all(
+          batch.map(async (s) => {
+            try {
+              const res = await window.electronAPI.getContextRefDetail({ sourceSessionId: s.id })
+              return { id: s.id, detail: res.detail, ok: true }
+            } catch {
+              return { id: s.id, detail: undefined, ok: false }
+            }
+          })
+        )
+        if (!active) break
+
+        setDetailsCache((prev) => {
+          const next = { ...prev }
+          for (const r of results) {
+            if (r.ok && r.detail) {
+              next[r.id] = r.detail
+            }
+          }
+          return next
+        })
+
+        setLoadingDetails((prev) => {
+          const next = { ...prev }
+          for (const r of results) {
+            delete next[r.id]
+          }
+          return next
+        })
+
+        setErrorDetails((prev) => {
+          const next = { ...prev }
+          for (const r of results) {
+            if (!r.ok) {
+              next[r.id] = true
+            }
+          }
+          return next
+        })
+      }
+    }
+
+    void fetchInBatches()
 
     return () => {
       active = false
     }
-  }, [open, eligibleSessions, detailsCache])
+  }, [open, eligibleSessions, retryDetails])
 
   // 工作区 Map
   const workspaceMap = React.useMemo(() => {
@@ -156,6 +205,7 @@ export function ConversationReferenceDialog({
     const normalizedQuery = query.trim().toLowerCase()
 
     const filtered = eligibleSessions.filter((s) => {
+      if (projectFilter !== '*' && (s.workspaceId ?? '') !== projectFilter) return false
       if (!normalizedQuery) return true
       const titleMatch = (s.title || '').toLowerCase().includes(normalizedQuery)
       const detail = detailsCache[s.id]
@@ -215,7 +265,7 @@ export function ConversationReferenceDialog({
     }
 
     return { groups: groupList, flattenedItems: flat }
-  }, [eligibleSessions, query, currentWorkspaceId, workspaceMap, detailsCache])
+  }, [eligibleSessions, query, projectFilter, currentWorkspaceId, workspaceMap, detailsCache])
 
   // 提取纯 session 项用于键盘高亮索引
   const sessionIndices = React.useMemo(() => {
@@ -226,8 +276,20 @@ export function ConversationReferenceDialog({
     return indices
   }, [flattenedItems])
 
+  // 当 sessionIndices 或 query 改变时，确保高亮索引落在合法 session 项（杜绝首项是 header 的错误）
+  React.useEffect(() => {
+    if (sessionIndices.length === 0) {
+      setHighlightedIndex(-1)
+      return
+    }
+    if (!sessionIndices.includes(highlightedIndex)) {
+      setHighlightedIndex(sessionIndices[0] ?? -1)
+    }
+  }, [sessionIndices, highlightedIndex])
+
   // 键盘导航
   const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.target instanceof HTMLElement && ['BUTTON', 'SELECT'].includes(e.target.tagName)) return
     if (sessionIndices.length === 0) return
 
     if (e.key === 'ArrowDown') {
@@ -255,7 +317,7 @@ export function ConversationReferenceDialog({
 
   // 自动滚动高亮项进视口
   React.useEffect(() => {
-    if (listRef.current) {
+    if (listRef.current && highlightedIndex >= 0) {
       const el = listRef.current.querySelector(`[data-flat-index="${highlightedIndex}"]`)
       if (el) {
         el.scrollIntoView({ block: 'nearest' })
@@ -314,9 +376,16 @@ export function ConversationReferenceDialog({
 
   // 确认保存
   const handleConfirm = async (): Promise<void> => {
-    const refs = Array.from(selectedMap.values())
-    await onConfirm(refs)
-    onOpenChange(false)
+    if (saving) return
+    setSaving(true)
+    try {
+      await onConfirm(Array.from(selectedMap.values()))
+      onOpenChange(false)
+    } catch {
+      // 调用方已显示持久化错误；保留选择，允许重试。
+    } finally {
+      setSaving(false)
+    }
   }
 
   const selectedCount = selectedMap.size
@@ -341,15 +410,20 @@ export function ConversationReferenceDialog({
             被引用的历史对话将注入上下文辅助解答，不会混入持久历史或被修改。
           </DialogDescription>
 
+          <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            项目
+            <select aria-label="筛选项目" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="min-w-0 flex-1 rounded border border-border bg-background p-1.5 text-foreground">
+              <option value="*">全部项目</option>
+              {[...allWorkspaces].sort((a, b) => Number(b.id === currentWorkspaceId) - Number(a.id === currentWorkspaceId)).map((ws) => <option key={ws.id} value={ws.id}>{ws.id === currentWorkspaceId ? '当前项目：' : ''}{ws.name}</option>)}
+              <option value="">默认空间</option>
+            </select>
+          </label>
           {/* 搜索框 */}
           <div className="relative mt-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60" />
             <Input
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value)
-                setHighlightedIndex(0)
-              }}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索项目或对话标题、首句预览..."
               className="pl-9 pr-8 h-9 text-xs"
               autoFocus
@@ -366,6 +440,7 @@ export function ConversationReferenceDialog({
           </div>
         </DialogHeader>
 
+        {Object.keys(errorDetails).length > 0 && <button type="button" className="mx-5 text-xs text-destructive" onClick={() => setRetryDetails((n) => n + 1)}>部分详情加载失败，点击重试</button>}
         {/* 对话列表 */}
         <div ref={listRef} className="flex-1 overflow-y-auto px-5 py-3 space-y-3 min-h-[300px]">
           {flattenedItems.length === 0 ? (
@@ -393,11 +468,15 @@ export function ConversationReferenceDialog({
               const isHighlighted = highlightedIndex === index
               const currentRef = selectedMap.get(session.id)
               const detail = detailsCache[session.id]
+              const isLoading = Boolean(loadingDetails[session.id])
+              const isError = Boolean(errorDetails[session.id])
 
               return (
                 <div
                   key={session.id}
                   data-flat-index={index}
+                  role="option"
+                  aria-selected={isSelected}
                   onClick={() => toggleSelection(session)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={cn(
@@ -461,7 +540,16 @@ export function ConversationReferenceDialog({
                     </div>
 
                     {/* 首句预览 */}
-                    {detail?.firstMessagePreview ? (
+                    {isLoading ? (
+                      <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1 mt-0.5 animate-pulse">
+                        <Loader2 className="size-2.5 animate-spin" />
+                        <span>正在加载会话详情...</span>
+                      </p>
+                    ) : isError ? (
+                      <p className="text-[11px] text-destructive/70 mt-0.5">
+                        详情加载失败
+                      </p>
+                    ) : detail?.firstMessagePreview ? (
                       <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
                         {detail.firstMessagePreview}
                       </p>
@@ -473,18 +561,23 @@ export function ConversationReferenceDialog({
 
                     {/* 元数据标签 */}
                     <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground/60">
-                      {detail?.messageCount != null && (
+                      {detail?.messageCount != null ? (
                         <span className="flex items-center gap-1">
                           <Layers className="size-3" />
                           <span>{detail.messageCount} 条消息</span>
                         </span>
-                      )}
-                      {detail?.estTokens != null && detail.estTokens > 0 && (
+                      ) : isLoading ? (
+                        <span className="flex items-center gap-1 opacity-70">
+                          <Layers className="size-3" />
+                          <span>计算消息中...</span>
+                        </span>
+                      ) : null}
+                      {detail?.estTokens != null && detail.estTokens > 0 ? (
                         <span className="flex items-center gap-1">
                           <Sparkles className="size-3" />
                           <span>~{detail.estTokens} tokens</span>
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -514,6 +607,7 @@ export function ConversationReferenceDialog({
               type="button"
               size="sm"
               onClick={handleConfirm}
+              disabled={saving}
               className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white"
             >
               确定引用 ({selectedCount})
