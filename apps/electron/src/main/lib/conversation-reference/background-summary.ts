@@ -1,7 +1,7 @@
 import type { AgentContextRef, ReferenceSummaryStatus } from '@gamma/shared'
 import { getConfigDir } from '../config-paths'
 import { getReferencedMessagesForRef } from './pi-tools'
-import { computeSnapshotHash, loadSummaryFromCache } from './ref-cache'
+import { computeSummaryHash, isFallbackSummary, loadSummaryFromCache } from './ref-cache'
 import { getOrGenerateConversationSummary } from './summary-service'
 import type { GenerateConversationSummaryInput } from './summary-service'
 
@@ -41,7 +41,7 @@ export function reconcileReferenceSummaries(
   for (const ref of refs) {
     const key = prefix + ref.refId
     const messages = (deps.getMessages ?? getReferencedMessagesForRef)(ref)
-    const hash = computeSnapshotHash(messages)
+    const hash = computeSummaryHash(ref.sourceConversationId, messages)
     const route = `${channelId ?? ''}:${modelId ?? ''}`
     const previous = jobs.get(key)
     if (previous?.hash === hash && previous.route === route) {
@@ -50,14 +50,14 @@ export function reconcileReferenceSummaries(
     }
     previous?.controller.abort()
     const cached = (deps.loadSummary ?? loadSummaryFromCache)(ref.sourceConversationId, ref.snapshotUpToMessageId ?? 'latest', hash)
-    const job: SummaryJob = { owner, hash, route, controller: new AbortController(), status: cached ? 'ready' : 'running' }
+    const job: SummaryJob = { owner, hash, route, controller: new AbortController(), status: cached ? (isFallbackSummary(cached) ? 'fallback' : 'ready') : 'running' }
     jobs.set(key, job)
-    if (!cached) {
+    if (!cached || isFallbackSummary(cached)) {
       void Promise.resolve().then(() => (deps.generate ?? getOrGenerateConversationSummary)({
         channelId, modelId, sourceConversationId: ref.sourceConversationId,
         snapshotUpToMessageId: ref.snapshotUpToMessageId ?? 'latest', messages, signal: job.controller.signal,
       })).then((summary) => {
-        if (jobs.get(key) === job && !job.controller.signal.aborted) job.status = summary ? 'ready' : 'fallback'
+        if (jobs.get(key) === job && !job.controller.signal.aborted) job.status = summary && !isFallbackSummary(summary) ? 'ready' : 'fallback'
       }, () => {
         if (jobs.get(key) === job && !job.controller.signal.aborted) job.status = 'fallback'
       })

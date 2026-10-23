@@ -19,7 +19,7 @@ import { Type, type Static } from 'typebox'
 import { getAgentSessionMeta, getAgentSessionSDKMessages } from '../agent-session-manager'
 import {
   loadSnapshotFromCache,
-  computeSnapshotHash,
+  computeSummaryHash,
   loadSummaryFromCache,
 } from './ref-cache'
 import {
@@ -180,10 +180,8 @@ export function createConversationReferenceExtension(sessionId: string, getRefer
         const items = activeRefs.map((r) => {
           const sourceMeta = getAgentSessionMeta(r.sourceConversationId)
           const messages = getReferencedMessagesForRef(r)
-          const contentHash = computeSnapshotHash(messages)
-          const cachedSummary = r.snapshotUpToMessageId
-            ? loadSummaryFromCache(r.sourceConversationId, r.snapshotUpToMessageId, contentHash)
-            : null
+          const contentHash = computeSummaryHash(r.sourceConversationId, messages)
+          const cachedSummary = loadSummaryFromCache(r.sourceConversationId, r.snapshotUpToMessageId ?? 'latest', contentHash)
           const safeTitle = redactCredentials(sourceMeta?.title || r.titleAtAttach)
           const safeSummarySnippet = cachedSummary
             ? redactCredentials(cachedSummary).slice(0, 150) + (cachedSummary.length > 150 ? '...' : '')

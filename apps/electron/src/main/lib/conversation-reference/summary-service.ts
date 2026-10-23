@@ -19,7 +19,11 @@ import { generateCodexTitle } from '../adapters/pi-codex-title-generator'
 import { extractAutomaticMemoryOAuth } from '../automatic-memory-oauth'
 import {
   computeChunkHash,
-  computeSnapshotHash,
+  computeSummaryHash,
+  SUMMARY_SCHEMA_VERSION,
+  SUMMARY_CHUNK_MESSAGE_SIZE,
+  SUMMARY_FALLBACK_PREFIX,
+  isFallbackSummary,
   loadChunkSummaryFromCache,
   loadSummaryFromCache,
   saveChunkSummaryToCache,
@@ -41,7 +45,7 @@ const SUMMARY_TIMEOUT_MS = 30_000
 const MAX_SUMMARY_INPUT_CHARS = 16_000
 
 /** 固定消息数分块默认大小（可由 deps.chunkSize 覆盖以供测试） */
-export const CHUNK_MESSAGE_SIZE = 10
+export const CHUNK_MESSAGE_SIZE = SUMMARY_CHUNK_MESSAGE_SIZE
 
 export const STRUCTURED_SUMMARY_PROMPT = `你是一个中立的背景资料总结助手。
 请针对以下引用的历史对话记录，生成一份精炼且准确的结构化背景摘要。
@@ -143,7 +147,8 @@ export async function getOrGenerateConversationSummary(
   if (signal?.aborted) return null
   if (messages.length === 0) return null
 
-  const contentHash = computeSnapshotHash(messages)
+  const chunkSize = deps?.chunkSize ?? CHUNK_MESSAGE_SIZE
+  const contentHash = computeSummaryHash(sourceConversationId, messages, chunkSize)
 
   const loadSummaryFn = deps?.loadSummary ?? loadSummaryFromCache
   const saveSummaryFn = deps?.saveSummary ?? saveSummaryToCache
@@ -153,7 +158,7 @@ export async function getOrGenerateConversationSummary(
 
   // 1. 优先读取磁盘整体快照稳定缓存
   const cached = loadSummaryFn(sourceConversationId, snapshotUpToMessageId, contentHash)
-  if (cached && cached.trim().length > 0) {
+  if (cached && cached.trim().length > 0 && !isFallbackSummary(cached)) {
     return cached.trim()
   }
 
@@ -266,7 +271,6 @@ export async function getOrGenerateConversationSummary(
     })
   }
 
-  const chunkSize = Math.max(1, deps?.chunkSize ?? CHUNK_MESSAGE_SIZE)
   const chunks: NormalizedReferencedMessage[][] = []
   for (let i = 0; i < messages.length; i += chunkSize) {
     chunks.push(messages.slice(i, i + chunkSize))
@@ -289,11 +293,12 @@ export async function getOrGenerateConversationSummary(
           throw new Error('单块摘要生成空结果')
         }
         finalSummary = generated.trim()
+        if (signal?.aborted || timeoutController.signal.aborted) return null
         saveChunkSummaryFn({
           sourceConversationId,
           chunkIndex: 0,
           chunkHash: cHash,
-          version: 'v1',
+          version: SUMMARY_SCHEMA_VERSION,
           createdAt: Date.now(),
           summary: finalSummary,
         })
@@ -314,11 +319,12 @@ export async function getOrGenerateConversationSummary(
             throw new Error(`分块 ${idx} 摘要生成失败`)
           }
           chunkSummary = redactCredentials(raw.trim())
+          if (signal?.aborted || timeoutController.signal.aborted) return null
           saveChunkSummaryFn({
             sourceConversationId,
             chunkIndex: idx,
             chunkHash: cHash,
-            version: 'v1',
+            version: SUMMARY_SCHEMA_VERSION,
             createdAt: Date.now(),
             summary: chunkSummary,
           })
@@ -341,11 +347,12 @@ export async function getOrGenerateConversationSummary(
 
     if (!finalSummary) throw new Error('摘要生成结果为空')
 
+    if (signal?.aborted || timeoutController.signal.aborted) return null
     saveSummaryFn({
       sourceConversationId,
       snapshotUpToMessageId,
       contentHash,
-      version: 'v1',
+      version: SUMMARY_SCHEMA_VERSION,
       createdAt: Date.now(),
       summary: finalSummary,
     })
@@ -366,14 +373,16 @@ export async function getOrGenerateConversationSummary(
         console.warn(`[会话引用摘要] 摘要生成失败（${sourceConversationId}），已回退摘录`)
         return null
       }
-      const cleanFallback = redactCredentials(fallbackRaw.trim())
+      const cleanFallback = `${SUMMARY_FALLBACK_PREFIX}\n${redactCredentials(fallbackRaw.trim())}`
+      if (signal?.aborted || timeoutController.signal.aborted) return null
       saveSummaryFn({
         sourceConversationId,
         snapshotUpToMessageId,
         contentHash,
-        version: 'v1',
+        version: SUMMARY_SCHEMA_VERSION,
         createdAt: Date.now(),
         summary: cleanFallback,
+        quality: 'fallback',
       })
       return cleanFallback
     } catch {

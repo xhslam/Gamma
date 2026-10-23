@@ -13,7 +13,13 @@ import { writeJsonFileAtomic } from '../safe-file'
 import type { NormalizedReferencedMessage } from './context-builder'
 
 /** 摘要架构版本 */
-export const SUMMARY_SCHEMA_VERSION = 'v1'
+export const SUMMARY_SCHEMA_VERSION = 'v2'
+export const SUMMARY_CHUNK_MESSAGE_SIZE = 10
+export const SUMMARY_FALLBACK_PREFIX = '[失败回退摘要：仅基于头尾摘录，并非全量摘要]'
+
+export function isFallbackSummary(summary: string): boolean {
+  return summary.startsWith(SUMMARY_FALLBACK_PREFIX)
+}
 
 /**
  * 快照持久化数据结构
@@ -42,6 +48,7 @@ export interface CachedConversationSummary {
   version: string
   createdAt: number
   summary: string
+  quality?: 'complete' | 'fallback'
 }
 
 /**
@@ -116,6 +123,20 @@ export function computeChunkHash(
   return hash.digest('hex').slice(0, 32)
 }
 
+/** 合并摘要按有序块哈希、分块尺寸与架构版本寻址；不改变冻结快照校验。 */
+export function computeSummaryHash(
+  sourceConversationId: string,
+  messages: readonly NormalizedReferencedMessage[],
+  chunkSize = SUMMARY_CHUNK_MESSAGE_SIZE,
+): string {
+  if (!Number.isSafeInteger(chunkSize) || chunkSize < 1) throw new Error('摘要分块尺寸必须为正整数')
+  const chunks: string[] = []
+  for (let i = 0; i < messages.length; i += chunkSize) {
+    chunks.push(computeChunkHash(sourceConversationId, chunks.length, messages.slice(i, i + chunkSize)))
+  }
+  return createHash('sha256').update(JSON.stringify({ schema: SUMMARY_SCHEMA_VERSION, sourceConversationId, chunkSize, chunks })).digest('hex').slice(0, 32)
+}
+
 /**
  * 分块摘要持久化数据结构
  */
@@ -147,8 +168,8 @@ export function saveChunkSummaryToCache(entry: CachedChunkSummary): void {
   try {
     const filePath = getChunkSummaryCacheFilePath(entry.sourceConversationId, entry.chunkHash)
     writeJsonFileAtomic(filePath, entry)
-  } catch (error) {
-    console.warn('[会话引用缓存] 保存分块摘要失败:', error)
+  } catch {
+    console.warn('[会话引用缓存] 保存分块摘要失败')
   }
 }
 
@@ -164,7 +185,7 @@ export function loadChunkSummaryFromCache(
     if (!existsSync(filePath)) return null
     const raw = readFileSync(filePath, 'utf-8')
     const parsed = JSON.parse(raw) as CachedChunkSummary
-    if (!parsed || parsed.version !== 'v1' || parsed.sourceConversationId !== sourceSessionId || parsed.chunkHash !== chunkHash || typeof parsed.summary !== 'string') {
+    if (!parsed || parsed.version !== SUMMARY_SCHEMA_VERSION || parsed.sourceConversationId !== sourceSessionId || parsed.chunkHash !== chunkHash || typeof parsed.summary !== 'string') {
       return null
     }
     return parsed.summary
@@ -288,8 +309,8 @@ export function saveSummaryToCache(summary: CachedConversationSummary): void {
       summary.contentHash,
     )
     writeJsonFileAtomic(filePath, summary)
-  } catch (error) {
-    console.warn('[会话引用缓存] 保存摘要失败:', error)
+  } catch {
+    console.warn('[会话引用缓存] 保存摘要失败')
   }
 }
 
@@ -306,8 +327,12 @@ export function loadSummaryFromCache(
     if (!existsSync(filePath)) return null
     const raw = readFileSync(filePath, 'utf-8')
     const parsed = JSON.parse(raw) as CachedConversationSummary
-    if (!parsed || parsed.version !== 'v1' || typeof parsed.summary !== 'string') return null
-    return parsed.summary
+    if (!parsed || parsed.version !== SUMMARY_SCHEMA_VERSION
+      || parsed.sourceConversationId !== sourceSessionId || parsed.snapshotUpToMessageId !== snapshotUpToMessageId
+      || parsed.contentHash !== contentHash || typeof parsed.summary !== 'string' || !parsed.summary.trim()
+      || (parsed.quality !== undefined && parsed.quality !== 'complete' && parsed.quality !== 'fallback')) return null
+    return parsed.quality === 'fallback' && !isFallbackSummary(parsed.summary)
+      ? `${SUMMARY_FALLBACK_PREFIX}\n${parsed.summary}` : parsed.summary
   } catch {
     console.warn('[会话引用缓存] 读取摘要失败: 缓存格式非法')
     return null

@@ -8,7 +8,7 @@
 import { existsSync } from 'node:fs'
 import { getAgentContextRefs, getAgentSessionMeta } from '../agent-session-manager'
 import { getReferencedMessagesForRef } from './pi-tools'
-import { computeSnapshotHash, getSnapshotCacheFilePathByRefId, loadSnapshotFromCache, loadSummaryFromCache } from './ref-cache'
+import { computeSummaryHash, getSnapshotCacheFilePathByRefId, loadSnapshotFromCache, loadSummaryFromCache } from './ref-cache'
 import {
   buildReferencedContext,
   DEFAULT_BUDGET_RATIO,
@@ -240,7 +240,7 @@ export async function injectConversationReferencesContext<
     for (const refData of resolvedDataList) {
       if (refData.unavailableReason) continue
       const summary = loadSummaryFromCache(refData.sourceConversationId,
-        refData.snapshotUpToMessageId ?? 'latest', computeSnapshotHash(refData.messages))
+        refData.snapshotUpToMessageId ?? 'latest', computeSummaryHash(refData.sourceConversationId, refData.messages))
       if (summary) modelSummaries.set(refData.refId, summary)
     }
   }
