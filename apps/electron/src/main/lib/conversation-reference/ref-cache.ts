@@ -78,6 +78,103 @@ export function getSummaryCacheDir(): string {
 }
 
 /**
+ * 获取分块摘要缓存子目录
+ */
+export function getChunkSummaryCacheDir(): string {
+  const dir = join(getConversationRefCacheDir(), 'chunks')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  return dir
+}
+
+/**
+ * 计算规范化单分块消息列表的 SHA-256 结构化哈希
+ * 严格包含 sourceConversationId 与字段长度前缀，防止跨源混用及分隔串歧义碰撞
+ */
+export function computeChunkHash(
+  sourceConversationId: string,
+  chunkIndex: number,
+  messages: readonly NormalizedReferencedMessage[],
+): string {
+  const hash = createHash('sha256')
+  hash.update(`src:${sourceConversationId.length}:${sourceConversationId}\n`)
+  hash.update(`idx:${chunkIndex}\n`)
+  for (const m of messages) {
+    hash.update(`msg:${m.id.length}:${m.id}:${m.role.length}:${m.role}:${Buffer.byteLength(m.content, 'utf8')}:${m.content}\n`)
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      for (const t of m.toolCalls) {
+        hash.update(`tool:${t.name.length}:${t.name}:${(t.keyParam ?? '').length}:${t.keyParam ?? ''}:${(t.resultSummary ?? '').length}:${t.resultSummary ?? ''}\n`)
+      }
+    }
+    if (m.attachments && m.attachments.length > 0) {
+      for (const a of m.attachments) {
+        hash.update(`att:${a.name.length}:${a.name}:${(a.type ?? '').length}:${a.type ?? ''}\n`)
+      }
+    }
+  }
+  return hash.digest('hex').slice(0, 32)
+}
+
+/**
+ * 分块摘要持久化数据结构
+ */
+export interface CachedChunkSummary {
+  sourceConversationId: string
+  chunkIndex: number
+  chunkHash: string
+  version: string
+  createdAt: number
+  summary: string
+}
+
+/**
+ * 获取分块摘要缓存文件路径（严格绑定源会话与分块哈希）
+ */
+export function getChunkSummaryCacheFilePath(
+  sourceSessionId: string,
+  chunkHash: string,
+): string {
+  const safeSession = sanitizeFileNamePart(sourceSessionId)
+  const safeHash = sanitizeFileNamePart(chunkHash)
+  return join(getChunkSummaryCacheDir(), `${safeSession}_${safeHash}_${SUMMARY_SCHEMA_VERSION}.json`)
+}
+
+/**
+ * 保存分块摘要到磁盘缓存（原子写）
+ */
+export function saveChunkSummaryToCache(entry: CachedChunkSummary): void {
+  try {
+    const filePath = getChunkSummaryCacheFilePath(entry.sourceConversationId, entry.chunkHash)
+    writeJsonFileAtomic(filePath, entry)
+  } catch (error) {
+    console.warn('[会话引用缓存] 保存分块摘要失败:', error)
+  }
+}
+
+/**
+ * 从磁盘读取分块摘要缓存（严格核对源会话与分块哈希）
+ */
+export function loadChunkSummaryFromCache(
+  sourceSessionId: string,
+  chunkHash: string,
+): string | null {
+  try {
+    const filePath = getChunkSummaryCacheFilePath(sourceSessionId, chunkHash)
+    if (!existsSync(filePath)) return null
+    const raw = readFileSync(filePath, 'utf-8')
+    const parsed = JSON.parse(raw) as CachedChunkSummary
+    if (!parsed || parsed.sourceConversationId !== sourceSessionId || parsed.chunkHash !== chunkHash || typeof parsed.summary !== 'string') {
+      return null
+    }
+    return parsed.summary
+  } catch (error) {
+    console.warn('[会话引用缓存] 读取分块摘要失败:', error)
+    return null
+  }
+}
+
+/**
  * 计算规范化消息列表的 SHA-256 稳定哈希
  */
 export function computeSnapshotHash(messages: readonly NormalizedReferencedMessage[]): string {
