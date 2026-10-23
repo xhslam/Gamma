@@ -44,14 +44,14 @@ const VALID_REF_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/
 
 function ok(text: string): AgentToolResult<undefined> {
   return {
-    content: [{ type: 'text', text }],
+    content: [{ type: 'text', text: redactCredentials(text) }],
     details: undefined,
   }
 }
 
 function errorResult(message: string): AgentToolResult<undefined> {
   return {
-    content: [{ type: 'text', text: `[错误]: ${message}` }],
+    content: [{ type: 'text', text: `[错误]: ${redactCredentials(message)}` }],
     details: undefined,
     isError: true,
   }
@@ -186,7 +186,7 @@ export function createConversationReferenceExtension(sessionId: string, getRefer
             : null
           const safeTitle = redactCredentials(sourceMeta?.title || r.titleAtAttach)
           const safeSummarySnippet = cachedSummary
-            ? redactCredentials(cachedSummary.slice(0, 150)) + (cachedSummary.length > 150 ? '...' : '')
+            ? redactCredentials(cachedSummary).slice(0, 150) + (cachedSummary.length > 150 ? '...' : '')
             : undefined
           return {
             id: r.refId,

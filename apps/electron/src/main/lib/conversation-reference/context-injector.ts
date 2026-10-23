@@ -162,7 +162,14 @@ export async function injectConversationReferencesContext<
       }
 
       const cached = loadSnapshotFromCache(ref.refId, ref.snapshotUpToMessageId)
-      if (!cached) {
+      if (
+        !cached ||
+        cached.refId !== ref.refId ||
+        cached.sourceConversationId !== ref.sourceConversationId ||
+        cached.sourceProjectId !== ref.sourceProjectId ||
+        (ref.snapshotUpToMessageId && cached.snapshotUpToMessageId !== ref.snapshotUpToMessageId) ||
+        (!ref.snapshotUpToMessageId && cached.messages.length > 0)
+      ) {
         resolvedDataList.push({
           refId: ref.refId,
           sourceConversationId: ref.sourceConversationId,

@@ -68,4 +68,29 @@ describe('Given Chromium 中的真实富文本输入', () => {
     `)).toEqual({ count: 0, text: '@无匹配', expanded: false })
   }, 30_000)
 
+  test('When 输入框为空按 Backspace Then 触发 onBackspaceEmpty 回调；包含 @文件 或文本时不拦截', async () => {
+    expect(await renderer.run<{ nonEmptyIntercepted: boolean; emptyIntercepted: boolean }>(`
+      let backspaceInterceptCount = 0;
+      const f = await window.composerRegression.mount({
+        onBackspaceEmpty: () => {
+          backspaceInterceptCount++;
+          return true;
+        }
+      });
+
+      // 输入框有内容或 @文件 提及
+      f.editor.commands.setContent('@说明.md');
+      f.key('Backspace');
+      const nonEmptyIntercepted = backspaceInterceptCount > 0;
+
+      // 清空富文本框
+      f.editor.commands.clearContent();
+      f.key('Backspace');
+      const emptyIntercepted = backspaceInterceptCount === 1;
+
+      const result = { nonEmptyIntercepted, emptyIntercepted };
+      f.root.unmount();
+      return result;
+    `)).toEqual({ nonEmptyIntercepted: false, emptyIntercepted: true })
+  }, 30_000)
 })

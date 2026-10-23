@@ -180,8 +180,8 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
           text += (text ? '\n' : '') + block.text
         } else if (block.type === 'tool_use' && block.name) {
           const input = (block.input ?? {}) as Record<string, unknown>
-          const rawKey = String(input.file_path ?? input.path ?? input.command ?? input.query ?? input.url ?? input.id ?? '').slice(0, 100)
-          const keyParam = redactCredentials(rawKey)
+          const rawKey = String(input.file_path ?? input.path ?? input.command ?? input.query ?? input.url ?? input.id ?? '')
+          const keyParam = redactCredentials(rawKey).slice(0, 100)
           toolCalls.push({
             name: redactCredentials(block.name),
             keyParam: keyParam || undefined,
@@ -242,10 +242,11 @@ export function normalizeCompleteSDKMessages(messages: readonly SDKMessage[]): N
       for (const block of assistant.message.content ?? []) {
         if (block.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
           const input = block.input as Record<string, unknown> | undefined
-          const rawKey = String(input?.file_path ?? input?.path ?? input?.command ?? input?.query ?? '').slice(0, 100)
+          const rawKey = String(input?.file_path ?? input?.path ?? input?.command ?? input?.query ?? '')
+          const keyParam = redactCredentials(rawKey).slice(0, 100)
           tools.set(block.id, {
             name: redactCredentials(block.name),
-            keyParam: redactCredentials(rawKey) || undefined,
+            keyParam: keyParam || undefined,
           })
         }
       }
@@ -310,8 +311,8 @@ export function escapeConversationContent(text: string): string {
 export function redactCredentials(text: string): string {
   if (!text || typeof text !== 'string') return ''
   return text
-    // 1. 多行 PEM / Private Key（兼容 RSA, EC, OPENSSH, DSA 或通用 PRIVATE KEY，包含带或不带 ----- 边界）
-    .replace(/(?:-----)?BEGIN[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?[\s\S]*?(?:-----)?END[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?/gi, '[REDACTED_PRIVATE_KEY]')
+    // 1. 多行 PEM / Private Key（兼容 RSA, EC, OPENSSH, DSA 或通用 PRIVATE KEY，包含带或不带 ----- 边界，以及被截断的开头块）
+    .replace(/(?:-----)?BEGIN[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?[\s\S]*?(?:(?:-----)?END[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?|$)/gi, '[REDACTED_PRIVATE_KEY]')
     // 2. AWS Access Key ID (AKIA + 16位大写字母/数字)
     .replace(/(?:(?<=[^0-9A-Za-z])|^)AKIA[0-9A-Z]{16}(?![0-9A-Za-z])/g, '[REDACTED_AWS_KEY]')
     // 3. GitHub Personal Access Token (ghp_, gho_, ghu_, ghs_, ghr_)

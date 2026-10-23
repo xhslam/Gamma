@@ -32,7 +32,8 @@ export const composerRegressionFixture = `
         return React.createElement(RichTextInput, { ref, value, onChange: change,
           onSubmit: text => submissions.push(text), enableMentions: true,
           workspacePath: '/fixture', workspaceSlug: 'fixture', sessionId: 'current',
-          sendWithCmdEnter: !!options.cmd });
+          sendWithCmdEnter: !!options.cmd,
+          onBackspaceEmpty: options.onBackspaceEmpty });
       }
       root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null, React.createElement(Fixture))));
       await until(() => document.querySelector('.tiptap')?.editor);
