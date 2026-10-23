@@ -1,5 +1,6 @@
 import type { AgentContextRef } from '@gamma/shared'
 import { getAgentContextRefs, getAgentSessionSDKMessages } from '../agent-session-manager'
+import { redactCredentials } from './context-builder'
 
 export interface ReferenceWarningNotice {
   sessionId: string
@@ -93,7 +94,9 @@ export function prepareAgentReferenceInput<
     }
   } catch (err: unknown) {
     if (isReferencePreparationError(err)) {
-      const warning = `引用准备失败（${err instanceof Error ? err.message : String(err)}），已转为无引用继续发送`
+      const rawError = err instanceof Error ? err.message : String(err)
+      const safeError = redactCredentials(rawError)
+      const warning = `引用准备失败（${safeError}），已转为无引用继续发送`
       console.warn(`[AgentReference] ${warning}`)
       options.onWarning?.(warning)
       emitReferenceWarning({ sessionId: input.sessionId, warning })
