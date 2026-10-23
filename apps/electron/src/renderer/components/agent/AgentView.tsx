@@ -146,7 +146,7 @@ import {
   normalizeReasoningLevel,
   resolveReasoningCapability,
   resolveReasoningProfile,
-  TIER_B_COUNT_THRESHOLD,
+  ABSOLUTE_TIER_A_TOKEN_LIMIT,
 } from '@gamma/shared'
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
 import { getFilePanelDragData, INSERT_FILE_MENTION_EVENT, type FilePanelDragItem } from '@/lib/file-panel-drag'
@@ -526,7 +526,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   )
   const referenceContextWindowAtom = React.useMemo(() => atom((get) => get(agentSessionStreamingStateAtomFamily(sessionId))?.contextWindow), [sessionId])
   const referenceContextWindow = useAtomValue(referenceContextWindowAtom)
-  const referenceBudget = Math.floor(inferBudgetContextWindow(agentModelId || undefined, referenceContextWindow) * DEFAULT_BUDGET_RATIO)
+  const referenceBudget = Math.min(ABSOLUTE_TIER_A_TOKEN_LIMIT, Math.floor(inferBudgetContextWindow(agentModelId || undefined, referenceContextWindow) * DEFAULT_BUDGET_RATIO))
   const [referenceDialogOpen, setReferenceDialogOpen] = React.useState(false)
   const [isUpdatingRefs, setIsUpdatingRefs] = React.useState(false)
   const savedContextRefsRef = React.useRef(currentContextRefs)
@@ -3636,7 +3636,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               onToggleMode={handleToggleRefMode}
               onOpenSelector={() => setReferenceDialogOpen(true)}
               isOverBudget={
-                currentContextRefs.length > TIER_B_COUNT_THRESHOLD ||
                 currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > referenceBudget
               }
               maxBudgetTokens={referenceBudget}

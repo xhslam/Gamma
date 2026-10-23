@@ -23,6 +23,7 @@ import {
   DEFAULT_BUDGET_TOKENS,
   MAX_CONTEXT_REFS,
   TIER_B_COUNT_THRESHOLD,
+  ABSOLUTE_TIER_A_TOKEN_LIMIT,
   type AgentContextRefMode,
   type SDKMessage,
   type SDKAssistantMessage,
@@ -34,6 +35,7 @@ export {
   DEFAULT_BUDGET_TOKENS,
   MAX_CONTEXT_REFS,
   TIER_B_COUNT_THRESHOLD,
+  ABSOLUTE_TIER_A_TOKEN_LIMIT,
 }
 
 /** 单条工具调用输出预览的最大字符数 */
@@ -385,7 +387,10 @@ export interface BuildReferencedContextOptions {
   tokenEstimator?: TokenEstimator
   /** 单条工具调用输出预览字符上限 */
   maxToolResultChars?: number
-  /** 触发 Tier B 的会话引用数量阈值（默认 3） */
+  /**
+   * @deprecated Item 1 修复：Tier B 不再由数量触发，仅由总 token 超预算或 forceTier 触发。
+   * 此字段保留以兼容旧测试调用，已无实际效果。
+   */
   tierBThresholdCount?: number
   /** Tier B 下各会话的预生成结构化摘要，key 为 refId 或 sourceConversationId */
   modelSummaries?: Map<string, string>
@@ -654,7 +659,7 @@ export function buildReferencedContext(
 ): BuildReferencedContextResult {
   const estimator = options?.tokenEstimator ?? defaultTokenEstimator
   const maxToolResultChars = options?.maxToolResultChars ?? DEFAULT_MAX_TOOL_RESULT_CHARS
-  const tierBThresholdCount = options?.tierBThresholdCount ?? TIER_B_COUNT_THRESHOLD
+  // tierBThresholdCount 已废弃（Item 1）：Tier B 不再由数量触发，保留参数读取以兼容旧测试。
   const modelSummaries = options?.modelSummaries ?? new Map<string, string>()
 
   if (!refs || refs.length === 0 || !Number.isFinite(budgetTokens) || budgetTokens <= 0) {
@@ -666,12 +671,15 @@ export function buildReferencedContext(
     }
   }
 
+  // A 绝对上限：budgetTokens 与 ABSOLUTE_TIER_A_TOKEN_LIMIT 双阈值择小
+  const cappedBudget = Math.min(budgetTokens, ABSOLUTE_TIER_A_TOKEN_LIMIT)
+
   // 计算包裹开销
   const headerTokens = estimator(REFERENCED_CONVERSATIONS_HEADER + '\n\n')
   const footerTokens = estimator('\n' + REFERENCED_CONVERSATIONS_FOOTER)
   const wrapperTokens = headerTokens + footerTokens
 
-  const effectiveBudget = Math.max(0, budgetTokens - wrapperTokens)
+  const effectiveBudget = Math.max(0, cappedBudget - wrapperTokens)
 
   // 1. 预格式化每条引用会话中的所有消息，并估算 tokens
   const formattedRefsData = refs.map((ref) => {
@@ -703,12 +711,13 @@ export function buildReferencedContext(
 
   const totalRequiredTokensSum = formattedRefsData.reduce((sum, item) => sum + item.totalRequiredTokens, 0)
 
-  // 2. 判断是否触发 Tier B（引用数 > 3 或 总 token 需求超过预算，或由 forceTier 明确指定）
+  // 2. 判断是否触发 Tier B：仅由总 token 需求超过有效预算或 forceTier 明确指定触发。
+  //    数量触发已移除（Item 1 修复）：4 个小对话仍保持 Tier A，超过 80k 绝对上限时降为 B。
   const shouldTriggerTierB = options?.forceTier === 'B'
-    || (options?.forceTier !== 'A' && (refs.length > tierBThresholdCount || totalRequiredTokensSum > effectiveBudget))
+    || (options?.forceTier !== 'A' && totalRequiredTokensSum > effectiveBudget)
 
-  // 如果总预算不足以容纳包裹开销与最小引用内容，直接返回空以绝对保证 totalEstTokens <= budgetTokens
-  if (budgetTokens < wrapperTokens + 5) {
+  // 如果总预算（含绝对上限）不足以容纳包裹开销与最小引用内容，直接返回空以绝对保证 totalEstTokens <= cappedBudget
+  if (cappedBudget < wrapperTokens + 5) {
     return {
       injectedPrompt: '',
       totalEstTokens: 0,
@@ -719,7 +728,7 @@ export function buildReferencedContext(
         messageCount: d.ref.messages.length,
         estTokens: 0,
         tier: shouldTriggerTierB ? 'tier_b_fallback' : 'tier_a_truncated',
-        reason: `Budget (${budgetTokens} tokens) is too small to contain conversation wrapper.`,
+        reason: `Budget (${cappedBudget} tokens, absolute cap applied) is too small to contain conversation wrapper.`,
       })),
     }
   }
@@ -851,9 +860,9 @@ export function buildReferencedContext(
   let injectedPrompt = `${REFERENCED_CONVERSATIONS_HEADER}\n\n${conversationBlocks.join('\n\n')}\n${REFERENCED_CONVERSATIONS_FOOTER}`
   let totalEstTokens = estimator(injectedPrompt)
 
-  // 终极安全门禁（Hard Invariant）：无论何种极端边界，totalEstTokens 绝不可超出 budgetTokens
-  if (totalEstTokens > budgetTokens) {
-    while (conversationBlocks.length > 0 && estimator(`${REFERENCED_CONVERSATIONS_HEADER}\n\n${conversationBlocks.join('\n\n')}\n${REFERENCED_CONVERSATIONS_FOOTER}`) > budgetTokens) {
+  // 终极安全门禁（Hard Invariant）：totalEstTokens 绝不可超出 cappedBudget（含 80k 绝对上限）
+  if (totalEstTokens > cappedBudget) {
+    while (conversationBlocks.length > 0 && estimator(`${REFERENCED_CONVERSATIONS_HEADER}\n\n${conversationBlocks.join('\n\n')}\n${REFERENCED_CONVERSATIONS_FOOTER}`) > cappedBudget) {
       conversationBlocks.pop()
     }
 
@@ -863,7 +872,7 @@ export function buildReferencedContext(
     } else {
       injectedPrompt = `${REFERENCED_CONVERSATIONS_HEADER}\n\n${conversationBlocks.join('\n\n')}\n${REFERENCED_CONVERSATIONS_FOOTER}`
       totalEstTokens = estimator(injectedPrompt)
-      if (totalEstTokens > budgetTokens) {
+      if (totalEstTokens > cappedBudget) {
         injectedPrompt = ''
         totalEstTokens = 0
       }
