@@ -170,7 +170,7 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
       writeFileSync(getAgentSessionMessagesPath(sourceSessionId), JSON.stringify({ uuid: 'huge-message', type: 'user', message: { role: 'user', content: '中'.repeat(20_000) } }) + '\n')
       const refs = updateAgentContextRefs(testSessionId, [{ refId: 'ignored', sourceConversationId: sourceSessionId, sourceProjectId: 'ws_test', titleAtAttach: 'fixture', mode: 'snapshot' }])
       let finish: (value: string | null) => void = () => {}
-      const deps = { namespace: tempHome, generate: () => new Promise<string | null>((resolve) => { finish = resolve }) }
+      const deps = { namespace: tempHome, inferBudgetWindow: () => 20_000, generate: () => new Promise<string | null>((resolve) => { finish = resolve }) }
       expect(reconcileReferenceSummaries(testSessionId, refs, 'fixture-channel', 'fixture-model', deps)[refs[0]!.refId]).toBe('running')
       await Promise.resolve()
       let timer: ReturnType<typeof setTimeout> | undefined

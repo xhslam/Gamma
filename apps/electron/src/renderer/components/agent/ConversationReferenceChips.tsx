@@ -23,6 +23,7 @@ import {
   MAX_CONTEXT_REFS,
   type AgentContextRef,
   type ReferenceSummaryStatus,
+  type ReferenceSummaryProgress,
 } from '@gamma/shared'
 
 export interface ConversationReferenceChipsProps {
@@ -51,6 +52,7 @@ export function ConversationReferenceChips({
 }: ConversationReferenceChipsProps): React.ReactElement | null {
   const agentSessions = useAtomValue(agentSessionsAtom)
   const [summaryStatuses, setSummaryStatuses] = React.useState<Record<string, ReferenceSummaryStatus>>({})
+  const [summaryProgresses, setSummaryProgresses] = React.useState<Record<string, ReferenceSummaryProgress>>({})
   const refKey = refs.map((ref) => ref.refId).join(',')
 
   // 跨渠道引用提示：每引用/目标路由提示一次“内容将发送给当前渠道的模型”（不是每轮 poll 重复）
@@ -77,7 +79,10 @@ export function ConversationReferenceChips({
       pending = true
       try {
         const result = await window.electronAPI.getContextRefs({ sessionId })
-        if (!disposed) setSummaryStatuses(result.summaryStatuses ?? {})
+        if (!disposed) {
+          setSummaryStatuses(result.summaryStatuses ?? {})
+          setSummaryProgresses(result.summaryProgresses ?? {})
+        }
       } catch {
         // 状态请求失败不阻止输入或发送，下次轮询自动恢复。
       } finally { pending = false }
@@ -213,7 +218,19 @@ export function ConversationReferenceChips({
 
               {!isDeleted && sessionId && (
                 <span className="text-[10px] text-muted-foreground" role="status">
-                  {summaryStatuses[ref.refId] === 'ready' ? '已就绪' : summaryStatuses[ref.refId] === 'fallback' ? '失败回退' : '摘要中'}
+                  {(() => {
+                    const status = summaryStatuses[ref.refId]
+                    if (status === 'ready') return '已就绪'
+                    if (status === 'fallback') return '失败回退'
+                    const progress = summaryProgresses[ref.refId]
+                    if (progress && progress.total > 0) {
+                      return `摘要中 ${progress.completed}/${progress.total}`
+                    }
+                    if (typeof status === 'string' && status.startsWith('running:')) {
+                      return `摘要中 ${status.slice('running:'.length)}`
+                    }
+                    return '摘要中'
+                  })()}
                 </span>
               )}
 

@@ -44,6 +44,9 @@ const SUMMARY_TIMEOUT_MS = 30_000
 /** 摘要提示词输入正文的最大字符预算（防模型输入溢出） */
 const MAX_SUMMARY_INPUT_CHARS = 16_000
 
+/** 单引用最大允许分块数，超过此上限必须走 fallback 而非假装完整 ready */
+export const MAX_SUMMARY_CHUNKS_PER_REF = 64
+
 /** 固定消息数分块默认大小（可由 deps.chunkSize 覆盖以供测试） */
 export const CHUNK_MESSAGE_SIZE = SUMMARY_CHUNK_MESSAGE_SIZE
 
@@ -111,6 +114,7 @@ export function prepareSummaryInputText(messages: readonly NormalizedReferencedM
 export interface SummaryServiceDeps {
   timeoutMs?: number
   chunkSize?: number
+  maxChunksPerRef?: number
   generateText?: (params: {
     prompt: string
     channelId: string
@@ -132,6 +136,7 @@ export interface GenerateConversationSummaryInput {
   messages: readonly NormalizedReferencedMessage[]
   signal?: AbortSignal
   deps?: SummaryServiceDeps
+  onProgress?: (progress: { completed: number; total: number }) => void
 }
 
 /**
@@ -276,15 +281,24 @@ export async function getOrGenerateConversationSummary(
     chunks.push(messages.slice(i, i + chunkSize))
   }
 
+  const maxChunksLimit = input.deps?.maxChunksPerRef ?? MAX_SUMMARY_CHUNKS_PER_REF
+  if (chunks.length > maxChunksLimit) {
+    console.warn(`[会话引用摘要] 分块数 (${chunks.length}) 超过上限 (${maxChunksLimit})，触发 fallback`)
+    // 超上限必须 fallback 而非假完整 ready
+    throw new Error(`分块数量超限 (${chunks.length} > ${maxChunksLimit})`)
+  }
+
   try {
     let finalSummary: string | null = null
 
     if (chunks.length === 1) {
       // 单分块：直接提取5维度摘要
+      input.onProgress?.({ completed: 0, total: 1 })
       const cHash = computeChunkHash(sourceConversationId, 0, chunks[0]!)
       const cachedChunk = loadChunkSummaryFn(sourceConversationId, cHash)
       if (cachedChunk && cachedChunk.trim().length > 0) {
         finalSummary = cachedChunk.trim()
+        input.onProgress?.({ completed: 1, total: 1 })
       } else {
         const inputText = chunks[0]!.map((m) => formatNormalizedMessage(m, 120)).join('\n\n')
         const prompt = `${STRUCTURED_SUMMARY_PROMPT}\n${inputText}`
@@ -294,6 +308,7 @@ export async function getOrGenerateConversationSummary(
         }
         finalSummary = generated.trim()
         if (signal?.aborted || timeoutController.signal.aborted) return null
+        input.onProgress?.({ completed: 1, total: 1 })
         saveChunkSummaryFn({
           sourceConversationId,
           chunkIndex: 0,
@@ -306,6 +321,7 @@ export async function getOrGenerateConversationSummary(
     } else {
       // 多分块：增量处理各分块，已满且未变的分块直接命中缓存，仅计算变化尾块或新块
       const chunkSummaries: string[] = []
+      input.onProgress?.({ completed: 0, total: chunks.length })
       for (let idx = 0; idx < chunks.length; idx++) {
         if (signal?.aborted || timeoutController.signal.aborted) return null
         const chunkMsgs = chunks[idx]!
@@ -330,6 +346,7 @@ export async function getOrGenerateConversationSummary(
           })
         }
         chunkSummaries.push(chunkSummary)
+        input.onProgress?.({ completed: idx + 1, total: chunks.length })
       }
 
       // 合并分块摘要
