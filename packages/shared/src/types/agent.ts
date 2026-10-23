@@ -821,6 +821,8 @@ export interface AgentSessionMeta {
   delegationDepth?: number
   /** 委派目标摘要，便于 UI 展示和追溯 */
   delegationGoal?: string
+  /** 用户显式附加的上下文引用会话列表 */
+  contextRefs?: AgentContextRef[]
   /** 创建时间戳 */
   createdAt: number
   /** 更新时间戳 */
@@ -867,6 +869,80 @@ export interface AgentMessage {
   durationMs?: number
   /** Token 用量明细（assistant 消息完成时记录） */
   usage?: AgentEventUsage
+  /** 发送本消息时附加的会话引用快照 */
+  contextRefs?: AgentContextRef[]
+}
+
+// ===== Agent 会话上下文引用 (Conversation Reference) =====
+
+/** 引用模式：快照模式（默认，冻结规范化内容）或实时模式（每轮读取最新） */
+export type AgentContextRefMode = 'snapshot' | 'live'
+
+/**
+ * Agent 会话上下文引用项
+ */
+export interface AgentContextRef {
+  /** 引用项唯一标识符（如 ref_xxx） */
+  refId: string
+  /** 来源会话 ID */
+  sourceConversationId: string
+  /** 来源项目 ID（workspaceId） */
+  sourceProjectId: string
+  /** 附加时记录的来源会话标题 */
+  titleAtAttach: string
+  /** 引用模式：'snapshot'（默认）或 'live' */
+  mode: AgentContextRefMode
+  /** 快照截止消息 ID（最后一条完整消息） */
+  snapshotUpToMessageId?: string
+  /** 快照创建时间戳 */
+  snapshotAt?: number
+  /** 包含的消息数量 */
+  messageCount?: number
+  /** 预估 Token 用量 */
+  estTokens?: number
+}
+
+/**
+ * 被引用会话的详细快照/预览信息
+ */
+export interface AgentContextRefDetail {
+  /** 来源会话 ID */
+  sourceConversationId: string
+  /** 来源项目 ID */
+  sourceProjectId: string
+  /** 来源会话当前标题 */
+  title: string
+  /** 当前最新完整消息 ID */
+  lastCompleteMessageId?: string
+  /** 消息总数 */
+  messageCount: number
+  /** 预估 Token 数 */
+  estTokens: number
+  /** 第一条用户消息的首句预览（用于选择器展示） */
+  firstMessagePreview?: string
+  /** 更新时间戳 */
+  updatedAt: number
+  /** 源会话是否存在（为 false 表示源文件已被删除） */
+  exists: boolean
+  /** 是否已归档 */
+  archived?: boolean
+}
+
+/** 获取会话上下文引用请求 */
+export interface GetAgentContextRefsRequest {
+  sessionId: string
+}
+
+/** 更新会话上下文引用请求 */
+export interface UpdateAgentContextRefsRequest {
+  sessionId: string
+  contextRefs: AgentContextRef[]
+}
+
+/** 获取上下文引用详情请求 */
+export interface GetAgentContextRefDetailRequest {
+  sourceSessionId: string
+  currentSessionId: string
 }
 
 // ===== Agent 消息搜索 =====
@@ -1878,6 +1954,12 @@ export const AGENT_IPC_CHANNELS = {
   SEARCH_MESSAGES: 'agent:search-messages',
   /** 搜索当前工作区可引用的 Agent 会话 */
   SEARCH_SESSION_REFERENCES: 'agent:search-session-references',
+  /** 获取会话上下文引用列表 */
+  GET_CONTEXT_REFS: 'agent:get-context-refs',
+  /** 更新会话上下文引用列表 */
+  UPDATE_CONTEXT_REFS: 'agent:update-context-refs',
+  /** 获取被引用会话的详情与快照信息 */
+  GET_CONTEXT_REF_DETAIL: 'agent:get-context-ref-detail',
   /** 迁移会话到另一个工作区 */
   MOVE_SESSION_TO_WORKSPACE: 'agent:move-session-to-workspace',
   /** 分叉会话（从指定消息处创建新会话） */
