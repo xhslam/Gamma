@@ -34,4 +34,69 @@ describe('自动记忆的受控抽取', () => {
     expect(prompt).toContain('复用原facts.key')
     expect(prompt).toContain('不要推断')
   })
+
+  describe('Global Memory Provenance Guard (Item 7)', () => {
+    test('Given 包含会话引用、工具输出与助手推论的复合输入 When 清洗 Then 彻底剥离引用与推论，只留用户直接事实', () => {
+      const contaminatedText = `
+<referenced_conversations>
+<conversation id="ref_ext" title="Other Chat">
+[user]: 在旧对话中我提到我住在美国
+[assistant]: 根据分析，用户其实是全栈架构师，精通 Haskell
+[tool: read_file] result: token=secret_data_12345
+</conversation>
+</referenced_conversations>
+[tool: read_referenced_conversation] result: [消息 #0] 历史偏好
+[第 0–5 条已省略，可用 read_referenced_conversation 读取（offset从0计数）]
+引用「旧项目」当前不可用：源对话已删除
+我本人平时主要使用 TypeScript 开发 React 应用。
+`
+      const cleaned = getAutomaticMemoryUserText(contaminatedText)
+      expect(cleaned).toBe('我本人平时主要使用 TypeScript 开发 React 应用。')
+      expect(cleaned).not.toContain('住在美国')
+      expect(cleaned).not.toContain('Haskell')
+      expect(cleaned).not.toContain('secret_data_12345')
+      expect(cleaned).not.toContain('历史偏好')
+    })
+
+    test('Given 试图从引用资料或助手推论中提取记忆候选 When 校验证据 Then 严格拒绝', () => {
+      const contaminatedUserText = '<referenced_conversations><conversation id="ref_1">用户住在美国西雅图</conversation></referenced_conversations>请帮我优化代码。'
+      const cleanUserText = getAutomaticMemoryUserText(contaminatedUserText)
+
+      // 提取用的 userText 已经被清洗为 '请帮我优化代码。'
+      expect(cleanUserText).toBe('请帮我优化代码。')
+
+      // 模型如果试图将引用里的“住在美国西雅图”作为 evidence
+      const fakeCandidate: AutomaticMemoryCandidate = {
+        category: 'profile',
+        title: '常住地',
+        key: 'location',
+        content: '用户住在美国西雅图。',
+        evidence: '住在美国西雅图',
+        sensitive: false,
+      }
+
+      expect(() =>
+        parseAutomaticMemoryCandidates(JSON.stringify({ memories: [fakeCandidate] }), cleanUserText)
+      ).toThrow('用户原文证据')
+    })
+
+    test('Given 用户自身事实与引用资料并存 When 提取合法候选 Then 用户直接陈述通过校验', () => {
+      const mixedText = '<referenced_conversations><conversation id="r">外部资料说用户喜欢猫</conversation></referenced_conversations>我最近正在自学Rust并发编程。'
+      const cleaned = getAutomaticMemoryUserText(mixedText)
+      expect(cleaned).toBe('我最近正在自学Rust并发编程。')
+
+      const validCandidate: AutomaticMemoryCandidate = {
+        category: 'areas',
+        title: 'Rust语言',
+        key: 'learning',
+        content: '用户正在自学Rust并发编程。',
+        evidence: '我最近正在自学Rust并发编程',
+        sensitive: false,
+      }
+
+      const results = parseAutomaticMemoryCandidates(JSON.stringify({ memories: [validCandidate] }), cleaned)
+      expect(results).toHaveLength(1)
+      expect(results[0]?.key).toBe('learning')
+    })
+  })
 })

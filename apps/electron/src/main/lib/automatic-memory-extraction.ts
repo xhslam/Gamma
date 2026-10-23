@@ -7,7 +7,12 @@ export const MEMORY_OUTPUT_LIMIT = 24_000
 /** 只提取本次直接输入；引用、附件、代码与渲染上下文不能成为画像证据。 */
 export function getAutomaticMemoryUserText(text: string): string {
   return text
-    .replace(/<(quoted_file|quoted_context|file|workspace_state|attached_file|browser_context)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<(quoted_file|quoted_context|file|workspace_state|attached_file|browser_context|referenced_conversations|conversation|referenced_planning|referenced_sessions|mentioned_tools)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<\/?(?:referenced_conversations|conversation|referenced_planning|referenced_sessions|mentioned_tools)\b[^>]*>/gi, '')
+    .replace(/\[tool:\s*[^\]]+\](?: result: [^\n]+)?/gi, '')
+    .replace(/\[(?:第\s*\d+[–-]\d+\s*条|检索提示|提示：结构化模型摘要).*?\]/gi, '')
+    .replace(/引用「.*?」当前不可用：[^\n]*/gi, '')
+    .replace(/\[(?:assistant|tool|system)\]:[^\n]*/gi, '')
     .replace(/```[\s\S]*?```/g, '')
     .replace(/^\s*>.*$/gm, '')
     .replace(/(?:@file:|&quote:)[^\s]+/g, '')
