@@ -70,6 +70,8 @@ import { createOpenAIReasoningRequestExtension } from './pi-openai-reasoning-req
 import { mergeRuntimeEnv, type AgentRuntimeEnv } from '../agent-runtime-env'
 import { createMemoryExtension } from '../memory'
 import { getMemoryDir } from '../config-paths'
+import { createConversationReferenceExtension } from '../conversation-reference/pi-tools'
+import { injectConversationReferencesContext } from '../conversation-reference/context-injector'
 import { sanitizePiMessageImageContent, sanitizeToolResultImageContent } from '../image-content-validation'
 import {
   convertPiMessage,
@@ -1639,6 +1641,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       const extensionFactories = [
         ...(memoryExtension ? [memoryExtension] : []),
         taskProgress.createExtension(),
+        createConversationReferenceExtension(input.sessionId),
         ...(projectInstructionScope ? [projectInstructionScope.createExtension()] : []),
         ...(openAIReasoningProfile
           ? [createOpenAIReasoningRequestExtension({
@@ -1694,7 +1697,16 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       // transformContext 在每个 provider 请求前执行，能隔离 resume 的坏图片而不篡改原 artifact。
       const previousTransformContext = session.agent.transformContext
       session.agent.transformContext = async (messages, signal) => {
-        const sanitized = sanitizePiMessageImageContent(await previousTransformContext?.(messages, signal) ?? messages)
+        let transformed = await previousTransformContext?.(messages, signal) ?? messages
+        transformed = await injectConversationReferencesContext({
+          sessionId: input.sessionId,
+          channelId: input.channelId,
+          modelId: input.model,
+          contextWindow: model.contextWindow,
+          messages: transformed,
+          signal,
+        })
+        const sanitized = sanitizePiMessageImageContent(transformed)
         let compacted = compactComputerScreenshots(sanitized, 2)
         if (input.computerToolsAvailable && hasComputerObservationContent(compacted)) {
           try {

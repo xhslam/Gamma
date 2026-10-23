@@ -53,6 +53,17 @@ export interface ReferencedConversationData {
 }
 
 /**
+ * 安全提取 SDKMessage 或原始消息对象的 ID
+ */
+export function getSDKMessageId(msg: unknown): string {
+  if (!msg || typeof msg !== 'object') return ''
+  const m = msg as Record<string, unknown>
+  if (typeof m.id === 'string' && m.id) return m.id
+  if (typeof m.uuid === 'string' && m.uuid) return m.uuid
+  return ''
+}
+
+/**
  * Token 估算函数类型
  */
 export type TokenEstimator = (text: string) => number
