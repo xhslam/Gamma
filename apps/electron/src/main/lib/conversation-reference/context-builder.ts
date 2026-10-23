@@ -306,7 +306,10 @@ export function escapeConversationContent(text: string): string {
 
 /**
  * 敏感凭证脱敏（严防密钥泄露）：
- * 支持多行 PEM/Private Key、AWS Access Key (AKIA...)、GitHub Token (ghp_...)、OpenAI 等 API Key (sk-...)
+ * 支持多行 PEM/Private Key、AWS Access Key (AKIA...)、GitHub Token (gh[opusr]_... 与 github_pat_...)、
+ * Google API Key (AIza...)、Slack Token (xox[baprs]-...)、OpenAI 等 API Key (sk-...)、
+ * JWT Token (eyJ...)、Bearer Token (Bearer ...)、URL 内嵌凭据 (protocol://user:pass@host)、
+ * 以及变量名含 KEY/SECRET/TOKEN/PASSWORD 的 KEY=VALUE 格式。
  */
 export function redactCredentials(text: string): string {
   if (!text || typeof text !== 'string') return ''
@@ -315,10 +318,41 @@ export function redactCredentials(text: string): string {
     .replace(/(?:-----)?BEGIN[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?[\s\S]*?(?:(?:-----)?END[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?|$)/gi, '[REDACTED_PRIVATE_KEY]')
     // 2. AWS Access Key ID (AKIA + 16位大写字母/数字)
     .replace(/(?:(?<=[^0-9A-Za-z])|^)AKIA[0-9A-Z]{16}(?![0-9A-Za-z])/g, '[REDACTED_AWS_KEY]')
-    // 3. GitHub Personal Access Token (ghp_, gho_, ghu_, ghs_, ghr_)
-    .replace(/(?:(?<=[^0-9A-Za-z])|^)gh[pousr]_[a-zA-Z0-9]{30,}(?![0-9A-Za-z])/g, '[REDACTED_GITHUB_TOKEN]')
-    // 4. OpenAI / 常用 sk- 前缀 API Key (如 sk-..., sk-proj-...)
+    // 3. GitHub Personal Access Token (classic: gh[opusr]_, fine-grained: github_pat_)
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)github_pat_[a-zA-Z0-9_]{20,}(?![0-9A-Za-z_])/g, '[REDACTED_GITHUB_TOKEN]')
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)gh[opusr]_[a-zA-Z0-9]{20,}(?![0-9A-Za-z])/g, '[REDACTED_GITHUB_TOKEN]')
+    // 4. Google API Key (AIza + 35位字符 [0-9A-Za-z_-])
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)AIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g, '[REDACTED_API_KEY]')
+    // 5. Slack Token (xox[baprs]-)
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)xox[baprs]-[0-9a-zA-Z-]{10,}(?![0-9A-Za-z_-])/g, '[REDACTED_SLACK_TOKEN]')
+    // 6. OpenAI / 常用 sk- 前缀 API Key (如 sk-..., sk-proj-...)
     .replace(/(?:(?<=[^0-9A-Za-z])|^)sk-(?:proj-)?[a-zA-Z0-9_-]{20,}(?![0-9A-Za-z_-])/g, '[REDACTED_API_KEY]')
+    // 7. JWT Token (三段式 base64url，以 eyJ 开头)
+    .replace(/(?:(?<=[^0-9A-Za-z_-])|^)eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![0-9A-Za-z_-])/g, '[REDACTED_JWT_TOKEN]')
+    // 8. Bearer Token (Bearer 紧随长随机字符)
+    .replace(/(?:(?<=[^0-9A-Za-z_-])|^)Bearer\s+[a-zA-Z0-9._~+/=-]{16,}(?![0-9A-Za-z_-])/gi, 'Bearer [REDACTED_TOKEN]')
+    // 9. URL 内嵌凭据 (如 https://user:pass@host 或 http://alice:secret@...)
+    .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^:\/\s@]+)(?::([^\/@\s]+))?@/g, '$1[REDACTED_CREDENTIALS]@')
+    // 10. 变量名含 KEY/SECRET/TOKEN/PASSWORD 的 KEY=VALUE (包括引号包裹与纯文本值)
+    .replace(
+      /((?:(?<=[^A-Za-z0-9_])|^)[A-Za-z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD)[A-Za-z0-9_]*\s*(?<![!=<>])=(?![=>])\s*)(?:"([^"\r\n]*)"|'([^'\r\n]*)'|`([^`\r\n]*)`|([a-zA-Z0-9_$]+\([^)\r\n]*\))|([^\s,;`}\]\)\r\n]+))/gi,
+      (match, prefix, dq, sq, bq, fnCall, raw) => {
+        if (fnCall !== undefined) return match // 函数调用如 getKey()，不脱敏
+        const val = dq ?? sq ?? bq ?? raw
+        if (!val || typeof val !== 'string') return match
+        // 防御性过滤反例：已脱敏占位符、布尔值、纯数字（按键常量/超时/非敏感字段）、null、undefined
+        if (/^\[REDACTED/.test(val) || /^(?:true|false|null|undefined)$/i.test(val)) return match
+        if (/^\d+$/.test(val) && !/(?:PASSWORD|SECRET|PIN)/i.test(prefix)) return match
+        if (raw !== undefined) {
+          // 排除对象属性访问等代码语法结构
+          if (/^(?:this\.|window\.|process\.|config\.)/.test(raw)) return match
+        }
+        if (dq !== undefined) return `${prefix}"[REDACTED]"`
+        if (sq !== undefined) return `${prefix}'[REDACTED]'`
+        if (bq !== undefined) return `${prefix}\`[REDACTED]\``
+        return `${prefix}[REDACTED]`
+      }
+    )
 }
 
 /**
