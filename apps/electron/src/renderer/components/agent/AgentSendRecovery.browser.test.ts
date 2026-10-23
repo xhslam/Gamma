@@ -1,9 +1,10 @@
+import { build } from 'esbuild'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElectronRendererHarness } from '../../../test-utils/electron-renderer'
 import type { ElectronRendererHarness } from '../../../test-utils/electron-renderer'
 import type { AgentSendOutboxEntry } from '@gamma/shared'
 import { parseSendOutboxEntry } from '../../../main/lib/agent-send-outbox'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -12,96 +13,12 @@ let validationDirectory: string
 beforeAll(async () => {
   validationDirectory = await mkdtemp(join(tmpdir(), 'gamma-send-ipc-'))
   const validationModule = join(validationDirectory, 'outbox.cjs')
-  const outboxCjsSource = `
-const fs = require('node:fs');
-const path = require('node:path');
-const GAMMA_PERMISSION_MODES = ['bypassPermissions', 'plan'];
-
-function isRecord(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseSendOutboxEntry(value, sessionId) {
-  if (!isRecord(value) || value.sessionId !== sessionId || typeof value.id !== 'string'
-    || !/^[A-Za-z0-9_-]{1,100}$/.test(value.id) || typeof value.createdAt !== 'number'
-    || !Number.isFinite(value.createdAt) || (value.status !== 'pending' && value.status !== 'failed')
-    || !isRecord(value.draft) || typeof value.draft.text !== 'string' || typeof value.draft.html !== 'string'
-    || !Array.isArray(value.draft.attachments) || !isRecord(value.input)) {
-    throw new Error('失败消息快照格式无效');
-  }
-  const input = value.input;
-  if (input.sessionId !== sessionId) throw new Error('发送快照的会话不一致');
-  if (input.queueMessageId !== value.id || input.userMessageUuid !== value.id) throw new Error('发送快照的消息 ID 不一致');
-  if (typeof input.userMessage !== 'string' || !input.userMessage.trim()) throw new Error('发送正文为空，请检查消息引用');
-  if (typeof input.channelId !== 'string' || !input.channelId) throw new Error('发送渠道无效，请重新选择渠道');
-  if (input.dispatch !== 'now' && input.dispatch !== 'after_current') throw new Error('发送调度方式无效，请重新提交消息');
-  const attachments = value.draft.attachments.map((file) => {
-    if (!isRecord(file) || typeof file.filename !== 'string' || typeof file.mediaType !== 'string'
-      || typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size < 0
-      || typeof file.targetPath !== 'string' || !path.isAbsolute(file.targetPath)) throw new Error('失败消息附件无效');
-    return { filename: file.filename, mediaType: file.mediaType, size: file.size, targetPath: file.targetPath };
-  });
-  const safeInput = {
-    sessionId, queueMessageId: value.id, userMessageUuid: value.id,
-    channelId: input.channelId, userMessage: input.userMessage, dispatch: input.dispatch,
-  };
-  for (const key of ['rawUserMessage', 'modelId', 'workspaceId', 'retryOfErrorUuid', 'retryOfUserMessageUuid']) {
-    if (input[key] !== undefined) {
-      if (typeof input[key] !== 'string') throw new Error('失败消息参数类型无效');
-      safeInput[key] = input[key];
-    }
-  }
-  for (const key of ['additionalDirectories', 'mentionedSkills', 'mentionedMcpServers', 'mentionedSessionIds', 'mentionedTodoIds', 'mentionedCalendarEventIds']) {
-    const items = input[key];
-    if (items !== undefined) {
-      if (!Array.isArray(items) || !items.every((item) => typeof item === 'string')) throw new Error('失败消息引用无效');
-      safeInput[key] = items;
-    }
-  }
-  if (input.contextRefs !== undefined) safeInput.contextRefs = input.contextRefs;
-  if (input.contextRefIds !== undefined) {
-    if (!Array.isArray(input.contextRefIds) || input.contextRefIds.length > 5 || !input.contextRefIds.every((id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id))) throw new Error('发送引用ID无效');
-    safeInput.contextRefIds = [...input.contextRefIds];
-  }
-  if (input.permissionModeOverride !== undefined) {
-    if (!GAMMA_PERMISSION_MODES.some((mode) => mode === input.permissionModeOverride)) throw new Error('失败消息权限模式无效');
-    safeInput.permissionModeOverride = input.permissionModeOverride;
-  }
-  if (typeof input.startedAt === 'number' && Number.isFinite(input.startedAt)) safeInput.startedAt = input.startedAt;
-  return {
-    id: value.id, sessionId, createdAt: value.createdAt, status: value.status,
-    ...(typeof value.error === 'string' && { error: value.error.slice(0, 2000) }),
-    draft: { text: value.draft.text, html: value.draft.html, attachments }, input: safeInput,
-  };
-}
-
-class AgentSendOutbox {
-  constructor(resolvePath) {
-    this.resolvePath = resolvePath;
-  }
-  list(sessionId) {
-    const p = this.resolvePath(sessionId);
-    if (!fs.existsSync(p)) return [];
-    const raw = fs.readFileSync(p, 'utf8');
-    const document = JSON.parse(raw);
-    return document.entries.map((entry) => parseSendOutboxEntry(entry, sessionId));
-  }
-  save(value) {
-    const entry = parseSendOutboxEntry(value, value.sessionId);
-    const entries = this.list(entry.sessionId);
-    const index = entries.findIndex((item) => item.id === entry.id);
-    if (index < 0) entries.push(entry);
-    else entries[index] = entry;
-    const p = this.resolvePath(entry.sessionId);
-    const tmp = p + '.' + Math.random().toString(36).slice(2) + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries }), 'utf8');
-    fs.renameSync(tmp, p);
-  }
-}
-
-module.exports = { parseSendOutboxEntry, AgentSendOutbox };
-`;
-  await writeFile(validationModule, outboxCjsSource, 'utf-8')
+  // 使用既有 esbuild 独立编译真实生产模块，避免 Bun test 装载状态影响同进程 Bun.build。
+  await build({
+    entryPoints: [resolve(import.meta.dir, '../../../main/lib/agent-send-outbox.ts')],
+    bundle: true, platform: 'node', format: 'cjs', outfile: validationModule,
+    external: ['electron'],
+  })
   renderer = await createElectronRendererHarness(`
     import React from 'react'
     import { createRoot } from 'react-dom/client'
