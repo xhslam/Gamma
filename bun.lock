@@ -37,7 +37,7 @@
     },
     "apps/electron": {
       "name": "@gamma/electron",
-      "version": "0.19.136",
+      "version": "0.19.137",
       "dependencies": {
         "@codemirror/commands": "6.11.0",
         "@codemirror/lang-markdown": "6.5.2",

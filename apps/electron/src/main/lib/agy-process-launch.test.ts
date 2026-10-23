@@ -59,6 +59,12 @@ describe('Given macOS/Linux 已正常工作的 agy', () => {
     }
     expect(resolveAgyExecutable({ platform: 'linux', home: '/home/test', env: {}, canExecute: files('/home/test/.local/bin/agy') })).toBe('/home/test/.local/bin/agy')
   })
+  test('When GUI PATH 精简且通过 Bun 或 pnpm 安装 Then 从固定全局目录发现而不执行 shell', () => {
+    for (const executable of ['/Users/test/.bun/bin/agy', '/Users/test/Library/pnpm/agy', '/Users/test/.local/share/pnpm/agy']) {
+      expect(resolveAgyExecutable({ platform: 'darwin', home: '/Users/test', env: { PATH: '/usr/bin:/bin' }, canExecute: files(executable) })).toBe(executable)
+    }
+    expect(resolveAgyExecutable({ platform: 'linux', home: '/home/test', env: {}, canExecute: files('/home/test/.local/share/pnpm/agy') })).toBe('/home/test/.local/share/pnpm/agy')
+  })
   test('When 文件不是可执行程序或是目录 Then 不误认为已安装', () => {
     const root = mkdtempSync(join(tmpdir(), 'agy-launch-')); roots.push(root)
     const path = join(root, 'agy.exe')

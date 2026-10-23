@@ -43,7 +43,7 @@ beforeAll(async () => {
       onAgentTerminalOpen: () => () => {},
     }
     const root = createRoot(document.getElementById('root'))
-    const render = (visible, embedded = false) => root.render(React.createElement(Provider, {store}, React.createElement(TooltipProvider, {delayDuration:0}, React.createElement(React.Fragment, null, React.createElement(TerminalLifecycleObserver), visible ? React.createElement(ProjectAgyTerminalView, { embedded }) : null))))
+    const render = (visible, embedded = false, active = true) => root.render(React.createElement(Provider, {store}, React.createElement(TooltipProvider, {delayDuration:0}, React.createElement(React.Fragment, null, React.createElement(TerminalLifecycleObserver), visible ? React.createElement(ProjectAgyTerminalView, { embedded, active }) : null))))
     render(true)
     window.agyRegression = {
       store, opened, killed, shellCreates, writes, resizes, until, delay, render,
@@ -59,6 +59,28 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('项目级 AGY 原生终端 Chromium 验证', () => {
+  test('Given 未确认项目在后台挂载 When 激活 Then 后台不弹窗且激活后才请求确认', async () => {
+    expect(await renderer.run<Record<string, unknown>>(`
+      const api=window.agyRegression;api.render(true,true,false);await api.delay();
+      await api.until(()=>!document.querySelector('[role="alertdialog"]'));
+      const background=!!document.querySelector('[role="alertdialog"]');
+      api.render(true,true,true);await api.until(()=>document.querySelector('[role="alertdialog"]'));
+      return {background,opened:api.opened.length};
+    `)).toEqual({background:false,opened:0})
+  }, 30_000)
+
+  test('Given 已接受风险后显式关闭 When 隐藏再激活 Then 恢复新实例但关闭时不自动复活', async () => {
+    expect(await renderer.run<Record<string, unknown>>(`
+      const api=window.agyRegression;await api.until(()=>document.querySelector('[role="alertdialog"]'));api.click('接受风险并启动');
+      await api.until(()=>api.entry('a')?.status==='ready');
+      document.querySelector('button[aria-label="关闭终端"]').click();await api.until(()=>api.entry('a')?.status==='closed');
+      await api.delay();const afterClose=api.opened.length;
+      api.render(true,true,false);await api.delay();api.render(true,true,true);
+      await api.until(()=>api.entry('a')?.status==='ready' && !document.querySelector('[role="alertdialog"]'));
+      return {afterClose,opened:api.opened.length,confirmed:!!document.querySelector('[role="alertdialog"]')};
+    `)).toEqual({afterClose:1,opened:2,confirmed:false})
+  }, 30_000)
+
   test('Given 右侧工作区栏目形态 When 启动 AGY Then 使用紧凑标题栏且终端占满栏目高度', async () => {
     const measured = await renderer.run<{ headerHeight: number; hasProjectTitle: boolean; closeButton: boolean; terminalHeight: number }>(`
       const api=window.agyRegression;
