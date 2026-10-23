@@ -13,6 +13,7 @@ import {
   DEFAULT_BUDGET_RATIO,
   type ReferencedConversationData,
 } from './context-builder'
+import type { AgentContextRef } from '@gamma/shared'
 import { inferBudgetContextWindow } from '@gamma/shared'
 
 /**
@@ -85,6 +86,7 @@ export function injectReferencedConversationsIntoMessages<
 
 export interface InjectConversationReferencesContextOptions<T> {
   sessionId: string
+  contextRefs?: AgentContextRef[]
   channelId?: string
   modelId?: string
   contextWindow?: number
@@ -99,7 +101,7 @@ export async function injectConversationReferencesContext<
   T extends { role: string; content?: unknown; timestamp?: number }
 >(options: InjectConversationReferencesContextOptions<T>): Promise<T[]> {
   const { sessionId, modelId, contextWindow, messages, signal } = options
-  const activeRefs = getAgentContextRefs(sessionId)
+  const activeRefs = options.contextRefs ?? getAgentContextRefs(sessionId)
   if (signal?.aborted || !activeRefs || activeRefs.length === 0) {
     return [...messages]
   }

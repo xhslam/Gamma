@@ -1,3 +1,4 @@
+import { prepareAgentReferenceInput } from './lib/agent-send-outbox-service'
 /**
  * IPC 处理器模块
  *
@@ -3524,6 +3525,7 @@ export function registerIpcHandlers(): void {
     async (event, input: AgentSendInput): Promise<import('@gamma/shared').AgentSendResult> => {
       // 旧客户端也走同一个接管入口；IPC 只等待接收，不能等待模型与工具执行结束。
       const messageId = input.userMessageUuid ?? randomUUID()
+      input = prepareAgentReferenceInput(input, messageId)
       const result = await submitAgentMessageOnce(input.sessionId, messageId, () => submitOrEnqueueAgentMessage({
         ...input,
         userMessageUuid: messageId,
@@ -3565,6 +3567,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.QUEUE_MESSAGE,
     async (event, input: import('@gamma/shared').AgentQueueMessageInput): Promise<string> => {
+      input = prepareAgentReferenceInput(input, input.uuid)
       const result = await submitAgentMessageOnce(input.sessionId, input.uuid, () => queueAgentMessage(input, event.sender))
       return result.duplicate ? input.uuid! : result.value
     }
@@ -3574,6 +3577,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SUBMIT_OR_ENQUEUE_MESSAGE,
     async (event, input: import('@gamma/shared').AgentSubmitOrEnqueueInput): Promise<import('@gamma/shared').AgentSubmitOrEnqueueResult> => {
+      input = prepareAgentReferenceInput(input, input.queueMessageId)
       const result = await submitAgentMessageOnce(input.sessionId, input.queueMessageId, () => submitOrEnqueueAgentMessage(input, event.sender))
       return result.duplicate ? { disposition: result.acceptedAs === 'queued' ? 'queued' : 'accepted' } : result.value
     },
@@ -3591,6 +3595,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE,
     async (event, input: import('@gamma/shared').AgentDeferredQueueMessageInput): Promise<void> => {
+      input = prepareAgentReferenceInput(input, input.queueMessageId)
       await submitAgentMessageOnce(input.sessionId, input.queueMessageId, async () => { enqueueAgentQueuedMessage(input, event.sender) })
     },
   )

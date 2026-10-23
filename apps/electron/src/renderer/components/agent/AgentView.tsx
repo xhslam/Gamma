@@ -1148,6 +1148,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     // “立即发送”与后台续轮都由主进程用实时状态路由：活跃通道可用则注入，
     // 否则保留到 deferred queue。这里的 streaming 只表达用户是否要求打断，不决定路由。
     const input: AgentSubmitOrEnqueueInput = {
+      contextRefIds: currentContextRefs.map((ref) => ref.refId),
       queueMessageId: message.id,
       userMessageUuid: message.id,
       sessionId,
@@ -1202,6 +1203,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   }, [
     agentChannelId,
     agentModelId,
+    currentContextRefs,
     appendLiveUserMessage,
     clearStoppedByUser,
     currentWorkspaceId,
@@ -2480,6 +2482,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       appendOptimisticPersistedMessage(tempUserSDKMsg)
 
       const input: AgentSendInput = {
+        contextRefIds: currentContextRefs.map((ref) => ref.refId),
         sessionId,
         userMessageUuid: outboxMessageId,
         userMessage: sdkMessage,
@@ -2581,7 +2584,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       }
       await refreshOutbox()
     }
-  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping, isUpdatingRefs])
+  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping, isUpdatingRefs, currentContextRefs])
 
   const handleRestoreOutbox = React.useCallback((entry: AgentSendOutboxEntry): void => {
     if (sendGuardRef.current.isPending(sessionId) || entry.sessionId !== sessionId) return
@@ -2871,6 +2874,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (!agentChannelId || streaming || sendGuardRef.current.isPending(sessionId)) return
 
     // 找到最后一条用户消息
+    const retryUserMessage = [...persistedSDKMessages].reverse().find((message) => getUserTextFromSDKMessage(message) !== null)
+    const retryUserUuid = (retryUserMessage as { uuid?: string } | undefined)?.uuid
     const lastUserRawMessage = [...persistedSDKMessages]
       .reverse()
       .map(getUserTextFromSDKMessage)
@@ -2924,6 +2929,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       startedAt: streamStartedAt,
       permissionModeOverride: permissionMode,
       ...(retryOfErrorUuid && { retryOfErrorUuid }),
+      ...(retryUserUuid && { retryOfUserMessageUuid: retryUserUuid }),
     }, previousState)
   }, [persistedSDKMessages, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, setAgentStreamErrors, setStreamingStates, setMessagesCache, permissionMode, store, submitCommandOrRetry])
 

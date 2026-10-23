@@ -1,3 +1,5 @@
+import { captureReferenceSnapshot, getRetryReferenceSnapshot } from './conversation-reference/send-snapshot'
+import type { AgentSendInput } from '@gamma/shared'
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
 import { GAMMA_DEFAULT_PERMISSION_MODE } from '@gamma/shared'
@@ -45,7 +47,15 @@ const recovery = new AgentSendOutboxRecovery({
 })
 
 export function listAgentSendOutbox(sessionId: string): AgentSendOutboxEntry[] { return recovery.list(sessionId) }
-export function saveAgentSendOutbox(entry: AgentSendOutboxEntry): void { recovery.save(entry) }
+/** 保存、初次提交、失败状态回写均复用同一 Main 冻结描述。 */
+export function prepareAgentReferenceInput<T extends Pick<AgentSendInput, 'sessionId' | 'contextRefIds' | 'contextRefs'> & Partial<Pick<AgentSendInput, 'retryOfUserMessageUuid' | 'retryOfErrorUuid'>>>(input: T, messageId?: string): T {
+  const saved = messageId ? outbox.list(input.sessionId).find((entry) => entry.id === messageId) : undefined
+  const refs = saved?.input.contextRefs ?? getRetryReferenceSnapshot(input.sessionId, input.retryOfUserMessageUuid, input.retryOfErrorUuid) ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds)
+  return { ...input, contextRefIds: refs.map((ref) => ref.refId), contextRefs: structuredClone(refs) }
+}
+export function saveAgentSendOutbox(entry: AgentSendOutboxEntry): void {
+  recovery.save({ ...entry, input: prepareAgentReferenceInput(entry.input, entry.id) })
+}
 export function cancelQueuedAgentSend(input: AgentCancelQueuedMessageInput): boolean {
   return recovery.cancelQueued(input, () => cancelAgentQueuedMessage(input))
 }

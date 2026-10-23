@@ -1,3 +1,4 @@
+import { captureReferenceSnapshot } from './conversation-reference/send-snapshot'
 /**
  * Agent 服务层（IPC 薄层）
  *
@@ -280,6 +281,7 @@ export async function runAgent(
   input: AgentRunInput,
   webContents: WebContents,
 ): Promise<void> {
+  input = { ...input, contextRefs: input.contextRefs ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds) }
   // deferred queue runs carry their queue id as an internal extension.
   const queueMessageId = (input as Partial<AgentDeferredQueueMessageInput>).queueMessageId
   const releaseStart = reserveAgentSessionStart(input.sessionId, queueMessageId)
@@ -451,6 +453,7 @@ export async function runAgentHeadless(
   const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSendInput & { runGeneration?: unknown }
   const runInput: AgentRunInput = {
     ...publicInput,
+    contextRefs: publicInput.contextRefs ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds),
     ...(input.triggeredBy ? {} : { triggeredBy: inferredTriggeredBy }),
     ...(input.startedAt != null ? {} : { startedAt: Date.now() }),
   }
@@ -705,13 +708,14 @@ export async function queueAgentMessage(
   input: AgentQueueMessageInput,
   _webContents: WebContents,
 ): Promise<string> {
+  const refs = input.contextRefs ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds)
   return orchestrator.queueMessage(
     input.sessionId,
     input.userMessage,
     input.rawUserMessage,
     undefined,
     input.uuid,
-    { interrupt: input.interrupt },
+    { interrupt: input.interrupt, contextRefs: refs },
     input.mentionedSkills,
     input.mentionedMcpServers,
     input.mentionedSessionIds,
@@ -730,7 +734,7 @@ export async function submitOrEnqueueAgentMessage(
 ): Promise<AgentSubmitOrEnqueueResult> {
   // 运行身份由主进程分配，任何 IPC 入口都不能注入或复用内部 generation。
   const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSubmitOrEnqueueInput & { runGeneration?: unknown }
-  input = publicInput
+  input = { ...publicInput, contextRefs: publicInput.contextRefs ?? captureReferenceSnapshot(publicInput.sessionId, publicInput.contextRefIds) }
   rebindWebContents(input.sessionId, webContents)
 
   if (input.dispatch === 'now' && orchestrator.isActive(input.sessionId)) {
@@ -740,6 +744,7 @@ export async function submitOrEnqueueAgentMessage(
         userMessage: input.userMessage,
         rawUserMessage: input.rawUserMessage,
         uuid: input.queueMessageId,
+        contextRefs: input.contextRefs,
         interrupt: input.interrupt,
         mentionedSkills: input.mentionedSkills,
         mentionedMcpServers: input.mentionedMcpServers,
@@ -763,7 +768,7 @@ export async function submitOrEnqueueAgentMessage(
 /** 兼容旧调用：仅将消息追加到主进程 deferred queue。 */
 export function enqueueAgentQueuedMessage(input: AgentDeferredQueueMessageInput, webContents: WebContents): void {
   rebindWebContents(input.sessionId, webContents)
-  agentQueueCoordinator.enqueue(input)
+  agentQueueCoordinator.enqueue({ ...input, contextRefs: input.contextRefs ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds) })
 }
 
 export function cancelAgentQueuedMessage(input: AgentQueuedMessageControlInput): boolean {

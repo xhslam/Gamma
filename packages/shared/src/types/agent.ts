@@ -1395,6 +1395,10 @@ export interface WorkspaceCapabilities {
 export interface AgentSendInput {
   /** 会话 ID */
   sessionId: string
+  /** 发送时选择的引用；undefined沿用当前，[]明确不引用。 */
+  contextRefIds?: string[]
+  /** Main权威冻结描述；IPC不得信任renderer提供的此字段。 */
+  contextRefs?: AgentContextRef[]
   /** 用户消息内容（传给 Agent 的 SDK 文本；@file 引用路径已解码为真实路径） */
   userMessage: string
   /** 仅用于持久化/展示的原始用户输入（保留 @file 编码原文，省略时回退到 userMessage） */
@@ -1425,6 +1429,8 @@ export interface AgentSendInput {
   startedAt?: number
   /** 用户点击错误消息的重试时，指向本轮开始前应删除的错误 UUID。 */
   retryOfErrorUuid?: string
+  /** 重试固定原始用户消息的引用快照（包括旧错误无UUID的场景）。 */
+  retryOfUserMessageUuid?: string
   /** 触发来源：用户手动、定时任务、父 Agent 委派或外部 Bridge（用于权限与 UI 区分）。 */
   triggeredBy?: 'user' | 'automation' | 'delegation' | 'external'
   /** 定时任务执行上下文（注入到系统提示词，用户不可见） */
@@ -1463,6 +1469,8 @@ export interface AgentSubmitOrEnqueueResult {
 export interface AgentQueueMessageInput {
   /** 会话 ID */
   sessionId: string
+  contextRefIds?: string[]
+  contextRefs?: AgentContextRef[]
   /** 用户消息内容 */
   userMessage: string
   /** 仅用于持久化/重放的原始用户输入；省略时回退到 userMessage */

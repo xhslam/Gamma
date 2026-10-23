@@ -1,3 +1,5 @@
+import type { AgentContextRef } from '@gamma/shared'
+import { captureReferenceSnapshot } from './conversation-reference/send-snapshot'
 /**
  * AgentOrchestrator — Agent 编排层
  *
@@ -53,7 +55,7 @@ import { getAdapter, fetchTitle } from '@gamma/core'
 import pkg from '../../../package.json' with { type: 'json' }
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
-import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir, isAgentSessionDeleting, getAgentContextRefs } from './agent-session-manager'
+import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir, isAgentSessionDeleting } from './agent-session-manager'
 import { getAgentWorkspace, getProjectFilesPath, getWorkspaceMcpConfig, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles, getWorkspaceAgentsMdPath, readWorkspaceAgentsMd, getWorkspaceMemoryGuidance, isWorkspaceProjectKnowledgeMaintenanceApproved } from './agent-workspace-manager'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { getMcpApiKeyEnvironment, getMcpOAuthHeaders } from './mcp-oauth-service'
@@ -578,9 +580,9 @@ export class AgentOrchestrator {
     userMessage: string,
     createdAt = Date.now(),
     uuid?: string,
+    activeRefs: AgentContextRef[] = [],
   ): string {
     const persistedUuid = uuid ?? randomUUID()
-    const activeRefs = getAgentContextRefs(sessionId)
     const userSDKMsg: SDKMessage = {
       type: 'user',
       uuid: persistedUuid,
@@ -589,7 +591,7 @@ export class AgentOrchestrator {
       },
       parent_tool_use_id: null,
       _createdAt: createdAt,
-      ...(activeRefs.length > 0 && { contextRefs: activeRefs }),
+      contextRefs: activeRefs,
     }
     appendSDKMessages(sessionId, [userSDKMsg])
     return persistedUuid
@@ -684,6 +686,7 @@ export class AgentOrchestrator {
     extensions: { piCustomTools?: ToolDefinition[] } = {},
   ): Promise<void> {
     const { sessionId, userMessage, rawUserMessage, userMessageUuid, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid } = input
+    const referenceSnapshot = input.contextRefs ?? captureReferenceSnapshot(sessionId, input.contextRefIds)
     const streamStartedAt = input.startedAt ?? Date.now()
     let userMessagePersisted = false
     let initialUserMessageUuid: string | undefined
@@ -714,6 +717,7 @@ export class AgentOrchestrator {
         rawUserMessage ?? userMessage,
         Date.now(),
         userMessageUuid,
+        referenceSnapshot,
       )
       userMessagePersisted = true
     }
@@ -1641,6 +1645,7 @@ export class AgentOrchestrator {
       const piCustomTools = [...piBuiltinTools, ...piMcpTools, ...(extensions.piCustomTools ?? [])]
       let githubCopilotCredentialsSnapshot = githubCopilotOAuthCredentials
       const queryOptions: PiAgentQueryOptions = {
+        contextRefs: referenceSnapshot,
         sessionId,
         computerToolsAvailable: true,
         validateComputerLease: async () => { computerController.assertObservationSharing(computerBinding) },
@@ -2458,7 +2463,7 @@ export class AgentOrchestrator {
     rawText?: string,
     _priority?: string,
     presetUuid?: string,
-    opts?: { interrupt?: boolean },
+    opts?: { interrupt?: boolean; contextRefs?: AgentContextRef[] },
     mentionedSkills?: string[],
     mentionedMcpServers?: string[],
     mentionedSessionIds?: string[],
@@ -2473,6 +2478,7 @@ export class AgentOrchestrator {
       throw new Error('[Agent 编排] 当前适配器不支持流式追加消息')
     }
 
+    const referenceSnapshot = opts?.contextRefs ?? captureReferenceSnapshot(sessionId)
     // 注入 mention 引用指令（Skill/MCP/会话）— 与 sendMessage 路径保持一致的 prompt 加工
     const meta = getAgentSessionMeta(sessionId)
     const workspaceSlug = meta?.workspaceId
@@ -2533,13 +2539,13 @@ export class AgentOrchestrator {
 
     try {
       await this.adapter.sendQueuedMessage(sessionId, sdkMessage, {
+        contextRefs: referenceSnapshot,
         ...(opts?.interrupt ? { interrupt: true } : {}),
         ...(mentionedSkills?.length ? { skillMentions: mentionedSkills } : {}),
       })
       console.log(`[Agent 编排] 追加消息已注入: sessionId=${sessionId}, uuid=${uuid}, interrupt=${!!opts?.interrupt}`)
 
       // 立即持久化到 JSONL — 仅存原始文本，不含 prompt 工程块（与 sendMessage 路径一致）
-      const activeRefs = getAgentContextRefs(sessionId)
       const persistMsg: SDKMessage = {
         type: 'user',
         uuid,
@@ -2548,7 +2554,7 @@ export class AgentOrchestrator {
         },
         parent_tool_use_id: null,
         _createdAt: Date.now(),
-        ...(activeRefs.length > 0 && { contextRefs: activeRefs }),
+        contextRefs: referenceSnapshot,
       }
       appendSDKMessages(sessionId, [persistMsg])
       this.flushPendingUserSkillActivations(sessionId, uuid)
