@@ -114,4 +114,90 @@ describe('Given 主进程恢复协调器', () => {
     expect(prepareOutboxRetryInput(withFile, { ...context, files: [join(external, 'file')] }).permissionModeOverride).toBe('plan')
     expect(() => prepareOutboxRetryInput({ ...f.entry, input: { ...f.entry.input, workspaceId: 'old' } }, context)).toThrow('已迁移')
   })
+
+  test('When 磁盘崩溃重启后历史重试 Then 保留原冻结引用A，不受Composer当前新引用B影响，且排队状态正确转换', async () => {
+    const f = fixture()
+    const frozenRefA = {
+      refId: 'ref_frozen_a',
+      sourceConversationId: 'src_sess_a',
+      sourceProjectId: 'ws_test',
+      titleAtAttach: '原引用A',
+      mode: 'snapshot' as const,
+      snapshotUpToMessageId: 'msg_a_last',
+      snapshotAt: 1000,
+      messageCount: 5,
+    }
+    const failedEntryA: AgentSendOutboxEntry = {
+      sessionId: 'session',
+      id: 'msg_failed_a',
+      createdAt: 1000,
+      status: 'failed',
+      draft: { text: '带引用A的消息', html: '<p>带引用A的消息</p>', attachments: [] },
+      input: {
+        sessionId: 'session',
+        queueMessageId: 'msg_failed_a',
+        userMessageUuid: 'msg_failed_a',
+        userMessage: '带引用A的消息',
+        channelId: 'channel',
+        dispatch: 'now',
+        permissionModeOverride: 'plan',
+        contextRefIds: ['ref_frozen_a'],
+        contextRefs: [frozenRefA],
+      },
+    }
+    // 保存至磁盘
+    f.outbox.save(failedEntryA)
+
+    // 1. 模拟应用崩溃重启：重建全新的 Outbox 和 Recovery 实例（从真实磁盘读取）
+    const freshOutbox = new AgentSendOutbox((id) => join(f.dir, `${id}.json`))
+    const diskEntries = freshOutbox.list('session')
+    expect(diskEntries.some((e) => e.id === 'msg_failed_a')).toBe(true)
+
+    // 2. 模拟当前 Composer 此时已经变更引用为 B
+    const composerCurrentRefs = [
+      {
+        refId: 'ref_composer_b',
+        sourceConversationId: 'src_sess_b',
+        sourceProjectId: 'ws_test',
+        titleAtAttach: '新引用B',
+        mode: 'snapshot' as const,
+        snapshotUpToMessageId: 'msg_b_last',
+        snapshotAt: 2000,
+        messageCount: 1,
+      },
+    ]
+
+    const freshQueued = new Set<string>()
+    const freshAccepted = new Set<string>()
+    let submittedInput: AgentSendOutboxEntry['input'] | undefined
+    const freshRecovery = new AgentSendOutboxRecovery({
+      outbox: freshOutbox,
+      readAcceptedIds: () => freshAccepted,
+      queuedIds: () => freshQueued,
+      isBusy: () => true, // 此时正在处理其他任务，触发排队
+      prepareRetryInput: (item) => prepareOutboxRetryInput(item, {
+        workspaceId: 'workspace',
+        permissionMode: 'plan',
+        directories: [f.dir],
+        files: [],
+      }),
+    })
+
+    // 3. 执行历史重试：模拟提交到排队
+    const submit = async (input: AgentSendOutboxEntry['input']) => {
+      submittedInput = input
+      freshQueued.add(input.queueMessageId)
+      return { disposition: 'queued' as const }
+    }
+
+    const result = await freshRecovery.retry({ sessionId: 'session', messageId: 'msg_failed_a' }, submit)
+
+    // 4. 断言：重试成功转入排队，提交的 payload 严格使用原冻结引用A，绝不混入 Composer 的引用B
+    expect(result).toEqual({ disposition: 'queued' })
+    expect(submittedInput).toBeDefined()
+    expect(submittedInput?.contextRefIds).toEqual(['ref_frozen_a'])
+    expect(submittedInput?.contextRefs).toEqual([frozenRefA])
+    expect(submittedInput?.contextRefIds).not.toContain('ref_composer_b')
+    expect(freshQueued.has('msg_failed_a')).toBe(true)
+  })
 })
