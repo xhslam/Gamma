@@ -136,7 +136,7 @@ export function ConversationReferenceChips({
                 <TooltipContent side="top">
                   <p>
                     {isDeleted
-                      ? '源对话已删除。本次发送将跳过该引用，可手动移除。'
+                      ? '源对话已删除。本次发送将提示该引用不可用，可手动移除。'
                       : isLive
                         ? '实时模式：每轮读取源会话最新消息（点击切换为快照）'
                         : '快照模式：冻结在引用时的消息状态（点击切换为实时）'}

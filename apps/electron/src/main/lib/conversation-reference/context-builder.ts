@@ -72,6 +72,7 @@ export interface ReferencedConversationData {
   snapshotAt?: number
   messages: NormalizedReferencedMessage[]
   previousReferencedTitles?: string[]
+  unavailableReason?: string
 }
 
 /**
@@ -689,6 +690,23 @@ export function buildReferencedContext(
       : undefined
     const prevTitlesTokens = prevTitlesLine ? estimator(prevTitlesLine + '\n') : 0
 
+    if (ref.unavailableReason) {
+      const safeTitle = escapeConversationContent(ref.title)
+      const safeReason = escapeConversationContent(ref.unavailableReason)
+      const unavailableNotice = `引用「${safeTitle}」当前不可用：${safeReason}`
+      const unavailableTokens = estimator(unavailableNotice + '\n')
+      return {
+        ref,
+        openTag,
+        closeTag,
+        prevTitlesLine: undefined,
+        tagOverhead,
+        formattedMessages: [unavailableNotice],
+        messageTokens: [unavailableTokens],
+        totalRequiredTokens: tagOverhead + unavailableTokens,
+      }
+    }
+
     const formattedMessages = ref.messages.map((m) => formatNormalizedMessage(m, maxToolResultChars))
     const messageTokens = formattedMessages.map((text) => estimator(text + '\n'))
     const fullContentTokens = messageTokens.reduce((sum, t) => sum + t, 0) + prevTitlesTokens
@@ -739,6 +757,7 @@ export function buildReferencedContext(
     const toolNoticeTokens = estimator(toolNoticeText)
 
     const requirements = formattedRefsData.map((item) => {
+      if (item.ref.unavailableReason) return item.totalRequiredTokens
       const summary = modelSummaries.get(item.ref.refId) ?? modelSummaries.get(item.ref.sourceConversationId)
       return item.tagOverhead + toolNoticeTokens + (summary ? estimator(escapeConversationContent(summary)) : item.totalRequiredTokens + 100)
     })
@@ -746,6 +765,26 @@ export function buildReferencedContext(
     for (const [index, item] of formattedRefsData.entries()) {
       const refBudgetShare = budgets[index] ?? 0
       const { ref, openTag, closeTag, prevTitlesLine, tagOverhead } = item
+
+      if (ref.unavailableReason) {
+        const safeTitle = escapeConversationContent(ref.title)
+        const safeReason = escapeConversationContent(ref.unavailableReason)
+        const notice = `引用「${safeTitle}」当前不可用：${safeReason}`
+        const safeContent = truncateTextToTokenBudget(notice, Math.max(0, refBudgetShare - tagOverhead), estimator)
+        let block = `${openTag}\n${safeContent}\n${closeTag}`
+        const safeBlock = fitConversationBlock(block, refBudgetShare, estimator)
+        conversationBlocks.push(safeBlock)
+        decisionLogs.push({
+          refId: ref.refId,
+          sourceConversationId: ref.sourceConversationId,
+          messageCount: 0,
+          estTokens: estimator(safeBlock),
+          tier: 'tier_b_fallback',
+          reason: `Reference unavailable: ${ref.unavailableReason}`,
+        })
+        continue
+      }
+
       const summary = modelSummaries.get(ref.refId) ?? modelSummaries.get(ref.sourceConversationId)
 
       let content = ''
@@ -816,6 +855,26 @@ export function buildReferencedContext(
       const item = formattedRefsData[i]!
       const { ref, openTag, closeTag, prevTitlesLine, tagOverhead, formattedMessages, messageTokens } = item
       const allocated = allocatedBudgets[i] ?? 0
+
+      if (ref.unavailableReason) {
+        const safeTitle = escapeConversationContent(ref.title)
+        const safeReason = escapeConversationContent(ref.unavailableReason)
+        const notice = `引用「${safeTitle}」当前不可用：${safeReason}`
+        const safeContent = truncateTextToTokenBudget(notice, Math.max(0, allocated - tagOverhead), estimator)
+        let block = `${openTag}\n${safeContent}\n${closeTag}`
+        const safeBlock = fitConversationBlock(block, allocated, estimator)
+        conversationBlocks.push(safeBlock)
+        decisionLogs.push({
+          refId: ref.refId,
+          sourceConversationId: ref.sourceConversationId,
+          messageCount: 0,
+          estTokens: estimator(safeBlock),
+          tier: 'tier_a_truncated',
+          reason: `Reference unavailable: ${ref.unavailableReason}`,
+        })
+        continue
+      }
+
       const targetMessageBudget = Math.max(0, allocated - tagOverhead)
 
       const { truncatedFormatted, wasTruncated } = truncateMessagesToBudget(

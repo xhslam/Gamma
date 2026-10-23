@@ -5,9 +5,10 @@
  * 纯内存变换，不持久化到 JSONL 会话历史，自动免疫会话压缩与截断。
  */
 
+import { existsSync } from 'node:fs'
 import { getAgentContextRefs, getAgentSessionMeta } from '../agent-session-manager'
 import { getReferencedMessagesForRef } from './pi-tools'
-import { computeSnapshotHash, loadSummaryFromCache } from './ref-cache'
+import { computeSnapshotHash, getSnapshotCacheFilePathByRefId, loadSnapshotFromCache, loadSummaryFromCache } from './ref-cache'
 import {
   buildReferencedContext,
   DEFAULT_BUDGET_RATIO,
@@ -111,9 +112,92 @@ export async function injectConversationReferencesContext<
   const modelSummaries = new Map<string, string>()
 
   for (const ref of activeRefs) {
-    // 校验源会话是否仍存在；源会话被删除时直接跳过，不继续注入失效快照
+    // 校验源会话是否仍存在；源会话被删除或归属不符时记录不可用原因，计入预算注入不可用提示
     const sourceMeta = getAgentSessionMeta(ref.sourceConversationId)
-    if (!sourceMeta || ref.sourceProjectId !== (sourceMeta.workspaceId ?? '')) {
+    if (!sourceMeta) {
+      resolvedDataList.push({
+        refId: ref.refId,
+        sourceConversationId: ref.sourceConversationId,
+        sourceProjectId: ref.sourceProjectId,
+        title: ref.titleAtAttach || '未命名对话',
+        mode: ref.mode,
+        snapshotUpToMessageId: ref.snapshotUpToMessageId,
+        snapshotAt: ref.snapshotAt,
+        messages: [],
+        unavailableReason: '源对话已删除',
+      })
+      continue
+    }
+
+    if (ref.sourceProjectId !== (sourceMeta.workspaceId ?? '')) {
+      resolvedDataList.push({
+        refId: ref.refId,
+        sourceConversationId: ref.sourceConversationId,
+        sourceProjectId: ref.sourceProjectId,
+        title: sourceMeta.title || ref.titleAtAttach || '未命名对话',
+        mode: ref.mode,
+        snapshotUpToMessageId: ref.snapshotUpToMessageId,
+        snapshotAt: ref.snapshotAt,
+        messages: [],
+        unavailableReason: '对话归属项目不符',
+      })
+      continue
+    }
+
+    if (ref.mode === 'snapshot') {
+      const cachePath = getSnapshotCacheFilePathByRefId(ref.refId)
+      if (!existsSync(cachePath)) {
+        resolvedDataList.push({
+          refId: ref.refId,
+          sourceConversationId: ref.sourceConversationId,
+          sourceProjectId: ref.sourceProjectId,
+          title: ref.titleAtAttach || sourceMeta.title || '未命名对话',
+          mode: ref.mode,
+          snapshotUpToMessageId: ref.snapshotUpToMessageId,
+          snapshotAt: ref.snapshotAt,
+          messages: [],
+          unavailableReason: '快照缓存缺失',
+        })
+        continue
+      }
+
+      const cached = loadSnapshotFromCache(ref.refId, ref.snapshotUpToMessageId)
+      if (!cached) {
+        resolvedDataList.push({
+          refId: ref.refId,
+          sourceConversationId: ref.sourceConversationId,
+          sourceProjectId: ref.sourceProjectId,
+          title: ref.titleAtAttach || sourceMeta.title || '未命名对话',
+          mode: ref.mode,
+          snapshotUpToMessageId: ref.snapshotUpToMessageId,
+          snapshotAt: ref.snapshotAt,
+          messages: [],
+          unavailableReason: '快照缓存损坏',
+        })
+        continue
+      }
+
+      const normMessages = cached.messages
+      const prevTitles: string[] = []
+      if (cached.previousReferencedTitles && cached.previousReferencedTitles.length > 0) {
+        prevTitles.push(...cached.previousReferencedTitles)
+      } else if (sourceMeta.contextRefs && sourceMeta.contextRefs.length > 0) {
+        for (const nested of sourceMeta.contextRefs) {
+          if (nested.titleAtAttach) prevTitles.push(nested.titleAtAttach)
+        }
+      }
+
+      resolvedDataList.push({
+        refId: ref.refId,
+        sourceConversationId: ref.sourceConversationId,
+        sourceProjectId: ref.sourceProjectId,
+        title: sourceMeta.title || ref.titleAtAttach,
+        mode: ref.mode,
+        snapshotUpToMessageId: ref.snapshotUpToMessageId,
+        snapshotAt: ref.snapshotAt,
+        messages: normMessages,
+        previousReferencedTitles: prevTitles.length > 0 ? prevTitles : undefined,
+      })
       continue
     }
 
@@ -145,8 +229,9 @@ export async function injectConversationReferencesContext<
   // 与最终构建使用同一分档决策，工具/附件/包裹开销不能漏算。
   const initial = buildReferencedContext(resolvedDataList, budgetTokens)
   if (initial.tier === 'B') {
-    // 发送路径只读缓存，绝不等待或启动模型摘要；未就绪立即使用受预算摘录。
+    // 发送路径只读缓存，绝不等待或启动模型摘要；未就绪立即使用受预算摘录。B 不能以旧 summary 覆盖不可用提示。
     for (const refData of resolvedDataList) {
+      if (refData.unavailableReason) continue
       const summary = loadSummaryFromCache(refData.sourceConversationId,
         refData.snapshotUpToMessageId ?? 'latest', computeSnapshotHash(refData.messages))
       if (summary) modelSummaries.set(refData.refId, summary)
