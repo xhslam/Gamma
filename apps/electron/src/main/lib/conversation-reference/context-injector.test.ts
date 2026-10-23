@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { setConfigHomeForTest, getAgentSessionsIndexPath, getAgentSessionMessagesPath } from '../config-paths'
@@ -294,6 +294,118 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
       })
       const text = String(result[0]!.content)
       expect(text).not.toContain('当前不可用')
+    })
+  })
+
+  describe('Security & Lifecycle Regressions (Item 7)', () => {
+    it('When 被引会话包含嵌套引用 Then 仅在正文注明标题而不递归展开嵌套消息', async () => {
+      // 在 sourceMeta 中添加嵌套引用
+      const indexPath = getAgentSessionsIndexPath()
+      const index = JSON.parse(readFileSync(indexPath, 'utf-8'))
+      const source = index.sessions.find((s: { id: string }) => s.id === sourceSessionId)
+      source.contextRefs = [
+        {
+          refId: 'nested_sub_ref_1',
+          sourceConversationId: 'deep_nested_session',
+          sourceProjectId: 'ws_test',
+          titleAtAttach: '底层架构选型讨论',
+          mode: 'snapshot',
+        },
+      ]
+      writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf-8')
+
+      const ref = {
+        refId: 'ref_top_1',
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_test',
+        titleAtAttach: '上层需求讨论',
+        mode: 'live' as const,
+      }
+
+      const result = await injectConversationReferencesContext({
+        sessionId: testSessionId,
+        contextRefs: [ref],
+        messages: [{ role: 'user', content: '测试问题' }],
+      })
+
+      const injectedText = String(result[0]!.content)
+      expect(injectedText).toContain('此对话曾引用过：底层架构选型讨论')
+      // 绝不递归展开底层会话标签
+      expect(injectedText).not.toContain('<conversation id="nested_sub_ref_1"')
+      expect(injectedText).not.toContain('deep_nested_session')
+    })
+
+    it('When 用户尝试添加自身会话或重复会话引用 Then updateAgentContextRefs 严格去重并拒绝自引', () => {
+      // 传入 3 项：一项自引(testSessionId)，两项重复(sourceSessionId)
+      const inputRefs = [
+        { sourceConversationId: testSessionId, mode: 'snapshot' as const },
+        { sourceConversationId: sourceSessionId, mode: 'snapshot' as const },
+        { sourceConversationId: sourceSessionId, mode: 'snapshot' as const },
+      ]
+
+      const updated = updateAgentContextRefs(testSessionId, inputRefs)
+      // 自引被自动丢弃，重复项被去重，仅剩 1 项
+      expect(updated.length).toBe(1)
+      expect(updated[0]!.sourceConversationId).toBe(sourceSessionId)
+      expect(updated.some((r) => r.sourceConversationId === testSessionId)).toBe(false)
+    })
+
+    it('When 处理带 Canary 标记的引用全文与摘要 When 经过完整注入与控制台输出 Then 严禁在 console / logger 中泄露 Canary 全文', async () => {
+      const canaryBody = 'CANARY_CONFIDENTIAL_CORPUS_987654_DO_NOT_LOG'
+      const canarySummary = 'CANARY_CONFIDENTIAL_SUMMARY_876543_DO_NOT_LOG'
+
+      const logs: string[] = []
+      const origLog = console.log
+      const origWarn = console.warn
+      const origError = console.error
+
+      console.log = (...args: unknown[]) => logs.push(args.map(String).join(' '))
+      console.warn = (...args: unknown[]) => logs.push(args.map(String).join(' '))
+      console.error = (...args: unknown[]) => logs.push(args.map(String).join(' '))
+
+      try {
+        const canaryRefId = 'ref_canary_log_test'
+        const canaryMessages: NormalizedReferencedMessage[] = [
+          { id: 'c1', role: 'user', content: `秘密报告: ${canaryBody}` },
+        ]
+
+        saveSnapshotToCache({
+          refId: canaryRefId,
+          sourceConversationId: sourceSessionId,
+          sourceProjectId: 'ws_test',
+          title: 'Canary Session',
+          snapshotUpToMessageId: 'c1',
+          snapshotAt: Date.now(),
+          messageCount: 1,
+          estTokens: 100,
+          contentHash: computeSnapshotHash(canaryMessages),
+          messages: canaryMessages,
+        })
+
+        const ref = {
+          refId: canaryRefId,
+          sourceConversationId: sourceSessionId,
+          sourceProjectId: 'ws_test',
+          titleAtAttach: 'Canary Session',
+          mode: 'snapshot' as const,
+          snapshotUpToMessageId: 'c1',
+        }
+
+        await injectConversationReferencesContext({
+          sessionId: testSessionId,
+          contextRefs: [ref],
+          messages: [{ role: 'user', content: 'Canary 提问' }],
+        })
+
+        // 检验所有 console.log / warn / error 输出
+        const allLogged = logs.join('\n')
+        expect(allLogged).not.toContain(canaryBody)
+        expect(allLogged).not.toContain(canarySummary)
+      } finally {
+        console.log = origLog
+        console.warn = origWarn
+        console.error = origError
+      }
     })
   })
 })

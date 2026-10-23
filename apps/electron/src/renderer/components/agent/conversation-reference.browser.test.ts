@@ -24,10 +24,20 @@ beforeAll(async () => {
     window.deleteSource=()=>store.set(agentSessionsAtom,sessions.filter(s=>s.id!=='source-0'));
     function Fixture(){const [open,setOpen]=React.useState(true),[refs,setRefs]=React.useState([]);
       window.fixture={setOpen,setRefs};
+      const onBackspaceEmpty=()=>{
+        if(refs.length>0){setRefs(prev=>prev.slice(0,-1));return true;}
+        return false;
+      };
       return React.createElement(React.Fragment,null,
         React.createElement('output',{id:'confirmed'},JSON.stringify(refs)),
         React.createElement(ConversationReferenceChips,{sessionId:'current',refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
         React.createElement(ReferencedConversationsMessageCard,{refs}),
+        React.createElement('input',{
+          id:'test-composer',
+          onKeyDown:(e)=>{
+            if(e.key==='Backspace'&&!e.currentTarget.value){onBackspaceEmpty();}
+          }
+        }),
         React.createElement(ConversationReferenceDialog,{open,onOpenChange:setOpen,currentSessionId:'current',currentWorkspaceId:'project-a',initialRefs:refs,onConfirm:async next=>setRefs(next)}));}
     createRoot(document.getElementById('root')).render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement(Fixture))));
   `)
@@ -72,5 +82,37 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
       return {renamed,historical,deleted,disabled,removed:document.querySelector('#confirmed').textContent==='[]'};
     `)
     expect(result).toEqual({ renamed: true, historical: true, deleted: true, disabled: true, removed: true })
+  }, 20_000)
+  test('When 输入框为空按 Backspace Then 删除末尾 chip；输入框有内容时不触发', async () => {
+    const result = await renderer.run(`
+      window.fixture.setOpen(false);
+      window.fixture.setRefs([
+        { refId: 'ref_a', sourceConversationId: 'source-1', sourceProjectId: 'project-a', titleAtAttach: 'A', mode: 'snapshot' },
+        { refId: 'ref_b', sourceConversationId: 'source-2', sourceProjectId: 'project-a', titleAtAttach: 'B', mode: 'snapshot' }
+      ]);
+      await window.wait(50);
+      const input = document.querySelector('#test-composer');
+      input.focus();
+
+      // 输入框有文本时按 Backspace
+      input.value = '@file';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      await window.wait(50);
+      const afterNonEmptyCount = JSON.parse(document.querySelector('#confirmed').textContent).length;
+
+      // 清空输入框后按 Backspace
+      input.value = '';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      await window.wait(50);
+      const afterEmptyCount = JSON.parse(document.querySelector('#confirmed').textContent).length;
+
+      // 再次按 Backspace，应删除最后一个 chip
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      await window.wait(50);
+      const finalCount = JSON.parse(document.querySelector('#confirmed').textContent).length;
+
+      return { afterNonEmptyCount, afterEmptyCount, finalCount };
+    `)
+    expect(result).toEqual({ afterNonEmptyCount: 2, afterEmptyCount: 1, finalCount: 0 })
   }, 20_000)
 })
