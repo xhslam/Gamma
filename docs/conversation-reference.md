@@ -40,3 +40,9 @@
 - 消息卡片只显示引用清单，可跳源会话；源已删时不可跳转。历史原标题保持发送时快照。
 - 自动测试覆盖纯构建、安全反例、持久化、快照/live、删除/越权、300 条深事实、摘要失败/取消/超时、压缩后模拟重注入。
 - 真实 Pi + 本地模拟 provider 验证多轮工具、恢复、移除和 artifact 不持久化注入；真实 Chromium 验证选择器及 chips。它们不是在线模型语义验收，也不等同于安装后真机重启验收。
+
+## 历史区间范围与 Preload IPC 澄清
+- 在区间 `78e32850..4d56ed88` 中，实际改动统计为 42 files changed, 2475 insertions(+), 262 deletions(-)，仓库总 tracked 文件数为 1744（`git ls-files | wc -l`）。
+- `apps/electron/src/preload/index.ts` 与 `apps/electron/src/main/lib/agent-session-manager.ts` 在该区间内并无物理代码修改，属于继承此前已就绪的既有工程能力，此前报告在文件栏提及系归类为“链路涉及文件”所致。
+- 摘要状态获取复用既有 Preload 暴露的 `window.electronAPI.getContextRefs: (req: GetContextRefsRequest) => Promise<GetContextRefsResponse>` 契约，Main 端在 `AGENT_IPC_CHANNELS.GET_CONTEXT_REFS` 返回 `{ refs, summaryStatuses }`，Chips 组件直接轮询该接口获取摘要就绪/回退/处理中状态，无需新增额外 IPC 通道或修改 Preload 接口。
+
