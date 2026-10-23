@@ -11,11 +11,11 @@ beforeAll(async () => {
     import {ReferencedConversationsMessageCard} from '@/components/agent/ReferencedConversationsMessageCard';
     import {agentSessionsAtom,agentWorkspacesAtom} from '@/atoms/agent-atoms'; import '@/styles/globals.css';
     const store=createStore(), now=1700000000000;
-    const sessions=Array.from({length:36},(_,i)=>({id:'source-'+i,title:'测试会话-'+i,workspaceId:i<20?'project-a':'project-b',createdAt:now,updatedAt:now+i}));
+    const sessions=Array.from({length:36},(_,i)=>({id:'source-'+i,title:'测试会话-'+i,workspaceId:i<20?'project-a':'project-b',channelId:i===0?'channel-source-legacy':'channel-target-active',createdAt:now,updatedAt:now+i}));
     store.set(agentSessionsAtom,sessions);
     store.set(agentWorkspacesAtom,[{id:'project-a',name:'当前测试项目',slug:'a'},{id:'project-b',name:'跨项目测试',slug:'b'}]);
     window.requests=[]; window.summaryState='running';
-    window.electronAPI={getContextRefs:async ()=>({refs:[],summaryStatuses:{r1:window.summaryState}}),getContextRefDetail:async ({sourceSessionId})=>{
+    window.electronAPI={getContextRefs:async ()=>({refs:[],summaryStatuses:{r1:window.summaryState,r_cross:window.summaryState}}),getContextRefDetail:async ({sourceSessionId})=>{
       await new Promise(r=>setTimeout(r,15)); window.requests.push(sourceSessionId);
       return {detail:{sourceConversationId:sourceSessionId,sourceProjectId:'project-a',title:sourceSessionId,lastCompleteMessageId:'m1',messageCount:42,estTokens:1234,firstMessagePreview:'预览-'+sourceSessionId,updatedAt:now,exists:true}};
     }};
@@ -23,14 +23,15 @@ beforeAll(async () => {
     window.rename=()=>store.set(agentSessionsAtom,sessions.map(s=>s.id==='source-0'?{...s,title:'已改名的源会话'}:s));
     window.deleteSource=()=>store.set(agentSessionsAtom,sessions.filter(s=>s.id!=='source-0'));
     function Fixture(){const [open,setOpen]=React.useState(true),[refs,setRefs]=React.useState([]);
-      window.fixture={setOpen,setRefs};
+      const [currentChannelId,setCurrentChannelId]=React.useState('channel-target-active');
+      window.fixture={setOpen,setRefs,setCurrentChannelId};
       const onBackspaceEmpty=()=>{
         if(refs.length>0){setRefs(prev=>prev.slice(0,-1));return true;}
         return false;
       };
       return React.createElement(React.Fragment,null,
         React.createElement('output',{id:'confirmed'},JSON.stringify(refs)),
-        React.createElement(ConversationReferenceChips,{sessionId:'current',refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
+        React.createElement(ConversationReferenceChips,{sessionId:'current',currentChannelId,refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
         React.createElement(ReferencedConversationsMessageCard,{refs}),
         React.createElement('input',{
           id:'test-composer',
@@ -114,5 +115,46 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
       return { afterNonEmptyCount, afterEmptyCount, finalCount };
     `)
     expect(result).toEqual({ afterNonEmptyCount: 2, afterEmptyCount: 1, finalCount: 0 })
+  }, 20_000)
+  test('When 来源渠道与当前渠道不同 Then chip与列表提示“内容将发送给当前渠道的模型”且轮询不重复', async () => {
+    const result = await renderer.run(`
+      window.fixture.setOpen(false);
+      // source-0 属于 channel-source-legacy，当前渠道为 channel-target-active
+      window.fixture.setRefs([
+        { refId: 'r_cross', sourceConversationId: 'source-0', sourceProjectId: 'project-a', titleAtAttach: '跨渠道测试', mode: 'snapshot' }
+      ]);
+      await window.wait(80);
+      const hasIndicator = Boolean(document.querySelector('[data-testid="cross-channel-indicator"]'));
+      const noticeText = document.querySelector('[data-testid="cross-channel-notice"]')?.textContent;
+
+      // 等待多次 2s 轮询，验证提示稳定且不会重复出现多个 banner
+      await window.wait(2200);
+      const noticeCountAfterPoll = document.querySelectorAll('[data-testid="cross-channel-notice"]').length;
+
+      // 切换当前渠道为与源渠道一致
+      window.fixture.setCurrentChannelId('channel-source-legacy');
+      await window.wait(80);
+      const indicatorAfterSameChannel = Boolean(document.querySelector('[data-testid="cross-channel-indicator"]'));
+      const noticeAfterSameChannel = Boolean(document.querySelector('[data-testid="cross-channel-notice"]'));
+
+      // 恢复当前渠道
+      window.fixture.setCurrentChannelId('channel-target-active');
+      await window.wait(80);
+
+      return {
+        hasIndicator,
+        noticeText,
+        noticeCountAfterPoll,
+        indicatorAfterSameChannel,
+        noticeAfterSameChannel,
+      };
+    `)
+    expect(result).toEqual({
+      hasIndicator: true,
+      noticeText: '内容将发送给当前渠道的模型',
+      noticeCountAfterPoll: 1,
+      indicatorAfterSameChannel: false,
+      noticeAfterSameChannel: false,
+    })
   }, 20_000)
 })

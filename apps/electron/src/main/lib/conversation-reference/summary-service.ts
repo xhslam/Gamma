@@ -27,6 +27,7 @@ import {
 } from './ref-cache'
 import {
   formatNormalizedMessage,
+  redactCredentials,
   type NormalizedReferencedMessage,
 } from './context-builder'
 
@@ -312,7 +313,7 @@ export async function getOrGenerateConversationSummary(
           if (!raw || !raw.trim()) {
             throw new Error(`分块 ${idx} 摘要生成失败`)
           }
-          chunkSummary = raw.trim()
+          chunkSummary = redactCredentials(raw.trim())
           saveChunkSummaryFn({
             sourceConversationId,
             chunkIndex: idx,
@@ -335,7 +336,7 @@ export async function getOrGenerateConversationSummary(
       if (!merged || !merged.trim()) {
         throw new Error('合并摘要生成空结果')
       }
-      finalSummary = merged.trim()
+      finalSummary = redactCredentials(merged.trim())
     }
 
     if (!finalSummary) throw new Error('摘要生成结果为空')
@@ -365,7 +366,7 @@ export async function getOrGenerateConversationSummary(
         console.warn(`[会话引用摘要] 摘要生成失败（${sourceConversationId}），已回退摘录`)
         return null
       }
-      const cleanFallback = fallbackRaw.trim()
+      const cleanFallback = redactCredentials(fallbackRaw.trim())
       saveSummaryFn({
         sourceConversationId,
         snapshotUpToMessageId,
