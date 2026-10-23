@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { build } from 'vite'
 import tailwindcss from 'tailwindcss'
 import loadTailwindConfig from 'tailwindcss/loadConfig'
+import { getIsolatedElectronTestArguments } from './electron-executable'
 
 export interface VisualRendererOptions {
   dpr?: number
@@ -102,7 +103,7 @@ app.whenReady().then(async () => {
       const environment = { ...process.env }
       // 父进程可能设置该变量，Electron GUI runner 必须使用 Chromium 而非 Node 模式。
       delete environment.ELECTRON_RUN_AS_NODE
-      const child = Bun.spawn([electronExecutable, mainPath], { stdout: 'pipe', stderr: 'pipe', env: environment })
+      const child = Bun.spawn([electronExecutable, ...getIsolatedElectronTestArguments(mainPath)], { stdout: 'pipe', stderr: 'pipe', env: environment })
       const timeout = setTimeout(() => child.kill(), 15_000)
       try {
         const [stdout, stderr, exitCode] = await Promise.all([

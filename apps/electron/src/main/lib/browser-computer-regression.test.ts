@@ -3,7 +3,7 @@ import { build } from 'esbuild'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { getElectronExecutablePath } from '../../test-utils/electron-executable'
+import { getElectronExecutablePath, getIsolatedElectronTestArguments } from '../../test-utils/electron-executable'
 
 test('Given 真实 Electron CDP When 输入/遮挡/验证/iframe 回归 Then 所有场景通过', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'gamma-browser-computer-'))
@@ -17,7 +17,7 @@ test('Given 真实 Electron CDP When 输入/遮挡/验证/iframe 回归 Then 所
       } }],
     })
     const environment = { ...process.env }; delete environment.ELECTRON_RUN_AS_NODE
-    const child = Bun.spawn([getElectronExecutablePath(), runner, directory], { stdout: 'pipe', stderr: 'pipe', env: environment })
+    const child = Bun.spawn([getElectronExecutablePath(), ...getIsolatedElectronTestArguments(runner, directory)], { stdout: 'pipe', stderr: 'pipe', env: environment })
     const timeout = setTimeout(() => child.kill(), 40_000)
     try {
       const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
