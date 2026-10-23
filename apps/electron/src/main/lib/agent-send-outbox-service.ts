@@ -1,4 +1,16 @@
-import { captureReferenceSnapshot, getRetryReferenceSnapshot } from './conversation-reference/send-snapshot'
+import {
+  captureReferenceSnapshot,
+  getRetryReferenceSnapshot,
+  prepareAgentReferenceInput as prepareReferenceInputCore,
+  isReferencePreparationError,
+  registerReferenceWarningListener,
+  emitReferenceWarning,
+} from './conversation-reference/send-snapshot'
+export {
+  isReferencePreparationError,
+  registerReferenceWarningListener,
+  emitReferenceWarning,
+}
 import type { AgentSendInput } from '@gamma/shared'
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
@@ -48,10 +60,30 @@ const recovery = new AgentSendOutboxRecovery({
 
 export function listAgentSendOutbox(sessionId: string): AgentSendOutboxEntry[] { return recovery.list(sessionId) }
 /** 保存、初次提交、失败状态回写均复用同一 Main 冻结描述。 */
-export function prepareAgentReferenceInput<T extends Pick<AgentSendInput, 'sessionId' | 'contextRefIds' | 'contextRefs'> & Partial<Pick<AgentSendInput, 'retryOfUserMessageUuid' | 'retryOfErrorUuid'>>>(input: T, messageId?: string): T {
-  const saved = messageId ? outbox.list(input.sessionId).find((entry) => entry.id === messageId) : undefined
-  const refs = saved?.input.contextRefs ?? getRetryReferenceSnapshot(input.sessionId, input.retryOfUserMessageUuid, input.retryOfErrorUuid) ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds)
-  return { ...input, contextRefIds: refs.map((ref) => ref.refId), contextRefs: structuredClone(refs) }
+export function prepareAgentReferenceInput<T extends Pick<AgentSendInput, 'sessionId' | 'contextRefIds' | 'contextRefs'> & Partial<Pick<AgentSendInput, 'retryOfUserMessageUuid' | 'retryOfErrorUuid'>>>(
+  input: T,
+  messageId?: string,
+  onWarning?: (warning: string) => void
+): T {
+  // 显式 [] 短路：没有重试且显式空数组时，不读任何引用存储或缓存，保持零额外开销
+  if (Array.isArray(input.contextRefIds) && input.contextRefIds.length === 0 && !input.retryOfUserMessageUuid && !input.retryOfErrorUuid) {
+    return { ...input, contextRefIds: [], contextRefs: [] }
+  }
+  try {
+    const saved = messageId ? outbox.list(input.sessionId).find((entry) => entry.id === messageId) : undefined
+    const refs = saved?.input.contextRefs ?? getRetryReferenceSnapshot(input.sessionId, input.retryOfUserMessageUuid, input.retryOfErrorUuid) ?? captureReferenceSnapshot(input.sessionId, input.contextRefIds)
+    return { ...input, contextRefIds: refs.map((ref) => ref.refId), contextRefs: structuredClone(refs) }
+  } catch (err: unknown) {
+    if (isReferencePreparationError(err)) {
+      const warning = `引用准备失败（${err instanceof Error ? err.message : String(err)}），已转为无引用继续发送`
+      console.warn(`[AgentReference] ${warning}`)
+      onWarning?.(warning)
+      emitReferenceWarning({ sessionId: input.sessionId, warning })
+      // 保留业务 payload，但明确赋予 contextRefIds: [], contextRefs: []，下游 ?? 不会再次读回 composer
+      return { ...input, contextRefIds: [], contextRefs: [] }
+    }
+    throw err
+  }
 }
 export function saveAgentSendOutbox(entry: AgentSendOutboxEntry): void {
   recovery.save({ ...entry, input: prepareAgentReferenceInput(entry.input, entry.id) })
