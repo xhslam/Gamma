@@ -125,9 +125,9 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
           } else if (rawOutput && typeof rawOutput === 'object') {
             outText = JSON.stringify(rawOutput)
           }
-          const cleanOutput = sanitizeMessageText(outText).slice(0, 300)
+          const cleanOutput = redactCredentials(sanitizeMessageText(outText)).slice(0, 300)
           toolCalls.push({
-            name: toolUseId,
+            name: redactCredentials(toolUseId),
             resultSummary: cleanOutput,
           })
         } else if (block.type === 'image') {
@@ -138,7 +138,7 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
           })
         } else if (block.type === 'document') {
           attachments.push({
-            name: String(block.name ?? 'document'),
+            name: redactCredentials(String(block.name ?? 'document')),
             type: String(block.media_type ?? 'document'),
           })
         }
@@ -149,13 +149,13 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
     const msgAttachments = (m as { attachments?: Array<{ name?: string; filename?: string; type?: string; mediaType?: string }> }).attachments
     if (Array.isArray(msgAttachments)) {
       for (const att of msgAttachments) {
-        const name = att.name ?? att.filename ?? 'attachment'
+        const name = redactCredentials(att.name ?? att.filename ?? 'attachment')
         const type = att.type ?? att.mediaType
         attachments.push({ name, type })
       }
     }
 
-    const cleanText = sanitizeMessageText(text)
+    const cleanText = redactCredentials(sanitizeMessageText(text))
     const isOnlyToolResult = !cleanText && toolCalls.length > 0
     return {
       id: msgId,
@@ -180,9 +180,10 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
           text += (text ? '\n' : '') + block.text
         } else if (block.type === 'tool_use' && block.name) {
           const input = (block.input ?? {}) as Record<string, unknown>
-          const keyParam = String(input.file_path ?? input.path ?? input.command ?? input.query ?? input.url ?? input.id ?? '').slice(0, 100)
+          const rawKey = String(input.file_path ?? input.path ?? input.command ?? input.query ?? input.url ?? input.id ?? '').slice(0, 100)
+          const keyParam = redactCredentials(rawKey)
           toolCalls.push({
-            name: block.name,
+            name: redactCredentials(block.name),
             keyParam: keyParam || undefined,
           })
         }
@@ -192,14 +193,14 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
     return {
       id: msgId,
       role: 'assistant',
-      content: sanitizeMessageText(text),
+      content: redactCredentials(sanitizeMessageText(text)),
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     }
   }
 
   if (m.type === 'tool_result' || m.type === 'tool') {
     const toolMsg = m as { toolName?: string; name?: string; content?: unknown; output?: unknown }
-    const name = toolMsg.toolName ?? toolMsg.name ?? 'tool'
+    const name = redactCredentials(toolMsg.toolName ?? toolMsg.name ?? 'tool')
     const rawOutput = toolMsg.output ?? toolMsg.content
     let text = ''
     if (typeof rawOutput === 'string') {
@@ -212,7 +213,7 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
     } else if (rawOutput && typeof rawOutput === 'object') {
       text = JSON.stringify(rawOutput)
     }
-    const cleanOutput = sanitizeMessageText(text).slice(0, 300)
+    const cleanOutput = redactCredentials(sanitizeMessageText(text)).slice(0, 300)
     return {
       id: msgId,
       role: 'tool',
@@ -241,7 +242,11 @@ export function normalizeCompleteSDKMessages(messages: readonly SDKMessage[]): N
       for (const block of assistant.message.content ?? []) {
         if (block.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
           const input = block.input as Record<string, unknown> | undefined
-          tools.set(block.id, { name: block.name, keyParam: String(input?.file_path ?? input?.path ?? input?.command ?? input?.query ?? '').slice(0, 100) || undefined })
+          const rawKey = String(input?.file_path ?? input?.path ?? input?.command ?? input?.query ?? '').slice(0, 100)
+          tools.set(block.id, {
+            name: redactCredentials(block.name),
+            keyParam: redactCredentials(rawKey) || undefined,
+          })
         }
       }
     }
@@ -299,6 +304,23 @@ export function escapeConversationContent(text: string): string {
 }
 
 /**
+ * 敏感凭证脱敏（严防密钥泄露）：
+ * 支持多行 PEM/Private Key、AWS Access Key (AKIA...)、GitHub Token (ghp_...)、OpenAI 等 API Key (sk-...)
+ */
+export function redactCredentials(text: string): string {
+  if (!text || typeof text !== 'string') return ''
+  return text
+    // 1. 多行 PEM / Private Key（兼容 RSA, EC, OPENSSH, DSA 或通用 PRIVATE KEY，包含带或不带 ----- 边界）
+    .replace(/(?:-----)?BEGIN[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?[\s\S]*?(?:-----)?END[\s_]+[A-Z0-9_\s-]*PRIVATE KEY(?:-----)?/gi, '[REDACTED_PRIVATE_KEY]')
+    // 2. AWS Access Key ID (AKIA + 16位大写字母/数字)
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)AKIA[0-9A-Z]{16}(?![0-9A-Za-z])/g, '[REDACTED_AWS_KEY]')
+    // 3. GitHub Personal Access Token (ghp_, gho_, ghu_, ghs_, ghr_)
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)gh[pousr]_[a-zA-Z0-9]{30,}(?![0-9A-Za-z])/g, '[REDACTED_GITHUB_TOKEN]')
+    // 4. OpenAI / 常用 sk- 前缀 API Key (如 sk-..., sk-proj-...)
+    .replace(/(?:(?<=[^0-9A-Za-z])|^)sk-(?:proj-)?[a-zA-Z0-9_-]{20,}(?![0-9A-Za-z_-])/g, '[REDACTED_API_KEY]')
+}
+
+/**
  * 清洗消息文本中的 thinking 内容和 base64 图片/数据
  */
 export function sanitizeMessageText(text: string): string {
@@ -319,11 +341,11 @@ export function formatToolCallSummary(
   resultSummary?: string,
   maxResultChars = DEFAULT_MAX_TOOL_RESULT_CHARS,
 ): string {
-  const safeName = escapeConversationContent(sanitizeMessageText(name))
-  const paramPart = keyParam ? `(${escapeConversationContent(sanitizeMessageText(keyParam).replace(/\s+/g, ' ').slice(0, 80))})` : ''
+  const safeName = escapeConversationContent(redactCredentials(sanitizeMessageText(name)))
+  const paramPart = keyParam ? `(${escapeConversationContent(redactCredentials(sanitizeMessageText(keyParam)).replace(/\s+/g, ' ').slice(0, 80))})` : ''
   let resultPart = ''
   if (resultSummary) {
-    const cleaned = sanitizeMessageText(resultSummary).replace(/\s+/g, ' ').trim()
+    const cleaned = redactCredentials(sanitizeMessageText(resultSummary)).replace(/\s+/g, ' ').trim()
     const truncated = cleaned.length > maxResultChars ? cleaned.slice(0, maxResultChars) + '...' : cleaned
     resultPart = ` result: ${escapeConversationContent(truncated)}`
   }
@@ -339,17 +361,17 @@ export function formatNormalizedMessage(
 ): string {
   const parts: string[] = []
 
-  // 附件摘要（仅文件名与类型，均严格统一转义防注入）
+  // 附件摘要（仅文件名与类型，均严格统一转义防注入与凭证脱敏）
   if (msg.attachments && msg.attachments.length > 0) {
     for (const att of msg.attachments) {
-      const safeName = escapeConversationContent(sanitizeMessageText(att.name))
+      const safeName = escapeConversationContent(redactCredentials(sanitizeMessageText(att.name)))
       const safeType = att.type ? escapeConversationContent(sanitizeMessageText(att.type)) : ''
       parts.push(`[附件: ${safeName}${safeType ? ` (${safeType})` : ''}]`)
     }
   }
 
-  // 消息正文文本（清洗 thinking / base64，转义标签）
-  const cleanContent = escapeConversationContent(sanitizeMessageText(msg.content))
+  // 消息正文文本（清洗 thinking / base64，脱敏凭证，转义标签）
+  const cleanContent = escapeConversationContent(redactCredentials(sanitizeMessageText(msg.content)))
   if (cleanContent) {
     parts.push(`[${msg.role}]: ${cleanContent}`)
   } else if (msg.role === 'user' || msg.role === 'assistant') {
@@ -546,12 +568,12 @@ export function truncateTextToTokenBudget(
  */
 function buildConversationOpenTag(ref: ReferencedConversationData): string {
   const parts = [
-    `id="${escapeXmlAttribute(escapeConversationContent(ref.refId))}"`,
-    `title="${escapeXmlAttribute(escapeConversationContent(ref.title))}"`,
-    `mode="${escapeXmlAttribute(escapeConversationContent(ref.mode))}"`,
+    `id="${escapeXmlAttribute(escapeConversationContent(redactCredentials(ref.refId)))}"`,
+    `title="${escapeXmlAttribute(escapeConversationContent(redactCredentials(ref.title)))}"`,
+    `mode="${escapeXmlAttribute(escapeConversationContent(redactCredentials(ref.mode)))}"`,
   ]
   if (ref.snapshotUpToMessageId) {
-    parts.push(`snapshotUpTo="${escapeXmlAttribute(escapeConversationContent(ref.snapshotUpToMessageId))}"`)
+    parts.push(`snapshotUpTo="${escapeXmlAttribute(escapeConversationContent(redactCredentials(ref.snapshotUpToMessageId)))}"`)
   }
   return `<conversation ${parts.join(' ')}>`
 }
@@ -686,13 +708,13 @@ export function buildReferencedContext(
     const tagOverhead = estimator(openTag + '\n' + closeTag + '\n')
 
     const prevTitlesLine = ref.previousReferencedTitles && ref.previousReferencedTitles.length > 0
-      ? `此对话曾引用过：${ref.previousReferencedTitles.map((t) => escapeConversationContent(t)).join('、')}`
+      ? `此对话曾引用过：${ref.previousReferencedTitles.map((t) => escapeConversationContent(redactCredentials(t))).join('、')}`
       : undefined
     const prevTitlesTokens = prevTitlesLine ? estimator(prevTitlesLine + '\n') : 0
 
     if (ref.unavailableReason) {
-      const safeTitle = escapeConversationContent(ref.title)
-      const safeReason = escapeConversationContent(ref.unavailableReason)
+      const safeTitle = escapeConversationContent(redactCredentials(ref.title))
+      const safeReason = escapeConversationContent(redactCredentials(ref.unavailableReason))
       const unavailableNotice = `引用「${safeTitle}」当前不可用：${safeReason}`
       const unavailableTokens = estimator(unavailableNotice + '\n')
       return {
@@ -767,8 +789,8 @@ export function buildReferencedContext(
       const { ref, openTag, closeTag, prevTitlesLine, tagOverhead } = item
 
       if (ref.unavailableReason) {
-        const safeTitle = escapeConversationContent(ref.title)
-        const safeReason = escapeConversationContent(ref.unavailableReason)
+        const safeTitle = escapeConversationContent(redactCredentials(ref.title))
+        const safeReason = escapeConversationContent(redactCredentials(ref.unavailableReason))
         const notice = `引用「${safeTitle}」当前不可用：${safeReason}`
         const safeContent = truncateTextToTokenBudget(notice, Math.max(0, refBudgetShare - tagOverhead), estimator)
         let block = `${openTag}\n${safeContent}\n${closeTag}`
@@ -797,7 +819,7 @@ export function buildReferencedContext(
       const contentBudget = Math.max(0, refBudgetShare - tagOverhead - noticeOverhead)
 
       if (summary && summary.trim().length > 0) {
-        const rawClean = escapeConversationContent(summary.trim())
+        const rawClean = escapeConversationContent(redactCredentials(summary.trim()))
         content = truncateTextToTokenBudget(rawClean, contentBudget, estimator)
         tierLog = 'tier_b_summary'
         reason = `Tier B triggered (total refs: ${refs.length}, requiredTokens: ${totalRequiredTokensSum}, budget: ${effectiveBudget}); structured summary injected.`
@@ -857,8 +879,8 @@ export function buildReferencedContext(
       const allocated = allocatedBudgets[i] ?? 0
 
       if (ref.unavailableReason) {
-        const safeTitle = escapeConversationContent(ref.title)
-        const safeReason = escapeConversationContent(ref.unavailableReason)
+        const safeTitle = escapeConversationContent(redactCredentials(ref.title))
+        const safeReason = escapeConversationContent(redactCredentials(ref.unavailableReason))
         const notice = `引用「${safeTitle}」当前不可用：${safeReason}`
         const safeContent = truncateTextToTokenBudget(notice, Math.max(0, allocated - tagOverhead), estimator)
         let block = `${openTag}\n${safeContent}\n${closeTag}`

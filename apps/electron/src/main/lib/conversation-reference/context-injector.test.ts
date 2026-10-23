@@ -10,7 +10,7 @@ import {
 import { updateAgentContextRefs } from '../agent-session-manager'
 import { reconcileReferenceSummaries } from './background-summary'
 import { saveSnapshotToCache, computeSnapshotHash, getSnapshotCacheFilePathByRefId } from './ref-cache'
-import { normalizeSDKMessage } from './context-builder'
+import { normalizeSDKMessage, type NormalizedReferencedMessage } from './context-builder'
 import type { SDKMessage } from '@gamma/shared'
 
 describe('Conversation Reference Context Injector & Compaction Resilience', () => {
@@ -338,9 +338,9 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
     it('When 用户尝试添加自身会话或重复会话引用 Then updateAgentContextRefs 严格去重并拒绝自引', () => {
       // 传入 3 项：一项自引(testSessionId)，两项重复(sourceSessionId)
       const inputRefs = [
-        { sourceConversationId: testSessionId, mode: 'snapshot' as const },
-        { sourceConversationId: sourceSessionId, mode: 'snapshot' as const },
-        { sourceConversationId: sourceSessionId, mode: 'snapshot' as const },
+        { refId: 'ref_self', sourceConversationId: testSessionId, sourceProjectId: 'ws_test', titleAtAttach: 'Self', mode: 'snapshot' as const },
+        { refId: 'ref_1', sourceConversationId: sourceSessionId, sourceProjectId: 'ws_test', titleAtAttach: 'Source', mode: 'snapshot' as const },
+        { refId: 'ref_2', sourceConversationId: sourceSessionId, sourceProjectId: 'ws_test', titleAtAttach: 'Source Duplicate', mode: 'snapshot' as const },
       ]
 
       const updated = updateAgentContextRefs(testSessionId, inputRefs)

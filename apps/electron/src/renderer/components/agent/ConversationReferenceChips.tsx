@@ -12,8 +12,9 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
-import { MessageSquareText, X, AlertTriangle, RefreshCw, Camera, Plus, Trash2 } from 'lucide-react'
+import { MessageSquareText, X, AlertTriangle, RefreshCw, Camera, Plus, Trash2, ArrowRightLeft } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import {
@@ -26,6 +27,8 @@ import {
 
 export interface ConversationReferenceChipsProps {
   sessionId?: string
+  /** 当前会话激活的渠道 ID（用于跨渠道引用检测） */
+  currentChannelId?: string | null
   refs: AgentContextRef[]
   onRemoveRef: (refId: string) => void
   onToggleMode: (refId: string) => void
@@ -38,6 +41,7 @@ export interface ConversationReferenceChipsProps {
 
 export function ConversationReferenceChips({
   sessionId,
+  currentChannelId,
   refs,
   onRemoveRef,
   onToggleMode,
@@ -48,6 +52,22 @@ export function ConversationReferenceChips({
   const agentSessions = useAtomValue(agentSessionsAtom)
   const [summaryStatuses, setSummaryStatuses] = React.useState<Record<string, ReferenceSummaryStatus>>({})
   const refKey = refs.map((ref) => ref.refId).join(',')
+
+  // 跨渠道引用提示：每引用/目标路由提示一次“内容将发送给当前渠道的模型”（不是每轮 poll 重复）
+  const notifiedCrossChannelRefsRef = React.useRef<Set<string>>(new Set())
+  React.useEffect(() => {
+    if (!currentChannelId || refs.length === 0) return
+    for (const ref of refs) {
+      const source = agentSessions.find((s) => s.id === ref.sourceConversationId)
+      if (source?.channelId && source.channelId !== currentChannelId) {
+        const routeKey = `${ref.refId}:${currentChannelId}`
+        if (!notifiedCrossChannelRefsRef.current.has(routeKey)) {
+          notifiedCrossChannelRefsRef.current.add(routeKey)
+          toast.info('内容将发送给当前渠道的模型', { id: `cross-channel-${ref.refId}` })
+        }
+      }
+    }
+  }, [refs, currentChannelId, agentSessions])
   React.useEffect(() => {
     if (!sessionId || !refKey) return
     let disposed = false
@@ -89,6 +109,8 @@ export function ConversationReferenceChips({
           const sourceSession = agentSessions.find((s) => s.id === ref.sourceConversationId)
           const isDeleted = !sourceSession
           const isRenamed = Boolean(sourceSession && sourceSession.title && sourceSession.title !== ref.titleAtAttach)
+          const sourceChannelId = sourceSession?.channelId
+          const isCrossChannel = Boolean(sourceChannelId && currentChannelId && sourceChannelId !== currentChannelId)
           const displayTitle = sourceSession?.title || ref.titleAtAttach || '无标题会话'
 
           return (
@@ -156,12 +178,31 @@ export function ConversationReferenceChips({
                     {displayTitle}
                   </span>
                 </TooltipTrigger>
-                {isRenamed && (
-                  <TooltipContent side="top">
-                    <p>原标题：{ref.titleAtAttach}</p>
-                  </TooltipContent>
-                )}
+                <TooltipContent side="top">
+                  {isRenamed && <p>原标题：{ref.titleAtAttach}</p>}
+                  {isCrossChannel && (
+                    <p className="text-amber-500 font-medium">内容将发送给当前渠道的模型</p>
+                  )}
+                </TooltipContent>
               </Tooltip>
+
+              {/* 跨渠道提示图标 */}
+              {isCrossChannel && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="flex items-center text-amber-500 hover:text-amber-600 transition-colors cursor-help"
+                      data-testid="cross-channel-indicator"
+                      aria-label="内容将发送给当前渠道的模型"
+                    >
+                      <ArrowRightLeft className="size-2.5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>内容将发送给当前渠道的模型</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
 
               {/* 已删除标签 */}
               {isDeleted && (
@@ -208,6 +249,20 @@ export function ConversationReferenceChips({
           </button>
         )}
       </div>
+
+      {/* 跨渠道提示 */}
+      {refs.some((r) => {
+        const s = agentSessions.find((sess) => sess.id === r.sourceConversationId)
+        return Boolean(s?.channelId && currentChannelId && s.channelId !== currentChannelId)
+      }) && (
+        <div
+          className="flex items-center gap-1 text-[11px] text-amber-600/90 dark:text-amber-400/90"
+          data-testid="cross-channel-notice"
+        >
+          <ArrowRightLeft className="size-3 shrink-0" />
+          <span>内容将发送给当前渠道的模型</span>
+        </div>
+      )}
 
       {/* 超出预算提示 */}
       {shouldShowSummaryWarning && (

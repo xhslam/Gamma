@@ -26,6 +26,7 @@ import {
   formatNormalizedMessage,
   normalizeSDKMessage,
   normalizeCompleteSDKMessages,
+  redactCredentials,
   type NormalizedReferencedMessage,
 } from './context-builder'
 
@@ -183,17 +184,21 @@ export function createConversationReferenceExtension(sessionId: string, getRefer
           const cachedSummary = r.snapshotUpToMessageId
             ? loadSummaryFromCache(r.sourceConversationId, r.snapshotUpToMessageId, contentHash)
             : null
+          const safeTitle = redactCredentials(sourceMeta?.title || r.titleAtAttach)
+          const safeSummarySnippet = cachedSummary
+            ? redactCredentials(cachedSummary.slice(0, 150)) + (cachedSummary.length > 150 ? '...' : '')
+            : undefined
           return {
             id: r.refId,
             sourceConversationId: r.sourceConversationId,
             sourceProjectId: r.sourceProjectId,
-            title: sourceMeta?.title || r.titleAtAttach,
+            title: safeTitle,
             mode: r.mode,
             messageCount: messages.length,
             estTokens: r.estTokens ?? 0,
             snapshotAt: r.snapshotAt ? new Date(r.snapshotAt).toISOString() : undefined,
             snapshotUpToMessageId: r.snapshotUpToMessageId,
-            summarySnippet: cachedSummary ? cachedSummary.slice(0, 150) + (cachedSummary.length > 150 ? '...' : '') : undefined,
+            summarySnippet: safeSummarySnippet,
             exists: Boolean(sourceMeta),
           }
         })
@@ -217,9 +222,10 @@ export function createConversationReferenceExtension(sessionId: string, getRefer
         const ref = check.ref
         const messages = getReferencedMessagesForRef(ref)
 
+        const safeTitle = redactCredentials(ref.titleAtAttach)
         const totalMessages = messages.length
         if (totalMessages === 0) {
-          return ok(`会话 [${ref.titleAtAttach}] 暂无可用历史消息。`)
+          return ok(`会话 [${safeTitle}] 暂无可用历史消息。`)
         }
 
         if ((params.offset !== undefined && (!Number.isSafeInteger(params.offset) || params.offset < 0)) || (params.limit !== undefined && (!Number.isSafeInteger(params.limit) || params.limit < 1 || params.limit > 50))) return errorResult('offset/limit 必须是范围内的整数')
@@ -234,7 +240,7 @@ export function createConversationReferenceExtension(sessionId: string, getRefer
         }
 
         const lines: string[] = [
-          `--- 会话: ${ref.titleAtAttach} (ID: ${ref.refId}) [消息 ${offset} 至 ${offset + slice.length - 1} / 共 ${totalMessages} 条] ---`,
+          `--- 会话: ${safeTitle} (ID: ${ref.refId}) [消息 ${offset} 至 ${offset + slice.length - 1} / 共 ${totalMessages} 条] ---`,
         ]
 
         for (let i = 0; i < slice.length; i++) {
@@ -302,8 +308,9 @@ export function createConversationReferenceExtension(sessionId: string, getRefer
           return ok(`引用的对话里没有提到关键词 "${params.query}"。`)
         }
 
+        const safeTitle = redactCredentials(ref.titleAtAttach)
         const blocks: string[] = [
-          `在会话 [${ref.titleAtAttach}] 中检索到 ${matches.length} 处匹配：`,
+          `在会话 [${safeTitle}] 中检索到 ${matches.length} 处匹配：`,
         ]
 
         for (const match of matches) {
