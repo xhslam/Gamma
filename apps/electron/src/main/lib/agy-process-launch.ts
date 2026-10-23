@@ -67,7 +67,13 @@ export function resolveAgyExecutable(options: AgyExecutableOptions = {}): string
       if (base) directories.push(win32.join(base, 'agy', 'bin'), win32.join(base, 'agy'))
     }
   } else {
-    directories.push(posix.join(home, '.local', 'bin'), posix.join(home, 'bin'), '/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin')
+    directories.push(
+      posix.join(home, '.local', 'bin'), posix.join(home, 'bin'),
+      posix.join(home, '.bun', 'bin'),
+      ...(platform === 'darwin' ? [posix.join(home, 'Library', 'pnpm')] : []),
+      posix.join(home, '.local', 'share', 'pnpm'),
+      '/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin',
+    )
   }
   const seen = new Set<string>()
   for (const directory of directories) {

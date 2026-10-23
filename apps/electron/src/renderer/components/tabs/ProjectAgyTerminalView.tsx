@@ -36,12 +36,13 @@ export function ProjectAgyTerminalView({ embedded = false, workspaceId: requeste
   const [confirmationOpen, setConfirmationOpen] = React.useState(false)
   const terminal = entry?.terminal
   React.useEffect(() => {
-    if (!workspaceId) return
+    if (!workspaceId || !active) { setConfirmationOpen(false); return }
     const current = store.get(projectAgyTerminalsAtom).get(workspaceId)
     setConfirmationOpen(!current?.accepted)
-    if (current?.terminal) void open({ workspaceId })
-    // 只在切入项目时核验/恢复，不因输出、退出或关闭而自动重启 CLI。
-  }, [workspaceId, open, store])
+    if (current?.accepted) void open({ workspaceId })
+    // 仅在项目/Pane 激活时核验或恢复已确认的实例；关闭、退出事件不触发该 effect。
+    // 已退出的实例由 service 保留最终画面，必须点击重新启动，避免意外重复执行。
+  }, [workspaceId, active, open, store])
 
   if (!workspace || !workspaceId) {
     return <div className="flex h-full items-center justify-center px-4 text-center text-xs text-muted-foreground">请先在侧栏选择项目，再打开 AGY 终端。</div>
