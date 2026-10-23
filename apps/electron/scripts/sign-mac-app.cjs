@@ -22,12 +22,28 @@ function computerOptionsForFile(app, original, defaults = {}) {
   }
 }
 
+/** 缺少证书时仍完成本地包签名，不能把链接器签名误当成完整的应用签名。 */
+function signingOptions(options) {
+  const local = !options.identity || options.identity === 'none' || options.identity === '-'
+  if (local && options.platform === 'mas') {
+    throw new Error('Mac App Store 构建需要有效的签名证书，不能使用本地临时签名。')
+  }
+  const perFile = computerOptionsForFile(options.app, options.optionsForFile, options)
+  return {
+    ...options,
+    ...(local && { identity: '-', identityValidation: false, preAutoEntitlements: false }),
+    optionsForFile: file => ({
+      ...perFile(file),
+      // 临时签名没有证书时间戳；正式签名保持调用方配置。
+      ...(local && { timestamp: 'none' }),
+    }),
+  }
+}
+
 // 仅electron-builder打包签名阶段调用，不在构建/测试/导入时执行签名。
 module.exports = async function signMacApp(options) {
-  if (!options.identity || options.identity === 'none') {
-    return
-  }
   const { signAsync } = require('@electron/osx-sign')
-  await signAsync({ ...options, optionsForFile: computerOptionsForFile(options.app, options.optionsForFile, options) })
+  await signAsync(signingOptions(options))
 }
 module.exports.computerOptionsForFile = computerOptionsForFile
+module.exports.signingOptions = signingOptions

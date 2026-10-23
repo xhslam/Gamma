@@ -4,6 +4,11 @@ import { dirname, join } from 'node:path'
 
 let cachedPath: string | undefined
 
+/** GUI 回归必须在启动前启用内存钥匙串，避免 Chromium 初始化时访问用户的真实凭据。 */
+export function getIsolatedElectronTestArguments(entryPoint: string, ...args: string[]): string[] {
+  return ['--use-mock-keychain', entryPoint, ...args]
+}
+
 /**
  * 稳健解析真实 Electron 可执行文件路径。
  * 直接基于 electron 包的 package.json 与 path.txt 读取物理路径，

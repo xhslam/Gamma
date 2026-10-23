@@ -106,9 +106,9 @@ mac:
       to: Helpers/Gamma Computer Use Helper.app
   sign: scripts/sign-mac-app.cjs
   binaries:
-    - resources/agent-island/macos-agent-island-helper
-    - resources/eventkit/macos-eventkit.node
-    - resources/officecli/officecli
+    - Contents/Resources/agent-island/macos-agent-island-helper
+    - Contents/Resources/eventkit/macos-eventkit.node
+    - Contents/Resources/officecli/officecli
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
