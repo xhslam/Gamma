@@ -137,6 +137,7 @@ import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentSendOutboxEnt
 import {
   DEFAULT_BUDGET_RATIO,
   inferContextWindow,
+  inferBudgetContextWindow,
   inferReasoningTransport,
   isCodexFastModeSupportedModel,
   MAX_ATTACHMENT_SIZE,
@@ -270,7 +271,8 @@ function resolveRunContextWindow(
   modelId: string | undefined,
   previous: number | undefined,
 ): number | undefined {
-  return inferContextWindow(modelId) ?? previous
+  // 优先采用已实测值（来自 result.modelUsage.contextWindow），否则用保守推断
+  return previous ?? inferBudgetContextWindow(modelId)
 }
 
 interface SDKMessageRecord {
@@ -524,7 +526,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   )
   const referenceContextWindowAtom = React.useMemo(() => atom((get) => get(agentSessionStreamingStateAtomFamily(sessionId))?.contextWindow), [sessionId])
   const referenceContextWindow = useAtomValue(referenceContextWindowAtom)
-  const referenceBudget = Math.floor((referenceContextWindow ?? inferContextWindow(agentModelId || undefined) ?? 200_000) * DEFAULT_BUDGET_RATIO)
+  const referenceBudget = Math.floor(inferBudgetContextWindow(agentModelId || undefined, referenceContextWindow) * DEFAULT_BUDGET_RATIO)
   const [referenceDialogOpen, setReferenceDialogOpen] = React.useState(false)
   const [isUpdatingRefs, setIsUpdatingRefs] = React.useState(false)
   const savedContextRefsRef = React.useRef(currentContextRefs)

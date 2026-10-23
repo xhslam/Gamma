@@ -11,9 +11,9 @@ import { getOrGenerateConversationSummary } from './summary-service'
 import {
   buildReferencedContext,
   DEFAULT_BUDGET_RATIO,
-  DEFAULT_CONTEXT_WINDOW,
   type ReferencedConversationData,
 } from './context-builder'
+import { inferBudgetContextWindow } from '@gamma/shared'
 
 /**
  * 将引用的上下文 prompt 注入到即将发送给模型的 messages 列表中
@@ -104,10 +104,7 @@ export async function injectConversationReferencesContext<
     return [...messages]
   }
 
-  const modelContextWindow = contextWindow ?? DEFAULT_CONTEXT_WINDOW
-  const budgetTokens = Math.floor(modelContextWindow * DEFAULT_BUDGET_RATIO)
-
-  const resolvedDataList: ReferencedConversationData[] = []
+  const budgetTokens = Math.floor(inferBudgetContextWindow(modelId, contextWindow) * DEFAULT_BUDGET_RATIO)  const resolvedDataList: ReferencedConversationData[] = []
   const modelSummaries = new Map<string, string>()
 
   for (const ref of activeRefs) {
