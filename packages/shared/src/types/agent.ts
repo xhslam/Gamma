@@ -2290,6 +2290,7 @@ export const AGENT_IPC_CHANNELS = {
   /** 提升队列消息为立即发送 */
   PROMOTE_QUEUED_MESSAGE: 'agent:promote-queued-message',
   /** 队列消息状态变更通知（主进程 → 渲染进程推送） */
+  REFERENCE_WARNING: 'agent:reference-warning',
   QUEUED_MESSAGE_STATUS: 'agent:queued-message-status',
 
   // 待处理请求恢复（渲染进程重载后查询主进程状态）
@@ -2307,4 +2308,10 @@ export interface PendingRequestsSnapshot {
   askUsers: AskUserRequest[]
   /** 待处理的 ExitPlanMode 请求 */
   exitPlans: ExitPlanModeRequest[]
+}
+
+/** 引用读取降级的静态通知，不包含源内容或底层错误。 */
+export interface AgentReferenceWarningNotice {
+  sessionId: string
+  warning: string
 }

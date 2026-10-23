@@ -129,7 +129,7 @@ module.exports = { parseSendOutboxEntry, AgentSendOutbox };
         const store = createStore(), root = createRoot(document.getElementById('root'));
         store.set(richTextRenderingEnabledAtom, true);
         const calls = [], routes = [], saves = [], retries = [], created = [], cancellations = [], queuedAccepted = [], disk = options.disk ?? [];
-        const listeners = { queue: new Set(), stream: new Set(), complete: new Set() };
+        const listeners = { queue: new Set(), stream: new Set(), complete: new Set(), referenceWarning: new Set() };
         let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
         const pendingSubmissions = [];
         const submit = (input, route) => {
@@ -148,6 +148,7 @@ module.exports = { parseSendOutboxEntry, AgentSendOutbox };
         };
         const subscribe = name => callback => { listeners[name].add(callback); return () => listeners[name].delete(callback); };
         const api = {
+          onAgentReferenceWarning: subscribe('referenceWarning'),
           onAgentQueuedMessageStatus: subscribe('queue'), onAgentStreamEvent: subscribe('stream'), onAgentStreamComplete: subscribe('complete'),
           sendAgentMessage: input => submit(input, 'direct'), submitOrEnqueueAgentMessage: input => submit(input, 'submit'),
           saveAgentSendOutbox: async entry => {
@@ -222,6 +223,7 @@ module.exports = { parseSendOutboxEntry, AgentSendOutbox };
           resolveDuplicate: () => resolveSend({ disposition: 'accepted' }),
           resolveWith: result => resolveSend(result),
           resolveAt: index => pendingSubmissions[index].resolve({ disposition: 'queued' }),
+          emitReferenceWarning: event => { for (const listener of listeners.referenceWarning) listener(event); },
           emitStream: event => { for (const listener of listeners.stream) listener(event); },
           emitQueue: event => { for (const listener of listeners.queue) listener(event); },
           emitComplete: event => { for (const listener of listeners.complete) listener(event); },
@@ -789,3 +791,16 @@ describe('Given 主进程稳定ID回执', () => {
     `)).toEqual({ different: true, records: 2 })
   }, 30_000)
 })
+
+
+test('Given 真实全局监听器 When 收到引用降级事件 Then toast可见且正常消息继续提交', async () => {
+  const result = await renderer.run<{ visible: boolean; submitted: boolean }>(`
+    const api = window.sendRecovery, f = await api.mount({ streaming: false, globalListeners: true });
+    f.emitReferenceWarning({ sessionId: 'a', warning: '引用准备失败，已转为无引用继续发送' });
+    await api.until(() => document.body.innerText.includes('引用准备失败，已转为无引用继续发送'));
+    const visible = !!document.querySelector('[data-sonner-toast]');
+    f.key(); await api.until(() => f.calls.length === 1); f.resolve(); await api.delay(30);
+    const submitted = f.calls.length === 1; f.root.unmount(); return { visible, submitted };
+  `)
+  expect(result).toEqual({ visible: true, submitted: true })
+}, 30_000)

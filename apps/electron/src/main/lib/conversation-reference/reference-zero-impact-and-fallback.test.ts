@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -140,7 +140,7 @@ describe('Feature: 无引用零影响与异常降级保证消息不丢失', () =
         // 核心断言：用户可见告警路径被实际触发
         expect(warnings.length).toBeGreaterThan(0)
         expect(warnings[0]!.sessionId).toBe(targetSessionId)
-        expect(warnings[0]!.warning).toContain('未获授权')
+        expect(warnings[0]!.warning).toBe('引用准备失败，已转为无引用继续发送')
       } finally {
         unregister()
       }
@@ -161,7 +161,7 @@ describe('Feature: 无引用零影响与异常降级保证消息不丢失', () =
         expect(prepared.userMessage).toBe('重试消息')
         expect(prepared.contextRefs).toEqual([])
         expect(warnings.length).toBe(1)
-        expect(warnings[0]!.warning).toContain('重试的原用户消息不存在')
+        expect(warnings[0]!.warning).toBe('引用准备失败，已转为无引用继续发送')
       } finally {
         unregister()
       }
@@ -183,4 +183,11 @@ describe('Feature: 无引用零影响与异常降级保证消息不丢失', () =
       expect(isReferencePreparationError(dbCrashError)).toBe(false)
     })
   })
+})
+
+
+test('Given 同一消息已冻结A When 当前composer明确清空 Then 仍保留Main已保存的A而非覆盖', () => {
+  const input = { sessionId: targetSessionId, userMessage: 'keep', contextRefIds: [] as string[] }
+  const prepared = prepareAgentReferenceInput(input, { savedRefs: [authorizedRef] })
+  expect(prepared.contextRefIds).toEqual([authorizedRef.refId])
 })
