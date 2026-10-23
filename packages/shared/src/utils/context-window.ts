@@ -158,3 +158,51 @@ export function inferContextWindow(model?: string): number | undefined {
   if (supports1MContext(model)) return ONE_MILLION_CONTEXT_WINDOW
   return DEFAULT_CONTEXT_WINDOW
 }
+
+/**
+ * 保守上下文窗口（未知模型时的预算兜底）。
+ *
+ * 用于计算会话引用预算等对安全性要求较高的场景：
+ * - 已知模型：优先采用权威 registry 窗口（inferContextWindow）。
+ * - 运行时实测值（contextWindow from result/usage）：优先级最高，由调用方传入。
+ * - 未知模型（inferContextWindow 返回 undefined）：保守兜底 128,000 tokens，
+ *   不使用 DEFAULT_CONTEXT_WINDOW（200k），避免引用预算过度乐观。
+ *
+ * UI 与主进程应使用同一函数，禁止各自内联不同的 fallback 值。
+ */
+export const CONSERVATIVE_FALLBACK_CONTEXT_WINDOW = 128_000
+
+/**
+ * 判断模型是否命中权威 registry（Codex / Gemini / 1M 列表），即是否有已知窗口。
+ * 未知模型返回 undefined，区别于 inferContextWindow 的 DEFAULT_CONTEXT_WINDOW 兜底。
+ */
+function inferKnownContextWindow(model?: string): number | undefined {
+  if (!model) return undefined
+  const codexAlignedWindow = inferCodexAlignedGPT5ContextWindow(model)
+  if (codexAlignedWindow !== undefined) return codexAlignedWindow
+  const geminiCapability = getGeminiModelCapability(model)
+  if (geminiCapability) return geminiCapability.contextWindow
+  if (supports1MContext(model)) return ONE_MILLION_CONTEXT_WINDOW
+  // 未知模型返回 undefined，由调用方决定保守兜底
+  return undefined
+}
+
+/**
+ * 为会话引用预算推断保守上下文窗口。
+ *
+ * @param modelId   模型 ID（可为 undefined）
+ * @param measured  运行时实测窗口（来自 result.modelUsage.contextWindow）
+ * @returns 保守上下文窗口 token 数，未知模型时为 128,000
+ */
+export function inferBudgetContextWindow(
+  modelId: string | undefined,
+  measured?: number,
+): number {
+  // 运行时实测值优先级最高（来自权威 result 消息）
+  if (measured !== undefined && measured > 0) return measured
+  // 权威 registry 已知值
+  const knownWindow = inferKnownContextWindow(modelId)
+  if (knownWindow !== undefined) return knownWindow
+  // 未知模型保守兜底（不使用 DEFAULT_CONTEXT_WINDOW 200k）
+  return CONSERVATIVE_FALLBACK_CONTEXT_WINDOW
+}
