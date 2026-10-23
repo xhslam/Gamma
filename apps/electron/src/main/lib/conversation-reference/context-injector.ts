@@ -7,7 +7,7 @@
 
 import { getAgentContextRefs, getAgentSessionMeta } from '../agent-session-manager'
 import { getReferencedMessagesForRef } from './pi-tools'
-import { getOrGenerateConversationSummary } from './summary-service'
+import { computeSnapshotHash, loadSummaryFromCache } from './ref-cache'
 import {
   buildReferencedContext,
   DEFAULT_BUDGET_RATIO,
@@ -98,7 +98,7 @@ export interface InjectConversationReferencesContextOptions<T> {
 export async function injectConversationReferencesContext<
   T extends { role: string; content?: unknown; timestamp?: number }
 >(options: InjectConversationReferencesContextOptions<T>): Promise<T[]> {
-  const { sessionId, channelId, modelId, contextWindow, messages, signal } = options
+  const { sessionId, modelId, contextWindow, messages, signal } = options
   const activeRefs = getAgentContextRefs(sessionId)
   if (signal?.aborted || !activeRefs || activeRefs.length === 0) {
     return [...messages]
@@ -143,24 +143,11 @@ export async function injectConversationReferencesContext<
   // 与最终构建使用同一分档决策，工具/附件/包裹开销不能漏算。
   const initial = buildReferencedContext(resolvedDataList, budgetTokens)
   if (initial.tier === 'B') {
-    // 尝试为每个会话引用获取或生成结构化模型摘要
+    // 发送路径只读缓存，绝不等待或启动模型摘要；未就绪立即使用受预算摘录。
     for (const refData of resolvedDataList) {
-      if (signal?.aborted) break
-      try {
-        const summary = await getOrGenerateConversationSummary({
-          channelId,
-          modelId,
-          sourceConversationId: refData.sourceConversationId,
-          snapshotUpToMessageId: refData.snapshotUpToMessageId ?? 'latest',
-          messages: refData.messages,
-          signal,
-        })
-        if (summary) {
-          modelSummaries.set(refData.refId, summary)
-        }
-      } catch {
-        console.warn(`[会话引用] 摘要不可用: ${refData.refId}`)
-      }
+      const summary = loadSummaryFromCache(refData.sourceConversationId,
+        refData.snapshotUpToMessageId ?? 'latest', computeSnapshotHash(refData.messages))
+      if (summary) modelSummaries.set(refData.refId, summary)
     }
   }
 

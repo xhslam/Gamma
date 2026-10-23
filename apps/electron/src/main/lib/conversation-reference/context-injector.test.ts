@@ -8,6 +8,7 @@ import {
   injectReferencedConversationsIntoMessages,
 } from './context-injector'
 import { updateAgentContextRefs } from '../agent-session-manager'
+import { reconcileReferenceSummaries } from './background-summary'
 import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
 import { normalizeSDKMessage } from './context-builder'
 import type { SDKMessage } from '@gamma/shared'
@@ -163,6 +164,23 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
       expect(userContent).not.toContain('<referenced_conversations>')
       expect(userContent).not.toContain('zero-copy IPC buffers')
       expect(userContent).toBe('What about IPC buffers now?')
+    })
+
+    it('When B摘要仍未响应 Then发送立即使用受预算摘录而不等待后台模型', async () => {
+      writeFileSync(getAgentSessionMessagesPath(sourceSessionId), JSON.stringify({ uuid: 'huge-message', type: 'user', message: { role: 'user', content: '中'.repeat(20_000) } }) + '\n')
+      const refs = updateAgentContextRefs(testSessionId, [{ refId: 'ignored', sourceConversationId: sourceSessionId, sourceProjectId: 'ws_test', titleAtAttach: 'fixture', mode: 'snapshot' }])
+      let finish: (value: string | null) => void = () => {}
+      const deps = { namespace: tempHome, generate: () => new Promise<string | null>((resolve) => { finish = resolve }) }
+      expect(reconcileReferenceSummaries(testSessionId, refs, 'fixture-channel', 'fixture-model', deps)[refs[0]!.refId]).toBe('running')
+      await Promise.resolve()
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const result = await Promise.race([
+        injectConversationReferencesContext({ sessionId: testSessionId, contextWindow: 20_000, messages: [{ role: 'user', content: 'current question' }] }),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('发送错误地等待后台摘要')), 100) }),
+      ]).finally(() => { clearTimeout(timer); finish(null) })
+      expect(String(result[0]!.content)).toContain('current question')
+      expect(String(result[0]!.content)).toContain('已自动降级')
+      reconcileReferenceSummaries(testSessionId, [], undefined, undefined, deps)
     })
   })
 })

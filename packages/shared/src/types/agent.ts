@@ -957,8 +957,12 @@ export interface AgentContextRefDetail {
 export interface GetAgentContextRefsRequest {
   sessionId: string
 }
+export type ReferenceSummaryStatus = 'running' | 'ready' | 'fallback'
+
 export interface GetContextRefsResponse {
   refs: AgentContextRef[]
+  /** 后台摘要状态；旧版调用方可忽略。 */
+  summaryStatuses?: Record<string, ReferenceSummaryStatus>
 }
 export type GetContextRefsRequest = GetAgentContextRefsRequest
 
