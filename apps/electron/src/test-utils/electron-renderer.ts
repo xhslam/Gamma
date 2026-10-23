@@ -7,7 +7,7 @@ import tailwindcss from 'tailwindcss'
 import loadTailwindConfig from 'tailwindcss/loadConfig'
 
 export interface ElectronRendererHarness {
-  run<T>(scenario: string): Promise<T>
+  run<T>(scenario: string, reloadScenario?: string): Promise<T>
   dispose(): Promise<void>
 }
 
@@ -15,6 +15,11 @@ interface ElectronRendererHarnessOptions {
   /** 测试专用主进程初始化，可注册真实 ipcMain handler，不能连接用户配置。 */
   mainProcessSetup?: string
   preloadSource?: string
+  /** 真实服务合成配置的隔离环境，仅影响本次Electron子进程。 */
+  environment?: Record<string, string>
+  mainProcessReady?: string
+  mainWindowSetup?: string
+  timeoutMs?: number
 }
 
 /** 用应用真实的 Vite 构建与 Chromium DOM 检查 renderer，避免模拟 DOM 掩盖 xterm 原生事件顺序。 */
@@ -62,7 +67,7 @@ export async function createElectronRendererHarness(entrySource: string, options
   const electronExecutable = getElectronExecutablePath()
   let runId = 0
   return {
-    async run<T>(scenario: string): Promise<T> {
+    async run<T>(scenario: string, reloadScenario?: string): Promise<T> {
       const mainPath = join(directory, `main-${++runId}.cjs`)
       const marker = 'GAMMA_RENDERER_RESULT:'
       // 不连接真实 PTY/剪贴板；结果只来自该次场景提供的 mock 数据。
@@ -72,10 +77,14 @@ ${options.mainProcessSetup ?? ''}
 app.setPath('userData', ${JSON.stringify(join(directory, 'user-data'))});
 app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
-  const window = new BrowserWindow({ width: 900, height: 600, show: false, webPreferences: { backgroundThrottling: false, ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
+  ${options.mainProcessReady ?? ''}
+  const window = new BrowserWindow({ width: 900, height: 600, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
+  ${options.mainWindowSetup ?? ''}
   try {
     await window.loadFile(${JSON.stringify(join(directory, 'index.html'))});
-    const result = await window.webContents.executeJavaScript(${JSON.stringify(`(async () => { ${scenario} })()`)});
+    let result = await window.webContents.executeJavaScript(${JSON.stringify(`(async () => { ${scenario} })()`)});
+    ${reloadScenario ? `await new Promise(resolve => { window.webContents.once('did-finish-load', resolve); window.reload(); });
+    result = { before: result, after: await window.webContents.executeJavaScript(${JSON.stringify(`(async () => { ${reloadScenario} })()`)}) };` : ''}
     process.stdout.write(${JSON.stringify(marker)} + JSON.stringify({ result }) + '\\n');
   } catch (error) {
     process.stdout.write(${JSON.stringify(marker)} + JSON.stringify({ error: error instanceof Error ? error.stack : String(error) }) + '\\n');
@@ -83,11 +92,11 @@ app.whenReady().then(async () => {
   } finally { window.destroy(); app.quit(); }
 });
 `)
-      const environment = { ...process.env }
+      const environment = { ...process.env, ...options.environment }
       // 父进程可能设置该变量，Electron GUI runner 必须使用 Chromium 而非 Node 模式。
       delete environment.ELECTRON_RUN_AS_NODE
       const child = Bun.spawn([electronExecutable, mainPath], { stdout: 'pipe', stderr: 'pipe', env: environment })
-      const timeout = setTimeout(() => child.kill(), 15_000)
+      const timeout = setTimeout(() => child.kill(), options.timeoutMs ?? 15_000)
       try {
         const [stdout, stderr, exitCode] = await Promise.all([
           new Response(child.stdout).text(),
