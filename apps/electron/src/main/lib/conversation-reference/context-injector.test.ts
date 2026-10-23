@@ -9,7 +9,7 @@ import {
 } from './context-injector'
 import { updateAgentContextRefs } from '../agent-session-manager'
 import { reconcileReferenceSummaries } from './background-summary'
-import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
+import { saveSnapshotToCache, computeSnapshotHash, getSnapshotCacheFilePathByRefId } from './ref-cache'
 import { normalizeSDKMessage } from './context-builder'
 import type { SDKMessage } from '@gamma/shared'
 
@@ -181,6 +181,119 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
       expect(String(result[0]!.content)).toContain('current question')
       expect(String(result[0]!.content)).toContain('已自动降级')
       reconcileReferenceSummaries(testSessionId, [], undefined, undefined, deps)
+    })
+  })
+
+  describe('Unavailable Reference Injections (Item 5)', () => {
+    it('When 源对话已删除 Then 不静默跳过且注入不可用原因', async () => {
+      const deletedRef = {
+        refId: 'ref_del_1',
+        sourceConversationId: 'non_existent_deleted_session',
+        sourceProjectId: 'ws_test',
+        titleAtAttach: '已删除的架构讨论',
+        mode: 'snapshot' as const,
+      }
+      const messages = [{ role: 'user', content: '请总结' }]
+      const result = await injectConversationReferencesContext({
+        sessionId: testSessionId,
+        contextRefs: [deletedRef],
+        messages,
+      })
+      const text = String(result[0]!.content)
+      expect(text).toContain('引用「已删除的架构讨论」当前不可用：源对话已删除')
+      expect(text).toContain('<referenced_conversations>')
+    })
+
+    it('When 归属项目不符 Then 不静默跳过且注入归属异常提示', async () => {
+      const mismatchedRef = {
+        refId: 'ref_mismatch_1',
+        sourceConversationId: sourceSessionId, // 真实 workspaceId 是 'ws_test'
+        sourceProjectId: 'ws_attacker_project',
+        titleAtAttach: '跨工作区伪造对话',
+        mode: 'snapshot' as const,
+      }
+      const messages = [{ role: 'user', content: '请总结' }]
+      const result = await injectConversationReferencesContext({
+        sessionId: testSessionId,
+        contextRefs: [mismatchedRef],
+        messages,
+      })
+      const text = String(result[0]!.content)
+      expect(text).toContain('当前不可用：对话归属项目不符')
+    })
+
+    it('When 快照缓存文件缺失 Then 不静默跳过且注入缓存缺失提示，绝不回源重建', async () => {
+      const missingCacheRef = {
+        refId: 'ref_snap_missing_file',
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_test',
+        titleAtAttach: '缓存缺失对话',
+        mode: 'snapshot' as const,
+      }
+      const messages = [{ role: 'user', content: '请总结' }]
+      const result = await injectConversationReferencesContext({
+        sessionId: testSessionId,
+        contextRefs: [missingCacheRef],
+        messages,
+      })
+      const text = String(result[0]!.content)
+      expect(text).toContain('引用「缓存缺失对话」当前不可用：快照缓存缺失')
+    })
+
+    it('When 快照缓存损坏/哈希篡改 Then 不静默跳过且注入缓存损坏提示', async () => {
+      const corruptRefId = 'ref_snap_corrupt_file'
+      const corruptRef = {
+        refId: corruptRefId,
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_test',
+        titleAtAttach: '损坏快照对话',
+        mode: 'snapshot' as const,
+      }
+      // 写入损坏的 json 文件
+      const cachePath = getSnapshotCacheFilePathByRefId(corruptRefId)
+      writeFileSync(cachePath, '{"broken_json": true, incomplete', 'utf-8')
+
+      const messages = [{ role: 'user', content: '请总结' }]
+      const result = await injectConversationReferencesContext({
+        sessionId: testSessionId,
+        contextRefs: [corruptRef],
+        messages,
+      })
+      const text = String(result[0]!.content)
+      expect(text).toContain('引用「损坏快照对话」当前不可用：快照缓存损坏')
+    })
+
+    it('When 正常空会话（0条消息）Then 绝不误判为缓存缺失或损坏', async () => {
+      const emptyRefId = 'ref_snap_empty_valid'
+      const emptyRef = {
+        refId: emptyRefId,
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_test',
+        titleAtAttach: '合法空会话',
+        mode: 'snapshot' as const,
+      }
+      // 保存包含 0 条消息的合法快照
+      saveSnapshotToCache({
+        refId: emptyRefId,
+        sourceConversationId: sourceSessionId,
+        sourceProjectId: 'ws_test',
+        title: '合法空会话',
+        snapshotUpToMessageId: '',
+        snapshotAt: Date.now(),
+        messageCount: 0,
+        estTokens: 0,
+        contentHash: computeSnapshotHash([]),
+        messages: [],
+      })
+
+      const messages = [{ role: 'user', content: '请总结' }]
+      const result = await injectConversationReferencesContext({
+        sessionId: testSessionId,
+        contextRefs: [emptyRef],
+        messages,
+      })
+      const text = String(result[0]!.content)
+      expect(text).not.toContain('当前不可用')
     })
   })
 })
