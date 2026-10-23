@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { attachScrollFade } from '@/components/ui/scroll-fade'
 import type { FileIndexEntry } from '@gamma/shared'
 import { FileTypeIcon } from './FileTypeIcon'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, MessageSquareText } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 // ===== Error Boundary =====
@@ -74,6 +74,8 @@ export interface FileMentionListProps {
   onBack?: () => void
   /** 嵌入另一个弹层时，移除自身的卡片容器样式。 */
   embedded?: boolean
+  /** 打开引用对话选择器 */
+  onOpenConversationReference?: () => void
 }
 
 export interface FileMentionRef {
@@ -171,7 +173,7 @@ function getTreeNodeStateKey(node: Pick<FileTreeNode, 'source' | 'treePath'>): s
 // ===== 组件 =====
 
 export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListProps>(
-  function FileMentionList({ sessionEntries, workspaceEntries, onSelect, onBack, embedded = false, listId, onActiveDescendantChange }, ref) {
+  function FileMentionList({ sessionEntries, workspaceEntries, onSelect, onBack, embedded = false, listId, onActiveDescendantChange, onOpenConversationReference }, ref) {
     const generatedId = React.useId()
     const id = listId ?? `file-mention-${generatedId}`
     // 构建一棵连续树；项目与会话来源只通过 badge 区分，不形成两个列表。
@@ -318,6 +320,19 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
         <div className={cn(!embedded && 'rounded-lg border bg-popover shadow-lg', 'overflow-hidden min-w-[260px]')}>
           <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] font-medium bg-primary/10 text-primary border-b border-border/50">
             <span>文件</span>
+            {onOpenConversationReference && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  onOpenConversationReference()
+                }}
+                className="flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 hover:underline"
+              >
+                <MessageSquareText className="size-3" />
+                <span>引用对话...</span>
+              </button>
+            )}
             <span className="font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
           </div>
           <div id={id} role="tree" aria-label="引用文件" /><div role="status" className="p-2 text-[11px] text-muted-foreground">无匹配文件</div>
@@ -336,9 +351,22 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
           'overflow-y-auto',
         )}
       >
-        <div className="flex items-center px-2.5 py-1.5 text-[11px] font-medium bg-primary/10 text-primary border-b border-border/50">
+        <div className="flex items-center justify-between px-2.5 py-1.5 text-[11px] font-medium bg-primary/10 text-primary border-b border-border/50">
           <span>文件</span>
-          <span className="ml-auto font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
+          {onOpenConversationReference && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                onOpenConversationReference()
+              }}
+              className="flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 hover:underline"
+            >
+              <MessageSquareText className="size-3" />
+              <span>引用对话...</span>
+            </button>
+          )}
+          <span className="font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
         </div>
         <div id={id} role="tree" aria-label="引用文件">
         <TreeNodeList

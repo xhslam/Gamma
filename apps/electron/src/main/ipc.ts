@@ -93,6 +93,13 @@ import type {
   RewindSessionInput,
   RewindSessionResult,
   AgentSessionReferenceSearchInput,
+  GetContextRefsRequest,
+  GetContextRefsResponse,
+  UpdateContextRefsRequest,
+  UpdateContextRefsResponse,
+  GetContextRefDetailRequest,
+  GetContextRefDetailResponse,
+  AgentContextRef,
   FeishuConfigInput,
   FeishuConfig,
   FeishuBridgeState,
@@ -268,6 +275,9 @@ import {
   searchAgentSessionMessages,
   searchAgentSessionReferences,
   resolveAgentCwd,
+  getAgentContextRefs,
+  updateAgentContextRefs,
+  getAgentContextRefDetail,
 } from './lib/agent-session-manager'
 import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce, cancelQueuedAgentSend } from './lib/agent-send-outbox-service'
 import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
@@ -2620,6 +2630,87 @@ export function registerIpcHandlers(): void {
     AGENT_IPC_CHANNELS.SEARCH_SESSION_REFERENCES,
     async (_, input: AgentSessionReferenceSearchInput) => {
       return searchAgentSessionReferences(input)
+    }
+  )
+
+  // 获取会话的引用列表
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.GET_CONTEXT_REFS,
+    async (_, req: GetContextRefsRequest): Promise<GetContextRefsResponse> => {
+      if (!req || typeof req.sessionId !== 'string' || !req.sessionId.trim()) {
+        return { refs: [] }
+      }
+      return { refs: getAgentContextRefs(req.sessionId.trim()) }
+    }
+  )
+
+  // 更新会话的引用列表（上限 5 条，校验白名单及自引用防护）
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.UPDATE_CONTEXT_REFS,
+    async (_, req: UpdateContextRefsRequest): Promise<UpdateContextRefsResponse> => {
+      if (!req || typeof req.sessionId !== 'string' || !req.sessionId.trim()) {
+        throw new Error('无效的会话 ID')
+      }
+      const sessionId = req.sessionId.trim()
+      const rawRefs = Array.isArray(req.refs) ? req.refs : []
+      const MAX_CONTEXT_REFS = 5
+      const seenSources = new Set<string>()
+      const sanitized: AgentContextRef[] = []
+
+      for (const item of rawRefs) {
+        if (!item || typeof item !== 'object') continue
+        const sourceConversationId = typeof item.sourceConversationId === 'string' ? item.sourceConversationId.trim() : ''
+        if (!sourceConversationId) continue
+        // 禁止自引用
+        if (sourceConversationId === sessionId) continue
+        // 去重
+        if (seenSources.has(sourceConversationId)) continue
+        seenSources.add(sourceConversationId)
+
+        // 安全 ID 校验防路径穿越
+        const refId = typeof item.refId === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(item.refId)
+          ? item.refId
+          : `ref-${randomUUID()}`
+
+        sanitized.push({
+          refId,
+          sourceConversationId,
+          sourceProjectId: typeof item.sourceProjectId === 'string' ? item.sourceProjectId : '',
+          titleAtAttach: typeof item.titleAtAttach === 'string' ? item.titleAtAttach : '',
+          mode: item.mode === 'live' ? 'live' : 'snapshot',
+          snapshotUpToMessageId: typeof item.snapshotUpToMessageId === 'string' ? item.snapshotUpToMessageId : undefined,
+          snapshotAt: typeof item.snapshotAt === 'number' ? item.snapshotAt : undefined,
+          messageCount: typeof item.messageCount === 'number' ? item.messageCount : undefined,
+          estTokens: typeof item.estTokens === 'number' ? item.estTokens : undefined,
+        })
+
+        if (sanitized.length >= MAX_CONTEXT_REFS) break
+      }
+
+      const updated = updateAgentContextRefs(sessionId, sanitized)
+      return { refs: updated }
+    }
+  )
+
+  // 获取源会话详情（用于展示预览、消息数及 Token 估算）
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.GET_CONTEXT_REF_DETAIL,
+    async (_, req: GetContextRefDetailRequest): Promise<GetContextRefDetailResponse> => {
+      if (!req || typeof req.sourceSessionId !== 'string' || !req.sourceSessionId.trim()) {
+        return {
+          detail: {
+            sourceConversationId: '',
+            sourceProjectId: '',
+            title: '',
+            messageCount: 0,
+            estTokens: 0,
+            updatedAt: 0,
+            exists: false,
+          },
+        }
+      }
+      const detail = getAgentContextRefDetail(req.sourceSessionId.trim())
+      return { detail }
     }
   )
 

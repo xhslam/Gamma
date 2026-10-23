@@ -158,6 +158,12 @@ import type {
   TerminalSavePastedImageInput,
   TerminalSavePastedImageResult,
   TerminalClipboardContentResult,
+  GetContextRefsRequest,
+  GetContextRefsResponse,
+  UpdateContextRefsRequest,
+  UpdateContextRefsResponse,
+  GetContextRefDetailRequest,
+  GetContextRefDetailResponse,
 } from '@gamma/shared'
 import type {
   UserProfile,
@@ -542,6 +548,15 @@ export interface ElectronAPI {
 
   /** 搜索可引用的 Agent 会话；省略 workspaceId 时跨工作区搜索。 */
   searchAgentSessionReferences: (input: AgentSessionReferenceSearchInput) => Promise<AgentSessionReferenceSearchResult[]>
+
+  /** 获取当前会话附加的引用会话元数据列表 */
+  getContextRefs: (req: GetContextRefsRequest) => Promise<GetContextRefsResponse>
+
+  /** 更新当前会话的引用会话列表（最多5条，支持快照/实时模式） */
+  updateContextRefs: (req: UpdateContextRefsRequest) => Promise<UpdateContextRefsResponse>
+
+  /** 获取待引用的源会话详细元数据（用于前端展示预览、消息数及 Token 估算） */
+  getContextRefDetail: (req: GetContextRefDetailRequest) => Promise<GetContextRefDetailResponse>
 
   /** 迁移 Agent 会话到另一个工作区 */
   moveAgentSessionToWorkspace: (input: MoveSessionToWorkspaceInput) => Promise<AgentSessionMeta>
@@ -1745,6 +1760,18 @@ const electronAPI: ElectronAPI = {
 
   searchAgentSessionReferences: (input: AgentSessionReferenceSearchInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SEARCH_SESSION_REFERENCES, input)
+  },
+
+  getContextRefs: (req: GetContextRefsRequest) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_CONTEXT_REFS, req)
+  },
+
+  updateContextRefs: (req: UpdateContextRefsRequest) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_CONTEXT_REFS, req)
+  },
+
+  getContextRefDetail: (req: GetContextRefDetailRequest) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_CONTEXT_REF_DETAIL, req)
   },
 
   moveAgentSessionToWorkspace: (input: MoveSessionToWorkspaceInput) => {

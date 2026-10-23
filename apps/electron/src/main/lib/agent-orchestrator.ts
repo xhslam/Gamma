@@ -53,7 +53,7 @@ import { getAdapter, fetchTitle } from '@gamma/core'
 import pkg from '../../../package.json' with { type: 'json' }
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
-import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir, isAgentSessionDeleting } from './agent-session-manager'
+import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir, isAgentSessionDeleting, getAgentContextRefs } from './agent-session-manager'
 import { getAgentWorkspace, getProjectFilesPath, getWorkspaceMcpConfig, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles, getWorkspaceAgentsMdPath, readWorkspaceAgentsMd, getWorkspaceMemoryGuidance, isWorkspaceProjectKnowledgeMaintenanceApproved } from './agent-workspace-manager'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { getMcpApiKeyEnvironment, getMcpOAuthHeaders } from './mcp-oauth-service'
@@ -580,6 +580,7 @@ export class AgentOrchestrator {
     uuid?: string,
   ): string {
     const persistedUuid = uuid ?? randomUUID()
+    const activeRefs = getAgentContextRefs(sessionId)
     const userSDKMsg: SDKMessage = {
       type: 'user',
       uuid: persistedUuid,
@@ -588,6 +589,7 @@ export class AgentOrchestrator {
       },
       parent_tool_use_id: null,
       _createdAt: createdAt,
+      ...(activeRefs.length > 0 && { contextRefs: activeRefs }),
     } as unknown as SDKMessage
     appendSDKMessages(sessionId, [userSDKMsg])
     return persistedUuid
