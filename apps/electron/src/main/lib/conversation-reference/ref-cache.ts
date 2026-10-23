@@ -164,31 +164,42 @@ export function loadChunkSummaryFromCache(
     if (!existsSync(filePath)) return null
     const raw = readFileSync(filePath, 'utf-8')
     const parsed = JSON.parse(raw) as CachedChunkSummary
-    if (!parsed || parsed.sourceConversationId !== sourceSessionId || parsed.chunkHash !== chunkHash || typeof parsed.summary !== 'string') {
+    if (!parsed || parsed.version !== 'v1' || parsed.sourceConversationId !== sourceSessionId || parsed.chunkHash !== chunkHash || typeof parsed.summary !== 'string') {
       return null
     }
     return parsed.summary
-  } catch (error) {
-    console.warn('[会话引用缓存] 读取分块摘要失败:', error)
+  } catch {
+    console.warn('[会话引用缓存] 读取分块摘要失败: 缓存格式非法')
     return null
   }
 }
 
 /**
- * 计算规范化消息列表的 SHA-256 稳定哈希
+ * 计算规范化消息列表的 SHA-256 稳定哈希（定长前缀编码防分隔串碰撞）
  */
 export function computeSnapshotHash(messages: readonly NormalizedReferencedMessage[]): string {
   const hash = createHash('sha256')
   for (const m of messages) {
-    hash.update(`${m.id}:${m.role}:${m.content}:`)
+    const idLen = Buffer.byteLength(m.id)
+    const roleLen = Buffer.byteLength(m.role)
+    const contentLen = Buffer.byteLength(m.content)
+    hash.update(`m|${idLen}:${m.id}|${roleLen}:${m.role}|${contentLen}:${m.content}\n`)
     if (m.toolCalls && m.toolCalls.length > 0) {
       for (const t of m.toolCalls) {
-        hash.update(`${t.name}:${t.keyParam ?? ''}:${t.resultSummary ?? ''};`)
+        const nameLen = Buffer.byteLength(t.name)
+        const kp = t.keyParam ?? ''
+        const kpLen = Buffer.byteLength(kp)
+        const rs = t.resultSummary ?? ''
+        const rsLen = Buffer.byteLength(rs)
+        hash.update(`t|${nameLen}:${t.name}|${kpLen}:${kp}|${rsLen}:${rs}\n`)
       }
     }
     if (m.attachments && m.attachments.length > 0) {
       for (const a of m.attachments) {
-        hash.update(`${a.name}:${a.type ?? ''};`)
+        const nameLen = Buffer.byteLength(a.name)
+        const type = a.type ?? ''
+        const typeLen = Buffer.byteLength(type)
+        hash.update(`a|${nameLen}:${a.name}|${typeLen}:${type}\n`)
       }
     }
   }
@@ -295,10 +306,10 @@ export function loadSummaryFromCache(
     if (!existsSync(filePath)) return null
     const raw = readFileSync(filePath, 'utf-8')
     const parsed = JSON.parse(raw) as CachedConversationSummary
-    if (!parsed || typeof parsed.summary !== 'string') return null
+    if (!parsed || parsed.version !== 'v1' || typeof parsed.summary !== 'string') return null
     return parsed.summary
-  } catch (error) {
-    console.warn('[会话引用缓存] 读取摘要失败:', error)
+  } catch {
+    console.warn('[会话引用缓存] 读取摘要失败: 缓存格式非法')
     return null
   }
 }

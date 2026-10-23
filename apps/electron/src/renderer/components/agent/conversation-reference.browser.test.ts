@@ -15,10 +15,13 @@ beforeAll(async () => {
     store.set(agentSessionsAtom,sessions);
     store.set(agentWorkspacesAtom,[{id:'project-a',name:'当前测试项目',slug:'a'},{id:'project-b',name:'跨项目测试',slug:'b'}]);
     window.requests=[]; window.summaryState='running';
-    window.electronAPI={getContextRefs:async ()=>({refs:[],summaryStatuses:{r1:window.summaryState,r_cross:window.summaryState}}),getContextRefDetail:async ({sourceSessionId})=>{
-      await new Promise(r=>setTimeout(r,15)); window.requests.push(sourceSessionId);
-      return {detail:{sourceConversationId:sourceSessionId,sourceProjectId:'project-a',title:sourceSessionId,lastCompleteMessageId:'m1',messageCount:42,estTokens:1234,firstMessagePreview:'预览-'+sourceSessionId,updatedAt:now,exists:true}};
-    }};
+    window.electronAPI={
+      getContextRefs:async ()=>({refs:[],summaryStatuses:{r1:window.summaryState,r_cross:window.summaryState}}),
+      getContextRefDetail:async ({sourceSessionId})=>{
+        await new Promise(r=>setTimeout(r,15)); window.requests.push(sourceSessionId);
+        return {detail:{sourceConversationId:sourceSessionId,sourceProjectId:'project-a',title:sourceSessionId,lastCompleteMessageId:'m1',messageCount:42,estTokens:1234,firstMessagePreview:'预览-'+sourceSessionId,updatedAt:now,exists:true}};
+      },
+    };
     window.wait=ms=>new Promise(r=>setTimeout(r,ms));
     window.rename=()=>store.set(agentSessionsAtom,sessions.map(s=>s.id==='source-0'?{...s,title:'已改名的源会话'}:s));
     window.deleteSource=()=>store.set(agentSessionsAtom,sessions.filter(s=>s.id!=='source-0'));
