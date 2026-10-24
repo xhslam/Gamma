@@ -1194,7 +1194,7 @@ export const AgentMessages = React.memo(function AgentMessages({
     <BasePathsProvider basePaths={messageBasePaths} sessionId={sessionId}>
       <AgentBrowserLinkProvider sessionId={sessionId}>
         <div ref={historySelectionRootRef} className="relative flex min-h-0 flex-1 flex-col">
-          {ready && !hasContent && !streaming && <CodeFieldBackground container={backgroundContainer} />}
+          {ready && <CodeFieldBackground container={backgroundContainer} />}
       <style>{`
         ::highlight(${AGENT_HISTORY_QUOTE_HIGHLIGHT_NAME}) {
           background-color: hsl(var(--primary) / 0.28);
