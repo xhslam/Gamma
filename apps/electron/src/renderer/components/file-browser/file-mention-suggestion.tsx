@@ -13,7 +13,7 @@ import { ReactRenderer } from '@tiptap/react'
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion'
 import { toast } from 'sonner'
 import { FileMentionList } from './FileMentionList'
-import type { FileMentionRef } from './FileMentionList'
+import type { ReferencePickerTab, FileMentionRef } from './FileMentionList'
 import type { FileIndexEntry } from '@gamma/shared'
 import { createDebouncedSuggestionLoader, createLatestSuggestionRequestGuard, createMentionPopup, positionPopup, isSuggestionTriggerPresent, shouldSuppressEscTrigger, shouldClearEscSuppressionOnExit, type EscSuppressedTrigger } from '@/components/agent/mention-popup-utils'
 import { shouldAllowMentionTrigger, shouldShowMentionSuggestion } from '@/components/ai-elements/mention-utils'
@@ -27,7 +27,8 @@ export function createFileMentionSuggestion(
   attachedDirsRef?: React.RefObject<string[]>,
   mentionItemCountRef?: React.MutableRefObject<number>,
   sessionAttachedDirsRef?: React.RefObject<string[]>,
-  onOpenConversationReferenceRef?: React.RefObject<(() => void) | undefined>,
+  renderConversationReferenceRef?: React.RefObject<((onClose: () => void) => React.ReactNode) | undefined>,
+  initialTabRef?: React.MutableRefObject<ReferencePickerTab>,
 ): Omit<SuggestionOptions<FileIndexEntry>, 'editor'> {
   let missingWorkspaceToastShown = false
   // Esc 抑制：记录被 Esc 关闭的触发片段文本。
@@ -98,6 +99,7 @@ export function createFileMentionSuggestion(
       let resizeObserver: ResizeObserver | null = null
       let latestClientRect: (() => DOMRect | null) | null | undefined = null
       let blurHandler: (() => void) | null = null
+      let latestProps: SuggestionProps<FileIndexEntry> | null = null
       let editorRef: SuggestionProps<FileIndexEntry>['editor'] | null = null
 
       // 用本次查询的 props.items 按 source 分组渲染弹窗，
@@ -116,11 +118,16 @@ export function createFileMentionSuggestion(
           if (!isSuggestionTriggerPresent(props.editor, props.range, '@')) return
           props.command({ id: resolveFileMentionPath(item, workspacePathRef.current), label: item.name })
         }
-        const handleOpenRef = () => {
-          props.editor.commands.deleteRange(props.range)
+        latestProps = props
+        const closeConversations = () => {
+          const current = latestProps
+          if (current && isSuggestionTriggerPresent(current.editor, current.range, '@')) {
+            current.editor.chain().focus().deleteRange(current.range).run()
+          }
           cleanup()
-          onOpenConversationReferenceRef?.current?.()
         }
+        const initialTab = initialTabRef?.current ?? 'files'
+        if (initialTabRef) initialTabRef.current = 'files'
         renderer = new ReactRenderer(FileMentionList, {
           props: {
             listId: combobox?.listId,
@@ -128,7 +135,10 @@ export function createFileMentionSuggestion(
             sessionEntries,
             workspaceEntries,
             onSelect: selectItem,
-            onOpenConversationReference: onOpenConversationReferenceRef?.current ? handleOpenRef : undefined,
+            conversationContent: renderConversationReferenceRef?.current?.(closeConversations),
+            initialTab,
+            onClose: closeConversations,
+            onFileTabFocus: () => props.editor.commands.focus(),
           },
           editor: props.editor,
         })
@@ -143,11 +153,13 @@ export function createFileMentionSuggestion(
         combobox?.dispose()
         combobox = null
         queryLoader.cancel()
+        if (blurHandler && popup) popup.removeEventListener('focusout', blurHandler, true)
         if (blurHandler && editorRef) {
           editorRef.view.dom.removeEventListener('blur', blurHandler, true)
           blurHandler = null
         }
         editorRef = null
+        latestProps = null
         mentionActiveRef.current = false
         if (mentionItemCountRef) mentionItemCountRef.current = 0
         latestClientRect = null
@@ -206,14 +218,15 @@ export function createFileMentionSuggestion(
 
             // 编辑器失焦时强制关闭弹窗（点击页面其他区域等场景）
             blurHandler = () => {
-              // 延迟检查：点击弹窗本身不应关闭（焦点会回到编辑器）
+              // 弹窗内搜索、模式按钮等可接管焦点；只有焦点离开编辑器和整个共用框时才关闭。
               setTimeout(() => {
-                if (!editorRef?.view.hasFocus() && popup) {
+                if (!editorRef?.view.hasFocus() && popup && !popup.contains(document.activeElement)) {
                   cleanup()
                 }
               }, 100)
             }
             props.editor.view.dom.addEventListener('blur', blurHandler, true)
+            popup?.addEventListener('focusout', blurHandler, true)
           } catch (e) {
             console.error('[FileMention] render popup failed:', e)
             cleanup()
@@ -227,6 +240,7 @@ export function createFileMentionSuggestion(
           }
           if (mentionItemCountRef) mentionItemCountRef.current = props.items.length
           latestClientRect = props.clientRect
+          latestProps = props
 
           const { sessionEntries, workspaceEntries } = splitEntries(props.items)
           const selectItem = (item: MentionSelection) => {

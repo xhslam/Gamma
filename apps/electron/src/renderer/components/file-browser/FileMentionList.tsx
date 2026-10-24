@@ -22,17 +22,44 @@ import { ChevronRight, FileText, MessageSquareText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
-/** 文件与对话引用共享工具栏样式；保留输入框焦点，也支持键盘激活。 */
-function MentionHeader({ onOpenConversationReference }: Pick<FileMentionListProps, 'onOpenConversationReference'>): React.ReactElement {
+export type ReferencePickerTab = 'files' | 'conversations'
+
+interface ReferencePickerTabItem {
+  id: ReferencePickerTab
+  label: string
+  Icon: typeof FileText
+}
+
+/** 两种引用始终在同一个容器中切换，不创建第二个弹层。 */
+function MentionHeader({ activeTab, onTabChange, hasConversations, id }: {
+  id: string
+  activeTab: ReferencePickerTab
+  onTabChange: (tab: ReferencePickerTab) => void
+  hasConversations: boolean
+}): React.ReactElement {
+  const tabs: ReferencePickerTabItem[] = [
+    { id: 'files', label: '文件', Icon: FileText },
+    ...(hasConversations ? [{ id: 'conversations' as const, label: '引用对话', Icon: MessageSquareText }] : []),
+  ]
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-2 py-2">
-      <div className="flex items-center gap-1">
-        <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] font-medium text-foreground"><FileText className="size-3.5" />文件</span>
-        {onOpenConversationReference && (
-          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={onOpenConversationReference} className="h-7 gap-1.5 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground [&_svg]:size-3.5">
-            <MessageSquareText className="size-3.5" />引用对话
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/50 px-2 py-2">
+      <div className="flex items-center gap-1" role="tablist" aria-label="引用类型">
+        {tabs.map(({ id: tab, label, Icon }) => (
+          <Button key={tab} id={`${id}-tab-${tab}`} aria-controls={`${id}-panel-${tab}`} tabIndex={activeTab === tab ? 0 : -1}
+            type="button" role="tab" aria-selected={activeTab === tab} variant="ghost" size="sm"
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+              event.preventDefault()
+              const index = tabs.findIndex((item) => item.id === tab)
+              const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+              onTabChange(tabs[next]!.id)
+              document.getElementById(`${id}-tab-${tabs[next]!.id}`)?.focus()
+            }}
+            onMouseDown={(event) => event.preventDefault()} onClick={() => onTabChange(tab)}
+            className={cn('h-7 gap-1.5 px-2 text-[11px] font-medium [&_svg]:size-3.5', activeTab === tab ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Icon />{label}
           </Button>
-        )}
+        ))}
       </div>
       <span className="text-[10px] text-muted-foreground/70">Esc 关闭 · Enter 选中</span>
     </div>
@@ -92,8 +119,11 @@ export interface FileMentionListProps {
   onBack?: () => void
   /** 嵌入另一个弹层时，移除自身的卡片容器样式。 */
   embedded?: boolean
-  /** 打开引用对话选择器 */
-  onOpenConversationReference?: () => void
+  /** 对话选择内容直接嵌在文件框内。 */
+  conversationContent?: React.ReactNode
+  initialTab?: ReferencePickerTab
+  onFileTabFocus?: () => void
+  onClose?: () => void
 }
 
 export interface FileMentionRef {
@@ -191,7 +221,9 @@ function getTreeNodeStateKey(node: Pick<FileTreeNode, 'source' | 'treePath'>): s
 // ===== 组件 =====
 
 export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListProps>(
-  function FileMentionList({ sessionEntries, workspaceEntries, onSelect, onBack, embedded = false, listId, onActiveDescendantChange, onOpenConversationReference }, ref) {
+  function FileMentionList({ sessionEntries, workspaceEntries, onSelect, onBack, embedded = false, listId, onActiveDescendantChange, conversationContent, initialTab = 'files', onFileTabFocus, onClose }, ref) {
+    const [activeTab, setActiveTab] = React.useState<ReferencePickerTab>(initialTab)
+    const [conversationsVisited, setConversationsVisited] = React.useState(initialTab === 'conversations')
     const generatedId = React.useId()
     const id = listId ?? `file-mention-${generatedId}`
     // 构建一棵连续树；项目与会话来源只通过 badge 区分，不形成两个列表。
@@ -270,13 +302,14 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
     )
 
     React.useEffect(() => {
-      onActiveDescendantChange?.(totalItems > 0 ? `${id}-option-${selectedIndex}` : undefined)
+      onActiveDescendantChange?.(activeTab === 'files' && totalItems > 0 ? `${id}-option-${selectedIndex}` : undefined)
       return () => onActiveDescendantChange?.(undefined)
-    }, [id, selectedIndex, totalItems, onActiveDescendantChange])
+    }, [id, selectedIndex, totalItems, onActiveDescendantChange, activeTab])
 
     // 暴露键盘处理给 TipTap
     React.useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {
+        if (activeTab !== 'files') return false
         if (isImeKeyboardEvent(event)) return false
         if (totalItems === 0) return false
         if (event.key === 'ArrowUp') {
@@ -332,41 +365,39 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
 
     const hasResults = totalItems > 0
 
-    // 无匹配结果
-    if (!hasResults) {
-      return (
-        <div className={cn(!embedded && 'rounded-lg border bg-popover shadow-lg', 'overflow-hidden min-w-[260px]')}>
-          <MentionHeader onOpenConversationReference={onOpenConversationReference} />
-          <div id={id} role="tree" aria-label="引用文件" /><div role="status" className="p-2 text-[11px] text-muted-foreground">无匹配文件</div>
-        </div>
-      )
-    }
-
     return (
       <TooltipProvider disableHoverableContent>
         <MentionErrorBoundary>
-      <div
-        ref={containerRef}
-        className={cn(
-          !embedded && 'rounded-lg border bg-popover shadow-lg',
-          embedded ? 'max-h-none min-w-0' : 'max-h-[360px] min-w-[260px]',
-          'overflow-y-auto',
-        )}
-      >
-        <MentionHeader onOpenConversationReference={onOpenConversationReference} />
-        <div id={id} role="tree" aria-label="引用文件">
-        <TreeNodeList
-          listId={id}
-          nodes={treeWithState}
-          selectedIndex={selectedIndex}
-          baseIndex={0}
-          onSelect={handleSelect}
-          onToggle={toggleExpand}
-          setSelectedIndex={handleSetIndex}
-        />
-        </div>
-      </div>
-      </MentionErrorBoundary>
+          <div data-reference-picker onKeyDown={(event) => {
+            if (event.key === 'Escape' && !isImeKeyboardEvent(event.nativeEvent)) {
+              event.preventDefault()
+              event.stopPropagation()
+              onClose?.()
+            }
+          }} className={cn(
+            !embedded && 'rounded-lg border bg-popover shadow-lg',
+            embedded ? 'max-h-none min-w-0' : 'w-[400px] max-w-[calc(100vw-32px)] max-h-[360px] min-w-[260px]',
+            'flex flex-col overflow-hidden',
+          )}>
+            <MentionHeader id={id} activeTab={activeTab} hasConversations={Boolean(conversationContent)} onTabChange={(tab) => {
+              setActiveTab(tab)
+              if (tab === 'conversations') {
+                setConversationsVisited(true)
+                requestAnimationFrame(() => document.getElementById(`${id}-panel-conversations`)?.querySelector('input')?.focus())
+              } else onFileTabFocus?.()
+            }} />
+            <div ref={containerRef} id={`${id}-panel-files`} aria-labelledby={`${id}-tab-files`} role="tabpanel" aria-label="文件" className={activeTab === 'files' ? 'min-h-0 overflow-y-auto' : 'hidden'}>
+              <div id={id} role="tree" aria-label="引用文件">
+                <TreeNodeList listId={id} nodes={treeWithState} selectedIndex={selectedIndex} baseIndex={0}
+                  onSelect={handleSelect} onToggle={toggleExpand} setSelectedIndex={handleSetIndex} />
+              </div>
+              {!hasResults && <div role="status" className="p-2 text-[11px] text-muted-foreground">无匹配文件</div>}
+            </div>
+            {conversationsVisited && conversationContent && (
+              <div id={`${id}-panel-conversations`} aria-labelledby={`${id}-tab-conversations`} role="tabpanel" aria-label="引用对话" className={activeTab === 'conversations' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>{conversationContent}</div>
+            )}
+          </div>
+        </MentionErrorBoundary>
       </TooltipProvider>
     )
   },

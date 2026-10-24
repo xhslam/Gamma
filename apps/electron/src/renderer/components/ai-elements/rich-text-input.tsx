@@ -192,8 +192,8 @@ interface RichTextInputProps {
   onAgentHistoryQuoteClick?: (quote: QuotedSelection) => void
   /** 空输入框时按 Backspace 的拦截回调（用于删除末尾引用 Chip 等场景） */
   onBackspaceEmpty?: () => boolean
-  /** 打开引用对话选择器 */
-  onOpenConversationReference?: () => void
+  /** 在文件选择框内渲染对话页签。 */
+  renderConversationReference?: (onClose: () => void) => React.ReactNode
   className?: string
 }
 
@@ -201,6 +201,7 @@ interface RichTextInputProps {
 export interface RichTextInputHandle {
   /** 返回最新 Markdown 草稿，并同步尚未提交的编辑。 */
   getMarkdown: () => string
+  openReferencePicker: (tab: 'files' | 'conversations') => void
   /** 在光标处插入文件引用（右侧文件面板拖入时调用） */
   insertFileMentions: (items: FilePanelDragItem[]) => void
   /** 在光标处插入会话引用（左侧会话行拖入时调用）。 */
@@ -247,15 +248,16 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   sendWithCmdEnter = false,
   onAgentHistoryQuoteClick,
   onBackspaceEmpty,
-  onOpenConversationReference,
+  renderConversationReference,
 }: RichTextInputProps, ref: React.Ref<RichTextInputHandle>): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(false)
   const inputIdRef = useRef(voiceInputId ?? `rich-text-input-${Math.random().toString(36).slice(2)}`)
   const voicePreviewRef = useRef<VoiceDictationPreviewRange | null>(null)
   const onBackspaceEmptyRef = useRef(onBackspaceEmpty)
   onBackspaceEmptyRef.current = onBackspaceEmpty
-  const onOpenConversationReferenceRef = useRef(onOpenConversationReference)
-  onOpenConversationReferenceRef.current = onOpenConversationReference
+  const renderConversationReferenceRef = useRef(renderConversationReference)
+  renderConversationReferenceRef.current = renderConversationReference
+  const referencePickerTabRef = useRef<'files' | 'conversations'>('files')
   // 手动折叠状态：用户主动折叠输入框
   const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false)
   // 跟踪 isExpanded 最新值（对比后再 setState，避免每键无谓 setState 触发重渲染）
@@ -394,7 +396,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       attachedDirsRef,
       mentionItemCountRef,
       sessionAttachedDirsRef,
-      onOpenConversationReferenceRef,
+      renderConversationReferenceRef,
+      referencePickerTabRef,
     ),
     [],
   )
@@ -1096,6 +1099,11 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   // mention 节点沿用 TipTap Mention 扩展的 attrs（id=路径，label=文件名），
   // 发送时由 htmlToMarkdown 序列化为 @file:{path}，与键盘 @ 引用行为完全一致。
   useImperativeHandle(ref, () => ({
+    openReferencePicker(tab): void {
+      if (!editor || !editor.isEditable) return
+      referencePickerTabRef.current = tab
+      editor.chain().focus().insertContent(' @').run()
+    },
     getMarkdown(): string {
       return flushPendingDraftSync(editor ?? undefined)
     },
