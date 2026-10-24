@@ -145,7 +145,7 @@ describe('Given 新会话的字符流场背景', () => {
     expect(result.before.pixels).toBeGreaterThan(1000)
     expect(result.after.sum).toBe(result.before.sum)
   }, 30_000)
-  test('When 鼠标移动 Then 仅附近变色，停下后恢复原样并停止重绘', async () => {
+  test('When 鼠标移动 Then 产生局部扩散水光，停下后恢复原样并停止重绘', async () => {
     const result = await renderer.run<{ local: boolean; changed: boolean; restored: boolean; idlePaints: number; synchronousPaints: number }>(`
       window.mountField(true);
       await new Promise(resolve => setTimeout(resolve, 160));
@@ -162,7 +162,7 @@ describe('Given 新会话的字符流场背景', () => {
       const changed = window.fieldSample().sum !== before;
       const farAfter = context.getImageData(0,0,100,100).data;
       const local = farBefore.every((value,index) => value===farAfter[index]);
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, 1800));
       const restored = window.fieldSample().sum === before;
       paints = 0;
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -173,6 +173,22 @@ describe('Given 新会话的字符流场背景', () => {
     expect(result.restored).toBe(true)
     expect(result.idlePaints).toBe(0)
     expect(result.synchronousPaints).toBe(0)
+  }, 30_000)
+  test('When 鼠标离开 Then 已产生的水光继续扩散而不是立即熄灭', async () => {
+    const result = await renderer.run<{ fading: boolean; restored: boolean }>(`
+      window.mountField(true);
+      await new Promise(resolve => setTimeout(resolve, 160));
+      const before = window.fieldSample().sum;
+      window.moveField();
+      await new Promise(resolve => setTimeout(resolve, 150));
+      document.querySelector('canvas').parentElement.dispatchEvent(new PointerEvent('pointerleave'));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const fading = window.fieldSample().sum !== before;
+      await new Promise(resolve => setTimeout(resolve, 1600));
+      return {fading,restored:window.fieldSample().sum === before};
+    `)
+    expect(result.fading).toBe(true)
+    expect(result.restored).toBe(true)
   }, 30_000)
   test('When 鼠标经过输入控件、触屏移动或拖动 Then 背景不响应', async () => {
     const result = await renderer.run<{ before: number; after: number }>(`

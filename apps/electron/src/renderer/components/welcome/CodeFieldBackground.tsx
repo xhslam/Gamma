@@ -1,13 +1,15 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { CODE_FIELD_MAX_RIPPLES, CODE_FIELD_RIPPLE_LIFETIME, sampleCodeFieldRipple } from './code-field-ripple'
+import type { CodeFieldRipple } from './code-field-ripple'
 import './code-field-background.css'
 
 const GLYPHS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const CELL_WIDTH = 9
 const CELL_HEIGHT = 16
 
-const HOVER_LIFETIME = 450
-const HOVER_RADIUS = 110
+const HOVER_INTERVAL = 65
+const HOVER_DISTANCE = 12
 
 interface HoverPoint {
   x: number
@@ -20,7 +22,7 @@ interface CodeFieldBackgroundProps {
   container?: HTMLElement | null
 }
 
-/** 静态等色字符网格，仅鼠标移动附近短暂变色；空闲时不运行逐帧动画。 */
+/** 静态等色字符网格；鼠标经过时产生柔和水光，沿轨迹扩散并渐隐。 */
 export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}): React.ReactElement {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
 
@@ -40,9 +42,10 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
     let baseOpacity = 0.15
     let glowOpacity = 0.64
     let lastHover: HoverPoint | null = null
+    let ripples: CodeFieldRipple[] = []
 
     const paint = (now: number): void => {
-      if (lastHover && now - lastHover.at >= HOVER_LIFETIME) lastHover = null
+      ripples = ripples.filter(ripple => now - ripple.startedAt < CODE_FIELD_RIPPLE_LIFETIME)
       context.clearRect(0, 0, width, height)
       context.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
       context.textBaseline = 'top'
@@ -54,10 +57,7 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
           const seed = Math.imul(cell ^ (cell >>> 13), 1274126177) >>> 0
           // 字符与底色始终固定，不随时间或鼠标事件重新随机化。
           const glyph = GLYPHS[seed % GLYPHS.length]!
-          const distance = lastHover ? Math.hypot(x + CELL_WIDTH / 2 - lastHover.x, y + CELL_HEIGHT / 2 - lastHover.y) : HOVER_RADIUS
-          const proximity = Math.max(0, 1 - distance / HOVER_RADIUS)
-          const fade = lastHover ? Math.max(0, 1 - (now - lastHover.at) / HOVER_LIFETIME) : 0
-          const highlight = proximity * proximity * fade
+          const highlight = sampleCodeFieldRipple(ripples, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2, now)
           context.fillStyle = ink
           context.globalAlpha = baseOpacity
           context.fillText(glyph, x, y)
@@ -74,17 +74,17 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
     const stop = (): void => { cancelAnimationFrame(frame); frame = 0 }
     const animate = (now: number): void => {
       frame = 0
-      if (now - lastPaint < 50) { frame = requestAnimationFrame(animate); return }
+      if (now - lastPaint < 1000 / 60) { frame = requestAnimationFrame(animate); return }
       paint(now)
       lastPaint = now
-      if (lastHover && visible && !document.hidden && !motion.matches) frame = requestAnimationFrame(animate)
+      if (ripples.length > 0 && visible && !document.hidden && !motion.matches) frame = requestAnimationFrame(animate)
     }
     const resume = (): void => {
       stop()
-      if (motion.matches || document.hidden || !visible) { lastHover = null }
+      if (motion.matches || document.hidden || !visible) { lastHover = null; ripples = [] }
       if (!visible || document.hidden || width === 0 || height === 0) return
       paint(performance.now())
-      if (lastHover && !motion.matches) frame = requestAnimationFrame(animate)
+      if (ripples.length > 0 && !motion.matches) frame = requestAnimationFrame(animate)
     }
     const getPointerPoint = (event: PointerEvent): HoverPoint | null => {
       if (!event.isPrimary || motion.matches || !visible || document.hidden) return null
@@ -101,9 +101,11 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
       if (event.buttons !== 0 || (event.pointerType !== 'mouse' && event.pointerType !== 'pen')) return
       const point = getPointerPoint(event)
       if (!point) { lastHover = null; return }
-      if (lastHover && point.x === lastHover.x && point.y === lastHover.y) return
+      if (lastHover && (point.at - lastHover.at < HOVER_INTERVAL || Math.hypot(point.x - lastHover.x, point.y - lastHover.y) < HOVER_DISTANCE)) return
       lastHover = point
-      // 高频事件仅更新位置，每帧最多绘制一次；静止后渐隐并停止动画。
+      // 保留移动轨迹，宽波峰相互交叠；离开后仍自然扩散，不突然截断。
+      ripples = [...ripples.slice(-(CODE_FIELD_MAX_RIPPLES - 1)), { x: point.x, y: point.y, startedAt: point.at, strength: 0.6 }]
+      // 高频事件不直接绘制；仅在涟漪存续期间运行逐帧动画。
       if (!frame) frame = requestAnimationFrame(animate)
     }
     const handlePointerLeave = (): void => { lastHover = null }
