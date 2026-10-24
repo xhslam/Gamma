@@ -85,7 +85,8 @@ describe('Given 新会话的字符流场背景', () => {
       const behind = document.elementFromPoint(inputBounds.x+20,inputBounds.y+20) === input;
       input.focus();
       const before = window.fieldSample().sum;
-      panel.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,isPrimary:true,clientX:20,clientY:area.bottom-20}));
+      panel.dispatchEvent(new PointerEvent('pointermove', {bubbles:true,pointerType:'mouse',isPrimary:true,clientX:20,clientY:area.bottom-20}));
+      await new Promise(resolve => setTimeout(resolve, 80));
       return {
         covers:bounds.x===area.x && bounds.y===area.y && bounds.width===area.width && bounds.height===area.height,
         limited:document.getElementById('column').getBoundingClientRect().width===560 && area.width>560,
@@ -114,7 +115,7 @@ describe('Given 新会话的字符流场背景', () => {
   }, 30_000)
 
   for (const dark of [true, false]) {
-    test(`When 使用${dark ? '深' : '浅'}色主题 Then 字符持续变化且输入框仍可聚焦`, async () => {
+    test(`When 使用${dark ? '深' : '浅'}色主题 Then 字符颜色保持静态且输入框仍可聚焦`, async () => {
       const result = await renderer.run<{ before: Sample; after: Sample; focused: boolean }>(`
         window.mountField(${dark});
         await new Promise(resolve => setTimeout(resolve, 160));
@@ -124,7 +125,7 @@ describe('Given 新会话的字符流场背景', () => {
         return {before,after:window.fieldSample(),focused:document.activeElement.id==='input'};
       `, { screenshot: artifacts ? join(artifacts, `code-field-${dark ? 'dark' : 'light'}.png`) : undefined })
       expect(result.before.pixels).toBeGreaterThan(1000)
-      expect(result.after.sum).not.toBe(result.before.sum)
+      expect(result.after.sum).toBe(result.before.sum)
       expect(result.before.opacity).toBe('1')
       expect(result.before.contrastPixels).toBeGreaterThan(1000)
       expect(result.before.hidden).toBe('true')
@@ -144,30 +145,34 @@ describe('Given 新会话的字符流场背景', () => {
     expect(result.before.pixels).toBeGreaterThan(1000)
     expect(result.after.sum).toBe(result.before.sum)
   }, 30_000)
-  test('When 鼠标划过背景 Then 产生柔和波纹且连续事件不会同步重绘', async () => {
-    const result = await renderer.run<{ before: number; after: number; burst: number; paints: number }>(`
+  test('When 鼠标移动 Then 仅附近变色，停下后恢复原样并停止重绘', async () => {
+    const result = await renderer.run<{ local: boolean; changed: boolean; restored: boolean; idlePaints: number; synchronousPaints: number }>(`
+      window.mountField(true);
       await new Promise(resolve => setTimeout(resolve, 160));
-      const now = performance.now();
-      performance.now = () => now;
-      document.dispatchEvent(new Event('visibilitychange'));
+      const canvas = document.querySelector('canvas');
+      const context = canvas.getContext('2d');
       const before = window.fieldSample().sum;
-      const context = document.querySelector('canvas').getContext('2d');
+      const farBefore = context.getImageData(0,0,100,100).data.slice();
       const clear = context.clearRect.bind(context);
       let paints = 0;
       context.clearRect = (...args) => { paints++; clear(...args); };
       window.moveField();
       const synchronousPaints = paints;
-      document.dispatchEvent(new Event('visibilitychange'));
-      const after = window.fieldSample().sum;
-      window.moveField();
-      for (let i=0;i<200;i++) window.moveField('.welcome-empty-state',{clientX:60+i*3,clientY:200});
-      document.dispatchEvent(new Event('visibilitychange'));
-      return {before,after,burst:window.fieldSample().sum,paints:synchronousPaints};
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const changed = window.fieldSample().sum !== before;
+      const farAfter = context.getImageData(0,0,100,100).data;
+      const local = farBefore.every((value,index) => value===farAfter[index]);
+      await new Promise(resolve => setTimeout(resolve, 600));
+      const restored = window.fieldSample().sum === before;
+      paints = 0;
+      await new Promise(resolve => setTimeout(resolve, 200));
+      return {local,changed,restored,idlePaints:paints,synchronousPaints};
     `)
-    expect(result.after).not.toBe(result.before)
-    expect(result.paints).toBe(0)
-    // 重复移动位于同一波心，后续高频事件应被节流，没有额外的波纹。
-    expect(result.burst).toBe(result.after)
+    expect(result.local).toBe(true)
+    expect(result.changed).toBe(true)
+    expect(result.restored).toBe(true)
+    expect(result.idlePaints).toBe(0)
+    expect(result.synchronousPaints).toBe(0)
   }, 30_000)
   test('When 鼠标经过输入控件、触屏移动或拖动 Then 背景不响应', async () => {
     const result = await renderer.run<{ before: number; after: number }>(`
@@ -197,7 +202,7 @@ describe('Given 新会话的字符流场背景', () => {
       expect(result.contrastPixels).toBeGreaterThan(1000)
     }, 30_000)
   }
-  test('When 点击上层空白内容 Then 涟漪立即在穿透画布上呈现', async () => {
+  test('When 仅点击而未移动鼠标 Then 不改变静态背景或拦截事件', async () => {
     const result = await renderer.run<{ before: number; after: number; blocked: boolean }>(`
       await new Promise(resolve => setTimeout(resolve, 160));
       const before = window.fieldSample().sum;
@@ -208,7 +213,7 @@ describe('Given 新会话的字符流场背景', () => {
       await new Promise(resolve => setTimeout(resolve, 320));
       return {before,after,blocked};
     `, { screenshot: artifacts ? join(artifacts, 'code-field-ripple.png') : undefined })
-    expect(result.after).not.toBe(result.before)
+    expect(result.after).toBe(result.before)
     expect(result.blocked).toBe(false)
   }, 30_000)
   test('When 点击按钮、输入区或右键 Then 不触发背景涟漪', async () => {

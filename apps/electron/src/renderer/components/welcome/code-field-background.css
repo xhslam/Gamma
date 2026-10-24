@@ -2,7 +2,6 @@
   --code-field-ink: hsl(var(--muted-foreground));
   --code-field-glow: hsl(205 58% 32%);
   --code-field-base-opacity: 0.15;
-  --code-field-wave-opacity: 0.24;
   --code-field-glow-opacity: 0.64;
   position: absolute;
   inset: 0;
@@ -17,6 +16,5 @@
 .dark .code-field-background {
   --code-field-glow: hsl(205 58% 52%);
   --code-field-base-opacity: 0.1;
-  --code-field-wave-opacity: 0.22;
   --code-field-glow-opacity: 0.62;
 }
