@@ -39,7 +39,7 @@ const fixtureSource = `
         return false;
       };
       return React.createElement(React.Fragment,null,
-        React.createElement('div',{id:'test-file-menu',style:{position:'absolute',left:24,top:24,width:'min(400px, calc(100vw - 48px))'}},React.createElement(FileMentionList,{sessionEntries:[],workspaceEntries:[{name:'project-notes.md',path:'project-notes.md',type:'file',source:'workspace'}],onSelect:()=>{},onOpenConversationReference:()=>{window.referenceOpens=(window.referenceOpens||0)+1}})),
+        React.createElement('div',{id:'test-file-menu',style:{position:'absolute',left:24,top:24,width:'min(400px, calc(100vw - 48px))'}},React.createElement(FileMentionList,{sessionEntries:[],workspaceEntries:[{name:'project-notes.md',path:'project-notes.md',type:'file',source:'workspace'}],onSelect:()=>{},conversationContent:React.createElement('div',{'data-test-conversation-content':true},'同框对话内容')})),
         React.createElement('output',{id:'confirmed'},JSON.stringify(refs)),
         React.createElement('div',{id:'test-attachments',style:{display:'flex',gap:8,flexWrap:'wrap'}},
           React.createElement(AttachmentPreviewItem,{filename:'notes.md',mediaType:'text/plain',onRemove:()=>{}}),
@@ -190,14 +190,14 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     `)
     expect(result).toEqual({rowFocused:true,count:5,live:1,saved:5,frozen:true,unique:5})
   }, 20_000)
-  test('When 点击或聚焦文件菜单引用入口后激活 Then 回调可用且鼠标按下保留选区', async () => {
+  test('When 点击或聚焦文件菜单引用入口后激活 Then 在原框内切换且鼠标按下保留选区', async () => {
     const result = await renderer.run(`
       window.fixture.setOpen(false);await window.wait(100);
       const button=[...document.querySelectorAll('#test-file-menu button')].find(button=>button.textContent==='引用对话');
-      const event=new MouseEvent('mousedown',{bubbles:true,cancelable:true});button.dispatchEvent(event);button.click();button.focus();button.click();
-      return {opens:window.referenceOpens,focus:document.activeElement===button,preserved:event.defaultPrevented,blue:button.className.includes('sky-')};
+      const event=new MouseEvent('mousedown',{bubbles:true,cancelable:true});button.dispatchEvent(event);button.click();button.focus();button.click();await window.wait(50);
+      return {selected:button.getAttribute('aria-selected')==='true',sameFrame:Boolean(document.querySelector('#test-file-menu [data-test-conversation-content]')),focus:document.activeElement===button,preserved:event.defaultPrevented,blue:button.className.includes('sky-')};
     `)
-    expect(result).toEqual({opens:2,focus:true,preserved:true,blue:false})
+    expect(result).toEqual({selected:true,sameFrame:true,focus:true,preserved:true,blue:false})
   }, 20_000)
   for (const variant of [{name:'collapsed',dark:false,zoom:1},{name:'light',dark:false,zoom:1},{name:'dark',dark:true,zoom:1},{name:'narrow',dark:false,zoom:1.3}]) {
     test(`When ${variant.name} 真实视口显示引用 Then 列表独立滚动且固定头尾和关闭计数不重叠`, async () => {
@@ -224,7 +224,7 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     const result = await visual.run(`
       window.fixture.setOpen(false);await window.wait(200);
       const header=document.querySelector('#test-file-menu > div > div');
-      const file=header.querySelector('span'),button=header.querySelector('button');
+      const [file,button]=header.querySelectorAll('[role="tab"]');
       return {height:file.getBoundingClientRect().height===button.getBoundingClientRect().height,icon:file.querySelector('svg').getBoundingClientRect().width===button.querySelector('svg').getBoundingClientRect().width};
     `,{screenshot:directory?join(directory,'reference-ui-menu.png'):undefined})
     expect(result).toEqual({height:true,icon:true})

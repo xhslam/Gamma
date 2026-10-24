@@ -35,6 +35,7 @@ import {
 import { toast } from 'sonner'
 
 export interface ConversationReferenceDialogProps {
+  embedded?: boolean
   anchorRef?: React.RefObject<HTMLElement>
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -67,6 +68,7 @@ function formatTimeAgo(timestamp?: number): string {
 }
 
 export function ConversationReferenceDialog({
+  embedded = false,
   anchorRef,
   open,
   onOpenChange,
@@ -384,17 +386,15 @@ export function ConversationReferenceDialog({
     )
   }
 
-  return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      {anchorRef ? <PopoverAnchor virtualRef={anchorRef} /> : <PopoverAnchor />}
-      <PopoverContent side="top" align="start" sideOffset={8} aria-label="引用对话" aria-describedby={descriptionId}
-        className="flex w-[400px] max-w-[calc(100vw-32px)] max-h-[min(360px,var(--radix-popover-content-available-height))] flex-col gap-0 overflow-hidden p-0"
-        onKeyDown={handleKeyDown}>
+  const content = (
+    <>
         <div className="shrink-0 border-b border-border/50 px-2 py-2 text-left">
+          {!embedded && (
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] font-medium text-foreground"><MessageSquareText className="size-3.5" />引用对话</span>
             <button type="button" aria-label="关闭" onClick={() => onOpenChange(false)} className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="size-3.5" /></button>
           </div>
+          )}
           <p id={descriptionId} className="sr-only">选择历史对话作为背景资料，源对话不会被修改。</p>
           <div className="flex flex-wrap items-center gap-2 pt-2">
             <div className="relative min-w-0 basis-48 flex-1">
@@ -464,7 +464,17 @@ export function ConversationReferenceDialog({
             <Button type="button" size="sm" onClick={handleConfirm} disabled={saving} className="h-7 px-2 text-[11px]">{saving ? <Loader2 className="mr-1.5 size-3 animate-spin" /> : null}确定引用{selectedCount ? ` (${selectedCount})` : ''}</Button>
           </div>
         </div>
-      </PopoverContent>
+    </>
+  )
+
+  if (embedded) return <div className="flex min-h-0 flex-1 flex-col" onKeyDown={handleKeyDown}>{content}</div>
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      {anchorRef ? <PopoverAnchor virtualRef={anchorRef} /> : <PopoverAnchor />}
+      <PopoverContent side="top" align="start" sideOffset={8} aria-label="引用对话" aria-describedby={descriptionId}
+        className="flex w-[400px] max-w-[calc(100vw-32px)] max-h-[min(360px,var(--radix-popover-content-available-height))] flex-col gap-0 overflow-hidden p-0"
+        onKeyDown={handleKeyDown}>{content}</PopoverContent>
     </Popover>
   )
 }

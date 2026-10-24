@@ -527,8 +527,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const referenceContextWindowAtom = React.useMemo(() => atom((get) => get(agentSessionStreamingStateAtomFamily(sessionId))?.contextWindow), [sessionId])
   const referenceContextWindow = useAtomValue(referenceContextWindowAtom)
   const referenceBudget = Math.min(ABSOLUTE_TIER_A_TOKEN_LIMIT, Math.floor(inferBudgetContextWindow(agentModelId || undefined, referenceContextWindow) * DEFAULT_BUDGET_RATIO))
-  const referenceAnchorRef = React.useRef<HTMLDivElement>(null)
-  const [referenceDialogOpen, setReferenceDialogOpen] = React.useState(false)
   const [isUpdatingRefs, setIsUpdatingRefs] = React.useState(false)
   const savedContextRefsRef = React.useRef(currentContextRefs)
   const updateRefsPendingRef = React.useRef(0)
@@ -3356,7 +3354,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               <span>附加文件或文件夹</span>
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => setReferenceDialogOpen(true)}
+              onClick={() => richTextInputRef.current?.openReferencePicker('conversations')}
               className="flex items-center gap-2 cursor-pointer text-xs"
             >
               <MessageSquareText className="size-3.5" />
@@ -3538,7 +3536,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <div ref={referenceAnchorRef} aria-hidden="true" />
             {(isPlanMode || isPermissionPlanMode) && !isDragOver && <PlanModeDashedBorder />}
             {isLegacyTranscript && (
               <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-amber-700 dark:text-amber-300">
@@ -3588,7 +3585,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
                   refs={currentContextRefs}
                   onRemoveRef={handleRemoveContextRef}
                   onToggleMode={handleToggleRefMode}
-                  onOpenSelector={() => setReferenceDialogOpen(true)}
+                  onOpenSelector={() => richTextInputRef.current?.openReferencePicker('conversations')}
                   isOverBudget={
                     currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > referenceBudget
                   }
@@ -3683,7 +3680,11 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               sendWithCmdEnter={sendWithCmdEnter}
               onAgentHistoryQuoteClick={handleAgentHistoryQuoteClick}
               onBackspaceEmpty={handleBackspaceEmpty}
-              onOpenConversationReference={() => setReferenceDialogOpen(true)}
+              renderConversationReference={(onClose) => (
+                <ConversationReferenceDialog embedded open onOpenChange={(open) => { if (!open) onClose() }}
+                  currentSessionId={sessionId} currentWorkspaceId={currentWorkspaceId || undefined}
+                  initialRefs={currentContextRefs} onConfirm={handleUpdateContextRefs} />
+              )}
             />
 
           </div>
@@ -3750,15 +3751,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       </AlertDialogContent>
     </AlertDialog>
 
-    <ConversationReferenceDialog
-      anchorRef={referenceAnchorRef}
-      open={referenceDialogOpen}
-      onOpenChange={setReferenceDialogOpen}
-      currentSessionId={sessionId}
-      currentWorkspaceId={currentWorkspaceId || undefined}
-      initialRefs={currentContextRefs}
-      onConfirm={handleUpdateContextRefs}
-    />
     </SkillMentionNamesProvider>
   )
 }
