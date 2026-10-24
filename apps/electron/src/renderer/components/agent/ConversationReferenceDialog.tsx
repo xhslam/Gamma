@@ -15,9 +15,7 @@ import {
   MessageSquareText,
   Check,
   FolderGit2,
-  Layers,
-  Sparkles,
-  Info,
+  ChevronRight,
   Loader2,
 } from 'lucide-react'
 import {
@@ -30,7 +28,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
@@ -38,7 +37,6 @@ import {
   MAX_CONTEXT_REFS,
   type AgentContextRef,
   type AgentContextRefDetail,
-  type AgentWorkspace,
   type AgentSessionMeta,
 } from '@gamma/shared'
 import { toast } from 'sonner'
@@ -52,12 +50,12 @@ export interface ConversationReferenceDialogProps {
   onConfirm: (refs: AgentContextRef[]) => void | Promise<void>
 }
 
-interface FlattenedItem {
-  type: 'header' | 'session'
+interface ReferenceGroup {
   id: string
-  workspaceId?: string
-  workspaceName?: string
-  session?: AgentSessionMeta
+  title: string
+  isCurrent: boolean
+  sessions: AgentSessionMeta[]
+  expanded: boolean
 }
 
 /** 格式化更新相对时间 */
@@ -89,6 +87,7 @@ export function ConversationReferenceDialog({
   const [saving, setSaving] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const [projectFilter, setProjectFilter] = React.useState('*')
+  const [expandedProjects, setExpandedProjects] = React.useState<Set<string>>(new Set())
   const [selectedMap, setSelectedMap] = React.useState<Map<string, AgentContextRef>>(new Map())
   const [highlightedIndex, setHighlightedIndex] = React.useState<number>(-1)
   const [detailsCache, setDetailsCache] = React.useState<Record<string, AgentContextRefDetail>>({})
@@ -100,6 +99,9 @@ export function ConversationReferenceDialog({
   React.useEffect(() => {
     if (open) {
       setQuery('')
+      setProjectFilter('*')
+      setExpandedProjects(new Set())
+      setHighlightedIndex(-1)
       const map = new Map<string, AgentContextRef>()
       for (const ref of initialRefs) {
         map.set(ref.sourceConversationId, { ...ref })
@@ -191,138 +193,82 @@ export function ConversationReferenceDialog({
     }
   }, [open, eligibleSessions, retryDetails])
 
-  // 工作区 Map
-  const workspaceMap = React.useMemo(() => {
-    const map = new Map<string, AgentWorkspace>()
-    for (const ws of allWorkspaces) {
-      map.set(ws.id, ws)
+  const workspaceMap = React.useMemo(() => new Map(allWorkspaces.map((ws) => [ws.id, ws])), [allWorkspaces])
+  const normalizedQuery = query.trim().toLowerCase()
+
+  // 搜索的展开状态仅为派生展示，清空搜索后恢复用户原来的折叠选择。
+  const groups = React.useMemo(() => {
+    const grouped = new Map<string, AgentSessionMeta[]>()
+    for (const session of eligibleSessions) {
+      const id = session.workspaceId ?? ''
+      if (projectFilter !== '*' && id !== projectFilter) continue
+      const workspace = workspaceMap.get(id)
+      if (normalizedQuery && ![
+        session.title, workspace?.name, detailsCache[session.id]?.firstMessagePreview,
+      ].some((value) => value?.toLowerCase().includes(normalizedQuery))) continue
+      const sessions = grouped.get(id) ?? []
+      sessions.push(session)
+      grouped.set(id, sessions)
     }
-    return map
-  }, [allWorkspaces])
+    return [...grouped].map(([id, sessions]): ReferenceGroup => ({
+      id,
+      title: id ? workspaceMap.get(id)?.name ?? '其他项目' : '默认空间',
+      isCurrent: id === (currentWorkspaceId ?? ''),
+      sessions: [...sessions].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)),
+      expanded: Boolean(normalizedQuery) || expandedProjects.has(id),
+    })).sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent))
+  }, [eligibleSessions, projectFilter, normalizedQuery, workspaceMap, detailsCache, currentWorkspaceId, expandedProjects])
 
-  // 搜索与两级分组（当前项目优先）
-  const { groups, flattenedItems } = React.useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
+  const visibleSessions = React.useMemo(() => groups.flatMap((group) => group.expanded ? group.sessions : []), [groups])
+  const sessionIndex = React.useMemo(() => new Map(visibleSessions.map((session, index) => [session.id, index])), [visibleSessions])
 
-    const filtered = eligibleSessions.filter((s) => {
-      if (projectFilter !== '*' && (s.workspaceId ?? '') !== projectFilter) return false
-      if (!normalizedQuery) return true
-      const titleMatch = (s.title || '').toLowerCase().includes(normalizedQuery)
-      const detail = detailsCache[s.id]
-      const previewMatch = (detail?.firstMessagePreview || '').toLowerCase().includes(normalizedQuery)
-      const ws = s.workspaceId ? workspaceMap.get(s.workspaceId) : undefined
-      const wsMatch = ws ? (ws.name || '').toLowerCase().includes(normalizedQuery) : false
-      return titleMatch || previewMatch || wsMatch
-    })
-
-    // 按工作区分组
-    const currentWsSessions: AgentSessionMeta[] = []
-    const otherWsSessions = new Map<string, AgentSessionMeta[]>()
-    const defaultWsSessions: AgentSessionMeta[] = []
-
-    for (const s of filtered) {
-      if (currentWorkspaceId && s.workspaceId === currentWorkspaceId) {
-        currentWsSessions.push(s)
-      } else if (s.workspaceId) {
-        const list = otherWsSessions.get(s.workspaceId) ?? []
-        list.push(s)
-        otherWsSessions.set(s.workspaceId, list)
-      } else {
-        defaultWsSessions.push(s)
-      }
-    }
-
-    // 组装扁平化列表供渲染与键盘导航
-    const flat: FlattenedItem[] = []
-    const groupList: Array<{ title: string; isCurrent: boolean; sessions: AgentSessionMeta[] }> = []
-
-    if (currentWsSessions.length > 0) {
-      const currentWs = currentWorkspaceId ? workspaceMap.get(currentWorkspaceId) : undefined
-      const title = currentWs ? `当前项目：${currentWs.name}` : '当前项目'
-      groupList.push({ title, isCurrent: true, sessions: currentWsSessions })
-      flat.push({ type: 'header', id: `header-current`, workspaceName: title })
-      for (const s of currentWsSessions) {
-        flat.push({ type: 'session', id: s.id, session: s })
-      }
-    }
-
-    for (const [wsId, sessions] of otherWsSessions.entries()) {
-      const ws = workspaceMap.get(wsId)
-      const title = ws?.name ?? '其他项目'
-      groupList.push({ title, isCurrent: false, sessions })
-      flat.push({ type: 'header', id: `header-${wsId}`, workspaceName: title })
-      for (const s of sessions) {
-        flat.push({ type: 'session', id: s.id, session: s })
-      }
-    }
-
-    if (defaultWsSessions.length > 0) {
-      groupList.push({ title: '默认空间', isCurrent: false, sessions: defaultWsSessions })
-      flat.push({ type: 'header', id: `header-default`, workspaceName: '默认空间' })
-      for (const s of defaultWsSessions) {
-        flat.push({ type: 'session', id: s.id, session: s })
-      }
-    }
-
-    return { groups: groupList, flattenedItems: flat }
-  }, [eligibleSessions, query, projectFilter, currentWorkspaceId, workspaceMap, detailsCache])
-
-  // 提取纯 session 项用于键盘高亮索引
-  const sessionIndices = React.useMemo(() => {
-    const indices: number[] = []
-    flattenedItems.forEach((item, index) => {
-      if (item.type === 'session') indices.push(index)
-    })
-    return indices
-  }, [flattenedItems])
-
-  // 当 sessionIndices 或 query 改变时，确保高亮索引落在合法 session 项（杜绝首项是 header 的错误）
   React.useEffect(() => {
-    if (sessionIndices.length === 0) {
-      setHighlightedIndex(-1)
-      return
-    }
-    if (!sessionIndices.includes(highlightedIndex)) {
-      setHighlightedIndex(sessionIndices[0] ?? -1)
-    }
-  }, [sessionIndices, highlightedIndex])
+    setHighlightedIndex((index) => visibleSessions.length ? Math.min(Math.max(index, 0), visibleSessions.length - 1) : -1)
+  }, [visibleSessions])
 
-  // 键盘导航
-  const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.target instanceof HTMLElement && ['BUTTON', 'SELECT'].includes(e.target.tagName)) return
-    if (sessionIndices.length === 0) return
+  const setProjectExpanded = (id: string, expanded: boolean): void => {
+    setExpandedProjects((previous) => {
+      const next = new Set(previous)
+      if (expanded) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setHighlightedIndex((prev) => {
-        const currentPos = sessionIndices.indexOf(prev)
-        const nextPos = currentPos < sessionIndices.length - 1 ? currentPos + 1 : 0
-        return sessionIndices[nextPos] ?? prev
-      })
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setHighlightedIndex((prev) => {
-        const currentPos = sessionIndices.indexOf(prev)
-        const nextPos = currentPos > 0 ? currentPos - 1 : sessionIndices.length - 1
-        return sessionIndices[nextPos] ?? prev
-      })
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      const target = flattenedItems[highlightedIndex]
-      if (target?.type === 'session' && target.session) {
-        toggleSelection(target.session)
+  // 仅处理结果行和搜索框，避免吞掉项目、模式及底部按钮的原生键盘行为。
+  const handleKeyDown = (event: React.KeyboardEvent): void => {
+    if (isImeKeyboardEvent(event.nativeEvent)) return
+    const element = event.target instanceof HTMLElement ? event.target : null
+    if (!element || element.closest('button, select')) return
+    const row = element.closest<HTMLElement>('[data-flat-index]')
+    if (!row && element.tagName !== 'INPUT') return
+    const index = row ? Number(row.dataset.flatIndex) : highlightedIndex
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (!visibleSessions.length) {
+        listRef.current?.querySelector<HTMLButtonElement>('[data-reference-project]')?.focus()
+        return
+      }
+      const next = (index + (event.key === 'ArrowDown' ? 1 : -1) + visibleSessions.length) % visibleSessions.length
+      setHighlightedIndex(next)
+      if (row) listRef.current?.querySelector<HTMLElement>(`[data-flat-index="${next}"]`)?.focus()
+    } else if (event.key === 'Enter' || (event.key === ' ' && row)) {
+      event.preventDefault()
+      const session = visibleSessions[index]
+      if (session) toggleSelection(session)
+    } else if (event.key === 'ArrowLeft' && row && !normalizedQuery) {
+      event.preventDefault()
+      const session = visibleSessions[index]
+      if (session) {
+        const id = session.workspaceId ?? ''
+        listRef.current?.querySelector<HTMLButtonElement>(`[data-reference-project="${CSS.escape(id)}"]`)?.focus()
+        setProjectExpanded(id, false)
       }
     }
   }
 
-  // 自动滚动高亮项进视口
   React.useEffect(() => {
-    if (listRef.current && highlightedIndex >= 0) {
-      const el = listRef.current.querySelector(`[data-flat-index="${highlightedIndex}"]`)
-      if (el) {
-        el.scrollIntoView({ block: 'nearest' })
-      }
-    }
+    listRef.current?.querySelector(`[data-flat-index="${highlightedIndex}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [highlightedIndex])
 
   // 切换选择
@@ -390,228 +336,130 @@ export function ConversationReferenceDialog({
 
   const selectedCount = selectedMap.size
 
+  const renderSession = (session: AgentSessionMeta): React.ReactElement => {
+    const index = sessionIndex.get(session.id) ?? -1
+    const currentRef = selectedMap.get(session.id)
+    const selected = Boolean(currentRef)
+    const detail = detailsCache[session.id]
+    return (
+      <div
+        key={session.id}
+        data-flat-index={index}
+        role="option"
+        aria-selected={selected}
+        tabIndex={0}
+        onClick={() => toggleSelection(session)}
+        onFocus={() => setHighlightedIndex(index)}
+        onMouseEnter={() => setHighlightedIndex(index)}
+        className={cn(
+          'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset',
+          selected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60',
+          highlightedIndex === index && !selected && 'bg-muted/50',
+        )}
+      >
+        <span aria-hidden="true" className={cn('flex size-4 shrink-0 items-center justify-center rounded border transition-colors', selected ? 'border-foreground bg-foreground text-background' : 'border-muted-foreground/35 group-hover:border-muted-foreground/60')}>
+          {selected && <Check className="size-3" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-medium">{session.title || '无标题对话'}</div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+            {loadingDetails[session.id] ? <Loader2 className="size-3 shrink-0 animate-spin" /> : null}
+            <span className={cn('truncate', errorDetails[session.id] && 'text-destructive')}>
+              {errorDetails[session.id] ? '详情加载失败' : detail?.firstMessagePreview || (loadingDetails[session.id] ? '正在加载详情…' : '暂无文本预览')}
+            </span>
+            {detail?.messageCount != null && <span className="hidden shrink-0 text-muted-foreground/70 sm:inline">{detail.messageCount} 条消息</span>}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+          {currentRef && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label={`切换引用模式：${session.title || '无标题对话'}`} onClick={(event) => toggleMode(session.id, event)}
+                  className="rounded-md border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                  {currentRef.mode === 'live' ? '实时' : '快照'}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{currentRef.mode === 'live' ? '每轮读取最新消息' : '冻结在当前消息，内容保持稳定'}{detail?.estTokens ? ` · 约 ${detail.estTokens} tokens` : ''}</TooltipContent>
+            </Tooltip>
+          )}
+          <span className="text-[11px] text-muted-foreground/70">{formatTimeAgo(session.updatedAt)}</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden"
-        onKeyDown={handleKeyDown}
-      >
-        <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/50">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <MessageSquareText className="size-4 text-sky-500" />
-              <span>引用对话作为背景资料</span>
-            </DialogTitle>
-            <Badge variant="secondary" className="text-xs font-normal">
-              已选 {selectedCount} / {MAX_CONTEXT_REFS}
-            </Badge>
-          </div>
-          <DialogDescription className="text-xs text-muted-foreground mt-1">
-            被引用的历史对话将注入上下文辅助解答，不会混入持久历史或被修改。
-          </DialogDescription>
-
-          <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            项目
-            <select aria-label="筛选项目" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="min-w-0 flex-1 rounded border border-border bg-background p-1.5 text-foreground">
+      <DialogContent className="flex max-h-[min(640px,calc(100dvh-48px))] w-[calc(100vw-32px)] max-w-[720px] flex-col gap-0 overflow-hidden p-0" onKeyDown={handleKeyDown}>
+        <DialogHeader className="shrink-0 space-y-0 px-6 pb-5 pt-6 text-left">
+          <DialogTitle className="pr-8 text-lg font-semibold tracking-tight">引用对话</DialogTitle>
+          <DialogDescription className="pt-1.5 text-xs leading-relaxed">选择历史对话作为背景资料，源对话不会被修改。</DialogDescription>
+          <div className="flex flex-wrap items-center gap-2 pt-5">
+            <div className="relative min-w-0 basis-48 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input aria-label="搜索对话" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目、对话或内容…" className="h-9 rounded-lg border-border/60 bg-muted/30 pl-9 pr-8 text-xs focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:ring-offset-0" autoFocus />
+              {query && <button type="button" aria-label="清空搜索" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"><X className="size-3" /></button>}
+            </div>
+            <select aria-label="筛选项目" value={projectFilter} onChange={(event) => {
+              setProjectFilter(event.target.value)
+              if (event.target.value !== '*') setProjectExpanded(event.target.value, true)
+            }} className="h-9 min-w-0 max-w-[180px] rounded-lg border border-border/60 bg-muted/30 px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
               <option value="*">全部项目</option>
-              {[...allWorkspaces].sort((a, b) => Number(b.id === currentWorkspaceId) - Number(a.id === currentWorkspaceId)).map((ws) => <option key={ws.id} value={ws.id}>{ws.id === currentWorkspaceId ? '当前项目：' : ''}{ws.name}</option>)}
+              {[...allWorkspaces].sort((a, b) => Number(b.id === currentWorkspaceId) - Number(a.id === currentWorkspaceId)).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
               <option value="">默认空间</option>
             </select>
-          </label>
-          {/* 搜索框 */}
-          <div className="relative mt-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索项目或对话标题、首句预览..."
-              className="pl-9 pr-8 h-9 text-xs"
-              autoFocus
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
           </div>
         </DialogHeader>
 
-        {Object.keys(errorDetails).length > 0 && <button type="button" className="mx-5 text-xs text-destructive" onClick={() => setRetryDetails((n) => n + 1)}>部分详情加载失败，点击重试</button>}
-        {/* 对话列表 */}
-        <div ref={listRef} className="flex-1 overflow-y-auto px-5 py-3 space-y-3 min-h-[300px]">
-          {flattenedItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-              <MessageSquareText className="size-8 opacity-30 mb-2" />
-              <p className="text-sm font-medium">未找到匹配的对话</p>
-              <p className="text-xs opacity-75 mt-0.5">请尝试缩短关键词，或查看其他工作区。</p>
+        {Object.keys(errorDetails).length > 0 && <button type="button" className="mx-6 mb-2 shrink-0 text-left text-xs text-destructive hover:underline" onClick={() => setRetryDetails((value) => value + 1)}>部分详情加载失败，点击重试</button>}
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-y border-border/50 px-3 py-2 sm:px-4">
+          {!groups.length ? (
+            <div role="status" className="flex h-full min-h-24 flex-col items-center justify-center gap-2 py-6 text-center text-muted-foreground">
+              <MessageSquareText className="size-6 opacity-40" />
+              <p className="text-sm">未找到匹配的对话</p>
+              <p className="text-xs">试试其他关键词，或切换项目。</p>
             </div>
-          ) : (
-            flattenedItems.map((item, index) => {
-              if (item.type === 'header') {
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground/80"
-                  >
-                    <FolderGit2 className="size-3.5 text-muted-foreground/60" />
-                    <span>{item.workspaceName}</span>
+          ) : groups.map((group) => {
+            const count = group.sessions.filter((session) => selectedMap.has(session.id)).length
+            return (
+              <Collapsible key={group.id} open={group.expanded} onOpenChange={(expanded) => setProjectExpanded(group.id, expanded)} className="py-0.5">
+                <CollapsibleTrigger asChild>
+                  <button type="button" data-reference-project={group.id} disabled={Boolean(normalizedQuery)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+                        event.preventDefault()
+                        if (!normalizedQuery) setProjectExpanded(group.id, event.key === 'ArrowRight')
+                      } else if (event.key === 'ArrowDown' && group.expanded) {
+                        event.preventDefault()
+                        event.currentTarget.parentElement?.querySelector<HTMLElement>('[data-flat-index]')?.focus()
+                      }
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-3 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:bg-transparent">
+                    <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', group.expanded && 'rotate-90')} />
+                    <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{group.title}</span>
+                    {group.isCurrent && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">当前项目</span>}
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count ? `已选 ${count} · ` : ''}{group.sessions.length}</span>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div role="listbox" aria-label={`${group.title}的对话`} aria-multiselectable="true" className="mb-2 ml-3 space-y-0.5 border-l border-border/60 pl-2 sm:ml-4">
+                    {group.sessions.map(renderSession)}
                   </div>
-                )
-              }
-
-              const session = item.session!
-              const isSelected = selectedMap.has(session.id)
-              const isHighlighted = highlightedIndex === index
-              const currentRef = selectedMap.get(session.id)
-              const detail = detailsCache[session.id]
-              const isLoading = Boolean(loadingDetails[session.id])
-              const isError = Boolean(errorDetails[session.id])
-
-              return (
-                <div
-                  key={session.id}
-                  data-flat-index={index}
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => toggleSelection(session)}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  className={cn(
-                    'group relative flex items-start gap-3 p-2.5 rounded-lg border transition-all cursor-pointer select-none text-left',
-                    isSelected
-                      ? 'border-sky-500/40 bg-sky-500/[0.04]'
-                      : 'border-border/60 hover:border-border hover:bg-muted/40',
-                    isHighlighted && !isSelected && 'bg-muted/60 border-primary/30',
-                    isHighlighted && isSelected && 'border-sky-500/60 bg-sky-500/[0.08]'
-                  )}
-                >
-                  {/* 复选框 */}
-                  <div
-                    className={cn(
-                      'mt-0.5 size-4 rounded border flex items-center justify-center transition-colors flex-shrink-0',
-                      isSelected
-                        ? 'bg-sky-500 border-sky-500 text-white'
-                        : 'border-muted-foreground/40 group-hover:border-muted-foreground/60'
-                    )}
-                  >
-                    {isSelected && <Check className="size-3 stroke-[2.5]" />}
-                  </div>
-
-                  {/* 会话内容 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium truncate text-foreground">
-                        {session.title || '无标题会话'}
-                      </span>
-
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {/* 模式选择按钮（选中时可切换） */}
-                        {isSelected && currentRef && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={(e) => toggleMode(session.id, e)}
-                                className={cn(
-                                  'text-[10px] px-1.5 py-0.5 rounded border transition-colors font-mono',
-                                  currentRef.mode === 'live'
-                                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                    : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                                )}
-                              >
-                                {currentRef.mode === 'live' ? '实时' : '快照'}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p>{currentRef.mode === 'live' ? '实时模式：每轮读取最新消息' : '快照模式：冻结在当前消息，内容稳定'}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-
-                        {session.updatedAt && (
-                          <span className="text-[10px] text-muted-foreground/50 whitespace-nowrap">
-                            {formatTimeAgo(session.updatedAt)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 首句预览 */}
-                    {isLoading ? (
-                      <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1 mt-0.5 animate-pulse">
-                        <Loader2 className="size-2.5 animate-spin" />
-                        <span>正在加载会话详情...</span>
-                      </p>
-                    ) : isError ? (
-                      <p className="text-[11px] text-destructive/70 mt-0.5">
-                        详情加载失败
-                      </p>
-                    ) : detail?.firstMessagePreview ? (
-                      <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                        {detail.firstMessagePreview}
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-muted-foreground/50 italic mt-0.5">
-                        暂无文本预览
-                      </p>
-                    )}
-
-                    {/* 元数据标签 */}
-                    <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground/60">
-                      {detail?.messageCount != null ? (
-                        <span className="flex items-center gap-1">
-                          <Layers className="size-3" />
-                          <span>{detail.messageCount} 条消息</span>
-                        </span>
-                      ) : isLoading ? (
-                        <span className="flex items-center gap-1 opacity-70">
-                          <Layers className="size-3" />
-                          <span>计算消息中...</span>
-                        </span>
-                      ) : null}
-                      {detail?.estTokens != null && detail.estTokens > 0 ? (
-                        <span className="flex items-center gap-1">
-                          <Sparkles className="size-3" />
-                          <span>~{detail.estTokens} tokens</span>
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              )
-            })
-          )}
+                </CollapsibleContent>
+              </Collapsible>
+            )
+          })}
         </div>
 
-        {/* 底部按钮栏 */}
-        <DialogFooter className="px-5 py-3 border-t border-border/50 flex items-center justify-between sm:justify-between bg-muted/20">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info className="size-3.5" />
-            <span>按 ↑↓ 选择，Enter 勾选，Esc 关闭</span>
+        <DialogFooter className="flex-row items-center justify-between shrink-0 gap-3 px-6 py-4 sm:space-x-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+            <span data-reference-count className="shrink-0 font-medium tabular-nums text-foreground">已选 {selectedCount} / {MAX_CONTEXT_REFS}</span>
+            <span className="hidden truncate text-[11px] min-[600px]:inline">展开项目选择对话 · Esc 关闭</span>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              className="h-8 text-xs"
-            >
-              取消
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleConfirm}
-              disabled={saving}
-              className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white"
-            >
-              确定引用 ({selectedCount})
-            </Button>
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="h-8 text-xs">取消</Button>
+            <Button type="button" size="sm" onClick={handleConfirm} disabled={saving} className="h-8 text-xs">{saving ? <Loader2 className="mr-1.5 size-3 animate-spin" /> : null}确定引用{selectedCount ? ` (${selectedCount})` : ''}</Button>
           </div>
         </DialogFooter>
       </DialogContent>
