@@ -3358,8 +3358,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               onClick={() => setReferenceDialogOpen(true)}
               className="flex items-center gap-2 cursor-pointer text-xs"
             >
-              <MessageSquareText className="size-3.5 text-sky-500" />
-              <span>引用对话...</span>
+              <MessageSquareText className="size-3.5" />
+              <span>引用对话</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

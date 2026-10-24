@@ -62,6 +62,8 @@ test('Given 完整生产桥与隔离HOME When UI附加、轮询、发送和重�
       button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse',ctrlKey:false}));
       await wait(()=>[...document.querySelectorAll('[role="menuitem"]')].find(e=>e.textContent.includes('引用对话')));
       [...document.querySelectorAll('[role="menuitem"]')].find(e=>e.textContent.includes('引用对话')).click();
+      await wait(()=>document.querySelector('[data-reference-project]'));
+      document.querySelector('[data-reference-project]').click();
       await wait(()=>[...document.querySelectorAll('[role="option"]')].find(e=>e.textContent.includes('桥接源资料7391')));
       [...document.querySelectorAll('[role="option"]')].find(e=>e.textContent.includes('桥接源资料7391')).click();
       await wait(()=>[...document.querySelectorAll('button')].find(e=>e.textContent.includes('确定引用 (1)')));

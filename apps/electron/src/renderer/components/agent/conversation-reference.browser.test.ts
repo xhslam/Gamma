@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElectronRendererHarness, type ElectronRendererHarness } from '../../../test-utils/electron-renderer'
+import { createVisualRendererHarness, type VisualRendererHarness } from '../../../test-utils/visual-renderer'
+import { join } from 'node:path'
 
 let renderer: ElectronRendererHarness
-beforeAll(async () => {
-  renderer = await createElectronRendererHarness(`
+let visual: VisualRendererHarness
+const fixtureSource = `
     import React from 'react'; import {createRoot} from 'react-dom/client';
     import {Provider,createStore} from 'jotai'; import {TooltipProvider} from '@/components/ui/tooltip';
+    import {FileMentionList} from '@/components/file-browser/FileMentionList';
     import {ConversationReferenceDialog} from '@/components/agent/ConversationReferenceDialog';
     import {ConversationReferenceChips} from '@/components/agent/ConversationReferenceChips';
     import {ReferencedConversationsMessageCard} from '@/components/agent/ReferencedConversationsMessageCard';
@@ -33,6 +36,7 @@ beforeAll(async () => {
         return false;
       };
       return React.createElement(React.Fragment,null,
+        React.createElement('div',{id:'test-file-menu',style:{position:'absolute',left:24,top:24,width:'min(400px, calc(100vw - 48px))'}},React.createElement(FileMentionList,{sessionEntries:[],workspaceEntries:[{name:'project-notes.md',path:'project-notes.md',type:'file',source:'workspace'}],onSelect:()=>{},onOpenConversationReference:()=>{window.referenceOpens=(window.referenceOpens||0)+1}})),
         React.createElement('output',{id:'confirmed'},JSON.stringify(refs)),
         React.createElement(ConversationReferenceChips,{sessionId:'current',currentChannelId,refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
         React.createElement(ReferencedConversationsMessageCard,{refs}),
@@ -44,9 +48,12 @@ beforeAll(async () => {
         }),
         React.createElement(ConversationReferenceDialog,{open,onOpenChange:setOpen,currentSessionId:'current',currentWorkspaceId:'project-a',initialRefs:refs,onConfirm:async next=>setRefs(next)}));}
     createRoot(document.getElementById('root')).render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement(Fixture))));
-  `)
+  `
+beforeAll(async () => {
+  renderer = await createElectronRendererHarness(fixtureSource)
+  visual = await createVisualRendererHarness(fixtureSource)
 }, 60_000)
-afterAll(async () => { await renderer?.dispose() })
+afterAll(async () => { await renderer?.dispose(); await visual?.dispose() })
 
 describe('Given 隔离数据与真实 Chromium 引用组件', () => {
   test('When后台摘要状态改变 Then chip依次显示摘要中、已就绪与失败回退', async () => {
@@ -59,9 +66,40 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     `)
     expect(result).toEqual({running:'摘要中',ready:'已就绪',fallback:'失败回退'})
   }, 20_000)
-  test('When 异步加载超过30条并首次Enter Then 详情不遗漏且首项可选', async () => {
+  test('When 默认收起项目再展开选择并收起 Then 隐藏项不可选且选择保留', async () => {
     const result = await renderer.run(`
-      await window.wait(500); const input=document.querySelector('[role="dialog"] input'); input.focus();
+      window.fixture.setRefs([]);window.fixture.setOpen(true);await window.wait(500);
+      const input=document.querySelector('[role="dialog"] input');input.focus();
+      const initial=document.querySelectorAll('[data-flat-index]').length;
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await window.wait(30);
+      const hiddenSelected=document.querySelectorAll('[role="dialog"] [aria-selected="true"]').length;
+      const group=document.querySelector('[data-reference-project="project-a"]');
+      group.click();await window.wait(50);
+      const expanded=document.querySelectorAll('[data-flat-index]').length;
+      document.querySelector('[data-flat-index]').click();await window.wait(50);
+      group.click();await window.wait(50);
+      const collapsed=document.querySelectorAll('[data-flat-index]').length;
+      group.click();await window.wait(50);
+      return {initial,hiddenSelected,expanded,collapsed,retained:document.querySelectorAll('[data-flat-index][aria-selected="true"]').length};
+    `)
+    expect(result).toEqual({initial:0,hiddenSelected:0,expanded:20,collapsed:0,retained:1})
+  }, 20_000)
+  test('When 搜索跨项目并清空 Then 匹配自动展开且恢复原折叠状态', async () => {
+    const result = await renderer.run(`
+      await window.wait(500);document.querySelector('[data-reference-project="project-a"]').click();await window.wait(50);
+      const input=document.querySelector('[role="dialog"] input');
+      const fill=value=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));};
+      fill('测试会话-35');await window.wait(80);
+      const matched=document.querySelectorAll('[data-flat-index]').length;
+      fill('');await window.wait(80);
+      return {matched,restored:document.querySelector('[data-reference-project="project-a"]').getAttribute('aria-expanded'),other:document.querySelector('[data-reference-project="project-b"]').getAttribute('aria-expanded')};
+    `)
+    expect(result).toEqual({matched:1,restored:'true',other:'false'})
+  }, 20_000)
+  test('When 异步加载超过30条并展开后Enter Then 详情不遗漏且可见首项可选', async () => {
+    const result = await renderer.run(`
+      await window.wait(500); document.querySelector('[data-reference-project="project-a"]').click();await window.wait(50);
+      const input=document.querySelector('[role="dialog"] input'); input.focus();
       input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await window.wait(50);
       return {requested:window.requests.length,last:window.requests.includes('source-35'),selected:document.querySelectorAll('[data-flat-index][aria-selected="true"]').length};
     `)
@@ -76,6 +114,65 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     `)
     expect(result).toEqual({ projectCount: 16, searchCount: 1, text: true })
   }, 20_000)
+  test('When 键盘展开项目并选择六项再切换模式 Then 只保存五项且模式不误触取消选择', async () => {
+    const result = await renderer.run(`
+      await window.wait(500);
+      const input=document.querySelector('[aria-label="搜索对话"]');input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));await window.wait(40);
+      const group=document.activeElement;
+      group.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await window.wait(40);
+      group.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));await window.wait(40);
+      const rowFocused=document.activeElement.hasAttribute('data-flat-index');
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await window.wait(40);
+      for(const row of [...document.querySelectorAll('[data-flat-index]')].slice(1,6)){row.click();await window.wait(30);}
+      const count=document.querySelectorAll('[data-flat-index][aria-selected="true"]').length;
+      document.querySelector('[aria-label^="切换引用模式"]').click();await window.wait(40);
+      const live=[...document.querySelectorAll('[aria-label^="切换引用模式"]')].filter(button=>button.textContent==='实时').length;
+      [...document.querySelectorAll('button')].find(button=>button.textContent.includes('确定引用')).click();await window.wait(80);
+      const refs=JSON.parse(document.querySelector('#confirmed').textContent);
+      return {rowFocused,count,live,saved:refs.length,frozen:refs.every(ref=>ref.snapshotUpToMessageId==='m1'),unique:new Set(refs.map(ref=>ref.sourceConversationId)).size};
+    `)
+    expect(result).toEqual({rowFocused:true,count:5,live:1,saved:5,frozen:true,unique:5})
+  }, 20_000)
+  test('When 点击或聚焦文件菜单引用入口后激活 Then 回调可用且鼠标按下保留选区', async () => {
+    const result = await renderer.run(`
+      window.fixture.setOpen(false);await window.wait(100);
+      const button=[...document.querySelectorAll('#test-file-menu button')].find(button=>button.textContent==='引用对话');
+      const event=new MouseEvent('mousedown',{bubbles:true,cancelable:true});button.dispatchEvent(event);button.click();button.focus();button.click();
+      return {opens:window.referenceOpens,focus:document.activeElement===button,preserved:event.defaultPrevented,blue:button.className.includes('sky-')};
+    `)
+    expect(result).toEqual({opens:2,focus:true,preserved:true,blue:false})
+  }, 20_000)
+  for (const variant of [{name:'collapsed',dark:false,zoom:1},{name:'light',dark:false,zoom:1},{name:'dark',dark:true,zoom:1},{name:'narrow',dark:false,zoom:1.3}]) {
+    test(`When ${variant.name} 真实视口显示引用 Then 列表独立滚动且固定头尾和关闭计数不重叠`, async () => {
+      const screenshotDirectory = process.env.GAMMA_REFERENCE_SCREENSHOT_DIR
+      const result = await visual.run<{inside:boolean;footer:boolean;scrolls:boolean;separate:boolean;overflow:boolean}>(`
+        document.documentElement.classList.toggle('dark',${variant.dark});
+        await window.wait(500);
+        if (${variant.name !== 'collapsed'}) {
+          document.querySelector('[data-reference-project="project-a"]').click();await window.wait(100);
+          document.querySelector('[data-flat-index]').click();await window.wait(250);
+        }
+        const dialog=document.querySelector('[role="dialog"]'),bounds=dialog.getBoundingClientRect();
+        const close=dialog.querySelector('button:last-child > .sr-only')?.parentElement || [...dialog.querySelectorAll('button')].find(button=>button.textContent==='关闭');
+        const closeBounds=close.getBoundingClientRect(), count=dialog.querySelector('[data-reference-count]').getBoundingClientRect();
+        const list=dialog.querySelector('[data-reference-project]').parentElement.parentElement;
+        const confirm=[...dialog.querySelectorAll('button')].find(button=>button.textContent.includes('确定引用')).getBoundingClientRect();
+        return {inside:bounds.left>=0&&bounds.top>=0&&bounds.right<=innerWidth+1&&bounds.bottom<=innerHeight+1,footer:confirm.top>=bounds.top&&confirm.bottom<=bounds.bottom&&count.top>=bounds.top&&count.bottom<=bounds.bottom,scrolls:list.scrollHeight>list.clientHeight,separate:closeBounds.bottom<=count.top||count.right<=closeBounds.left,overflow:document.documentElement.scrollWidth>innerWidth};
+      `,{zoom:variant.zoom,screenshot:screenshotDirectory?join(screenshotDirectory,`reference-ui-${variant.name}.png`):undefined})
+      expect(result).toEqual({inside:true,footer:true,scrolls:variant.name !== 'collapsed',separate:true,overflow:false})
+    }, 30_000)
+  }
+  test('When 文件引用菜单独立展示 Then 新入口与文件标识具有相同高度和图标尺寸', async () => {
+    const directory = process.env.GAMMA_REFERENCE_SCREENSHOT_DIR
+    const result = await visual.run(`
+      window.fixture.setOpen(false);await window.wait(200);
+      const header=document.querySelector('#test-file-menu > div > div');
+      const file=header.querySelector('span'),button=header.querySelector('button');
+      return {height:file.getBoundingClientRect().height===button.getBoundingClientRect().height,icon:file.querySelector('svg').getBoundingClientRect().width===button.querySelector('svg').getBoundingClientRect().width};
+    `,{screenshot:directory?join(directory,'reference-ui-menu.png'):undefined})
+    expect(result).toEqual({height:true,icon:true})
+  }, 30_000)
   test('When 源改名再删除 Then chip更新、历史标题固定且已删来源不可跳转', async () => {
     const result = await renderer.run(`
       await window.wait(100);window.fixture.setOpen(false);window.fixture.setRefs([{refId:'r1',sourceConversationId:'source-0',sourceProjectId:'project-a',titleAtAttach:'附加时原标题',mode:'snapshot',estTokens:1234}]);await window.wait(80);

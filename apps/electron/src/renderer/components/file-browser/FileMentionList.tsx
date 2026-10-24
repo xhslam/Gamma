@@ -18,8 +18,26 @@ import { cn } from '@/lib/utils'
 import { attachScrollFade } from '@/components/ui/scroll-fade'
 import type { FileIndexEntry } from '@gamma/shared'
 import { FileTypeIcon } from './FileTypeIcon'
-import { ChevronRight, MessageSquareText } from 'lucide-react'
+import { ChevronRight, FileText, MessageSquareText } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+
+/** 文件与对话引用共享工具栏样式；保留输入框焦点，也支持键盘激活。 */
+function MentionHeader({ onOpenConversationReference }: Pick<FileMentionListProps, 'onOpenConversationReference'>): React.ReactElement {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-2 py-2">
+      <div className="flex items-center gap-1">
+        <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] font-medium text-foreground"><FileText className="size-3.5" />文件</span>
+        {onOpenConversationReference && (
+          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={onOpenConversationReference} className="h-7 gap-1.5 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground [&_svg]:size-3.5">
+            <MessageSquareText className="size-3.5" />引用对话
+          </Button>
+        )}
+      </div>
+      <span className="text-[10px] text-muted-foreground/70">Esc 关闭 · Enter 选中</span>
+    </div>
+  )
+}
 
 // ===== Error Boundary =====
 
@@ -318,23 +336,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
     if (!hasResults) {
       return (
         <div className={cn(!embedded && 'rounded-lg border bg-popover shadow-lg', 'overflow-hidden min-w-[260px]')}>
-          <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] font-medium bg-primary/10 text-primary border-b border-border/50">
-            <span>文件</span>
-            {onOpenConversationReference && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  onOpenConversationReference()
-                }}
-                className="flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 hover:underline"
-              >
-                <MessageSquareText className="size-3" />
-                <span>引用对话...</span>
-              </button>
-            )}
-            <span className="font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
-          </div>
+          <MentionHeader onOpenConversationReference={onOpenConversationReference} />
           <div id={id} role="tree" aria-label="引用文件" /><div role="status" className="p-2 text-[11px] text-muted-foreground">无匹配文件</div>
         </div>
       )
@@ -351,23 +353,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
           'overflow-y-auto',
         )}
       >
-        <div className="flex items-center justify-between px-2.5 py-1.5 text-[11px] font-medium bg-primary/10 text-primary border-b border-border/50">
-          <span>文件</span>
-          {onOpenConversationReference && (
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                onOpenConversationReference()
-              }}
-              className="flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 hover:underline"
-            >
-              <MessageSquareText className="size-3" />
-              <span>引用对话...</span>
-            </button>
-          )}
-          <span className="font-normal text-muted-foreground">Esc 关闭 · Enter 选中</span>
-        </div>
+        <MentionHeader onOpenConversationReference={onOpenConversationReference} />
         <div id={id} role="tree" aria-label="引用文件">
         <TreeNodeList
           listId={id}
