@@ -10,6 +10,8 @@ const fixtureSource = `
     import {Provider,createStore} from 'jotai'; import {TooltipProvider} from '@/components/ui/tooltip';
     import {FileMentionList} from '@/components/file-browser/FileMentionList';
     import {ConversationReferenceDialog} from '@/components/agent/ConversationReferenceDialog';
+    import {AttachmentPreviewItem} from '@/components/session/AttachmentPreviewItem';
+    import {messageAttachmentClassName} from '@/components/session/attachment-styles';
     import {ConversationReferenceChips} from '@/components/agent/ConversationReferenceChips';
     import {ReferencedConversationsMessageCard} from '@/components/agent/ReferencedConversationsMessageCard';
     import {agentSessionsAtom,agentWorkspacesAtom} from '@/atoms/agent-atoms'; import '@/styles/globals.css';
@@ -30,6 +32,7 @@ const fixtureSource = `
     window.deleteSource=()=>store.set(agentSessionsAtom,sessions.filter(s=>s.id!=='source-0'));
     function Fixture(){const [open,setOpen]=React.useState(true),[refs,setRefs]=React.useState([]);
       const [currentChannelId,setCurrentChannelId]=React.useState('channel-target-active');
+      const anchorRef=React.useRef(null);
       window.fixture={setOpen,setRefs,setCurrentChannelId};
       const onBackspaceEmpty=()=>{
         if(refs.length>0){setRefs(prev=>prev.slice(0,-1));return true;}
@@ -38,7 +41,11 @@ const fixtureSource = `
       return React.createElement(React.Fragment,null,
         React.createElement('div',{id:'test-file-menu',style:{position:'absolute',left:24,top:24,width:'min(400px, calc(100vw - 48px))'}},React.createElement(FileMentionList,{sessionEntries:[],workspaceEntries:[{name:'project-notes.md',path:'project-notes.md',type:'file',source:'workspace'}],onSelect:()=>{},onOpenConversationReference:()=>{window.referenceOpens=(window.referenceOpens||0)+1}})),
         React.createElement('output',{id:'confirmed'},JSON.stringify(refs)),
-        React.createElement(ConversationReferenceChips,{sessionId:'current',currentChannelId,refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:()=>{}}),
+        React.createElement('div',{id:'test-attachments',style:{display:'flex',gap:8,flexWrap:'wrap'}},
+          React.createElement(AttachmentPreviewItem,{filename:'notes.md',mediaType:'text/plain',onRemove:()=>{}}),
+          React.createElement(ConversationReferenceChips,{embedded:true,sessionId:'current',currentChannelId,refs,onRemoveRef:id=>setRefs(r=>r.filter(x=>x.refId!==id)),onToggleMode:id=>setRefs(r=>r.map(x=>x.refId===id?{...x,mode:x.mode==='live'?'snapshot':'live'}:x))})),
+        React.createElement('button',{id:'test-message-file',className:messageAttachmentClassName},'notes.md'),
+        React.createElement('div',{ref:anchorRef,style:{position:'fixed',bottom:48,left:24}}),
         React.createElement(ReferencedConversationsMessageCard,{refs}),
         React.createElement('input',{
           id:'test-composer',
@@ -46,7 +53,7 @@ const fixtureSource = `
             if(e.key==='Backspace'&&!e.currentTarget.value){onBackspaceEmpty();}
           }
         }),
-        React.createElement(ConversationReferenceDialog,{open,onOpenChange:setOpen,currentSessionId:'current',currentWorkspaceId:'project-a',initialRefs:refs,onConfirm:async next=>setRefs(next)}));}
+        React.createElement(ConversationReferenceDialog,{anchorRef,open,onOpenChange:setOpen,currentSessionId:'current',currentWorkspaceId:'project-a',initialRefs:refs,onConfirm:async next=>{if(window.confirmError)throw new Error('合成保存失败');setRefs(next)}}));}
     createRoot(document.getElementById('root')).render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement(Fixture))));
   `
 beforeAll(async () => {
@@ -56,6 +63,55 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose(); await visual?.dispose() })
 
 describe('Given 隔离数据与真实 Chromium 引用组件', () => {
+  test('When 已选对话与文件同排 Then 共享附件样式且消息直接展示不再折叠', async () => {
+    const result = await visual.run(`
+      window.fixture.setOpen(false);
+      window.fixture.setRefs([{refId:'r1',sourceConversationId:'source-1',sourceProjectId:'project-a',titleAtAttach:'背景资料',mode:'snapshot'}]);
+      await window.wait(250);
+      const file=document.querySelector('#test-attachments > div');
+      const conversation=document.querySelector('[data-conversation-attachments] > div');
+      const fileStyle=getComputedStyle(file),refStyle=getComputedStyle(conversation);
+      const historical=document.querySelector('[aria-label="引用对话附件"] button');
+      const mode=document.querySelector('[aria-label^="切换引用模式"]');mode.click();await window.wait(40);
+      return {sameRow:file.getBoundingClientRect().top===conversation.getBoundingClientRect().top,
+        sameBackground:fileStyle.backgroundColor===refStyle.backgroundColor,
+        sameRadius:fileStyle.borderRadius===refStyle.borderRadius,
+        samePadding:fileStyle.paddingTop===refStyle.paddingTop,
+        direct:historical.textContent.includes('背景资料')&&!historical.hasAttribute('aria-expanded'),
+        sameMessageStyle:historical.className===document.querySelector('#test-message-file').className,
+        toggled:document.querySelector('[aria-label^="切换引用模式"]').textContent==='实时'};
+    `);
+    expect(result).toEqual({sameRow:true,sameBackground:true,sameRadius:true,samePadding:true,direct:true,sameMessageStyle:true,toggled:true});
+  }, 30_000)
+  test('When 打开引用选择器 Then 弹层锚定输入区域且没有模态遮罩', async () => {
+    const result = await visual.run(`
+      await window.wait(250);
+      const panel=document.querySelector('[role="dialog"]'),bounds=panel.getBoundingClientRect();
+      return {compact:bounds.width===400&&bounds.height<=360,anchored:Math.abs(bounds.bottom-(innerHeight-56))<2,
+        modal:panel.getAttribute('aria-modal')==='true',search:document.activeElement.getAttribute('aria-label')==='搜索对话'};
+    `);
+    expect(result).toEqual({compact:true,anchored:true,modal:false,search:true});
+  }, 30_000)
+  test('When 未确认即关闭 Then 不保存草稿选择；保存失败后可重试', async () => {
+    const result = await renderer.run(`
+      await window.wait(300);
+      document.querySelector('[data-reference-project="project-a"]').click();await window.wait(40);
+      document.querySelector('[data-flat-index]').click();await window.wait(40);
+      document.querySelector('[aria-label="关闭"]').click();await window.wait(80);
+      const cancelled=document.querySelector('#confirmed').textContent==='[]';
+      window.fixture.setOpen(true);await window.wait(80);
+      document.querySelector('[data-reference-project="project-a"]').click();await window.wait(40);
+      const reset=document.querySelectorAll('[data-flat-index][aria-selected="true"]').length===0;
+      document.querySelector('[data-flat-index]').click();await window.wait(40);
+      window.confirmError=true;
+      const confirm=()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('确定引用'));
+      confirm().click();await window.wait(80);
+      const retryable=Boolean(document.querySelector('[role="dialog"]'))&&!confirm().disabled&&document.querySelectorAll('[data-flat-index][aria-selected="true"]').length===1;
+      window.confirmError=false;confirm().click();await window.wait(80);
+      return {cancelled,reset,retryable,saved:JSON.parse(document.querySelector('#confirmed').textContent).length===1};
+    `);
+    expect(result).toEqual({cancelled:true,reset:true,retryable:true,saved:true});
+  }, 20_000)
   test('When后台摘要状态改变 Then chip依次显示摘要中、已就绪与失败回退', async () => {
     const result = await renderer.run(`
       await window.wait(100);window.fixture.setOpen(false);window.fixture.setRefs([{refId:'r1',sourceConversationId:'source-0',sourceProjectId:'project-a',titleAtAttach:'fixture',mode:'snapshot'}]);await window.wait(100);
@@ -154,9 +210,9 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
           document.querySelector('[data-flat-index]').click();await window.wait(250);
         }
         const dialog=document.querySelector('[role="dialog"]'),bounds=dialog.getBoundingClientRect();
-        const close=dialog.querySelector('button:last-child > .sr-only')?.parentElement || [...dialog.querySelectorAll('button')].find(button=>button.textContent==='关闭');
+        const close=dialog.querySelector('[aria-label="关闭"]');
         const closeBounds=close.getBoundingClientRect(), count=dialog.querySelector('[data-reference-count]').getBoundingClientRect();
-        const list=dialog.querySelector('[data-reference-project]').parentElement.parentElement;
+        const list=dialog.querySelector('[data-reference-list]');
         const confirm=[...dialog.querySelectorAll('button')].find(button=>button.textContent.includes('确定引用')).getBoundingClientRect();
         return {inside:bounds.left>=0&&bounds.top>=0&&bounds.right<=innerWidth+1&&bounds.bottom<=innerHeight+1,footer:confirm.top>=bounds.top&&confirm.bottom<=bounds.bottom&&count.top>=bounds.top&&count.bottom<=bounds.bottom,scrolls:list.scrollHeight>list.clientHeight,separate:closeBounds.bottom<=count.top||count.right<=closeBounds.left,overflow:document.documentElement.scrollWidth>innerWidth};
       `,{zoom:variant.zoom,screenshot:screenshotDirectory?join(screenshotDirectory,`reference-ui-${variant.name}.png`):undefined})
@@ -177,7 +233,7 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     const result = await renderer.run(`
       await window.wait(100);window.fixture.setOpen(false);window.fixture.setRefs([{refId:'r1',sourceConversationId:'source-0',sourceProjectId:'project-a',titleAtAttach:'附加时原标题',mode:'snapshot',estTokens:1234}]);await window.wait(80);
       window.rename();await window.wait(80);const renamed=document.body.textContent.includes('已改名的源会话');
-      [...document.querySelectorAll('button')].find(b=>b.textContent.includes('已引用 1 个对话'))?.click();await window.wait(50);const historical=document.body.textContent.includes('附加时原标题');
+      [...document.querySelectorAll('button')].find(b=>b.textContent.includes('已引用 1 个对话'))?.click();await window.wait(50);const historical=document.querySelector('[aria-label="引用对话附件"]')?.textContent.includes('附加时原标题');
       window.deleteSource();await window.wait(80);const deleted=document.body.textContent.includes('源对话已删除');const disabled=[...document.querySelectorAll('button')].some(b=>b.disabled&&b.textContent.includes('附加时原标题'));
       document.querySelector('[aria-label^="移除引用"]')?.click();await window.wait(50);
       return {renamed,historical,deleted,disabled,removed:document.querySelector('#confirmed').textContent==='[]'};

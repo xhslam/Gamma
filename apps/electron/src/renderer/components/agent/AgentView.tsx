@@ -527,6 +527,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const referenceContextWindowAtom = React.useMemo(() => atom((get) => get(agentSessionStreamingStateAtomFamily(sessionId))?.contextWindow), [sessionId])
   const referenceContextWindow = useAtomValue(referenceContextWindowAtom)
   const referenceBudget = Math.min(ABSOLUTE_TIER_A_TOKEN_LIMIT, Math.floor(inferBudgetContextWindow(agentModelId || undefined, referenceContextWindow) * DEFAULT_BUDGET_RATIO))
+  const referenceAnchorRef = React.useRef<HTMLDivElement>(null)
   const [referenceDialogOpen, setReferenceDialogOpen] = React.useState(false)
   const [isUpdatingRefs, setIsUpdatingRefs] = React.useState(false)
   const savedContextRefsRef = React.useRef(currentContextRefs)
@@ -3537,6 +3538,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
+            <div ref={referenceAnchorRef} aria-hidden="true" />
             {(isPlanMode || isPermissionPlanMode) && !isDragOver && <PlanModeDashedBorder />}
             {isLegacyTranscript && (
               <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-amber-700 dark:text-amber-300">
@@ -3563,7 +3565,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
             )}
 
             {/* 附件 + 引用选中文本 Chip（同排并排） */}
-            {(pendingFiles.length > 0 || currentQuotedSelection) && (
+            {(pendingFiles.length > 0 || currentQuotedSelection || currentContextRefs.length > 0) && (
               <div className="flex flex-wrap gap-2 px-3 pt-2.5 pb-1.5">
                 {pendingFiles.map((file) => (
                     <AttachmentPreviewItem
@@ -3578,6 +3580,21 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
                       siblingIndex={pendingImageFiles.findIndex((f) => f.id === file.id)}
                     />
                   ))}
+                {/* 会话引用 Chips 条 */}
+                <ConversationReferenceChips
+                  embedded
+                  sessionId={sessionId}
+                  currentChannelId={stableChannelId ?? undefined}
+                  refs={currentContextRefs}
+                  onRemoveRef={handleRemoveContextRef}
+                  onToggleMode={handleToggleRefMode}
+                  onOpenSelector={() => setReferenceDialogOpen(true)}
+                  isOverBudget={
+                    currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > referenceBudget
+                  }
+                  maxBudgetTokens={referenceBudget}
+                />
+
                 {currentQuotedSelection && (
                   <QuotedSelectionChip
                     text={currentQuotedSelection.text}
@@ -3634,20 +3651,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
                 </button>
               </div>
             )}
-
-            {/* 会话引用 Chips 条 */}
-            <ConversationReferenceChips
-              sessionId={sessionId}
-              currentChannelId={stableChannelId ?? undefined}
-              refs={currentContextRefs}
-              onRemoveRef={handleRemoveContextRef}
-              onToggleMode={handleToggleRefMode}
-              onOpenSelector={() => setReferenceDialogOpen(true)}
-              isOverBudget={
-                currentContextRefs.reduce((acc, r) => acc + (r.estTokens ?? 0), 0) > referenceBudget
-              }
-              maxBudgetTokens={referenceBudget}
-            />
 
             <AgentScopedRichTextInput
               ref={richTextInputRef}
@@ -3748,6 +3751,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     </AlertDialog>
 
     <ConversationReferenceDialog
+      anchorRef={referenceAnchorRef}
       open={referenceDialogOpen}
       onOpenChange={setReferenceDialogOpen}
       currentSessionId={sessionId}

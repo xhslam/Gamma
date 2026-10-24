@@ -82,8 +82,8 @@ test('Given 完整生产桥与隔离HOME When UI附加、轮询、发送和重�
     `, `
       await window.bridgeReady;
       const until=Date.now()+10000;
-      while(Date.now()<until&&!document.body.innerText.includes('已引用 1 个对话作为背景'))await new Promise(r=>setTimeout(r,50));
-      return {historyCard:document.body.innerText.includes('已引用 1 个对话作为背景'),composerCleared:!document.body.innerText.includes('引用对话 (1/5)')};
+      while(Date.now()<until&&!Boolean(document.querySelector('[aria-label="引用对话附件"]')))await new Promise(r=>setTimeout(r,50));
+      return {historyCard:Boolean(document.querySelector('[aria-label="引用对话附件"]')),composerCleared:!document.querySelector('[data-conversation-attachments]')};
     `)
     expect(result).toEqual({ before: { isolated: true, attached: true, ready: true, history: true, rawPromptAbsent: true }, after: { historyCard: true, composerCleared: true } })
     expect(requests.some(body => body.includes('桥接青花瓷7391') && body.includes('<referenced_conversations>'))).toBe(true)

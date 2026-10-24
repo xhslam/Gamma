@@ -10,6 +10,7 @@
 import * as React from 'react'
 import { X, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { composerAttachmentClassName, attachmentRemoveClassName } from './attachment-styles'
 import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbox'
 
 /** 同批图片附件（用于大图预览时左右翻页） */
@@ -139,10 +140,7 @@ export function AttachmentPreviewItem({
   return (
     <div
       className={cn(
-        'group/attachment relative flex items-center gap-2 shrink-0',
-        'rounded-lg bg-[#37a5aa]/10 border border-[#37a5aa]/20',
-        'pl-2.5 pr-7 py-1.5 text-[13px] text-[#37a5aa]',
-        'transition-colors hover:bg-[#37a5aa]/15',
+        composerAttachmentClassName,
         onClick && 'cursor-pointer',
         className
       )}
@@ -163,12 +161,8 @@ export function AttachmentPreviewItem({
         type="button"
         onClick={handleRemoveClick}
         onKeyDown={handleRemoveKeyDown}
-        className={cn(
-          'absolute top-1/2 right-1.5 -translate-y-1/2 size-[18px] rounded-full',
-          'flex items-center justify-center',
-          'text-[#37a5aa]/60 hover:text-[#37a5aa] hover:bg-[#37a5aa]/20',
-          'opacity-0 group-hover/attachment:opacity-100 transition-all duration-200'
-        )}
+        aria-label={`移除文件 ${filename}`}
+        className={attachmentRemoveClassName}
       >
         <X className="size-3" />
       </button>

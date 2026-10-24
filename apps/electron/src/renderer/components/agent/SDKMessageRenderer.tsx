@@ -15,6 +15,7 @@ import * as React from 'react'
 import { Bot, Loader2, AlertTriangle, FileText, FileImage, Download, Split, Undo2, RotateCw, Plus, Minimize2, Wrench, Settings, Cpu, ExternalLink, Quote, Clock, FolderInput, FolderPlus, ListTodo } from 'lucide-react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { cn } from '@/lib/utils'
+import { messageAttachmentClassName } from '@/components/session/attachment-styles'
 import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbox'
 import { ContentBlock } from './ContentBlock'
 import { TurnFileChangesSummary, buildTurnFileNameMap } from './TurnFileChangesSummary'
@@ -870,10 +871,7 @@ function AttachedFileChip({ file }: { file: AttachedFileRef }): React.ReactEleme
       type="button"
       onClick={handleOpenPreview}
       disabled={!activeSessionId}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-md bg-muted/60 px-2.5 py-1 text-[12px] text-muted-foreground',
-        'transition-colors hover:bg-muted hover:text-foreground disabled:cursor-default disabled:hover:bg-muted/60 disabled:hover:text-muted-foreground'
-      )}
+      className={messageAttachmentClassName}
       title={file.path}
     >
       <Icon className="size-3.5 shrink-0" />
