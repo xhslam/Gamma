@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { CODE_FIELD_MAX_RIPPLES, CODE_FIELD_RIPPLE_LIFETIME, sampleCodeFieldRipple } from './code-field-ripple'
+import { CODE_FIELD_MAX_RIPPLES, codeFieldRippleLifetime, sampleCodeFieldRipple } from './code-field-ripple'
 import type { CodeFieldRipple } from './code-field-ripple'
 import './code-field-background.css'
 
@@ -45,7 +45,7 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
     let ripples: CodeFieldRipple[] = []
 
     const paint = (now: number): void => {
-      ripples = ripples.filter(ripple => now - ripple.startedAt < CODE_FIELD_RIPPLE_LIFETIME)
+      ripples = ripples.filter(ripple => now - ripple.startedAt < codeFieldRippleLifetime(ripple))
       context.clearRect(0, 0, width, height)
       context.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
       context.textBaseline = 'top'
@@ -97,6 +97,15 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
       if (x < 0 || y < 0 || x >= width || y >= height) return null
       return { x, y, at: performance.now() }
     }
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (event.button !== 0) return
+      const point = getPointerPoint(event)
+      if (!point) return
+      // 点击用固定圆心的强涟漪，移动仅留较轻余波；不拦截上层点击行为。
+      lastHover = point
+      ripples = [...ripples.slice(-(CODE_FIELD_MAX_RIPPLES - 1)), { x: point.x, y: point.y, startedAt: point.at, strength: 1.6, kind: 'click' }]
+      if (!frame) frame = requestAnimationFrame(animate)
+    }
     const handlePointerMove = (event: PointerEvent): void => {
       if (event.buttons !== 0 || (event.pointerType !== 'mouse' && event.pointerType !== 'pen')) return
       const point = getPointerPoint(event)
@@ -104,7 +113,7 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
       if (lastHover && (point.at - lastHover.at < HOVER_INTERVAL || Math.hypot(point.x - lastHover.x, point.y - lastHover.y) < HOVER_DISTANCE)) return
       lastHover = point
       // 保留移动轨迹，宽波峰相互交叠；离开后仍自然扩散，不突然截断。
-      ripples = [...ripples.slice(-(CODE_FIELD_MAX_RIPPLES - 1)), { x: point.x, y: point.y, startedAt: point.at, strength: 0.6 }]
+      ripples = [...ripples.slice(-(CODE_FIELD_MAX_RIPPLES - 1)), { x: point.x, y: point.y, startedAt: point.at, strength: 0.32, kind: 'hover' }]
       // 高频事件不直接绘制；仅在涟漪存续期间运行逐帧动画。
       if (!frame) frame = requestAnimationFrame(animate)
     }
@@ -135,6 +144,7 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] })
     motion.addEventListener('change', resume)
     document.addEventListener('visibilitychange', resume)
+    surface?.addEventListener('pointerdown', handlePointerDown, true)
     surface?.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true })
     surface?.addEventListener('pointerleave', handlePointerLeave)
     resize()
@@ -145,6 +155,7 @@ export function CodeFieldBackground({ container }: CodeFieldBackgroundProps = {}
       themeObserver.disconnect()
       motion.removeEventListener('change', resume)
       document.removeEventListener('visibilitychange', resume)
+      surface?.removeEventListener('pointerdown', handlePointerDown, true)
       surface?.removeEventListener('pointermove', handlePointerMove, true)
       surface?.removeEventListener('pointerleave', handlePointerLeave)
     }

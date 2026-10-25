@@ -218,19 +218,21 @@ describe('Given 新会话的字符流场背景', () => {
       expect(result.contrastPixels).toBeGreaterThan(1000)
     }, 30_000)
   }
-  test('When 仅点击而未移动鼠标 Then 不改变静态背景或拦截事件', async () => {
-    const result = await renderer.run<{ before: number; after: number; blocked: boolean }>(`
+  test('When 点击空白处 Then 从点击圆心扩散并渐隐且不拦截事件', async () => {
+    const result = await renderer.run<{ before: number; after: number; blocked: boolean; restored: boolean }>(`
       await new Promise(resolve => setTimeout(resolve, 160));
       const before = window.fieldSample().sum;
       let blocked = false;
       document.getElementById('field').addEventListener('pointerdown', event => { blocked = event.defaultPrevented; });
       window.clickField();
-      const after = window.fieldSample().sum;
       await new Promise(resolve => setTimeout(resolve, 320));
-      return {before,after,blocked};
+      const after = window.fieldSample().sum;
+      await new Promise(resolve => setTimeout(resolve, 2400));
+      return {before,after,blocked,restored:window.fieldSample().sum === before};
     `, { screenshot: artifacts ? join(artifacts, 'code-field-ripple.png') : undefined })
-    expect(result.after).toBe(result.before)
+    expect(result.after).not.toBe(result.before)
     expect(result.blocked).toBe(false)
+    expect(result.restored).toBe(true)
   }, 30_000)
   test('When 点击按钮、输入区或右键 Then 不触发背景涟漪', async () => {
     const result = await renderer.run<{ before: number; after: number }>(`
@@ -246,6 +248,7 @@ describe('Given 新会话的字符流场背景', () => {
       const before = window.fieldSample().sum;
       for (const tag of ['button','input','a','div']) window.clickField('#control-' + tag);
       window.clickField('.welcome-empty-state', 2);
+      await new Promise(resolve => setTimeout(resolve, 350));
       return {before,after:window.fieldSample().sum};
     `)
     expect(result.after).toBe(result.before)
