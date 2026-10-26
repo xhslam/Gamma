@@ -62,14 +62,14 @@ function injectShadowStyle(root: ParentNode): void {
   style.id = SHADOW_STYLE_ID
   style.textContent = `
     ${MATCH_SELECTOR} {
-      background: rgba(250, 204, 21, 0.48);
+      background: hsl(var(--primary) / 0.16);
       color: inherit;
       border-radius: 2px;
       padding: 0 1px;
     }
     ${MATCH_SELECTOR}[data-gamma-find-active="true"] {
-      background: rgba(249, 115, 22, 0.72);
-      box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.55);
+      background: hsl(var(--primary) / 0.3);
+      box-shadow: 0 0 0 1px hsl(var(--primary) / 0.55);
     }
   `
   root.prepend(style)
@@ -90,11 +90,11 @@ function shouldSkipTextNode(node: Text): boolean {
 }
 
 function applyMatchStyle(mark: HTMLElement, active: boolean): void {
-  mark.style.background = active ? 'rgba(249, 115, 22, 0.72)' : 'rgba(250, 204, 21, 0.48)'
+  mark.style.background = active ? 'hsl(var(--primary) / 0.3)' : 'hsl(var(--primary) / 0.16)'
   mark.style.color = 'inherit'
   mark.style.borderRadius = '2px'
   mark.style.padding = '0 1px'
-  mark.style.boxShadow = active ? '0 0 0 1px rgba(249, 115, 22, 0.55)' : 'none'
+  mark.style.boxShadow = active ? '0 0 0 1px hsl(var(--primary) / 0.55)' : 'none'
 }
 
 function cleanupHighlights(container: HTMLElement): void {
@@ -458,7 +458,7 @@ export function PreviewFindBar({ open, rootRef, contentKey, unsupportedReason, m
       >
         {statusText}
       </span>
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={goToPrevious}
         disabled={Boolean(unsupportedReason) || matchCount === 0}
@@ -468,7 +468,7 @@ export function PreviewFindBar({ open, rootRef, contentKey, unsupportedReason, m
       >
         <ChevronUp className="size-3.5" aria-hidden="true" />
       </button>
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={goToNext}
         disabled={Boolean(unsupportedReason) || matchCount === 0}
@@ -478,7 +478,7 @@ export function PreviewFindBar({ open, rootRef, contentKey, unsupportedReason, m
       >
         <ChevronDown className="size-3.5" aria-hidden="true" />
       </button>
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={close}
         className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"

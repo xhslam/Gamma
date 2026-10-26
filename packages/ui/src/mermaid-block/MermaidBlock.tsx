@@ -17,7 +17,7 @@
  */
 
 import * as React from 'react'
-import type { DiagramColors, RenderOptions } from 'beautiful-mermaid'
+import type { RenderOptions } from 'beautiful-mermaid'
 
 interface MermaidBlockProps {
   /** mermaid 源码 */
@@ -35,13 +35,15 @@ const ZOOM_STEP = 0.15
 const INITIAL_SCALE = 1
 let mermaidRenderId = 0
 
-function isDarkMode(): boolean {
-  return document.documentElement.classList.contains('dark')
+function isDarkMode(host: Element): boolean {
+  return getComputedStyle(host).colorScheme === 'dark'
 }
 
-function getThemeOptions(themes: Record<string, DiagramColors>): RenderOptions {
-  const colors = isDarkMode() ? themes['github-dark'] : themes['github-light']
-  return colors ? { ...colors } : {}
+/** 共享组件从宿主 CSS 取色，不维护第二套图表色板。 */
+function getThemeOptions(host: Element): RenderOptions {
+  const style = getComputedStyle(host)
+  const color = (role: string): string => style.getPropertyValue(`--color-${role}`).trim()
+  return { bg: color('background'), fg: color('text'), line: color('secondary'), accent: color('accent'), muted: color('tertiary'), surface: color('panel'), border: color('border') }
 }
 
 function isUsableSvg(svg: unknown): svg is string {
@@ -53,26 +55,47 @@ function isUsableSvg(svg: unknown): svg is string {
   return true
 }
 
-async function renderWithOfficialMermaid(code: string): Promise<string> {
+async function renderWithOfficialMermaid(code: string, host: Element): Promise<string> {
   const { default: mermaid } = await import('mermaid')
-  const dark = isDarkMode()
+  const dark = isDarkMode(host)
+  const colors = getThemeOptions(host)
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     // 解析/绘制失败时清理临时节点并抛错，而非把错误图注入 document.body
     // （后者会在页面底部残留一条孤立的 "Syntax error in text" bar）
     suppressErrorRendering: true,
-    theme: dark ? 'dark' : 'default',
+    theme: 'base',
     themeVariables: {
-      background: dark ? '#0f172a' : '#ffffff',
-      mainBkg: dark ? '#1e293b' : '#f8fafc',
-      primaryColor: dark ? '#1e293b' : '#f8fafc',
-      primaryTextColor: dark ? '#e2e8f0' : '#0f172a',
-      primaryBorderColor: dark ? '#475569' : '#cbd5e1',
-      lineColor: dark ? '#94a3b8' : '#64748b',
-      textColor: dark ? '#e2e8f0' : '#0f172a',
+      darkMode: dark,
+      background: colors.bg, mainBkg: colors.surface,
+      primaryColor: colors.surface, primaryTextColor: colors.fg, primaryBorderColor: colors.border,
+      secondaryColor: colors.surface, secondaryTextColor: colors.fg, secondaryBorderColor: colors.border,
+      tertiaryColor: colors.bg, tertiaryTextColor: colors.fg, tertiaryBorderColor: colors.border,
+      lineColor: colors.line, textColor: colors.fg, nodeTextColor: colors.fg,
+      clusterBkg: colors.bg, clusterBorder: colors.border, edgeLabelBackground: colors.bg,
+      titleColor: colors.fg, noteBkgColor: colors.surface, noteTextColor: colors.fg, noteBorderColor: colors.border,
+      actorBkg: colors.surface, actorTextColor: colors.fg, actorBorder: colors.border,
+      signalColor: colors.line, signalTextColor: colors.fg, labelBoxBkgColor: colors.surface,
+      labelBoxBorderColor: colors.border, labelTextColor: colors.fg, loopTextColor: colors.fg,
+      activationBkgColor: colors.surface, activationBorderColor: colors.border,
+      errorBkgColor: colors.surface, errorTextColor: colors.fg,
+      ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`pie${i + 1}`, i % 2 ? colors.surface : colors.accent])),
+      ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`cScale${i}`, i % 2 ? colors.surface : colors.accent])),
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`git${i}`, colors.accent])),
     },
   })
+
+  const variables: Record<string, unknown> = mermaid.mermaidAPI.getConfig().themeVariables ?? {}
+  const paletteVariables = Object.fromEntries(Object.entries(variables).map(([name, value]) => {
+    if (typeof value !== 'string' || value === 'transparent' || !CSS.supports('color', value)) return [name, value]
+    const color = /text|title|label/i.test(name) ? colors.fg
+      : /border|stroke/i.test(name) ? colors.border
+      : /line|grid/i.test(name) ? colors.line
+      : /crit|active|git\d|pie\d|cScale\d/i.test(name) ? colors.accent : colors.surface
+    return [name, color]
+  }))
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', themeVariables: paletteVariables })
 
   const id = `gamma-mermaid-${Date.now()}-${mermaidRenderId++}`
   const { svg } = await mermaid.render(id, code)
@@ -80,16 +103,21 @@ async function renderWithOfficialMermaid(code: string): Promise<string> {
   return svg
 }
 
-async function renderMermaidSvg(code: string): Promise<string> {
+async function renderMermaidSvg(code: string, host: Element): Promise<string> {
   try {
-    const { renderMermaidSVGAsync, THEMES } = await import('beautiful-mermaid')
-    const svg = await renderMermaidSVGAsync(code, getThemeOptions(THEMES))
-    if (isUsableSvg(svg)) return svg
+    const { renderMermaidSVGAsync } = await import('beautiful-mermaid')
+    const svg = await renderMermaidSVGAsync(code, getThemeOptions(host))
+    if (isUsableSvg(svg)) {
+      const parsed = new DOMParser().parseFromString(svg, 'image/svg+xml')
+      const root = parsed.documentElement
+      root.setAttribute('style', `${root.getAttribute('style') ?? ''};--_text-faint:var(--color-tertiary);--_group-hdr:var(--color-inset);--_inner-stroke:var(--color-border);--_key-badge:var(--color-inset)`)
+      return root.outerHTML
+    }
   } catch {
     // beautiful-mermaid 只覆盖部分图型，不支持时交给官方 mermaid 兜底。
   }
 
-  return renderWithOfficialMermaid(code)
+  return renderWithOfficialMermaid(code, host)
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -133,6 +161,7 @@ export function MermaidBlock({ code, onCopy }: MermaidBlockProps): React.ReactEl
   const [copied, setCopied] = React.useState(false)
   const [scale, setScale] = React.useState<number>(INITIAL_SCALE)
 
+  const hostRef = React.useRef<HTMLDivElement>(null)
   const codeRef = React.useRef(code)
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   /** generation 计数器：每次 code 变化递增，防止异步竞态 */
@@ -142,7 +171,7 @@ export function MermaidBlock({ code, onCopy }: MermaidBlockProps): React.ReactEl
 
   const renderCurrentCode = React.useCallback(async (generation: number) => {
     try {
-      const svg = await renderMermaidSvg(codeRef.current)
+      const svg = await renderMermaidSvg(codeRef.current, hostRef.current ?? document.documentElement)
       if (generationRef.current !== generation) return
       setRenderedSvg(svg)
     } catch {
@@ -170,11 +199,20 @@ export function MermaidBlock({ code, onCopy }: MermaidBlockProps): React.ReactEl
 
   // ---- 主题变化：重新渲染当前 code ----
   React.useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    let signature = JSON.stringify(getThemeOptions(host))
     const observer = new MutationObserver(() => {
+      const next = JSON.stringify(getThemeOptions(host))
+      if (next === signature) return
+      signature = next
       generationRef.current++
       void renderCurrentCode(generationRef.current)
     })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    // 文档的局部主题和全局主题都可能变化；不监听 SVG 子树，避免自身渲染触发循环。
+    for (let ancestor: Element | null = host; ancestor; ancestor = ancestor.parentElement) {
+      observer.observe(ancestor, { attributes: true, attributeFilter: ['class', 'style'] })
+    }
     return () => observer.disconnect()
   }, [renderCurrentCode])
 
@@ -199,20 +237,20 @@ export function MermaidBlock({ code, onCopy }: MermaidBlockProps): React.ReactEl
   const zoomPercent = Math.round(scale * 100)
 
   return (
-    <div className="mermaid-block-wrapper group/mermaid rounded-lg overflow-hidden my-2 border border-border/50">
+    <div ref={hostRef} className="mermaid-block-wrapper group/mermaid rounded-lg overflow-hidden my-2 border border-border/50">
       {/* 头部栏 */}
       <div className="flex items-center justify-between h-[34px] px-2 py-1 bg-muted/60 text-muted-foreground text-xs">
         <span className="font-medium select-none">Mermaid</span>
         <div className="flex items-center gap-1">
           {renderedSvg && (
             <div className="flex items-center gap-0.5 mr-2">
-              <button type="button" onClick={handleZoomOut} className="p-0.5 rounded hover:bg-foreground/10 transition-colors" title="缩小">
+              <button data-icon-button="true" type="button" onClick={handleZoomOut} className="p-0.5 rounded hover:bg-foreground/10 transition-colors" title="缩小">
                 <svg {...ICON_ATTRS}>{zoomOutPath}</svg>
               </button>
               <button type="button" onClick={handleZoomReset} className="px-1 py-0.5 rounded hover:bg-foreground/10 transition-colors min-w-[40px] text-center tabular-nums" title="重置缩放">
                 {zoomPercent}%
               </button>
-              <button type="button" onClick={handleZoomIn} className="p-0.5 rounded hover:bg-foreground/10 transition-colors" title="放大">
+              <button data-icon-button="true" type="button" onClick={handleZoomIn} className="p-0.5 rounded hover:bg-foreground/10 transition-colors" title="放大">
                 <svg {...ICON_ATTRS}>{zoomInPath}</svg>
               </button>
             </div>

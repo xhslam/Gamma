@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorktreeInfo, WorkspaceWorktreeRepo } from '@gamma/shared'
 import { normalizePathForCompare } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface WorktreeSelectorProps {
   sessionId: string
@@ -142,9 +143,9 @@ export function WorktreeSelector({
               <span className="block truncate text-xs font-medium leading-4">
                 {selectedWorktree?.branch ?? '选择开发 Worktree'}
               </span>
-              <span className="block truncate text-[10px] leading-3 text-muted-foreground">
+              <FadeTitle className="block truncate text-[10px] leading-3 text-muted-foreground">
                 {selectedWorktree ? getPathBasename(selectedWorktree.path) : '会话改动'}
-              </span>
+              </FadeTitle>
             </span>
             <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} />
           </button>
@@ -157,7 +158,7 @@ export function WorktreeSelector({
         {selectedWorktree && onOpenTerminal && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={() => onOpenTerminal(selectedWorktree)}
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
@@ -169,7 +170,7 @@ export function WorktreeSelector({
             <TooltipContent side="bottom">在右侧标签中打开终端</TooltipContent>
           </Tooltip>
         )}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={() => void fetchWorktrees()}
           className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
@@ -231,7 +232,7 @@ export function WorktreeSelector({
                         <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{wt.head}</span>
                       </button>
                       {onOpenTerminal && (
-                        <button
+                        <button data-icon-button="true"
                           type="button"
                           onClick={() => onOpenTerminal(wt)}
                           className="mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[background-color,color,opacity,transform] hover:bg-background/80 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 active:scale-[0.96]"

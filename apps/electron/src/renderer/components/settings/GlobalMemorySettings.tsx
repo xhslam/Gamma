@@ -306,12 +306,12 @@ export function GlobalMemorySettings(): React.ReactElement {
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-semibold">{selectedEntry.path}</span>
                   {isDirty && (
-                    <Badge variant="secondary" className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                    <Badge variant="secondary" className="text-[10px] bg-warning/15 text-warning dark:text-warning">
                       未保存修改
                     </Badge>
                   )}
                   {saveStatus === 'success' && (
-                    <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+                    <span className="flex items-center gap-1 text-[11px] text-success">
                       <CheckCircle2 className="size-3.5" /> 已保存
                     </span>
                   )}
@@ -346,15 +346,15 @@ export function GlobalMemorySettings(): React.ReactElement {
                 </div>
               </div>
               {hasConflict && (
-                <div className="flex items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+                <div className="flex items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-xs text-warning dark:text-warning">
                   <div className="flex items-center gap-1.5">
-                    <AlertCircle className="size-4 shrink-0 text-amber-500" />
+                    <AlertCircle className="size-4 shrink-0 text-warning" />
                     <span>检测到版本冲突：该记忆文件在打开后已被修改。请重新加载最新内容比对后再编辑保存。</span>
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-6 text-xs border-amber-500/40 hover:bg-amber-500/20"
+                    className="h-6 text-xs border-warning/40 hover:bg-warning/20"
                     onClick={async () => {
                       if (!selectedPath) return
                       setHasConflict(false)

@@ -1,0 +1,30 @@
+:root {
+  --edge-fade-size: 24px;
+}
+
+/* 布局默认值允许既有max-w/flex utilities覆盖，不改变标题原来的宽度预算。 */
+.gamma-fade-title {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* 双class仅保证裁切规则优先于旧truncate及局部标题样式。 */
+.gamma-fade-title[class] {
+  text-overflow: clip;
+  mask-image: none;
+  -webkit-mask-image: none;
+  mask-mode: alpha;
+}
+.gamma-fade-title[data-title-overflow="true"] {
+  /* foreground在遮罩中只提供不透明alpha，不给文字额外着色。 */
+  mask-image: linear-gradient(to right, hsl(var(--foreground)) calc(100% - var(--edge-fade-size)), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, hsl(var(--foreground)) calc(100% - var(--edge-fade-size)), transparent 100%);
+}
+@media (forced-colors: active) {
+  .gamma-fade-title[data-title-overflow] {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { McpServerForm } from '@/components/settings/McpServerForm'
 import { cn } from '@/lib/utils'
 import type { McpServerEntry } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface McpDetailViewProps {
   name: string
@@ -53,7 +54,7 @@ export function McpDetailView({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h4 className="truncate text-base font-semibold text-foreground">{name}</h4>
+              <FadeTitle as="h4" className="truncate text-base font-semibold text-foreground">{name}</FadeTitle>
               <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                 {entry.isBuiltin ? '内置' : (TRANSPORT_LABELS[entry.type] ?? entry.type ?? '未知')}
               </span>

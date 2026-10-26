@@ -26,7 +26,7 @@ describe('Given Chromium 中真实双轴滚动容器', () => {
       dispose();const restored=el.style.maskImage==='none'&&!el.hasAttribute('data-scroll-fade');el.remove();
       return {top,end,short,grown,twoMasks:(mask.match(/linear-gradient\\(/g)??[]).length===2,composite:composite.split(',')[0].trim(),restored};
     `)
-    expect(result).toEqual({ top: ['0px', '28px', '0px', '28px'], end: ['28px', '0px', '28px', '0px'], short: ['0px', '0px', '0px', '0px'], grown: ['0px', '28px', '0px', '28px'], twoMasks: true, composite: 'intersect', restored: true })
+    expect(result).toEqual({ top: ['0px', '24px', '0px', '24px'], end: ['24px', '0px', '24px', '0px'], short: ['0px', '0px', '0px', '0px'], grown: ['0px', '24px', '0px', '24px'], twoMasks: true, composite: 'intersect', restored: true })
   }, 30_000)
   test('When RTL 横向滚动 Then 按物理左右边缘正确羽化', async () => {
     const result = await renderer.run(`
@@ -35,6 +35,6 @@ describe('Given Chromium 中真实双轴滚动容器', () => {
       const right=[el.style.getPropertyValue('--scroll-fade-left'),el.style.getPropertyValue('--scroll-fade-right')];
       el.scrollLeft=-1000;await new Promise(r=>setTimeout(r,50));const left=[el.style.getPropertyValue('--scroll-fade-left'),el.style.getPropertyValue('--scroll-fade-right')];dispose();el.remove();return {right,left};
     `)
-    expect(result).toEqual({ right: ['28px', '0px'], left: ['0px', '28px'] })
+    expect(result).toEqual({ right: ['24px', '0px'], left: ['0px', '24px'] })
   }, 30_000)
 })

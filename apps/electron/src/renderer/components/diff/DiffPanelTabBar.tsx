@@ -32,6 +32,7 @@ import type { AgentSidePanelTab, SessionIndicatorStatus, WorkspaceComponentTab }
 import { groupRightWorkspaceTabs, type RightWorkspacePane } from '@/lib/right-workspace-split'
 import { getDelegationStatusIconClass } from '@/lib/agent-session-list'
 import type { ProductivityToolsSettings } from '@/types/settings'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface RightWorkspaceTabDragState {
   tabId: AgentSidePanelTab
@@ -48,7 +49,7 @@ export interface WorkspacePanelTab {
   status?: SessionIndicatorStatus
 }
 
-interface DiffPanelTabBarProps {
+export interface DiffPanelTabBarProps {
   tabs: WorkspacePanelTab[]
   activeTab: AgentSidePanelTab
   onTabChange: (tab: AgentSidePanelTab) => void
@@ -388,10 +389,10 @@ export function DiffPanelTabBar({
                         : selected ? 'text-foreground' : 'text-muted-foreground/80',
                     )}>{tab.icon}</span>
                   )}
-                  <span className="truncate">{tab.label}</span>
+                  <FadeTitle className="truncate">{tab.label}</FadeTitle>
                 </button>
                 {(showsIndividualClose || isSharedSplitClose) && (
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     onClick={isSharedSplitClose ? onCollapseSplit : () => onCloseTab(tab.id)}
                     className={cn(
@@ -450,7 +451,7 @@ export function DiffPanelTabBar({
         {currentSessionId && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <Button data-icon-button="true"
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -489,7 +490,7 @@ export function DiffPanelTabBar({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   className="mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
                   aria-label={`添加${workspaceSideLabel}工作区标签`}
@@ -566,7 +567,7 @@ export function DiffPanelTabBar({
         {onClose && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={onClose}
                 className="mr-2 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"

@@ -23,12 +23,12 @@ function openLink(url: string): void {
 
 /** 状态指示器配置 */
 const STATUS_CONFIG: Record<WeChatBridgeStatus, { color: string; label: string }> = {
-  disconnected: { color: 'bg-gray-400', label: '未连接' },
-  waiting_scan: { color: 'bg-amber-400 animate-pulse', label: '等待扫码...' },
-  scanned: { color: 'bg-blue-400 animate-pulse', label: '已扫码，确认中...' },
-  connecting: { color: 'bg-amber-400 animate-pulse', label: '连接中...' },
-  connected: { color: 'bg-green-500', label: '已连接' },
-  error: { color: 'bg-red-500', label: '连接错误' },
+  disconnected: { color: 'bg-muted', label: '未连接' },
+  waiting_scan: { color: 'bg-warning animate-pulse', label: '等待扫码...' },
+  scanned: { color: 'bg-info animate-pulse', label: '已扫码，确认中...' },
+  connecting: { color: 'bg-warning animate-pulse', label: '连接中...' },
+  connected: { color: 'bg-success', label: '已连接' },
+  error: { color: 'bg-destructive', label: '连接错误' },
 }
 
 export function WeChatSettings(): React.ReactElement {
@@ -170,14 +170,14 @@ export function WeChatSettings(): React.ReactElement {
 
         {/* 错误信息 */}
         {bridgeState.status === 'error' && bridgeState.errorMessage && (
-          <div className="mt-2 px-3 py-2.5 rounded-lg bg-red-500/10 text-red-700 dark:text-red-400 text-sm">
+          <div className="mt-2 px-3 py-2.5 rounded-lg bg-destructive/10 text-destructive dark:text-destructive text-sm">
             {bridgeState.errorMessage}
           </div>
         )}
 
         {/* 连接成功提示 */}
         {isConnected && (
-          <div className="mt-2 px-3 py-2.5 rounded-lg bg-green-500/10 text-green-700 dark:text-green-400 text-sm">
+          <div className="mt-2 px-3 py-2.5 rounded-lg bg-success/10 text-success dark:text-success text-sm">
             微信已连接，消息将自动接收。
           </div>
         )}
@@ -191,7 +191,7 @@ export function WeChatSettings(): React.ReactElement {
         >
           <SettingsCard divided={false}>
             <div className="flex flex-col items-center py-8 px-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="bg-card rounded-xl p-4 shadow-sm">
                 <img
                   src={bridgeState.qrCodeData}
                   alt="微信登录二维码"
@@ -200,7 +200,7 @@ export function WeChatSettings(): React.ReactElement {
               </div>
               <p className="mt-4 text-sm text-muted-foreground">
                 {bridgeState.status === 'scanned' ? (
-                  <span className="text-blue-500 font-medium">已扫码，请在手机上确认登录</span>
+                  <span className="text-info font-medium">已扫码，请在手机上确认登录</span>
                 ) : (
                   '打开微信，扫描二维码登录'
                 )}
@@ -262,7 +262,7 @@ export function WeChatSettings(): React.ReactElement {
             </div>
 
             {/* 提示 */}
-            <div className="pl-7 p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
+            <div className="pl-7 p-3 rounded-lg bg-warning/10 text-warning dark:text-warning text-xs">
               微信集成基于{' '}
               <button
                 type="button"

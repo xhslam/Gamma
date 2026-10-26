@@ -31,6 +31,7 @@ import {
   isRelativeFilePath,
   stripLineCol,
 } from './file-path-chip-utils'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface FileResolutionCacheEntry {
   exists: boolean
@@ -212,7 +213,7 @@ export function FilePathChip({ filePath, basePath, basePaths, sessionId, classNa
               )}
             >
               <FileTypeIcon name={filename} isDirectory={false} size={12} />
-              <span className="truncate max-w-[240px] leading-none">{filename}{lineColSuffix}</span>
+              <FadeTitle className="truncate max-w-[240px] leading-none">{filename}{lineColSuffix}</FadeTitle>
             </button>
           </TooltipTrigger>
         </ContextMenuTrigger>

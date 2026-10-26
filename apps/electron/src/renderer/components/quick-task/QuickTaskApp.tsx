@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { fileToBase64, formatFileNames } from '@/lib/file-utils'
 import { MAX_ATTACHMENT_SIZE } from '@gamma/shared'
 import { toast } from 'sonner'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 待上传附件（仅在快速任务窗口内使用） */
 interface QuickAttachment {
@@ -261,9 +262,9 @@ export function QuickTaskApp(): React.ReactElement {
           <div className="flex items-center gap-2">
             {/* 模型信息 */}
             {modelInfo && (
-              <span className="text-[11px] text-muted-foreground/70 truncate max-w-[280px]">
+              <FadeTitle className="text-[11px] text-muted-foreground/70 truncate max-w-[280px]">
                 {modelInfo.channelName} / {modelInfo.modelId}
-              </span>
+              </FadeTitle>
             )}
           </div>
 
@@ -373,10 +374,10 @@ function AttachmentChip({ filename, mediaType, previewUrl, onRemove }: Attachmen
     return (
       <div className="group/chip relative size-14 shrink-0 rounded-lg overflow-hidden">
         <img src={previewUrl} alt={filename} className="size-full object-cover" />
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={onRemove}
-          className="absolute top-0.5 right-0.5 size-4 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/chip:opacity-100 transition-opacity"
+          className="absolute top-0.5 right-0.5 size-4 rounded-full bg-overlay/50 text-inverse-foreground flex items-center justify-center opacity-0 group-hover/chip:opacity-100 transition-opacity"
         >
           <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
             <path d="M18 6 6 18" />
@@ -392,8 +393,8 @@ function AttachmentChip({ filename, mediaType, previewUrl, onRemove }: Attachmen
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
       </svg>
-      <span className="max-w-[120px] truncate">{displayName}</span>
-      <button
+      <FadeTitle className="max-w-[120px] truncate">{displayName}</FadeTitle>
+      <button data-icon-button="true"
         type="button"
         onClick={onRemove}
         className="ml-0.5 size-3.5 rounded-full flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted opacity-0 group-hover/chip:opacity-100 transition-all"

@@ -194,7 +194,7 @@ export function AppearanceSettings(): React.ReactElement {
           <fieldset disabled={densitySaving} aria-busy={densitySaving}>
             <SettingsSegmentedControl
               label="工作台密度"
-              description="紧凑：28px 侧栏行与 12px 输入圆角；舒适：36px 侧栏行与 14px 输入圆角。不改变主题与字号。"
+              description="列表行高统一为 34px；紧凑/舒适保留 12px/14px 输入圆角差异，不改变主题与字号。"
               value={density}
               onValueChange={(value) => { void handleDensityChange(value) }}
               options={[{ value: 'compact', label: '紧凑' }, { value: 'comfortable', label: '舒适' }]}

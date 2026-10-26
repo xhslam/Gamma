@@ -13,6 +13,7 @@ import { TERMINAL_BACKGROUND } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { TerminalTabContent } from './TerminalTabContent'
 import { AgyPermissionNotice } from './AgyPermissionNotice'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface ProjectAgyTerminalViewProps {
   /** 右侧工作区栏目形态：省略大标题，让终端占满可用高度。 */
@@ -93,7 +94,7 @@ export function ProjectAgyTerminalView({ embedded = false, workspaceId: requeste
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium">{workspace.name}</span>
+              <FadeTitle className="truncate text-sm font-medium">{workspace.name}</FadeTitle>
               <span className="shrink-0 rounded border border-border/70 px-1.5 py-px text-[10px] font-medium tracking-wide text-muted-foreground">AGY</span>
             </div>
             <div className="truncate text-[11px] text-muted-foreground" title={effectiveCwd}>{effectiveCwd}</div>
@@ -148,7 +149,7 @@ export function ProjectAgyTerminalView({ embedded = false, workspaceId: requeste
                 </>
               ) : (
                 <>
-                  <span className={cn('flex items-center justify-center rounded-full bg-white/[0.04] text-muted-foreground', embedded ? 'size-9' : 'size-11')}>
+                  <span className={cn('flex items-center justify-center rounded-full bg-card/[0.04] text-muted-foreground', embedded ? 'size-9' : 'size-11')}>
                     <TerminalSquare size={embedded ? 16 : 20} strokeWidth={1.5} />
                   </span>
                   <div className="space-y-1">

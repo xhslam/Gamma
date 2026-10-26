@@ -52,11 +52,11 @@ export interface MarkdownEditorPreferences {
   latinFont: 'system' | 'serif' | 'sans'
   cjkFont: 'system' | 'song' | 'hei' | 'kai'
   monoFont: 'system' | 'menlo' | 'monaco'
-  fontSize: 14 | 16 | 18 | 20 | 22 | 24
-  lineHeight: 1.4 | 1.6 | 1.8 | 2
+  fontSize: 14 | 15.5 | 16 | 18 | 20 | 22 | 24
+  lineHeight: 1.4 | 1.6 | 1.7 | 1.8 | 2
   blockSpacing: 0.75 | 1 | 1.5 | 2
   letterSpacing: 0 | 0.02 | 0.05
-  /** 单位 em；0 表示不限制正文宽度。 */
+  /** 单位 em；0 跟随全局行宽。所有阅读正文同时受全局最大行宽限制。 */
   contentWidth: 36 | 50 | 64 | 0
   defaultMode: 'read' | 'rich' | 'source' | 'split'
   showToolbar: boolean
@@ -82,7 +82,7 @@ export interface MarkdownEditorPreferencesUpdate extends Partial<Omit<MarkdownEd
 
 export const DEFAULT_MARKDOWN_EDITOR_PREFERENCES: MarkdownEditorPreferences = {
   theme: 'inherit', latinFont: 'system', cjkFont: 'system', monoFont: 'system',
-  fontSize: 18, lineHeight: 1.8, blockSpacing: 1, letterSpacing: 0, contentWidth: 50,
+  fontSize: 15.5, lineHeight: 1.7, blockSpacing: 1, letterSpacing: 0, contentWidth: 50,
   defaultMode: 'rich', showToolbar: false, sourceLineNumbers: true, sourceWordWrap: true,
   tabSize: 2, headingAlign: 'left', tableFit: false,
   cjkSpacing: true, cjkPunctuation: true, cjkFullwidth: true,
@@ -119,8 +119,8 @@ export function normalizeMarkdownEditorPreferences(input: unknown): MarkdownEdit
     latinFont: preferenceChoice(raw.latinFont, ['system', 'serif', 'sans'], defaults.latinFont),
     cjkFont: preferenceChoice(raw.cjkFont, ['system', 'song', 'hei', 'kai'], defaults.cjkFont),
     monoFont: preferenceChoice(raw.monoFont, ['system', 'menlo', 'monaco'], defaults.monoFont),
-    fontSize: preferenceChoice(raw.fontSize, [14, 16, 18, 20, 22, 24], defaults.fontSize),
-    lineHeight: preferenceChoice(raw.lineHeight, [1.4, 1.6, 1.8, 2], defaults.lineHeight),
+    fontSize: preferenceChoice(raw.fontSize, [14, 15.5, 16, 18, 20, 22, 24], defaults.fontSize),
+    lineHeight: preferenceChoice(raw.lineHeight, [1.4, 1.6, 1.7, 1.8, 2], defaults.lineHeight),
     blockSpacing: preferenceChoice(raw.blockSpacing, [0.75, 1, 1.5, 2], defaults.blockSpacing),
     letterSpacing: preferenceChoice(raw.letterSpacing, [0, 0.02, 0.05], defaults.letterSpacing),
     contentWidth: preferenceChoice(raw.contentWidth, [36, 50, 64, 0], defaults.contentWidth),

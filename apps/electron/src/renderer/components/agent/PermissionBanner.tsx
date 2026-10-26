@@ -19,9 +19,9 @@ import type { DangerLevel } from '@gamma/shared'
 
 /** 危险等级对应的图标颜色 */
 const DANGER_ICON_STYLES: Record<DangerLevel, string> = {
-  safe: 'text-green-500',
+  safe: 'text-success',
   normal: 'text-primary',
-  dangerous: 'text-amber-500',
+  dangerous: 'text-warning',
 }
 
 /** 解析工具显示名称（MCP 工具显示 server / tool） */
@@ -144,7 +144,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           <span className="text-xs text-muted-foreground font-mono">
             {request.sdkDisplayName ?? formatToolName(request.toolName)}
           </span>
-          <button
+          <button data-icon-button="true"
             type="button"
             className="size-5 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
             onClick={() => void handleDismiss()}

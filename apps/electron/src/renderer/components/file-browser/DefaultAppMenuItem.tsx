@@ -11,6 +11,7 @@ import type { FileAccessOptions } from '@gamma/shared'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useDefaultAppForFile } from '@/hooks/useDefaultAppForFile'
 import { getDefaultAppOpenLabel } from '@/lib/default-app-open-label'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface DefaultAppMenuItemProps {
   filePath: string
@@ -44,7 +45,7 @@ export function DefaultAppMenuItem({
       ) : (
         <ExternalLink />
       )}
-      <span className="truncate">{getDefaultAppOpenLabel(info)}</span>
+      <FadeTitle className="truncate">{getDefaultAppOpenLabel(info)}</FadeTitle>
     </DropdownMenuItem>
   )
 }

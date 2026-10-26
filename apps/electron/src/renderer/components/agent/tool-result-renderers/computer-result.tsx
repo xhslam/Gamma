@@ -25,7 +25,7 @@ export function ComputerResultRenderer({ result, isError }: ComputerResultRender
   if (parsed?.interrupted === true) {
     const reason = typeof parsed.reason === 'string' ? parsed.reason : '桌面操作已停止'
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+      <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/10 px-3 py-2 text-xs text-warning dark:text-warning">
         <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
         <span className="font-medium">桌面操作已中断：{reason}</span>
       </div>
@@ -35,7 +35,7 @@ export function ComputerResultRenderer({ result, isError }: ComputerResultRender
   if (parsed && typeof parsed.message === 'string') {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <CheckCircle2 className="size-3.5 shrink-0 text-success dark:text-success" aria-hidden="true" />
         <span className="text-foreground/80">{parsed.message}</span>
       </div>
     )

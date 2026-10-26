@@ -1,0 +1,70 @@
+/* 第4步几何；JS 布局常量由 panels.browser.test 与宽度/树布局测试核对。 */
+:root {
+  --panel-gap: 8px;
+  --panel-radius: 12px;
+  --panel-border-width: 1px;
+  --panel-padding: 16px;
+  --list-row-height: 34px;
+}
+
+.gamma-workbench {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--panel-gap);
+  column-gap: var(--panel-gap);
+  background-color: hsl(var(--background));
+}
+.gamma-workbench[data-sidebar-collapsed="true"] {
+  column-gap: 0;
+}
+/* 保留既有 Windows 32px 标题栏，再留出外框8px，不遮住窗口按钮。 */
+.gamma-workbench.pt-8 {
+  padding-top: calc(32px + var(--panel-gap));
+}
+
+/* 双标记只作用真正的面板，且优先于旧 padding/rounded utility。 */
+.gamma-panel[data-panel] {
+  box-sizing: border-box;
+  background-color: hsl(var(--panel));
+  border: var(--panel-border-width) solid var(--color-border);
+  border-radius: var(--panel-radius);
+  padding: var(--panel-padding);
+  box-shadow: none;
+}
+.gamma-panel[data-panel][data-panel-open="false"] {
+  border-width: 0;
+  padding: 0;
+}
+:root.theme-terminal-dark .gamma-panel[data-panel] {
+  border-radius: var(--panel-radius) !important;
+}
+
+.gamma-workspace-layout {
+  column-gap: 0;
+}
+.gamma-workspace-layout[data-workspace-open="true"] {
+  column-gap: var(--panel-gap);
+}
+[data-workspace-pane="workspace"][data-workspace-open="false"] {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+}
+
+.gamma-settings-shell {
+  box-sizing: border-box;
+  padding: var(--panel-gap);
+  background-color: hsl(var(--background));
+}
+.gamma-settings-layout {
+  gap: var(--panel-gap);
+}
+
+/* 单行条目实际为34px，多行说明自然增高；不作用 Markdown、消息或任务卡片。 */
+:root .gamma-list-row {
+  min-height: var(--list-row-height);
+  height: auto;
+  flex-shrink: 0;
+  padding-block: 0;
+}

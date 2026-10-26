@@ -12,12 +12,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { slackBotStatesAtom } from '@/atoms/slack-atoms'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 const STATUS: Record<SlackBridgeStatus, { label: string; color: string }> = {
   disconnected: { label: '未连接', color: 'bg-muted-foreground/50' },
-  connecting: { label: '连接中…', color: 'bg-amber-400 animate-pulse' },
-  connected: { label: '已连接', color: 'bg-emerald-500' },
-  error: { label: '连接错误', color: 'bg-red-500' },
+  connecting: { label: '连接中…', color: 'bg-warning animate-pulse' },
+  connected: { label: '已连接', color: 'bg-success' },
+  error: { label: '连接错误', color: 'bg-destructive' },
 }
 
 function openLink(url: string): void {
@@ -181,7 +182,7 @@ function SlackBotCard({ bot, state, onChanged }: { bot: SlackBotSettingsConfig; 
       >
         <span className="flex min-w-0 items-center gap-3">
           <span className={cn('size-2 shrink-0 rounded-full', status.color)} />
-          <span className="truncate text-sm font-medium">{bot.name || 'Gamma'}</span>
+          <FadeTitle className="truncate text-sm font-medium">{bot.name || 'Gamma'}</FadeTitle>
           <span className="hidden text-xs text-muted-foreground sm:inline">{status.label}</span>
         </span>
         <span className="shrink-0 text-xs text-muted-foreground">{expanded ? '收起' : '配置'}</span>
@@ -202,10 +203,10 @@ function SlackBotCard({ bot, state, onChanged }: { bot: SlackBotSettingsConfig; 
       <div className="rounded-lg bg-muted/45 px-3 py-2.5 text-sm"><p className="font-medium">频道访问已开放</p><p className="mt-0.5 text-xs text-muted-foreground">工作区任意成员都可在 Bot 已加入的任意频道通过 <code>@{bot.name || 'Gamma'}</code> 发起任务，并在自己发起的 thread 中处理计划与单次权限确认；仍只响应 @mention。</p></div>
       <SettingsInput label="Home Channel ID（可选）" description="可填一个 Bot 已加入的频道 ID。Gamma 在桌面端、Automation 或其他 Bridge 完成任务时会在此发送仅含标题与状态的完成通知；标题仍会对该频道成员可见。Slack 自己发起的任务仍只在原 thread 回复。留空不会影响正常使用。" value={homeChannel} onChange={setHomeChannel} placeholder="例如 C012…" />
       <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant="outline" disabled={testing || !botToken.trim()} onClick={() => void test()} className="min-h-9 active:scale-[0.96] transition-transform">{testing && <Loader2 className="mr-1 size-3.5 animate-spin" />}测试 Token</Button><Button type="button" size="sm" disabled={saving} onClick={() => void save()} className="min-h-9 active:scale-[0.96] transition-transform">{saving && <Loader2 className="mr-1 size-3.5 animate-spin" />}保存并连接</Button><AlertDialog><AlertDialogTrigger asChild><Button type="button" size="sm" variant="destructive" className="min-h-9 active:scale-[0.96] transition-transform"><Trash2 className="mr-1 size-3.5" />删除</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>删除 Slack Bot？</AlertDialogTitle><AlertDialogDescription>这会断开本机 Socket Mode 连接并删除已保存的 Token 配置。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => void remove()}>删除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div>
-      {testResult && <div className={cn('flex items-start gap-2 rounded-lg p-3 text-sm', testResult.success ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/10 text-red-700 dark:text-red-300')}>
+      {testResult && <div className={cn('flex items-start gap-2 rounded-lg p-3 text-sm', testResult.success ? 'bg-success/10 text-success dark:text-success' : 'bg-destructive/10 text-destructive dark:text-destructive')}>
         {testResult.success ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <XCircle className="mt-0.5 size-4 shrink-0" />}<span>{testResult.message}</span>
       </div>}
-      {state?.errorMessage && <p className="text-xs text-red-500">{state.errorMessage}</p>}
+      {state?.errorMessage && <p className="text-xs text-destructive">{state.errorMessage}</p>}
     </div>}
   </SettingsCard>
 }

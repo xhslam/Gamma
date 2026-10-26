@@ -9,15 +9,27 @@
 export const PIERRE_DIFF_CSS = `
   :root, :host {
     --diffs-bg: transparent;
-    --diffs-addition-base: rgb(67,167,71);
-    --diffs-deletion-base: rgb(206,66,52);
-    --diffs-addition-bg: light-dark(rgb(228,244,233), rgb(19,34,23));
-    --diffs-deletion-bg: light-dark(rgb(248,231,230), rgb(39,22,20));
+    --diffs-fg: hsl(var(--foreground));
+    --diffs-fg-number: hsl(var(--muted-foreground));
+    --diffs-modified-base: hsl(var(--primary));
+    --diffs-mixer: hsl(var(--foreground));
+    --diffs-bg-context: hsl(var(--muted));
+    --diffs-bg-buffer: hsl(var(--muted));
+    --diffs-bg-separator: hsl(var(--background));
+    --diffs-bg-addition: hsl(var(--muted));
+    --diffs-bg-deletion: hsl(var(--primary) / 0.08);
+    --diffs-bg-addition-emphasis: hsl(var(--muted));
+    --diffs-bg-deletion-emphasis: hsl(var(--primary) / 0.16);
+    --diffs-addition-base: hsl(var(--success));
+    --diffs-deletion-base: hsl(var(--destructive));
+    --diffs-addition-bg: hsl(var(--muted));
+    --diffs-deletion-bg: hsl(var(--primary) / 0.08);
     --diffs-separator-bg: hsl(var(--background));
     --diffs-gap-style: 3px solid hsl(var(--content-area));
     --diffs-scrollbar-thumb: light-dark(hsl(var(--muted-foreground) / 0.6), hsl(var(--muted-foreground) / 0.2));
     --diffs-scrollbar-thumb-hover: light-dark(hsl(var(--muted-foreground) / 0.8), hsl(var(--muted-foreground) / 0.35));
   }
+  [data-line] span { color: hsl(var(--foreground)) !important; background-color: transparent !important; }
   [data-code]::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -49,12 +61,12 @@ export const PIERRE_DIFF_CSS = `
   }
   [data-line-type=change-addition] [data-column-number],
   [data-line-type=change-addition] [data-gutter-buffer]:not([data-gutter-buffer=buffer]) {
-    color: rgb(67,167,71) !important;
+    color: hsl(var(--success)) !important;
     background-color: var(--diffs-addition-bg) !important;
   }
   [data-line-type=change-deletion] [data-column-number],
   [data-line-type=change-deletion] [data-gutter-buffer]:not([data-gutter-buffer=buffer]) {
-    color: rgb(206,66,52) !important;
+    color: hsl(var(--destructive)) !important;
     background-color: var(--diffs-deletion-bg) !important;
   }
   [data-gutter-buffer=buffer] {
@@ -72,9 +84,21 @@ export const PIERRE_DIFF_CSS = `
 export const PIERRE_FILE_CSS = `
   :root, :host {
     --diffs-bg: transparent;
+    --diffs-fg: hsl(var(--foreground));
+    --diffs-fg-number: hsl(var(--muted-foreground));
+    --diffs-modified-base: hsl(var(--primary));
+    --diffs-mixer: hsl(var(--foreground));
+    --diffs-bg-context: hsl(var(--muted));
+    --diffs-bg-buffer: hsl(var(--muted));
+    --diffs-bg-separator: hsl(var(--background));
+    --diffs-bg-addition: hsl(var(--muted));
+    --diffs-bg-deletion: hsl(var(--primary) / 0.08);
+    --diffs-bg-addition-emphasis: hsl(var(--muted));
+    --diffs-bg-deletion-emphasis: hsl(var(--primary) / 0.16);
     --diffs-scrollbar-thumb: light-dark(hsl(var(--muted-foreground) / 0.6), hsl(var(--muted-foreground) / 0.2));
     --diffs-scrollbar-thumb-hover: light-dark(hsl(var(--muted-foreground) / 0.8), hsl(var(--muted-foreground) / 0.35));
   }
+  [data-line] span { color: hsl(var(--foreground)) !important; background-color: transparent !important; }
   [data-code]::-webkit-scrollbar {
     width: 6px;
     height: 6px;

@@ -244,7 +244,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
             {requests.length > 1 && (
               <span className="text-xs text-muted-foreground">(+{requests.length - 1})</span>
             )}
-            <button
+            <button data-icon-button="true"
               type="button"
               className="size-5 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
               onClick={handleDismiss}

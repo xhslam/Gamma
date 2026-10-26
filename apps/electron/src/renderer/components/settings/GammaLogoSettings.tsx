@@ -7,6 +7,7 @@ import { APP_ICON_PREVIEWS } from '@/lib/app-icons'
 import { SettingsSection } from './primitives/SettingsSection'
 import { SettingsCard } from './primitives/SettingsCard'
 import { Button } from '@/components/ui/button'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface LogoCardProps {
   logo: (typeof APP_ICON_PREVIEWS)[number]
@@ -43,7 +44,7 @@ function LogoCard({ logo }: LogoCardProps): React.ReactElement {
         decoding="async"
       />
       <div className="w-full space-y-1 text-center">
-        <div className="truncate text-xs font-medium">{logo.name}</div>
+        <FadeTitle as="div" className="truncate text-xs font-medium">{logo.name}</FadeTitle>
         <div className="text-xs text-muted-foreground">{logo.description}</div>
       </div>
       <Button

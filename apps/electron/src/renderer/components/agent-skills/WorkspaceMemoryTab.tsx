@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { toast } from 'sonner'
-import { AlertTriangle, Brain, ChevronDown, ChevronRight, FileText, FolderOpen, RefreshCw, Sparkles } from 'lucide-react'
+import { AlertTriangle, Brain, FileText, FolderOpen, RefreshCw, Sparkles } from 'lucide-react'
 import type { SkillFileNode, WorkspaceMemorySummary } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -23,6 +23,8 @@ import {
   MEMORY_HISTORY_RANGE_OPTIONS,
   type MemoryHistoryRange,
 } from './workspaceMemoryInitPrompt'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 type SelectedMemoryFile =
   | { kind: 'agents'; relativePath: 'AGENTS.md'; title: string; absolutePath: string }
@@ -525,7 +527,7 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
               <div className="flex h-full min-h-0 flex-col">
                 <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
                   <div className="text-[13px] font-medium text-foreground/75">记忆文件</div>
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     title="刷新"
                     onClick={() => void refresh()}
@@ -538,7 +540,7 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
                   <div
                     role="status"
                     title={migrationReminderTitle}
-                    className="mx-2 mt-2 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
+                    className="mx-2 mt-2 flex items-center gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-[11px] leading-relaxed text-warning dark:text-warning"
                   >
                     <AlertTriangle size={13} className="shrink-0" />
                     <span>待处理：{migrationIssues.join('、')}，请检查旧文件。</span>
@@ -590,9 +592,9 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
               <div className="flex h-full min-h-0 flex-col">
                 <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-foreground">
+                    <FadeTitle as="div" className="truncate text-sm font-medium text-foreground">
                       {selected?.title ?? '未选择文件'}
-                    </div>
+                    </FadeTitle>
                     <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
                       {selected?.absolutePath ?? '从左侧选择一个记忆文件'}
                     </div>
@@ -600,7 +602,7 @@ export function WorkspaceMemoryTab({ workspaceSlug, sessionId, search, embedded 
 
                 </div>
                 {saveConflict && (
-                  <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning dark:text-warning">
                     <span>文件已被外部更新，已停止保存以避免覆盖。请复制你的修改后刷新文件。</span>
                     <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={() => void refresh()}>刷新文件</Button>
                   </div>
@@ -658,12 +660,12 @@ function FileButton({
         )}
       >
         <span className="shrink-0 text-muted-foreground">{icon}</span>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <FadeTitle className="min-w-0 flex-1 truncate">{label}</FadeTitle>
         {meta && <span className="truncate text-[11px] text-muted-foreground">{meta}</span>}
       </button>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
+          <button data-icon-button="true"
             type="button"
             onClick={onReveal}
             className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -706,7 +708,7 @@ function MemoryTreeNode({
   return (
     <div>
       <div className="flex items-center gap-0.5">
-        <button
+        <button data-disclosure-trigger="" aria-expanded={isDirectory ? isExpanded : undefined}
           type="button"
           onClick={() => isDirectory ? onToggle(node.relativePath) : onOpen(node.relativePath)}
           className={cn(
@@ -716,12 +718,12 @@ function MemoryTreeNode({
           style={{ paddingLeft }}
         >
           {isDirectory ? (
-            isExpanded ? <ChevronDown size={13} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+            <DisclosureChevron expanded={isExpanded} size={13} className="shrink-0 text-muted-foreground" />
           ) : (
             <FileText size={13} className="shrink-0 text-muted-foreground" />
           )}
           <span className="min-w-0 flex-1 overflow-hidden">
-            <span className="block truncate">{node.name}</span>
+            <FadeTitle className="block truncate">{node.name}</FadeTitle>
             {contentExcerpt && <span className="block truncate text-[10px] text-muted-foreground" title={contentExcerpt}>{contentExcerpt}</span>}
           </span>
           {!isDirectory && node.size != null && (
@@ -731,7 +733,7 @@ function MemoryTreeNode({
         {!isDirectory && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={() => onReveal(node.relativePath)}
                 className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

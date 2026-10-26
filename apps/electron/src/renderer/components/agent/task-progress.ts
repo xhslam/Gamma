@@ -15,6 +15,8 @@ export interface TaskItem {
   subject: string
   status: TaskItemStatus
   activeForm?: string
+  /** 任务快照中的说明；失败时用于提取中性的单行错误摘要。 */
+  description?: string
 }
 
 /**
@@ -140,6 +142,7 @@ export function aggregateTaskItems(
         subject,
         status: toTaskStatus(confirmed.status),
         activeForm: typeof confirmed.activeForm === 'string' ? confirmed.activeForm : undefined,
+        ...(typeof confirmed.description === 'string' && { description: confirmed.description }),
       })
     } else if (activity.toolName === 'TaskUpdate') {
       const taskId = stringId(task?.id) ?? taskIdFromInput(activity.input)
@@ -154,6 +157,7 @@ export function aggregateTaskItems(
           status,
           ...(typeof confirmed.subject === 'string' && { subject: confirmed.subject }),
           ...(typeof confirmed.activeForm === 'string' && { activeForm: confirmed.activeForm }),
+          ...(typeof confirmed.description === 'string' && { description: confirmed.description }),
         })
       } else {
         taskMap.set(taskId, {
@@ -163,6 +167,7 @@ export function aggregateTaskItems(
             : historicalTaskSubjects?.get(taskId) ?? `任务 #${taskId}`,
           status,
           activeForm: typeof confirmed.activeForm === 'string' ? confirmed.activeForm : undefined,
+          ...(typeof confirmed.description === 'string' && { description: confirmed.description }),
         })
       }
     }

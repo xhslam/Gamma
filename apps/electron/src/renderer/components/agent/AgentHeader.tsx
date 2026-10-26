@@ -6,19 +6,28 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { Check, ChevronDown, PanelLeft, PanelRight, Pencil, Split, X } from 'lucide-react'
-import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, agentSidePanelLayoutAtomFamily, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
+import { Check, ChevronDown, Pencil, Split, X } from 'lucide-react'
+import {
+  agentSessionsAtom,
+  agentSideTemporaryAgentMapAtom,
+  agentDiffPanelTabAtom,
+  agentSidePanelLayoutAtomFamily,
+  currentSessionSidePanelOpenAtom,
+  getExplorationSidePanelTab,
+} from '@/atoms/agent-atoms'
 import { sidebarCollapsedAtom, tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
 import { SidebarExpandButton } from '@/components/app-shell/CollapsedSidebarHeader'
 import { detectIsMac } from '@/lib/platform'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { cn } from '@/lib/utils'
+import { OnDemandRightPanelNav } from './OnDemandRightPanelNav'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** AgentHeader 属性接口 */
 interface AgentHeaderProps {
@@ -30,14 +39,14 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   const session = sessions.find((s) => s.id === sessionId) ?? null
   const setAgentSessions = useSetAtom(agentSessionsAtom)
   const setTabs = useSetAtom(tabsAtom)
-  const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
-  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
-  const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
+  const isRightPanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
   const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const workspaceSide = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)).workspaceSide === 'left' ? 'left' : 'right'
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
+  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const ownsWindowControls = sidebarCollapsed && (!isRightPanelOpen || workspaceSide === 'right')
 
   const explorationBranches = React.useMemo(() => sessions
@@ -58,9 +67,8 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
       }])
       return next
     })
-    setRightPanelOpen(true)
     setSidePanelTabMap((prev) => new Map(prev).set(sessionId, getExplorationSidePanelTab(branch.id)))
-  }, [sessionId, setRightPanelOpen, setSidePanelTabMap, setSideTemporaryAgentMap])
+  }, [sessionId, setSidePanelTabMap, setSideTemporaryAgentMap])
 
   if (!session) return null
 
@@ -121,7 +129,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
             className="flex-1 bg-transparent text-[15px] font-normal border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
             maxLength={100}
           />
-          <button
+          <button data-icon-button="true"
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={saveTitle}
@@ -129,7 +137,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           >
             <Check className="size-3.5" />
           </button>
-          <button
+          <button data-icon-button="true"
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setEditing(false)}
@@ -146,7 +154,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
               className="titlebar-no-drag group flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted/60"
               aria-label={`会话菜单：${session.title}`}
             >
-              <span className="truncate text-[15px] font-normal text-foreground">{session.title}</span>
+              <FadeTitle className="truncate text-[15px] font-normal text-foreground">{session.title}</FadeTitle>
               <ChevronDown className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </button>
           </DropdownMenuTrigger>
@@ -158,12 +166,13 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {explorationBranches.length > 0 && (
+      {/* S2 大面板展开时，保留恢复历史探索分支入口 */}
+      {isRightPanelOpen && explorationBranches.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="titlebar-no-drag inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
+              className="titlebar-no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
               aria-label={`打开 ${explorationBranches.length} 个探索分支`}
               title={`打开探索分支（${explorationBranches.length}）`}
             >
@@ -175,29 +184,19 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           <DropdownMenuContent
             align="end"
             className="z-[100] w-64 titlebar-no-drag"
-            // 选择或失焦关闭后不要把焦点回跳到「探索」触发器，避免出现残留 focus 框。
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             {explorationBranches.map((branch) => (
               <DropdownMenuItem key={branch.id} onSelect={() => reopenExploration(branch)} className="flex items-center gap-2 py-2">
                 <Split className="size-3.5 shrink-0" />
-                <span className="min-w-0 truncate">{branch.title}</span>
+                <FadeTitle className="min-w-0 truncate">{branch.title}</FadeTitle>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {!isRightPanelOpen && (
-        <button
-          type="button"
-          onClick={() => setRightPanelOpen(true)}
-          className="titlebar-no-drag ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-          aria-label={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
-          title={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
-        >
-          {workspaceSide === 'left' ? <PanelLeft className="size-4" /> : <PanelRight className="size-4" />}
-        </button>
-      )}
+      {/* S0/S1 复用新版按需入口，保留六步标题与图标样式。 */}
+      <OnDemandRightPanelNav sessionId={sessionId} />
     </div>
   )
 }

@@ -40,6 +40,7 @@ import type {
   AgentMessageSearchResult,
 } from '@gamma/shared'
 import { findBestSearchMatch } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 标题搜索结果项 */
 interface TitleResult {
@@ -109,7 +110,7 @@ function HighlightSnippet({ snippet, matchStart, matchLength }: {
 
 function SearchResultIcon({ result }: { result: SearchResult }): React.ReactElement {
   return (
-    <Bot size={14} className="flex-shrink-0 text-blue-500/70" />
+    <Bot size={14} className="flex-shrink-0 text-info/70" />
   )
 }
 
@@ -164,9 +165,9 @@ function SearchResultRow({
             {isContent ? result.title : <HighlightText text={result.title} query={committedQuery} />}
           </span>
           {wsName && (
-            <span className="flex-shrink-0 px-1.5 py-0 rounded-full bg-foreground/[0.06] text-[10px] leading-4 text-foreground/40 font-medium truncate max-w-[80px]">
+            <FadeTitle className="flex-shrink-0 px-1.5 py-0 rounded-full bg-foreground/[0.06] text-[10px] leading-4 text-foreground/40 font-medium truncate max-w-[80px]">
               {wsName}
-            </span>
+            </FadeTitle>
           )}
           {result.archived && (
             <Archive size={12} className="flex-shrink-0 text-foreground/30" />
@@ -432,7 +433,7 @@ export function SearchDialog(): React.ReactElement {
         <DialogPortal>
           <div
             aria-hidden
-            className="fixed inset-0 z-[99] bg-black/40 pointer-events-none animate-in fade-in-0 duration-150"
+            className="fixed inset-0 z-[99] bg-overlay/40 pointer-events-none animate-in fade-in-0 duration-150"
           />
         </DialogPortal>
       )}
@@ -456,7 +457,7 @@ export function SearchDialog(): React.ReactElement {
             className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground placeholder:text-foreground/40 outline-none"
           />
           {query && (
-            <button
+            <button data-icon-button="true"
               onClick={handleClearQuery}
               title="清空"
               className="p-0.5 rounded text-foreground/30 hover:text-foreground/60 transition-colors"
@@ -484,7 +485,7 @@ export function SearchDialog(): React.ReactElement {
             className={cn(
               'flex shrink-0 items-center gap-1 px-2 py-1 rounded text-[12px] font-medium transition-colors',
               trimmedQuery.length >= 2
-                ? 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
+                ? 'bg-info/10 text-info hover:bg-info/20'
                 : 'bg-foreground/[0.06] text-foreground/30 cursor-not-allowed'
             )}
           >
@@ -518,7 +519,7 @@ export function SearchDialog(): React.ReactElement {
               <span>未找到匹配结果</span>
               <button
                 onClick={() => void handleAgentSearch()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-info/10 text-info hover:bg-info/20 transition-colors"
               >
                 <Bot size={12} />
                 <span>试试 Agent 搜索</span>

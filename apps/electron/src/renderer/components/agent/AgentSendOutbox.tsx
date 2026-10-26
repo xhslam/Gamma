@@ -16,8 +16,8 @@ interface AgentSendOutboxProps {
 export function AgentSendOutbox({ entries, error, busyId, disabled, onRetry, onRestore, onRefresh }: AgentSendOutboxProps): React.ReactElement | null {
   if (!entries.length && !error) return null
   return (
-    <section aria-label="待恢复消息" className="mx-3 mt-2 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2 text-xs">
-      <div role="status" className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+    <section aria-label="待恢复消息" className="mx-3 mt-2 rounded-lg border border-warning/25 bg-warning/5 p-2 text-xs">
+      <div role="status" className="flex items-center gap-1.5 text-warning dark:text-warning">
         <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
         <span>{error ? '待恢复消息读取失败，原文件已保留' : `${entries.length} 条消息已暂存本地，可跨重启恢复`}</span>
         {error && <Button type="button" size="sm" variant="ghost" onClick={onRefresh}>重新读取</Button>}

@@ -1,23 +1,17 @@
 import * as React from 'react'
-import { ChevronRight } from 'lucide-react'
 import type { SDKToolUseBlock } from '@gamma/shared'
-import type { ToolExecutionPresentation } from '@/lib/tool-execution-presentation'
 import { cn } from '@/lib/utils'
-import { getProcessActionLabel, getProcessErrorSummary } from './process-timeline-presentation'
+import { getProcessActionLabel } from './process-timeline-presentation'
 
 interface ProcessTimelineToolProps {
   block: SDKToolUseBlock
-  presentation: ToolExecutionPresentation
-  result?: string
   children: React.ReactNode
 }
 
-export function ProcessTimelineTool({ block, presentation, result, children }: ProcessTimelineToolProps): React.ReactElement {
+export function ProcessTimelineTool({ block, children }: ProcessTimelineToolProps): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
   const contentId = React.useId()
   const label = getProcessActionLabel(block)
-  const note = presentation.status === 'error' ? getProcessErrorSummary(result)
-    : presentation.status === 'pending' || presentation.status === 'approval-submitting' ? '等待授权' : undefined
 
   return (
     <div>
@@ -34,8 +28,6 @@ export function ProcessTimelineTool({ block, presentation, result, children }: P
           {label.action && label.object ? ' ' : null}
           {label.object && <span className={cn(label.monospace && 'font-mono')}>{label.object.replace(/\s*\n\s*/g, ' ')}</span>}
         </span>
-        {note && <span data-process-step-note="" className="process-timeline-note" title={note}>{note}</span>}
-        <ChevronRight aria-hidden="true" className={cn('process-timeline-chevron', expanded && 'rotate-90')} />
       </button>
       {expanded && <div id={contentId} className="process-timeline-details">{children}</div>}
     </div>
@@ -73,7 +65,6 @@ export function ProcessTimelineText({ text, thinking = false }: ProcessTimelineT
       onClick={() => { if (overflows || expanded) setExpanded((value) => !value) }}
     >
       <span id={contentId} ref={textRef} data-process-text="" className={cn('process-timeline-text', !expanded && 'line-clamp-2')}>{text}</span>
-      {(overflows || expanded) && <ChevronRight aria-hidden="true" className={cn('process-timeline-chevron', expanded && 'rotate-90')} />}
     </button>
   )
 }

@@ -14,6 +14,7 @@ import baiduNetdiskIcon from '@/assets/integrations/baidu-netdisk.png'
 import feishuIcon from '@/assets/bots/feishu.png'
 import { cn } from '@/lib/utils'
 import { compareCatalogConnectionCards, getCatalogCliConnectionStatus, getCatalogCliStatusRank, getCatalogGuidedConnectionStatus, getCatalogMcpConnectionStatus, getCatalogMcpStatusRank, type CatalogCliIntegration, type CatalogCliProbeState, type CatalogCredentialIntegration, type CatalogGuidedIntegration, type CatalogMcpIntegration } from './integration-catalog'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface IntegrationCatalogProps {
   mcps: CatalogMcpIntegration[]
@@ -232,7 +233,7 @@ function IntegrationCard({ name, description, capabilities, iconSlug, status, st
                 : <img className="size-7 object-contain" src={`https://cdn.simpleicons.org/${iconSlug}`} alt="" onError={() => setIconFailed(true)} />}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[15px] font-semibold text-foreground [text-wrap:balance]">{name}</h3>
+          <FadeTitle as="h3" className="truncate text-[15px] font-semibold text-foreground [text-wrap:balance]">{name}</FadeTitle>
           <p className="mt-0.5 line-clamp-2 text-[12px] leading-4 text-muted-foreground">{description}</p>
         </div>
       </div>

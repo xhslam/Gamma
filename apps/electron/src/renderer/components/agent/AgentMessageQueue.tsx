@@ -9,6 +9,7 @@ import {
   type AgentQueuedMessage,
   type QueueDropPlacement,
 } from '@/lib/agent-message-queue'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface AgentMessageQueueProps {
   items: AgentQueuedMessage[]
@@ -125,11 +126,11 @@ export function AgentMessageQueue({
                 {item.attachments && item.attachments.length > 0 && (
                   <div className="mb-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-4 text-muted-foreground">
                     <Paperclip className="size-3 shrink-0" />
-                    <span className="truncate">
+                    <FadeTitle className="truncate">
                       {item.attachments.length === 1
                         ? item.attachments[0]?.filename
                         : `${item.attachments.length} 个附件`}
-                    </span>
+                    </FadeTitle>
                   </div>
                 )}
                 <QueuedMessagePreview text={item.text} />
@@ -166,12 +167,12 @@ export function AgentMessageQueue({
 
 const QUEUED_REFERENCE_STYLES = {
   file: { icon: FileText, className: 'bg-primary/10 text-primary' },
-  skill: { icon: Sparkles, className: 'bg-[hsl(270_60%_60%/0.15)] text-[hsl(270_60%_50%)]' },
-  mcp: { icon: Server, className: 'bg-[hsl(160_60%_45%/0.15)] text-[hsl(160_60%_35%)]' },
-  session: { icon: MessageSquareText, className: 'bg-[hsl(200_80%_50%/0.14)] text-[hsl(200_80%_40%)]' },
+  skill: { icon: Sparkles, className: 'bg-muted text-foreground' },
+  mcp: { icon: Server, className: 'bg-muted text-foreground' },
+  session: { icon: MessageSquareText, className: 'bg-muted text-foreground' },
   quote: { icon: Quote, className: 'bg-primary/10 text-primary' },
-  todo: { icon: ListTodo, className: 'bg-amber-500/15 text-amber-800 dark:text-amber-200' },
-  calendar_event: { icon: CalendarDays, className: 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-200' },
+  todo: { icon: ListTodo, className: 'bg-warning/15 text-warning dark:text-warning' },
+  calendar_event: { icon: CalendarDays, className: 'bg-info/15 text-info dark:text-info' },
 } as const
 
 function QueuedMessagePreview({ text }: { text: string }): React.ReactElement {
@@ -194,7 +195,7 @@ function QueuedMessagePreview({ text }: { text: string }): React.ReactElement {
             title={part.label}
           >
             <Icon className="size-3 shrink-0" />
-            <span className="truncate">{part.label}</span>
+            <FadeTitle className="truncate">{part.label}</FadeTitle>
           </span>
         )
       })}

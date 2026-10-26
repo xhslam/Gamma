@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { fileBrowserAutoRevealAtom } from '@/atoms/agent-atoms'
 import type { FileIndexEntry } from '@gamma/shared'
 import { hasMixedFileSources } from './file-search-sources'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface FileSearchBarProps {
   workspaceFilesPath: string | null
@@ -332,9 +333,9 @@ function ResultItem({
           onMouseEnter={onHover}
         >
           <FileTypeIcon name={entry.name} isDirectory={entry.type === 'dir'} size={12} />
-          <span className="text-[11px] font-medium truncate max-w-[90px]">
+          <FadeTitle className="text-[11px] font-medium truncate max-w-[90px]">
             {entry.name}
-          </span>
+          </FadeTitle>
           {showSessionBadge && entry.source === 'session' && (
             <span className="flex-shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">会话文件</span>
           )}

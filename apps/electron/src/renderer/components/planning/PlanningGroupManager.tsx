@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface PlanningGroupManagerProps {
   scope: PlanningGroupScope
@@ -129,13 +130,13 @@ export function PlanningGroupManager({ scope, groups, trigger, itemLabel, getUsa
             const renaming = renamingId === group.id
             return <div key={group.id} className="group flex min-h-10 items-center gap-1 rounded-md px-1.5 hover:bg-muted/55 focus-within:bg-muted/55">
               {renaming ? <>
-                <span className="ml-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: group.color ?? 'currentColor' }} />
+                <span className="ml-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: 'hsl(var(--primary))' }} />
                 <Input ref={renameInputRef} value={renameName} onChange={(event) => setRenameName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void renameGroup(group) } else if (event.key === 'Escape') { setRenamingId(null); setRenameName('') } }} aria-label={`重命名 ${group.name}`} className="h-9 min-w-0 flex-1 border-0 bg-background px-2 text-sm shadow-none focus-visible:ring-1" />
                 <Button type="button" variant="ghost" size="icon" className="size-10" aria-label="确认重命名" disabled={savingAction === 'rename' || !renameName.trim()} onClick={() => void renameGroup(group)}><Check size={15} /></Button>
                 <Button type="button" variant="ghost" size="icon" className="size-10" aria-label="取消重命名" disabled={savingAction === 'rename'} onClick={() => { setRenamingId(null); setRenameName('') }}><X size={15} /></Button>
               </> : <>
-                <span className="ml-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: group.color ?? 'currentColor' }} />
-                <span className="min-w-0 flex-1 truncate px-1 text-sm">{group.name}</span>
+                <span className="ml-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+                <FadeTitle className="min-w-0 flex-1 truncate px-1 text-sm">{group.name}</FadeTitle>
                 <span className="tabular-nums text-xs text-muted-foreground">{usageCount}</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-10 text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground" aria-label={`管理分组 ${group.name}`}><MoreHorizontal size={16} /></Button></DropdownMenuTrigger>

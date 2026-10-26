@@ -40,8 +40,8 @@ function MemoryChangeDiff({
       {hasDiff ? (
         <pre className="overflow-x-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-5">
           {change.diff?.context.map((line, lineIndex) => <div key={`context-${lineIndex}`} className="text-muted-foreground">  {line || ' '}</div>)}
-          {change.diff?.removed.map((line, lineIndex) => <div key={`removed-${lineIndex}`} className="bg-red-500/10 px-1 text-red-700 dark:text-red-300">- {line || ' '}</div>)}
-          {change.diff?.added.map((line, lineIndex) => <div key={`added-${lineIndex}`} className="bg-emerald-500/10 px-1 text-emerald-700 dark:text-emerald-300">+ {line || ' '}</div>)}
+          {change.diff?.removed.map((line, lineIndex) => <div key={`removed-${lineIndex}`} className="bg-destructive/10 px-1 text-destructive dark:text-destructive">- {line || ' '}</div>)}
+          {change.diff?.added.map((line, lineIndex) => <div key={`added-${lineIndex}`} className="bg-success/10 px-1 text-success dark:text-success">+ {line || ' '}</div>)}
           {change.diff?.truncated && <div className="mt-1 text-muted-foreground">… 其余变更请打开文件查看</div>}
         </pre>
       ) : (

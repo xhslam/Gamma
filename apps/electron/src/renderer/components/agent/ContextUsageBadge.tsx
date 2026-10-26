@@ -87,7 +87,7 @@ function UsageRing({ ratio, isWarning }: UsageRingProps): React.ReactElement {
       viewBox="0 0 20 20"
       className={cn(
         'shrink-0 transition-colors',
-        isWarning ? 'text-amber-500 dark:text-amber-400' : 'text-foreground/70',
+        isWarning ? 'text-warning dark:text-warning' : 'text-foreground/70',
       )}
       aria-hidden="true"
     >
@@ -148,7 +148,7 @@ function PlanQuotaRow({ quotaWindow, provider }: { quotaWindow: ChannelPlanQuota
           <div
             className={cn(
               'h-full rounded-full',
-              quotaWindow.remainingPercent <= 20 ? 'bg-amber-500' : 'bg-foreground/60',
+              quotaWindow.remainingPercent <= 20 ? 'bg-warning' : 'bg-foreground/60',
             )}
             style={{ width: `${Math.max(0, Math.min(100, quotaWindow.remainingPercent))}%` }}
           />
@@ -321,7 +321,7 @@ export function ContextUsageBadge({
           size="icon"
           className={cn(
             inputToolbarButtonClass,
-            isWarning ? 'text-amber-600 dark:text-amber-400' : 'text-foreground/60 hover:text-foreground',
+            isWarning ? 'text-warning dark:text-warning' : 'text-foreground/60 hover:text-foreground',
           )}
           onMouseEnter={() => {
             cancelClose()
@@ -407,7 +407,7 @@ export function ContextUsageBadge({
             size="sm"
             className={cn(
               'h-7 text-xs gap-1.5 select-none',
-              isWarning && !confirming && 'bg-amber-500 hover:bg-amber-600 text-white',
+              isWarning && !confirming && 'bg-warning hover:bg-warning text-primary-foreground',
             )}
             onClick={() => {
               if (isProcessing) return

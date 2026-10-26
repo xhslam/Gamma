@@ -10,7 +10,7 @@ import { beginPaneResize } from '@/lib/pane-resize-policy'
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { X, ExternalLink, ChevronRight, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal, Terminal, BookOpen } from 'lucide-react'
+import { X, ExternalLink, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal, Terminal, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -27,7 +27,7 @@ import { useAttachedDirectoryChildren } from '@/components/file-browser/use-atta
 import { productivityToolsAtom } from '@/atoms/ui-preferences'
 import { markdownToHtml } from '@/lib/markdown-rich-text'
 import { FileBrowser, FileDropZone, FileTypeIcon, FileSearchBar, computeRevealAncestors, isPathUnderRoot, computeTreeRowLayout, AncestorGuides, STICKY_ROW_BASE_CLASS, canBeSticky } from '@/components/file-browser'
-import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
+import { OnDemandRightPanelNav } from '@/components/agent/OnDemandRightPanelNav'
 import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components/diff/DiffPanelTabBar'
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { AgentView } from '@/components/agent/AgentView'
@@ -134,6 +134,8 @@ import {
   selectRightWorkspaceSplitTab,
 } from '@/lib/right-workspace-split'
 import type { RightWorkspacePane, RightWorkspaceSplitState } from '@/lib/right-workspace-split'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 function BrowserTabIcon({ favicon }: { favicon?: string }): React.ReactElement {
   const [loadFailed, setLoadFailed] = React.useState(false)
@@ -1392,6 +1394,21 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   }, [activeTab, handleCloseWorkspaceTab, sessionId])
 
   const splitContentRef = React.useRef<HTMLDivElement>(null)
+  const [splitContentWidth, setSplitContentWidth] = React.useState(0)
+  // 面板padding/border不属于可分配宽度；渲染比例与ARIA统一使用实际内容区。
+  // 这里只约束显示，不因临时缩窄而覆写会话保存的比例。
+  React.useLayoutEffect(() => {
+    const element = splitContentRef.current
+    if (!element) return
+    const measure = (): void => {
+      const nextWidth = element.clientWidth
+      setSplitContentWidth((previous) => previous === nextWidth ? previous : nextWidth)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   const splitDividerCancelRef = React.useRef<(() => void) | null>(null)
   const [tabDrag, setTabDrag] = React.useState<RightWorkspaceTabDragState | null>(null)
   const [dragTargetPane, setDragTargetPane] = React.useState<RightWorkspacePane | null>(null)
@@ -1744,7 +1761,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     )
   }
 
-  const effectiveSplitRatio = split ? clampRightWorkspaceSplitRatioForWidth(split.ratio, width) : 0.5
+  const effectiveSplitRatio = split ? clampRightWorkspaceSplitRatioForWidth(split.ratio, splitContentWidth) : 0.5
 
   const renderWorkspacePane = (pane: RightWorkspacePane, tab: AgentSidePanelTab): React.ReactElement => {
     return (
@@ -1761,10 +1778,12 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   return (
     <div
       className={cn(
-        'relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
+        'gamma-panel relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
         shouldAnimate && 'transition-[width] duration-300 ease-in-out',
         isOpen ? '' : '!w-0',
       )}
+      data-panel="workspace"
+      data-panel-open={isOpen}
       style={isOpen ? { width } : undefined}
     >
       {/* 面板内容 */}
@@ -1775,7 +1794,9 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
         >
-          <DiffPanelTabBar
+          <OnDemandRightPanelNav
+            presentation="tabs"
+            sessionId={sessionId}
             key={sessionId}
             tabs={workspaceTabs}
             activeTab={effectiveActiveTab}
@@ -1814,8 +1835,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
                   className="group relative w-2 shrink-0 touch-none cursor-col-resize focus-visible:outline focus-visible:outline-primary bg-border/35 transition-colors hover:bg-primary/25 active:bg-primary/45"
                   onPointerDown={handleSplitDividerMouseDown}
                   tabIndex={0}
-                  aria-valuemin={Math.round(clampRightWorkspaceSplitRatioForWidth(0, splitContentRef.current?.clientWidth ?? 0) * 100)}
-                  aria-valuemax={Math.round(clampRightWorkspaceSplitRatioForWidth(1, splitContentRef.current?.clientWidth ?? 0) * 100)}
+                  aria-valuemin={Math.round(clampRightWorkspaceSplitRatioForWidth(0, splitContentWidth) * 100)}
+                  aria-valuemax={Math.round(clampRightWorkspaceSplitRatioForWidth(1, splitContentWidth) * 100)}
                   aria-valuenow={Math.round(effectiveSplitRatio * 100)}
                   aria-valuetext={`左侧 ${Math.round(effectiveSplitRatio * 100)}%`}
                   onKeyDown={event => {
@@ -1887,7 +1908,7 @@ function AttachedFilesSection({ title, scope = 'project', showSessionBadge = tru
         return (
           <div
             key={filePath}
-            className="flex items-center gap-1 py-1 pl-2 pr-2 text-sm cursor-pointer hover:bg-accent/50 group mx-2 rounded-lg"
+            className="gamma-list-row flex items-center gap-1 pl-2 pr-2 text-sm cursor-pointer hover:bg-accent/50 group mx-2 rounded-lg"
             onClick={() => onFilePreview?.(filePath)}
             draggable
             onDragStart={(e) => {
@@ -1902,7 +1923,7 @@ function AttachedFilesSection({ title, scope = 'project', showSessionBadge = tru
           >
             <span className="w-3.5 flex-shrink-0" />
             <FileTypeIcon name={name} isDirectory={false} />
-            <span className="text-xs truncate flex-1" title={filePath}>{name}</span>
+            <FadeTitle className="text-xs truncate flex-1" title={filePath}>{name}</FadeTitle>
             {showSessionBadge && scope === 'session' && (
               <span className="flex-shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">会话文件</span>
             )}
@@ -1914,7 +1935,7 @@ function AttachedFilesSection({ title, scope = 'project', showSessionBadge = tru
             >
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70 text-muted-foreground hover:text-foreground invisible group-hover:visible focus-visible:visible data-[state=open]:visible"
                     title="更多操作"
@@ -2124,10 +2145,10 @@ function AttachedDirTree({ dirPath, onDetach, selectedPaths, onSelect, refreshVe
 
   return (
     <div className="relative">
-      <div
+      <div data-disclosure-group=""
         data-sticky-row={isSticky ? 'true' : undefined}
         className={cn(
-          'file-tree-row relative flex h-8 items-center gap-1 pr-2 text-sm cursor-pointer group',
+          'gamma-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
           isSticky && cn(STICKY_ROW_BASE_CLASS, 'top-0 z-10'),
         )}
         style={{ paddingLeft }}
@@ -2151,23 +2172,23 @@ function AttachedDirTree({ dirPath, onDetach, selectedPaths, onSelect, refreshVe
             isSticky ? 'group-hover:bg-accent' : 'group-hover:bg-accent/50',
           )}
         />
-        <ChevronRight
+        <button type="button" data-disclosure-trigger="" className="gamma-disclosure-button" style={{ width: 14 }} aria-expanded={expanded} aria-label={(expanded ? '收起目录 ' : '展开目录 ') + dirName} onClick={(event) => { event.stopPropagation(); toggleExpand() }}><DisclosureChevron expanded={expanded} size={14}
           className={cn(
             'relative z-10 size-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150',
             expanded && 'rotate-90',
           )}
-        />
+        /></button>
         <FileTypeIcon name={dirName} isDirectory isOpen={expanded} className="relative z-10" />
-        <span className="relative z-10 text-xs truncate flex-1" title={dirPath}>
+        <FadeTitle className="relative z-10 text-xs truncate flex-1" title={dirPath}>
           {dirName}
-        </span>
+        </FadeTitle>
         {showSessionBadge && scope === 'session' && (
           <span className="relative z-10 flex-shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">会话文件</span>
         )}
         {onOpenDirectoryTerminal && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 aria-label={`在 ${dirName} 打开终端`}
                 title={`在 ${dirName} 打开终端`}
@@ -2351,11 +2372,11 @@ function AttachedDirItem({ expandedStateKey, entry, depth, selectedPaths, onSele
 
   return (
     <>
-      <div
+      <div data-disclosure-group=""
         ref={rowRef}
         data-sticky-row={isSticky ? 'true' : undefined}
         className={cn(
-          'file-tree-row relative flex h-8 items-center gap-1 pr-2 text-sm cursor-pointer group',
+          'gamma-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
           isSticky && STICKY_ROW_BASE_CLASS,
         )}
         style={{
@@ -2391,12 +2412,12 @@ function AttachedDirItem({ expandedStateKey, entry, depth, selectedPaths, onSele
             选中态下 bg-accent 不透明背景会盖住原 border 色，组件内部已切到 accent-foreground。 */}
         {isSticky && <AncestorGuides depth={depth} isSelected={isSelected} />}
         {entry.isDirectory ? (
-          <ChevronRight
+          <button type="button" data-disclosure-trigger="" className="gamma-disclosure-button" style={{ width: 14 }} aria-expanded={expanded} aria-label={(expanded ? '收起目录 ' : '展开目录 ') + currentName} onClick={(event) => { event.stopPropagation(); handleClick(event) }}><DisclosureChevron expanded={expanded} size={14}
             className={cn(
               'relative z-10 size-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150',
               expanded && 'rotate-90',
             )}
-          />
+          /></button>
         ) : (
           <span className="relative z-10 w-3.5 flex-shrink-0" />
         )}
@@ -2418,13 +2439,13 @@ function AttachedDirItem({ expandedStateKey, entry, depth, selectedPaths, onSele
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="relative z-10 truncate text-xs flex-1">{currentName}</span>
+          <FadeTitle className="relative z-10 truncate text-xs flex-1">{currentName}</FadeTitle>
         )}
 
         {entry.isDirectory && onOpenDirectoryTerminal && !isRenaming && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 aria-label={`在 ${currentName} 打开终端`}
                 title={`在 ${currentName} 打开终端`}
@@ -2452,7 +2473,7 @@ function AttachedDirItem({ expandedStateKey, entry, depth, selectedPaths, onSele
           {!isRenaming && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 className={cn(
                   'h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70 text-muted-foreground hover:text-foreground',

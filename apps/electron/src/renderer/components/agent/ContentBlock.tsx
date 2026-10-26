@@ -9,9 +9,6 @@
 
 import * as React from 'react'
 import {
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
   XCircle,
   Loader2,
   Brain,
@@ -38,6 +35,8 @@ import type {
   SDKThinkingBlock,
   SDKSystemMessage,
 } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 // ===== useSubAgentMeta Hook =====
 
@@ -183,7 +182,7 @@ function PromptRow({ prompt, dimmed = false }: { prompt: string; dimmed?: boolea
 
   return (
     <div>
-      <button
+      <button data-disclosure-trigger="" aria-expanded={expanded}
         type="button"
         className="flex items-center gap-2 py-0.5 text-left hover:opacity-70 transition-opacity group"
         onClick={() => setExpanded(!expanded)}
@@ -202,7 +201,7 @@ function PromptRow({ prompt, dimmed = false }: { prompt: string; dimmed?: boolea
           {preview}
         </span>
 
-        <ChevronRight
+        <DisclosureChevron expanded={expanded} size={12}
           className={cn(
             'shrink-0 size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all duration-150',
             expanded && 'rotate-90 opacity-100',
@@ -233,9 +232,9 @@ function TaskGetCollapsedSummary({ task }: { task: ParsedTaskGetResult }): React
       {task.subject && (
         <>
           <span className="shrink-0 text-muted-foreground/35">·</span>
-          <span className="min-w-0 truncate text-[14px] font-medium text-foreground/75">
+          <FadeTitle className="min-w-0 truncate text-[14px] font-medium text-foreground/75">
             {task.subject}
-          </span>
+          </FadeTitle>
         </>
       )}
       {task.description && (
@@ -332,7 +331,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
       aria-live="polite"
       aria-atomic="true"
       data-tool-execution-status={presentation.status}
-      className={cn('shrink-0 text-[11px] tabular-nums', presentation.tone === 'error' ? 'text-destructive/80' : presentation.tone === 'success' ? 'text-emerald-600 dark:text-emerald-400' : presentation.tone === 'active' ? 'text-primary/80' : 'text-muted-foreground/65')}
+      className={cn('shrink-0 text-[11px] tabular-nums', presentation.tone === 'error' ? 'text-destructive/80' : presentation.tone === 'success' ? 'text-success dark:text-success' : presentation.tone === 'active' ? 'text-primary/80' : 'text-muted-foreground/65')}
     >
       {presentation.label}
     </span>
@@ -363,12 +362,12 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
         )}
         style={animate ? { animationDelay: delay } : undefined}
       >
-        <button
+        <button data-disclosure-trigger="" aria-expanded={childrenExpanded}
           type="button"
           className="group flex w-full min-w-0 items-center gap-2 rounded-md py-1 text-left transition-[background-color,opacity] hover:bg-muted/40 hover:opacity-90"
           onClick={() => setChildrenExpanded(!childrenExpanded)}
         >
-          <ChevronRight
+          <DisclosureChevron expanded={childrenExpanded} size={12}
             className={cn(
               'size-3 shrink-0 text-muted-foreground/45 transition-transform duration-150',
               childrenExpanded && 'rotate-90',
@@ -385,11 +384,11 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
           <ToolIcon className="size-3.5 shrink-0 text-muted-foreground" />
           {showToolKindLabel && (
             <>
-              <span className="min-w-0 max-w-[28%] truncate text-[14px] font-medium text-muted-foreground/65">{toolKindLabel}</span>
+              <FadeTitle className="min-w-0 max-w-[28%] truncate text-[14px] font-medium text-muted-foreground/65">{toolKindLabel}</FadeTitle>
               <span className="shrink-0 text-muted-foreground/30">·</span>
             </>
           )}
-          <span className="min-w-0 flex-1 truncate text-[14px] text-muted-foreground">{displayLabel}</span>
+          <FadeTitle className="min-w-0 flex-1 truncate text-[14px] text-muted-foreground">{displayLabel}</FadeTitle>
           {statusBadge}
           {childToolCount > 0 && !childrenExpanded && (
             <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/55">
@@ -430,12 +429,12 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             )}
 
             {/* 底部收起按钮 */}
-            <button
+            <button data-disclosure-trigger="" aria-expanded={childrenExpanded}
               type="button"
               onClick={() => setChildrenExpanded(false)}
               className="flex items-center gap-1 text-xs text-foreground/40 hover:text-foreground/70 transition-colors"
             >
-              <ChevronUp className="size-3" />
+              <DisclosureChevron expanded={childrenExpanded} size={12} className="size-3" />
               <span>收起</span>
             </button>
           </div>
@@ -452,7 +451,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
       )}
       style={animate ? { animationDelay: delay } : undefined}
     >
-        <button
+        <button data-disclosure-trigger="" aria-expanded={expanded}
           type="button"
           className="group inline-flex max-w-full min-w-0 items-center gap-2 rounded-md py-1 text-left transition-[background-color,opacity] hover:bg-muted/40 hover:opacity-90"
           onClick={() => setExpanded(!expanded)}
@@ -466,14 +465,14 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
           <ToolIcon className="size-3.5 shrink-0 text-muted-foreground" />
           {showToolKindLabel && (
             <>
-              <span className="min-w-0 max-w-[28%] truncate text-[14px] font-medium text-muted-foreground/65">{toolKindLabel}</span>
+              <FadeTitle className="min-w-0 max-w-[28%] truncate text-[14px] font-medium text-muted-foreground/65">{toolKindLabel}</FadeTitle>
               <span className="shrink-0 text-muted-foreground/30">·</span>
             </>
           )}
-          <span className={cn(
+          <FadeTitle className={cn(
             'min-w-0 max-w-[60%] truncate text-[14px]',
             dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground',
-          )}>{displayLabel}</span>
+          )}>{displayLabel}</FadeTitle>
           {statusBadge}
 
           {resultSummary && (
@@ -488,11 +487,11 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
           {phrase.diffStats && presentation.status === 'success' && (
             <span className="shrink-0 font-mono text-[12px] tabular-nums">
               {phrase.diffStats.additions > 0 && (
-                <span className="text-emerald-600 dark:text-emerald-400">+{phrase.diffStats.additions}</span>
+                <span className="text-success dark:text-success">+{phrase.diffStats.additions}</span>
               )}
               {phrase.diffStats.additions > 0 && phrase.diffStats.deletions > 0 && ' '}
               {phrase.diffStats.deletions > 0 && (
-                <span className="text-red-600 dark:text-red-400">-{phrase.diffStats.deletions}</span>
+                <span className="text-destructive dark:text-destructive">-{phrase.diffStats.deletions}</span>
               )}
             </span>
           )}
@@ -509,7 +508,7 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             </span>
           )}
 
-          <ChevronRight
+          <DisclosureChevron expanded={expanded} size={12}
             className={cn(
               'size-3 shrink-0 text-muted-foreground/40 transition-transform duration-150',
               expanded && 'rotate-90',
@@ -541,9 +540,9 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
 
 /** 时间线详情沿用现有结果渲染器；收起行不出现状态文字或额外控件。 */
 function TimelineToolUseBlock({ block, allMessages, childBlocks, basePath, isStreaming }: ToolUseBlockProps): React.ReactElement {
-  const { result, presentation } = useToolExecution(block.id, allMessages, isStreaming)
+  const { result } = useToolExecution(block.id, allMessages, isStreaming)
   return (
-    <ProcessTimelineTool block={block} presentation={presentation} result={result?.result}>
+    <ProcessTimelineTool block={block}>
       {(block.name === 'Agent' || block.name === 'Task') && typeof block.input.prompt === 'string' && (
         <p className="whitespace-pre-wrap break-words">{block.input.prompt}</p>
       )}
@@ -586,7 +585,7 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
   React.useLayoutEffect(() => {
     if (isStreaming || !contentRef.current) return
     const el = contentRef.current
-    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 22
+    const lineHeight = parseFloat(getComputedStyle(el.querySelector('.reading-body') ?? el).lineHeight) || 26.35
     const maxHeight = lineHeight * THINKING_COLLAPSE_LINE_THRESHOLD
     setShouldCollapse(el.scrollHeight > maxHeight + 10)
   }, [displayedContent, isStreaming])
@@ -608,18 +607,18 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
           'relative rounded-lg px-3.5 py-2.5',
           dimmed ? 'bg-muted/30' : 'bg-muted/50',
         )}
-        style={{
-          border: 'none',
-          backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='8' ry='8' stroke='${dimmed ? 'rgba(128,128,128,0.3)' : 'rgba(128,128,128,0.5)'}' stroke-width='1.5' stroke-dasharray='8%2c 6' stroke-dashoffset='0' stroke-linecap='round'/%3e%3c/svg%3e")`,
-        }}
+        style={{ border: 'none' }}
       >
+        <svg className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
+          <rect width="100%" height="100%" rx="8" ry="8" fill="none" stroke="hsl(var(--tertiary-foreground))" strokeOpacity={dimmed ? 0.3 : 0.5} strokeWidth="1.5" strokeDasharray="8 6" strokeLinecap="round" />
+        </svg>
         <div
           ref={contentRef}
           data-agent-history-selection-excluded={shouldCollapse && !isExpanded ? 'true' : undefined}
           className={cn(
             'prose prose-sm dark:prose-invert max-w-none prose-p:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-[14px] leading-relaxed overflow-hidden transition-[max-height] duration-200',
             dimmed ? 'text-muted-foreground' : 'text-foreground/90',
-            shouldCollapse && !isExpanded && 'max-h-[5.6em]',
+            shouldCollapse && !isExpanded && 'reading-body-collapsed',
           )}
         >
           <MessageResponse className="font-normal prose-strong:font-normal [&_strong]:font-normal [&_b]:font-normal">
@@ -627,7 +626,7 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
           </MessageResponse>
         </div>
         {shouldCollapse && (
-          <button
+          <button data-disclosure-trigger="" aria-expanded={isExpanded}
             type="button"
             onClick={toggleExpand}
             className={cn(
@@ -637,12 +636,12 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
           >
             {isExpanded ? (
               <>
-                <ChevronUp className="size-3" />
+                <DisclosureChevron expanded={isExpanded} size={12} className="size-3" />
                 <span>收起</span>
               </>
             ) : (
               <>
-                <ChevronDown className="size-3" />
+                <DisclosureChevron expanded={isExpanded} size={12} className="size-3" />
                 <span>展开思考</span>
               </>
             )}

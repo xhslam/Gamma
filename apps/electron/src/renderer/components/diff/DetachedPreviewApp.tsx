@@ -97,7 +97,7 @@ export function DetachedPreviewApp(): React.ReactElement {
           filePath={defaultAppTargetPath}
           access={defaultAppAccess}
         />
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={handleRefresh}
           className={cn(

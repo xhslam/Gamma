@@ -13,6 +13,7 @@ import { MARKDOWN_DOCUMENT_THEMES, markdownEditorStyle, markdownThemeStyle } fro
 import '../markdown-workspace/markdown-workspace.css'
 
 import { SettingsSection, SettingsCard, SettingsRow, SettingsToggle } from './primitives'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 type Category = 'appearance' | 'editor' | 'markdown' | 'cjk' | 'shortcuts'
 interface CategoryItem { id: Category; label: string; icon: React.ReactNode }
@@ -31,14 +32,14 @@ interface Option { value: string; label: string }
 interface Choice { key: keyof MarkdownEditorPreferences; label: string; description?: string; options: Option[] }
 const numericOptions = (values: number[], unit = ''): Option[] => values.map(value => ({ value: String(value), label: `${value}${unit}` }))
 const editorChoices: Choice[] = [
-  { key: 'latinFont', label: '拉丁字体', description: '西文字符与数字优先使用的字体族', options: [{ value: 'system', label: '系统默认' }, { value: 'serif', label: 'Georgia（衬线）' }, { value: 'sans', label: 'Arial（无衬线）' }] },
-  { key: 'cjkFont', label: 'CJK 字体', description: '使用本机字体；缺失时自动使用系统后备字体。', options: [{ value: 'system', label: '系统默认' }, { value: 'song', label: '宋体' }, { value: 'hei', label: '黑体' }, { value: 'kai', label: '楷体' }] },
-  { key: 'monoFont', label: '等宽字体', description: '代码块与行内代码使用的等宽字体族', options: [{ value: 'system', label: '系统默认' }, { value: 'menlo', label: 'Menlo' }, { value: 'monaco', label: 'Monaco' }] },
-  { key: 'fontSize', label: '字体大小', description: '正文基础字号大小', options: numericOptions([14, 16, 18, 20, 22, 24], 'px') },
-  { key: 'lineHeight', label: '正文行高', description: '正文文本行间距倍数', options: numericOptions([1.4, 1.6, 1.8, 2]) },
+  { key: 'latinFont', label: '拉丁字体', description: '西文字符与数字优先使用的字体族', options: [{ value: 'system', label: '跟随全局字体' }, { value: 'serif', label: 'Source Serif 4（衬线）' }, { value: 'sans', label: 'Inter（无衬线）' }] },
+  { key: 'cjkFont', label: 'CJK 字体', description: '正文优先使用随应用打包的 Noto Serif SC，回退 Songti SC。', options: [{ value: 'system', label: '跟随全局字体' }, { value: 'song', label: '宋体' }, { value: 'hei', label: '黑体' }, { value: 'kai', label: '楷体' }] },
+  { key: 'monoFont', label: '等宽字体', description: '代码块与行内代码使用的等宽字体族', options: [{ value: 'system', label: '跟随全局字体' }, { value: 'menlo', label: 'Menlo' }, { value: 'monaco', label: 'Monaco' }] },
+  { key: 'fontSize', label: '字体大小', description: '正文基础字号大小', options: numericOptions([14, 15.5, 16, 18, 20, 22, 24], 'px') },
+  { key: 'lineHeight', label: '正文行高', description: '正文文本行间距倍数', options: numericOptions([1.4, 1.6, 1.7, 1.8, 2]) },
   { key: 'blockSpacing', label: '段落间距', description: '段落与标题之间的垂直间距倍数', options: numericOptions([0.75, 1, 1.5, 2], '×') },
   { key: 'letterSpacing', label: '字间距', description: '汉字与西文字符间隙微调', options: [{ value: '0', label: '关闭' }, { value: '0.02', label: '0.02em' }, { value: '0.05', label: '0.05em' }] },
-  { key: 'contentWidth', label: '编辑器宽度', description: '正文居中显示的最大宽度，随字号自适应', options: [{ value: '36', label: '36em（窄）' }, { value: '50', label: '50em（中等）' }, { value: '64', label: '64em（宽）' }, { value: '0', label: '填满可用宽度' }] },
+  { key: 'contentWidth', label: '编辑器宽度', description: '正文居中显示，最大行宽不超过全局 680px', options: [{ value: '36', label: '36em（窄）' }, { value: '50', label: '50em（中等）' }, { value: '64', label: '64em（宽）' }, { value: '0', label: '跟随全局行宽（680px）' }] },
   { key: 'tabSize', label: '制表符大小', description: '源码模式按下 Tab 键时的缩进空格数', options: [{ value: '2', label: '2 个空格' }, { value: '4', label: '4 个空格' }] },
 ]
 const markdownChoices: Choice[] = [
@@ -183,7 +184,7 @@ export function MarkdownEditorSettingsPage(): React.ReactElement {
                     >
                       Aa
                     </span>
-                    <span className="block truncate font-medium">{item.label}</span>
+                    <FadeTitle className="block truncate font-medium">{item.label}</FadeTitle>
                   </button>
                 )
               })}
@@ -441,7 +442,7 @@ export function MarkdownEditorSettings({ mode = 'dialog' }: MarkdownEditorSettin
     </aside>
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5" role="region" aria-label="文档设置内容">
-        {show('appearance') && matches('主题', '外观 白色 纸张 薄荷 棕褐色 夜间 Solarized 跟随 Gamma') && <section className="space-y-5"><h3 className="text-base font-semibold">主题</h3><div className="grid grid-cols-3 gap-3 sm:grid-cols-6">{MARKDOWN_DOCUMENT_THEMES.map(item => <button key={item.id} type="button" aria-label={`${item.label}主题`} aria-pressed={preferences.theme === item.id} onClick={() => save({ theme: item.id })} className="group min-w-0 space-y-2 text-center text-xs focus-visible:outline-none"><span className={`flex h-16 items-center justify-center rounded-lg border text-xl font-semibold shadow-sm group-focus-visible:ring-2 group-focus-visible:ring-ring ${preferences.theme === item.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`} style={{ backgroundColor: item.background, color: item.text }}>Aa</span><span className="block truncate">{item.label}</span></button>)}</div><SettingRow label="跟随 Gamma 外观" description="文档使用应用当前的深浅主题与配色。"><Switch aria-label="跟随 Gamma 外观" checked={preferences.theme === 'inherit'} onCheckedChange={checked => save({ theme: checked ? 'inherit' : 'paper' })} /></SettingRow><div className="rounded-lg border border-border/60 bg-background px-5 py-4" style={markdownEditorStyle(preferences)}><div style={{ fontFamily: 'var(--md-editor-font)', fontSize: 'var(--md-editor-size)', lineHeight: 'var(--md-editor-line-height)', letterSpacing: 'var(--md-editor-letter-spacing)' }}><strong className="font-semibold">阅读与写作</strong><p>好的排版让你专注内容。Good typography stays quiet.</p></div></div></section>}
+        {show('appearance') && matches('主题', '外观 白色 纸张 薄荷 棕褐色 夜间 Solarized 跟随 Gamma') && <section className="space-y-5"><h3 className="text-base font-semibold">主题</h3><div className="grid grid-cols-3 gap-3 sm:grid-cols-6">{MARKDOWN_DOCUMENT_THEMES.map(item => <button key={item.id} type="button" aria-label={`${item.label}主题`} aria-pressed={preferences.theme === item.id} onClick={() => save({ theme: item.id })} className="group min-w-0 space-y-2 text-center text-xs focus-visible:outline-none"><span className={`flex h-16 items-center justify-center rounded-lg border text-xl font-semibold shadow-sm group-focus-visible:ring-2 group-focus-visible:ring-ring ${preferences.theme === item.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`} style={{ backgroundColor: item.background, color: item.text }}>Aa</span><FadeTitle className="block truncate">{item.label}</FadeTitle></button>)}</div><SettingRow label="跟随 Gamma 外观" description="文档使用应用当前的深浅主题与配色。"><Switch aria-label="跟随 Gamma 外观" checked={preferences.theme === 'inherit'} onCheckedChange={checked => save({ theme: checked ? 'inherit' : 'paper' })} /></SettingRow><div className="rounded-lg border border-border/60 bg-background px-5 py-4" style={markdownEditorStyle(preferences)}><div style={{ fontFamily: 'var(--md-editor-font)', fontSize: 'var(--md-editor-size)', lineHeight: 'var(--md-editor-line-height)', letterSpacing: 'var(--md-editor-letter-spacing)' }}><strong className="font-semibold">阅读与写作</strong><p>好的排版让你专注内容。Good typography stays quiet.</p></div></div></section>}
         {show('editor') && <section><h3 className="mb-3 text-base font-semibold">排版与源码</h3>{editorChoices.map(choice)}{editorToggles.map(toggle)}</section>}
         {show('markdown') && <section><h3 className="mb-3 text-base font-semibold">Markdown</h3>{markdownChoices.map(choice)}{toggle(tableToggle)}</section>}
         {show('cjk') && <section><h3 className="mb-3 text-base font-semibold">中文排版</h3><p className="mb-3 text-xs leading-relaxed text-muted-foreground">在文档的更多菜单中选择「中文排版」，预览后应用；修改不会自动写盘，可撤销。</p>{cjkToggles.map(toggle)}</section>}

@@ -31,16 +31,17 @@ export function Panel({
 }: PanelProps): React.ReactElement {
   return (
     <div
+      data-panel="content"
       className={cn(
         // Base styles shared by all panels
-        'h-full flex flex-col min-h-0 min-w-0 overflow-hidden',
+        'gamma-panel h-full flex flex-col min-h-0 min-w-0 overflow-hidden',
         // Variant-specific styles
         variant === 'grow' && 'flex-1',
         variant === 'shrink' && 'shrink-0',
         className
       )}
       style={{
-        ...(variant === 'shrink' && width ? { width } : {}),
+        ...(variant === 'shrink' && width !== undefined ? { width } : {}),
         ...style,
       }}
     >

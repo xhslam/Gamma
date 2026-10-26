@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { normalizeAppIconVariant } from '../../../types/app-icons'
 import type { AppIconVariantId } from '../../../types/app-icons'
 import { SettingsCard, SettingsSection } from './primitives'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface AppIconPickerState {
   activeIcon: AppIconVariantId
@@ -63,9 +64,9 @@ export function AppIconGrid({
               draggable={false}
               decoding="async"
             />
-            <span className={cn('max-w-full truncate text-xs', isSelected && 'text-foreground')}>
+            <FadeTitle className={cn('max-w-full truncate text-xs', isSelected && 'text-foreground')}>
               {variant.name}
-            </span>
+            </FadeTitle>
             {isPending ? (
               <Loader2 aria-hidden="true" className="absolute right-1.5 top-1.5 size-4 animate-spin text-primary" />
             ) : isSelected ? (

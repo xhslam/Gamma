@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SettingsCard } from '@/components/settings/primitives'
 import { cn } from '@/lib/utils'
 import type { BulkImportSkillsResult, OtherWorkspaceSkillsGroup, SkillMeta } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 function getFailureDescription(result: BulkImportSkillsResult): string | undefined {
   const failed = result.items.filter((item) => item.status === 'failed')
@@ -245,7 +246,7 @@ export function ImportSkillDialog({
           {selectedWorkspace ? (
             <>
               <div className="mb-3 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <span className="truncate">{selectedWorkspace.workspaceName}</span>
+                <FadeTitle className="truncate">{selectedWorkspace.workspaceName}</FadeTitle>
                 <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-medium tabular-nums">
                   {selectedWorkspace.skills.length} 个
                 </span>
@@ -280,7 +281,7 @@ export function ImportSkillDialog({
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="truncate text-sm font-medium text-foreground">{skill.name}</span>
+                              <FadeTitle className="truncate text-sm font-medium text-foreground">{skill.name}</FadeTitle>
                               {skill.version ? (
                                 <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                                   v{skill.version}
@@ -289,7 +290,7 @@ export function ImportSkillDialog({
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">{skill.slug}</div>
                           </div>
-                          <Sparkles size={16} className="shrink-0 text-amber-500" />
+                          <Sparkles size={16} className="shrink-0 text-warning" />
                         </div>
                         <div className="line-clamp-3 min-h-[40px] text-sm leading-6 text-muted-foreground">
                           {skill.description ?? '暂无描述'}

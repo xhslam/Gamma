@@ -31,13 +31,24 @@ beforeAll(async () => {
 }, 240_000)
 afterAll(async () => { await renderer?.dispose() })
 describe('Given VMark 风格文档设置与真实 Chromium 编辑器', () => {
+  test('When 从自定义字号切回15.5px与1.7行高 Then 小数选项可保存并即时更新正文而不写盘文档', async () => {
+    const result = await renderer.run<{ size: number; lineHeight: number; font: string; renderedLineHeight: string; saves: number }>(`
+      const f=await window.markdownPreferencesFixture();await f.settings();f.click('编辑器');
+      await f.choose('字体大小','22px');await f.choose('正文行高','2');
+      await f.choose('字体大小','15.5px');await f.choose('正文行高','1.7');await f.close();
+      const style=getComputedStyle(document.querySelector('.ProseMirror'));
+      const result={size:f.saved().fontSize,lineHeight:f.saved().lineHeight,font:style.fontSize,renderedLineHeight:style.lineHeight,saves:f.documentSaves()};f.root.unmount();return result;
+    `)
+    expect(result).toEqual({ size: 15.5, lineHeight: 1.7, font: '15.5px', renderedLineHeight: '26.35px', saves: 0 })
+  }, 30_000)
+
   test('When 选择主题和排版 Then 正文立即更新、设置持久化且文档不自动写盘', async () => {
     const result = await renderer.run<{ font: string; family: string; background: string; theme: string; size: number; saves: number; dialog: boolean }>(`
       const f=await window.markdownPreferencesFixture();await f.settings();f.click('薄荷主题');await f.delay(100);f.click('编辑器');await f.choose('字体大小','22px');await f.choose('CJK 字体','楷体');
       const dialog=!!document.querySelector('[role="dialog"]');await f.close();const style=getComputedStyle(document.querySelector('.ProseMirror'));const background=getComputedStyle(document.querySelector('[data-testid="markdown-workspace"]')).backgroundColor;
       const result={font:style.fontSize,family:style.fontFamily,background,theme:f.saved().theme,size:f.saved().fontSize,saves:f.documentSaves(),dialog};f.root.unmount();return result;
     `)
-    expect(result.font).toBe('22px'); expect(result.family).toContain('Kaiti SC'); expect(result.background).toBe('rgb(204, 230, 208)')
+    expect(result.font).toBe('22px'); expect(result.family).toContain('Kaiti SC'); expect(result.background).toBe('rgb(250, 249, 245)')
     expect(result.theme).toBe('mint'); expect(result.size).toBe(22); expect(result.saves).toBe(0); expect(result.dialog).toBe(true)
   }, 30_000)
   test('When 调整源码行号、换行、制表符 Then 编辑器与撤销历史保留', async () => {

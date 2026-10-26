@@ -107,6 +107,11 @@ function createTerminalView({ terminalId, sessionId, cwd, existingOnly }: Pick<T
   const fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(element)
+  // 已挂载终端随亮暗主题更新，不重建 PTY 或丢失选区/历史。
+  const themeObserver = new MutationObserver(() => {
+    terminal.options.theme = getTerminalAppearanceOptions().theme
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] })
   let disposed = false
   let ptyCreated = false
   let exited = false
@@ -441,6 +446,7 @@ function createTerminalView({ terminalId, sessionId, cwd, existingOnly }: Pick<T
       element.removeEventListener('drop', handleDrop)
       resizeObserver.disconnect()
       cancelAnimationFrame(fitFrame)
+      themeObserver.disconnect()
       output.dispose()
       disposeInput.dispose()
       disposeOutput()

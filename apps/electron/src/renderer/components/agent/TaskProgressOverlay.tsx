@@ -1,23 +1,14 @@
 import * as React from 'react'
-import { ArrowDownIcon, CheckCircle2, CircleAlert, ListTodo, Loader2 } from 'lucide-react'
+import { ArrowDownIcon, CheckCircle2, CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { ToolActivity } from '@/atoms/agent-atoms'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { useConversationJumpVisible } from '@/components/ai-elements/conversation'
-import { TaskProgressCard } from './TaskProgressCard'
-import { aggregateTaskItems, getTaskProgressCounts, type TaskItem } from './task-progress'
-import { getTaskProgressDisplay, hasConfirmedTaskProgressSnapshot, isSameTaskProgressRun, resolveTaskProgressRunIdentity, selectTaskProgressActivities, type TaskProgressRunIdentity } from './task-progress-overlay-state'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 const FINISH_RETENTION_MS = 4_000
 const FADE_OUT_DURATION_MS = 200
-
-function taskSignature(items: TaskItem[]): string {
-  return items
-    .map((item) => `${item.id}:${item.status}:${item.subject}:${item.activeForm ?? ''}`)
-    .join('|')
-}
 
 export interface ContextCompactionProgress {
   status: 'running' | 'success' | 'noop' | 'failed'
@@ -27,12 +18,7 @@ export interface ContextCompactionProgress {
 }
 
 interface TaskProgressOverlayProps {
-  /** 仅当前 live turn 的任务工具活动，不传历史 turn。 */
-  activities: ToolActivity[]
   streaming: boolean
-  runGeneration?: number
-  startedAt?: number
-  /** 与 Agent 任务并列的系统级短时操作；当前用于上下文压缩。 */
   contextCompaction?: ContextCompactionProgress
 }
 
@@ -44,10 +30,7 @@ export function shouldRestoreCompactionProgress(signature: string, dismissedSign
   return signature !== dismissedSignature
 }
 
-/**
- * 压缩成功后，如果同一个 stream 已恢复正常工作，保留的终态反馈不能继续覆盖新的任务进度。
- * 手动压缩直接结束时 streaming 会变为 false，因此仍可保留短时成功反馈。
- */
+/** 压缩后同一个 stream 恢复工作时，短时终态反馈不能覆盖新的执行状态。 */
 export function shouldClearRetainedCompactionForResumedStream(
   streaming: boolean,
   contextCompaction: ContextCompactionProgress | undefined,
@@ -56,23 +39,16 @@ export function shouldClearRetainedCompactionForResumedStream(
   return streaming && !contextCompaction && !!retainedCompaction
 }
 
-/** 任务完成反馈只能在整个 Agent run 结束后开始倒计时，避免仍在工作的 Agent 提前失去进度提示。 */
-export function shouldRetainTaskProgress(streaming: boolean, hasTasks: boolean): boolean {
-  return hasTasks && !streaming
-}
-
 function CompactionProgressDetails({ progress }: { progress: ContextCompactionProgress }): React.ReactElement {
   const isRunning = progress.status === 'running'
-  const isFailed = progress.status === 'failed'
-
   return (
     <div className="space-y-3 p-1">
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center">
-          {isRunning && <Loader2 className="size-4 animate-spin text-blue-500" />}
-          {progress.status === 'success' && <CheckCircle2 className="size-4 text-green-500" />}
+          {isRunning && <Loader2 className="size-4 animate-spin text-info" />}
+          {progress.status === 'success' && <CheckCircle2 className="size-4 text-success" />}
           {progress.status === 'noop' && <CheckCircle2 className="size-4 text-muted-foreground" />}
-          {isFailed && <CircleAlert className="size-4 text-destructive" />}
+          {progress.status === 'failed' && <CircleAlert className="size-4 text-destructive" />}
         </span>
         <div className="min-w-0 space-y-1">
           <div className="text-[13px] font-medium text-foreground">{progress.label}</div>
@@ -80,211 +56,91 @@ function CompactionProgressDetails({ progress }: { progress: ContextCompactionPr
         </div>
       </div>
       {progress.summary && !isRunning && (
-        <p className="max-h-28 overflow-y-auto rounded-md bg-muted/50 px-2.5 py-2 text-xs leading-5 text-muted-foreground">
-          {progress.summary}
-        </p>
+        <p className="max-h-28 overflow-y-auto rounded-md bg-muted/50 px-2.5 py-2 text-xs leading-5 text-muted-foreground">{progress.summary}</p>
       )}
     </div>
   )
 }
 
-/**
- * 取代单独的“回到最下方”按钮：任务进行时展示单行进度，点击展开完整任务卡；
- * 无任务时自动退化为原箭头按钮。
- */
-export function TaskProgressOverlay({ activities, streaming, runGeneration, startedAt, contextCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
+/** 计划已移入执行区；浮层仅保留既有的系统压缩反馈与跳至最新消息。 */
+export function TaskProgressOverlay({ streaming, contextCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
   const { scrollToBottom } = useStickToBottomContext()
   const showJump = useConversationJumpVisible()
   const jumpToLatest = (): void => {
     void scrollToBottom(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
   }
-  const liveItems = React.useMemo(
-    () => aggregateTaskItems(activities, false),
-    [activities],
-  )
-  const liveSignature = taskSignature(liveItems)
-  const hasLiveTasks = liveItems.length > 0
-  const hasLiveTaskSnapshot = hasConfirmedTaskProgressSnapshot(activities)
-  const [retainedActivities, setRetainedActivities] = React.useState<ToolActivity[]>([])
+  const [retainedCompaction, setRetainedCompaction] = React.useState<ContextCompactionProgress>()
   const [retainedSignature, setRetainedSignature] = React.useState('')
-  const [retainedRunIdentity, setRetainedRunIdentity] = React.useState<TaskProgressRunIdentity>({})
-  const [retainedCompaction, setRetainedCompaction] = React.useState<ContextCompactionProgress | undefined>()
-  const [retainedCompactionSignature, setRetainedCompactionSignature] = React.useState('')
-  const [dismissedCompactionSignature, setDismissedCompactionSignature] = React.useState('')
+  const [dismissedSignature, setDismissedSignature] = React.useState('')
   const [visible, setVisible] = React.useState(false)
   const [fading, setFading] = React.useState(false)
   const [open, setOpen] = React.useState(false)
-  const sameRetainedRun = isSameTaskProgressRun(retainedRunIdentity, { runGeneration, startedAt })
+  const liveSignature = contextCompaction ? compactionSignature(contextCompaction) : ''
 
-  // 新一轮开始时清除上一轮反馈；首帧的 display 也检查代际，避免 effect 执行前短暂显示旧阶段。
-  React.useEffect(() => {
-    if (!sameRetainedRun) {
-      setRetainedActivities([])
-      setRetainedSignature('')
-      setFading(false)
-      setVisible(false)
-      setOpen(false)
-    }
-    const nextIdentity = resolveTaskProgressRunIdentity(retainedRunIdentity, { runGeneration, startedAt })
-    if (
-      nextIdentity.runGeneration !== retainedRunIdentity.runGeneration
-      || nextIdentity.startedAt !== retainedRunIdentity.startedAt
-    ) setRetainedRunIdentity(nextIdentity)
-  }, [sameRetainedRun, runGeneration, startedAt, retainedRunIdentity])
-
-  // liveMessages 在收尾时会被清空；保留最后一份任务快照，才能完成 4 秒反馈。
-  React.useEffect(() => {
-    if (!hasLiveTaskSnapshot || (sameRetainedRun && liveSignature === retainedSignature)) return
-    setRetainedActivities(activities)
-    setRetainedSignature(liveSignature)
-    setRetainedRunIdentity((retained) => resolveTaskProgressRunIdentity(retained, { runGeneration, startedAt }))
-    setFading(false)
-    setVisible(hasLiveTasks)
-  }, [activities, hasLiveTasks, hasLiveTaskSnapshot, liveSignature, retainedSignature, sameRetainedRun, runGeneration, startedAt])
-
-  const liveCompactionSignature = contextCompaction ? compactionSignature(contextCompaction) : ''
   React.useEffect(() => {
     if (!contextCompaction) return
-    if (contextCompaction.status === 'running' && dismissedCompactionSignature) {
-      setDismissedCompactionSignature('')
-    }
-    if (
-      liveCompactionSignature === retainedCompactionSignature
-      || !shouldRestoreCompactionProgress(liveCompactionSignature, dismissedCompactionSignature)
-    ) return
+    if (contextCompaction.status === 'running' && dismissedSignature) setDismissedSignature('')
+    if (liveSignature === retainedSignature || !shouldRestoreCompactionProgress(liveSignature, dismissedSignature)) return
     setRetainedCompaction(contextCompaction)
-    setRetainedCompactionSignature(liveCompactionSignature)
+    setRetainedSignature(liveSignature)
     setFading(false)
     setVisible(true)
-  }, [contextCompaction, dismissedCompactionSignature, liveCompactionSignature, retainedCompactionSignature])
+  }, [contextCompaction, dismissedSignature, liveSignature, retainedSignature])
 
   React.useEffect(() => {
     if (!shouldClearRetainedCompactionForResumedStream(streaming, contextCompaction, retainedCompaction)) return
     setRetainedCompaction(undefined)
-    setRetainedCompactionSignature('')
+    setRetainedSignature('')
     setFading(false)
-    setVisible(hasLiveTasks)
-  }, [streaming, contextCompaction, retainedCompaction, hasLiveTasks])
+    setVisible(false)
+    setOpen(false)
+  }, [streaming, contextCompaction, retainedCompaction])
 
-  const displayActivities = selectTaskProgressActivities(activities, retainedActivities, sameRetainedRun)
-  const displayItems = aggregateTaskItems(displayActivities, !streaming)
-  const displaySignature = hasLiveTaskSnapshot ? liveSignature : sameRetainedRun ? retainedSignature : ''
-  const displayCompaction = contextCompaction ?? retainedCompaction
-  // 上游每次 liveMessages 更新都会重建 progress 对象；超时 effect 必须依赖稳定签名，不能依赖对象引用。
-  const displayCompactionSignature = displayCompaction ? compactionSignature(displayCompaction) : ''
-  const hasDisplayTasks = displayItems.length > 0
-  const compactionIsRunning = displayCompaction?.status === 'running'
-  const shouldRetainFinishedProgress = displayCompaction
-    ? !compactionIsRunning && displayCompaction.status !== 'failed'
-    : shouldRetainTaskProgress(streaming, hasDisplayTasks)
-  const hideKey = shouldRetainFinishedProgress
-    ? displayCompactionSignature
-      ? `${displayCompactionSignature}:${streaming}`
-      : `${displaySignature}:${streaming}`
-    : null
-
+  const progress = contextCompaction ?? retainedCompaction
+  const signature = progress ? compactionSignature(progress) : ''
+  const hideKey = progress && progress.status !== 'running' && progress.status !== 'failed' ? `${signature}:${streaming}` : ''
   React.useEffect(() => {
-    if (!hideKey) {
-      if (hasDisplayTasks) {
-        setFading(false)
-        setVisible(true)
-      }
-      return
-    }
-
-    const fadeTimer = window.setTimeout(() => {
-      setFading(true)
-    }, FINISH_RETENTION_MS - FADE_OUT_DURATION_MS)
+    if (!hideKey) return
+    const fadeTimer = window.setTimeout(() => setFading(true), FINISH_RETENTION_MS - FADE_OUT_DURATION_MS)
     const hideTimer = window.setTimeout(() => {
-      if (displayCompactionSignature) {
-        setDismissedCompactionSignature(displayCompactionSignature)
-      }
+      setDismissedSignature(signature)
       setVisible(false)
       setOpen(false)
-      setRetainedActivities([])
-      setRetainedSignature('')
       setRetainedCompaction(undefined)
-      setRetainedCompactionSignature('')
+      setRetainedSignature('')
     }, FINISH_RETENTION_MS)
-    return () => {
-      window.clearTimeout(fadeTimer)
-      window.clearTimeout(hideTimer)
-    }
-  }, [hasDisplayTasks, displayCompactionSignature, hideKey])
+    return () => { window.clearTimeout(fadeTimer); window.clearTimeout(hideTimer) }
+  }, [hideKey, signature])
 
-  const { completed: completedCount } = getTaskProgressCounts(displayItems)
-  const taskDisplay = getTaskProgressDisplay(displayItems, streaming)
-  const showTaskProgress = visible && (hasDisplayTasks || !!displayCompaction)
-
-  if (!showTaskProgress && !showJump) return null
-
-  if (!showTaskProgress) {
+  if ((!visible || !progress) && !showJump) return null
+  if (!visible || !progress) {
     return (
-      <Button
-        className="absolute bottom-[26px] left-1/2 size-10 -translate-x-1/2 rounded-md border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm transition-[background-color,transform] duration-200 hover:bg-accent/80 active:scale-[0.96]"
-        onClick={jumpToLatest}
-        aria-label="跳至最新消息"
-        title="跳至最新消息"
-        type="button"
-        variant="ghost"
+      <Button data-icon-button="true"
+        className="absolute bottom-[26px] left-1/2 size-10 -translate-x-1/2 rounded-md border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm transition-colors duration-200 hover:bg-accent/80"
+        onClick={jumpToLatest} aria-label="跳至最新消息" title="跳至最新消息" type="button" variant="ghost"
       >
         <ArrowDownIcon className="size-4" />
       </Button>
     )
   }
-
   return (
-    <div className={cn(
-      'pointer-events-none absolute bottom-[22px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 transition-opacity duration-200',
-      fading && 'opacity-0',
-    )}>
+    <div className={cn('pointer-events-none absolute bottom-[22px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 transition-opacity duration-200', fading && 'opacity-0')}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'pointer-events-auto flex min-h-10 max-w-[min(460px,calc(100vw-9rem))] items-center gap-2 rounded-md border border-border/60 bg-background/85 py-2 pr-3 pl-2.5 text-left shadow-sm backdrop-blur-sm',
-              'transition-[background-color,transform] duration-200 hover:bg-accent/80 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            )}
-          >
-            {displayCompaction ? (
-              <>
-                {displayCompaction.status === 'running' && <Loader2 className="size-3.5 shrink-0 animate-spin text-blue-500" />}
-                {displayCompaction.status === 'success' && <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />}
-                {displayCompaction.status === 'noop' && <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />}
-                {displayCompaction.status === 'failed' && <CircleAlert className="size-3.5 shrink-0 text-destructive" />}
-                <span className="truncate text-[13px] text-foreground/90">{displayCompaction.label}</span>
-              </>
-            ) : (
-              <>
-                {taskDisplay.running
-                  ? <Loader2 className="size-3.5 shrink-0 animate-spin text-blue-500" />
-                  : <ListTodo className="size-3.5 shrink-0 text-muted-foreground" />}
-                <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                  {completedCount}/{displayItems.length}
-                </span>
-                <span className="truncate text-[13px] text-foreground/90">
-                  {taskDisplay.label}
-                </span>
-              </>
-            )}
+          <button type="button" className="pointer-events-auto flex min-h-10 max-w-[min(460px,calc(100vw-9rem))] items-center gap-2 rounded-md border border-border/60 bg-background/85 py-2 pr-3 pl-2.5 text-left shadow-sm backdrop-blur-sm transition-colors duration-200 hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {progress.status === 'running' && <Loader2 className="size-3.5 shrink-0 animate-spin text-info" />}
+            {progress.status === 'success' && <CheckCircle2 className="size-3.5 shrink-0 text-success" />}
+            {progress.status === 'noop' && <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />}
+            {progress.status === 'failed' && <CircleAlert className="size-3.5 shrink-0 text-destructive" />}
+            <FadeTitle className="truncate text-[13px] text-foreground/90">{progress.label}</FadeTitle>
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-[min(420px,calc(100vw-2rem))] rounded-md border-border/60 bg-background/95 p-2 backdrop-blur-sm" side="top" align="center">
-          {displayCompaction
-            ? <CompactionProgressDetails progress={displayCompaction} />
-            : <TaskProgressCard activities={displayActivities} streamEnded={!streaming} alwaysExpanded />}
+          <CompactionProgressDetails progress={progress} />
         </PopoverContent>
       </Popover>
-
       {showJump && (
-        <Button
-          aria-label="回到最下方"
-          className="pointer-events-auto size-10 rounded-md border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm transition-[background-color,transform] duration-200 hover:bg-accent/80 active:scale-[0.96]"
-          onClick={jumpToLatest}
-          type="button"
-          variant="ghost"
-        >
+        <Button data-icon-button="true" aria-label="回到最下方" className="pointer-events-auto size-10 rounded-md border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm transition-colors duration-200 hover:bg-accent/80" onClick={jumpToLatest} type="button" variant="ghost">
           <ArrowDownIcon className="size-3.5" />
         </Button>
       )}

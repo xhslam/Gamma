@@ -14,6 +14,7 @@
 import * as React from 'react'
 import { Clock, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { attachScrollFade } from '@/components/ui/scroll-fade'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   SessionMiniMapPopover,
@@ -46,9 +47,9 @@ export interface RailRecentItem {
 
 const RAIL_STATUS_CLASS: Record<SessionIndicatorStatus, string> = {
   idle: 'hidden',
-  running: 'border-blue-500 animate-pulse',
-  blocked: 'border-orange-500',
-  completed: 'border-emerald-500',
+  running: 'border-info animate-pulse',
+  blocked: 'border-warning',
+  completed: 'border-success',
 }
 
 function getRailItemChildCount(item: RailRecentItem): number {
@@ -163,6 +164,10 @@ export function CollapsedSessionRail({
   onSelect: (item: RailRecentItem) => void
   onSelectChild: (session: AgentSessionMeta) => void
 }): React.ReactElement {
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+  React.useLayoutEffect(() => {
+    if (scrollRef.current) return attachScrollFade(scrollRef.current, { fadeSize: 24 })
+  }, [])
   // ID 与快照必须一起提交；旧面板的延迟关闭不能清理新面板的快照。
   const [popoverState, setPopoverState] = React.useState<CollapsedRailPopoverState>({
     openPopoverId: null,
@@ -190,7 +195,7 @@ export function CollapsedSessionRail({
   }, [effectiveOpenPopoverId, openPopoverId])
 
   return (
-    <div className="mt-2 flex-1 min-h-0 w-full overflow-y-auto scrollbar-thin">
+    <div ref={scrollRef} className="mt-2 flex-1 min-h-0 w-full overflow-y-auto scrollbar-thin">
       <div className="flex flex-col items-center gap-0.5 pb-2">
         {visibleItems.map((item) => (
           <RailRecentButton

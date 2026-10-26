@@ -8,8 +8,6 @@
 import * as React from 'react'
 import { toast } from 'sonner'
 import {
-  ChevronDown,
-  ChevronRight,
   File as FileIcon,
   Folder,
   FolderOpen,
@@ -25,6 +23,8 @@ import type { SkillFileNode, SkillFileContent } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
 import { SettingsCard } from './primitives'
 import { cn } from '@/lib/utils'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 interface SkillFilesPanelProps {
   workspaceSlug: string
@@ -332,7 +332,7 @@ export function SkillFilesPanel({ workspaceSlug, skillSlug, contentVersion = 0, 
               })()}
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <button data-icon-button="true"
             type="button"
             title="新建文件（根目录）"
             onClick={() => startCreate('file', '')}
@@ -340,7 +340,7 @@ export function SkillFilesPanel({ workspaceSlug, skillSlug, contentVersion = 0, 
           >
             <FilePlus size={14} />
           </button>
-          <button
+          <button data-icon-button="true"
             type="button"
             title="新建目录（根目录）"
             onClick={() => startCreate('directory', '')}
@@ -348,7 +348,7 @@ export function SkillFilesPanel({ workspaceSlug, skillSlug, contentVersion = 0, 
           >
             <FolderPlus size={14} />
           </button>
-          <button
+          <button data-icon-button="true"
             type="button"
             title="刷新"
             onClick={() => void refreshTree()}
@@ -543,9 +543,9 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
 
   return (
     <li>
-      <div
+      <div data-disclosure-group=""
         className={cn(
-          'group flex items-center gap-1 px-1 py-0.5 rounded text-xs cursor-pointer select-none',
+          'gamma-list-row group flex items-center gap-1 px-1 rounded text-xs cursor-pointer select-none',
           isSelected ? 'bg-accent text-foreground' : 'hover:bg-accent/60 text-foreground/80',
         )}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
@@ -553,7 +553,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
       >
         <span className="shrink-0 w-3.5">
           {node.type === 'directory' ? (
-            isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
+            <button type="button" data-disclosure-trigger="" className="gamma-disclosure-button" style={{ width: 12 }} aria-expanded={isExpanded} aria-label={(isExpanded ? '收起目录 ' : '展开目录 ') + node.name} onClick={(event) => { event.stopPropagation(); if (!isRenaming) props.onSelect(node) }}><DisclosureChevron expanded={isExpanded} size={12} /></button>
           ) : null}
         </span>
         <span className="shrink-0 text-muted-foreground">
@@ -577,7 +577,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
             className="flex-1 min-w-0 bg-background border border-border rounded px-1 text-xs"
           />
         ) : (
-          <span className="flex-1 truncate">{node.name}</span>
+          <FadeTitle className="flex-1 truncate">{node.name}</FadeTitle>
         )}
 
         {/* Action buttons */}
@@ -585,7 +585,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
           <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
             {node.type === 'directory' && (
               <>
-                <button
+                <button data-icon-button="true"
                   onClick={(e) => {
                     e.stopPropagation()
                     props.onStartCreate('file', node.relativePath)
@@ -595,7 +595,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
                 >
                   <FilePlus size={11} />
                 </button>
-                <button
+                <button data-icon-button="true"
                   onClick={(e) => {
                     e.stopPropagation()
                     props.onStartCreate('directory', node.relativePath)
@@ -607,7 +607,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
                 </button>
               </>
             )}
-            <button
+            <button data-icon-button="true"
               onClick={(e) => {
                 e.stopPropagation()
                 props.onStartRename(node)
@@ -617,7 +617,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
             >
               <Pencil size={11} />
             </button>
-            <button
+            <button data-icon-button="true"
               onClick={(e) => {
                 e.stopPropagation()
                 props.onDelete(node)

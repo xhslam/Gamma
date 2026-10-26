@@ -570,7 +570,7 @@ function createMarkdownVideoView(initialNode: ProseMirrorNode, fileAccessRef: Fi
 
   const video = document.createElement('video')
   video.controls = true
-  setClass(video, 'max-h-[520px] max-w-full rounded-md border border-border/30 bg-black')
+  setClass(video, 'max-h-[520px] max-w-full rounded-md border border-border/30 bg-overlay')
   figure.appendChild(video)
 
   const caption = document.createElement('figcaption')

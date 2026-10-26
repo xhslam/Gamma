@@ -9,7 +9,7 @@ import * as React from 'react'
 import { ComputerUsePreview } from '../computer-use/ComputerUsePreview'
 import { AutomaticMemoryNotice } from '@/components/agent-skills/AutomaticMemoryNotice'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { RotateCw, AlertTriangle, CheckCircle2, Ban, ChevronDown, ChevronRight } from 'lucide-react'
+import { RotateCw, AlertTriangle, CheckCircle2, Ban} from 'lucide-react'
 import { WelcomeEmptyState } from '@/components/welcome/WelcomeEmptyState'
 import { CodeFieldBackground } from '@/components/welcome/CodeFieldBackground'
 import {
@@ -42,7 +42,7 @@ import {
 import { toTranscript } from '@gamma/session-core'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { groupIntoTurns, AssistantLogo, MessageGroupRenderer, getGroupId, getGroupPreview, extractUserText, buildTaskProgressDataForTurn, type MessageGroup } from './SDKMessageRenderer'
+import { AssistantLogo, MessageGroupRenderer, getGroupId, getGroupPreview, extractUserText, type MessageGroup } from './SDKMessageRenderer'
 import { buildLiveGroupSet } from './live-group-set'
 import { AgentBrowserLinkProvider } from '@/components/browser/AgentBrowserLinkProvider'
 import { AgentHistorySelectionLayer } from './AgentHistorySelectionLayer'
@@ -52,6 +52,7 @@ import type { AgentEventUsage, RetryAttempt, SDKAssistantMessage, SDKMessage, SD
 import { getSDKCompactStatus } from '@gamma/shared'
 import { agentLiveMessagesAtomFamily, agentSessionStreamingStateAtomFamily, type AgentStreamState } from '@/atoms/agent-atoms'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 const EMPTY_SDK_MESSAGES: SDKMessage[] = []
 
@@ -371,42 +372,38 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
   const isTerminal = retrying.phase === 'exhausted' || retrying.phase === 'cancelled'
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-3 mb-3">
-      <button
+    <div className="rounded-lg border border-warning bg-muted dark:border-warning dark:bg-muted p-3 mb-3">
+      <button data-disclosure-trigger="" aria-expanded={expanded}
         type="button"
         className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
         onClick={() => setExpanded(!expanded)}
       >
         {retrying.phase === 'succeeded' ? (
-          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <CheckCircle2 className="size-4 text-success dark:text-success shrink-0" />
         ) : isTerminal ? (
           retrying.phase === 'cancelled'
-            ? <Ban className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            : <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            ? <Ban className="size-4 text-muted-foreground dark:text-muted-foreground shrink-0" />
+            : <AlertTriangle className="size-4 text-muted-foreground dark:text-muted-foreground shrink-0" />
         ) : (
-          <RotateCw className="size-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+          <RotateCw className="size-4 animate-spin text-muted-foreground dark:text-muted-foreground shrink-0" />
         )}
-        <span className="text-sm text-amber-900 dark:text-amber-100 flex-1 tabular-nums">
+        <span className="text-sm text-muted-foreground dark:text-muted-foreground flex-1 tabular-nums">
           {statusText}
           {retrying.reason && ` · ${retrying.reason}`}
         </span>
-        {expanded ? (
-          <ChevronDown className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
-        ) : (
-          <ChevronRight className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
-        )}
+        <DisclosureChevron expanded={expanded} size={16} className="size-4 text-muted-foreground dark:text-muted-foreground shrink-0" />
       </button>
 
       {expanded && (
-        <div className="mt-3 space-y-3 border-t border-amber-200 dark:border-amber-800 pt-3">
+        <div className="mt-3 space-y-3 border-t border-warning dark:border-warning pt-3">
           {retrying.maxTotalAttempts != null && (
-            <div className="text-xs text-amber-700 dark:text-amber-300 tabular-nums">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground tabular-nums">
               本轮已安排 {retrying.totalAttempt ?? 0}/{retrying.maxTotalAttempts} 次自动恢复
             </div>
           )}
           {retrying.history.length > 0 && (
             <>
-              <div className="text-xs font-medium text-amber-900 dark:text-amber-100">
+              <div className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
                 已执行的恢复记录：
               </div>
               {retrying.history.map((attempt, index) => (
@@ -419,13 +416,13 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
             </>
           )}
           {retrying.phase === 'scheduled' && (
-            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 pl-6 tabular-nums">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground pl-6 tabular-nums">
               <RotateCw className="size-3 animate-spin" />
               <span>{countdown > 0 ? `等待 ${countdown} 秒后开始第 ${retrying.currentAttempt} 次继续当前回答` : `即将开始第 ${retrying.currentAttempt} 次继续当前回答`}</span>
             </div>
           )}
           {retrying.phase === 'running' && (
-            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 pl-6 tabular-nums">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground pl-6 tabular-nums">
               <RotateCw className="size-3 animate-spin" />
               <span>正在执行第 {retrying.currentAttempt} 次继续当前回答…</span>
             </div>
@@ -459,16 +456,16 @@ function RetryAttemptItem({
       <div className="flex items-start gap-2">
         <span className="text-destructive shrink-0">❌</span>
         <div className="flex-1 min-w-0 space-y-1">
-          <div className="text-xs text-amber-900 dark:text-amber-100 tabular-nums">
+          <div className="text-xs text-muted-foreground dark:text-muted-foreground tabular-nums">
             第 {attempt.attempt} 次恢复前的错误（{time}）- {attempt.reason}
           </div>
-          <div className="text-xs text-amber-700 dark:text-amber-300 font-mono break-words">
+          <div className="text-xs text-muted-foreground dark:text-muted-foreground font-mono break-words">
             {attempt.errorMessage}
           </div>
 
           {/* 环境信息 */}
           {attempt.environment && (
-            <div className="text-[11px] text-amber-600 dark:text-amber-400 space-y-0.5">
+            <div className="text-[11px] text-muted-foreground dark:text-muted-foreground space-y-0.5">
               <div>运行时: {attempt.environment.runtime}</div>
               <div>平台: {attempt.environment.platform}</div>
               <div>模型: {attempt.environment.model}</div>
@@ -479,20 +476,16 @@ function RetryAttemptItem({
           {/* 可展开的 stderr */}
           {attempt.stderr && (
             <div className="mt-2">
-              <button
+              <button data-disclosure-trigger="" aria-expanded={showStderr}
                 type="button"
-                className="text-[11px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
+                className="text-[11px] text-muted-foreground dark:text-muted-foreground hover:underline flex items-center gap-1"
                 onClick={() => setShowStderr(!showStderr)}
               >
-                {showStderr ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
+                <DisclosureChevron expanded={showStderr} size={12} className="size-3" />
                 显示 stderr 输出
               </button>
               {showStderr && (
-                <pre className="mt-1 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                <pre className="mt-1 text-[10px] text-muted-foreground dark:text-muted-foreground bg-muted dark:bg-muted p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                   {attempt.stderr}
                 </pre>
               )}
@@ -502,20 +495,16 @@ function RetryAttemptItem({
           {/* 可展开的堆栈跟踪 */}
           {attempt.stack && (
             <div className="mt-2">
-              <button
+              <button data-disclosure-trigger="" aria-expanded={showStack}
                 type="button"
-                className="text-[11px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
+                className="text-[11px] text-muted-foreground dark:text-muted-foreground hover:underline flex items-center gap-1"
                 onClick={() => setShowStack(!showStack)}
               >
-                {showStack ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
+                <DisclosureChevron expanded={showStack} size={12} className="size-3" />
                 显示堆栈跟踪
               </button>
               {showStack && (
-                <pre className="mt-1 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                <pre className="mt-1 text-[10px] text-muted-foreground dark:text-muted-foreground bg-muted dark:bg-muted p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                   {attempt.stack}
                 </pre>
               )}
@@ -1040,24 +1029,6 @@ export const AgentMessages = React.memo(function AgentMessages({
       .join('\u0000')
   ), [allSDKMessages])
 
-  // 在当前 run 的全部 live turn 中汇总任务。压缩边界或后台唤醒会拆开 turn，
-  // 不能只取最后一段，否则此前已创建但未再次更新的任务会从进度卡消失。
-  const liveTaskActivities = React.useMemo(() => {
-    const currentRunMessages = (liveMessages ?? []).filter((message) => {
-      const record = message as Record<string, unknown>
-      const messageRunGeneration = record._gammaLiveRunGeneration
-      const messageRunStartedAt = record._gammaLiveRunStartedAt
-      if (streamState?.runGeneration != null && typeof messageRunGeneration === 'number') {
-        return messageRunGeneration === streamState.runGeneration
-      }
-      return startedAt == null || messageRunStartedAt == null || messageRunStartedAt === startedAt
-    })
-    return groupIntoTurns(currentRunMessages, sessionModelId)
-      .flatMap((group) => group.type === 'assistant-turn'
-        ? buildTaskProgressDataForTurn(group).taskActivities
-        : [])
-  }, [liveMessages, sessionModelId, startedAt, streamState?.runGeneration])
-
   const contextCompaction = React.useMemo(
     () => getContextCompactionProgress(liveMessages ?? [], streamState?.isCompacting, streamState?.contextCompaction),
     [liveMessages, streamState?.isCompacting, streamState?.contextCompaction],
@@ -1264,10 +1235,7 @@ export const AgentMessages = React.memo(function AgentMessages({
         <ScrollMinimap items={minimapItems} searchMessages={searchMessages} />
         <TaskProgressOverlay
           key={sessionId}
-          activities={liveTaskActivities}
           streaming={streaming}
-          runGeneration={streamState?.runGeneration}
-          startedAt={startedAt}
           contextCompaction={contextCompaction}
         />
           </Conversation>

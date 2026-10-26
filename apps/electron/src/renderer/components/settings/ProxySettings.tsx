@@ -138,7 +138,7 @@ export function ProxySettings(): React.ReactElement {
                       <div
                         className={cn(
                           'flex items-center gap-1.5 text-xs mt-2',
-                          detectResult.success ? 'text-emerald-600' : 'text-muted-foreground'
+                          detectResult.success ? 'text-success' : 'text-muted-foreground'
                         )}
                       >
                         {detectResult.success ? (

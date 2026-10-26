@@ -1,0 +1,123 @@
+/* 全局暖色调色板的唯一来源。通道别名兼容现有 hsl(var(--token)) 消费方。
+ * 亮色强调色复用同一陶土色；亮色边框使用主文字的 8% 透明度。
+ * 状态依靠图标和文案区分，不另引入红、绿、蓝调色板。
+ */
+:root {
+  --palette-dark-background: #1F1E1D;
+  --palette-dark-background-hsl: 30.00000000 3.33333333% 11.76470588%;
+  --palette-dark-panel: #262624;
+  --palette-dark-panel-hsl: 60.00000000 2.70270270% 14.50980392%;
+  --palette-dark-inset: #30302E;
+  --palette-dark-inset-hsl: 60.00000000 2.12765957% 18.43137255%;
+  --palette-dark-text: #F0EEE6;
+  --palette-dark-text-hsl: 48.00000000 25.00000000% 92.15686275%;
+  --palette-dark-secondary: #B0AEA5;
+  --palette-dark-secondary-hsl: 49.09090909 6.50887574% 66.86274510%;
+  --palette-dark-tertiary: #85837B;
+  --palette-dark-tertiary-hsl: 48.00000000 3.93700787% 50.19607843%;
+  --palette-accent: #D97757;
+  --palette-accent-hsl: 14.76923077 63.10679612% 59.60784314%;
+  --palette-light-background: #FAF9F5;
+  --palette-light-background-hsl: 48.00000000 33.33333333% 97.05882353%;
+  --palette-light-panel: #FFFFFF;
+  --palette-light-panel-hsl: 0.00000000 0.00000000% 100.00000000%;
+  --palette-light-inset: #F0EEE6;
+  --palette-light-inset-hsl: 48.00000000 25.00000000% 92.15686275%;
+  --palette-light-text: #141413;
+  --palette-light-text-hsl: 60.00000000 2.56410256% 7.64705882%;
+  --palette-light-secondary: #5E5D59;
+  --palette-light-secondary-hsl: 48.00000000 2.73224044% 35.88235294%;
+  --palette-light-tertiary: #8A887F;
+  --palette-light-tertiary-hsl: 49.09090909 4.48979592% 51.96078431%;
+
+  color-scheme: light;
+  accent-color: hsl(var(--primary));
+  --color-background: var(--palette-light-background);
+  --color-panel: var(--palette-light-panel);
+  --color-inset: var(--palette-light-inset);
+  --color-text: var(--palette-light-text);
+  --color-secondary: var(--palette-light-secondary);
+  --color-tertiary: var(--palette-light-tertiary);
+  --color-accent: var(--palette-accent);
+  --color-border: hsl(var(--palette-light-text-hsl) / 0.08);
+  --color-overlay: var(--palette-dark-background);
+  --color-inverse-text: var(--palette-dark-text);
+
+  --background: var(--palette-light-background-hsl);
+  --foreground: var(--palette-light-text-hsl);
+  --panel: var(--palette-light-panel-hsl);
+  --inset: var(--palette-light-inset-hsl);
+  --text-secondary: var(--palette-light-secondary-hsl);
+  --text-tertiary: var(--palette-light-tertiary-hsl);
+  --border: var(--palette-light-text-hsl) / 0.08;
+  --primary: var(--palette-accent-hsl);
+  /* 陶土底色配深色文字，避免浅色字在强调底色上对比不足。 */
+  --primary-foreground: var(--palette-light-text-hsl);
+  --muted: var(--inset);
+  --muted-foreground: var(--text-secondary);
+  --tertiary-foreground: var(--text-tertiary);
+  --secondary: var(--inset);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--inset);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--primary);
+  --destructive-foreground: var(--primary-foreground);
+  --success: var(--text-secondary);
+  /* 改动统计沿用暖色语义：新增为次级文字、未跟踪为三级文字，不引入红绿蓝。 */
+  --diff-addition: var(--success);
+  --diff-untracked: var(--text-tertiary);
+  --warning: var(--primary);
+  --info: var(--text-secondary);
+  --overlay: var(--palette-dark-background-hsl);
+  --inverse-foreground: var(--palette-dark-text-hsl);
+  --inverse: var(--palette-light-text-hsl);
+  --card: var(--panel);
+  --card-foreground: var(--foreground);
+  --popover: var(--panel);
+  --popover-foreground: var(--foreground);
+  --dialog: var(--panel);
+  --dialog-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--primary);
+  --stop-hover-bg: hsl(var(--inset));
+  --content-area: var(--panel);
+  --sidebar-surface: var(--panel);
+  --sidebar-primary-foreground: var(--foreground);
+  --tabbar-surface: var(--background);
+  --tab-indicator: var(--primary);
+  --sidebar-control-surface: var(--panel);
+  --sidebar-control-surface-hover: var(--inset);
+  --sidebar-control-stroke: var(--border);
+  --input-surface: var(--panel);
+  --tab-surface: var(--panel);
+  --tooltip: var(--panel);
+  --tooltip-foreground: var(--foreground);
+  --tooltip-muted: var(--text-secondary);
+  --code-bg: var(--inset);
+  --code-foreground: var(--foreground);
+  --syntax-text: hsl(var(--foreground));
+  --syntax-secondary: hsl(var(--text-secondary));
+  --syntax-accent: hsl(var(--primary));
+  --dashed-border: var(--text-tertiary);
+  --dashed-border-hover: var(--text-secondary);
+  --shadow-ink: var(--palette-dark-background-hsl);
+  --shadow-ink-rgb: 31 30 29;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-background: var(--palette-dark-background);
+  --color-panel: var(--palette-dark-panel);
+  --color-inset: var(--palette-dark-inset);
+  --color-text: var(--palette-dark-text);
+  --color-secondary: var(--palette-dark-secondary);
+  --color-tertiary: var(--palette-dark-tertiary);
+  --color-border: hsl(var(--palette-light-background-hsl) / 0.08);
+  --background: var(--palette-dark-background-hsl);
+  --foreground: var(--palette-dark-text-hsl);
+  --panel: var(--palette-dark-panel-hsl);
+  --inset: var(--palette-dark-inset-hsl);
+  --text-secondary: var(--palette-dark-secondary-hsl);
+  --text-tertiary: var(--palette-dark-tertiary-hsl);
+  --border: var(--palette-light-background-hsl) / 0.08;
+}

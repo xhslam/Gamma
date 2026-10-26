@@ -53,6 +53,7 @@ import { cn } from '@/lib/utils'
 import { detectIsMac, detectIsWindows } from '@/lib/platform'
 import { getEffectiveSoundPackId } from '@/lib/notification-sound-selection'
 import type { NotificationSoundId, NotificationSoundType, NotificationSoundSettings, ProductivityToolsSettings } from '@/types/settings'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** emoji-mart 选择回调的 emoji 对象类型 */
 interface EmojiMartEmoji {
@@ -205,10 +206,10 @@ export function GeneralSettings(): React.ReactElement {
                   <div
                     className={cn(
                       'absolute inset-0 rounded-[20%] flex items-center justify-center',
-                      'bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity'
+                      'bg-overlay/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity'
                     )}
                   >
-                    <Camera className="size-5 text-white" />
+                    <Camera className="size-5 text-inverse-foreground" />
                   </div>
                 </div>
               </PopoverTrigger>
@@ -497,7 +498,7 @@ function SoundLibrary({ sounds, disabled, onSoundChange }: SoundLibraryProps): R
                 activeType === scene.type ? 'border-foreground bg-muted/55 text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/35 hover:text-foreground'
               )}
             >
-              <span className="truncate text-xs font-medium">{scene.label}</span>
+              <FadeTitle className="truncate text-xs font-medium">{scene.label}</FadeTitle>
               <span className="flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-[0.08em] opacity-75">
                 <span className="size-1.5 rounded-full" style={{ backgroundColor: sceneSound?.color }} />
                 {sceneId === 'none' ? '关' : sceneSound?.label}
@@ -507,7 +508,7 @@ function SoundLibrary({ sounds, disabled, onSoundChange }: SoundLibraryProps): R
         })}
       </div>
 
-      <div className="mt-3 overflow-hidden border-2 border-foreground/70 bg-background/45 shadow-[4px_4px_0_rgba(122,110,206,0.4)]">
+      <div className="mt-3 overflow-hidden border-2 border-foreground/70 bg-background/45 shadow-[4px_4px_0_hsl(var(--shadow-ink)/0.4)]">
         <div className="grid grid-cols-[88px_1fr_auto] items-center gap-3 px-3 py-2.5 sm:grid-cols-[104px_1fr_auto]">
           <div className="relative aspect-[1.25] overflow-hidden border border-foreground/50 bg-muted">
             <img src={selectedSound.image} alt="" className="size-full object-cover" />
@@ -515,13 +516,13 @@ function SoundLibrary({ sounds, disabled, onSoundChange }: SoundLibraryProps): R
           </div>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
-              <span className="truncate text-base font-semibold text-foreground">{activeScene.label} · {currentId === 'none' ? '已关闭' : selectedSound.label}</span>
+              <FadeTitle className="truncate text-base font-semibold text-foreground">{activeScene.label} · {currentId === 'none' ? '已关闭' : selectedSound.label}</FadeTitle>
               <span className="hidden shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground sm:inline">{selectedSound.duration} S · ONE-SHOT</span>
             </div>
             <p className="mt-1 truncate text-xs text-muted-foreground">{selectedSound.description}</p>
             <Waveform color={selectedSound.color} />
           </div>
-          <button
+          <button data-icon-button="true"
             type="button"
             disabled={disabled || currentId === 'none'}
             aria-label={`试听${activeScene.label}`}
@@ -555,13 +556,13 @@ function SoundLibrary({ sounds, disabled, onSoundChange }: SoundLibraryProps): R
                   </span>
                   <span className="flex min-w-0 flex-col gap-0.5 px-2 py-1.5 pr-8">
                     <span className="flex min-w-0 items-center justify-between gap-1">
-                      <span className="truncate text-xs font-medium text-foreground">{sound.label}</span>
+                      <FadeTitle className="truncate text-xs font-medium text-foreground">{sound.label}</FadeTitle>
                       <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: sound.color }} />
                     </span>
                     <span className="truncate text-[10px] leading-4 text-muted-foreground">{sound.description}</span>
                   </span>
                 </button>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   disabled={disabled}
                   aria-label={`试听 ${sound.label}`}

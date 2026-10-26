@@ -113,7 +113,7 @@ const CodeLine = React.memo(function CodeLine({ tokens, rawLine }: CodeLineProps
   return (
     <span className="line">
       {tokens.map((token, i) => (
-        <span key={i} style={token.color ? { color: token.color } : undefined}>
+        <span key={i} style={token.color ? { color: 'var(--syntax-text)' } : undefined}>
           {token.content}
         </span>
       ))}
@@ -225,7 +225,7 @@ export function CodeBlock({ children, onCopy }: CodeBlockProps): React.ReactElem
       <pre
         className="shiki overflow-x-auto p-4 m-0 text-[0.875em] leading-[1.6] bg-[hsl(var(--code-bg))]"
         style={{
-          color: tokenResult?.fgColor ?? '#e1e4e8',
+          color: 'var(--syntax-text)',
           borderRadius: '0 0 8px 8px',
         }}
       >

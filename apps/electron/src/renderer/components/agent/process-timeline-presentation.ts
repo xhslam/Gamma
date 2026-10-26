@@ -23,7 +23,7 @@ export function getProcessActionLabel(block: SDKToolUseBlock): ProcessActionLabe
   switch (name.toLowerCase()) {
     case 'bash':
     case 'terminalexecute':
-      return { action: intent?.replace(/^(?:正在)?执行\s*/, '') ?? '', object: firstString(input, 'command') ?? '命令', monospace: true }
+      return { action: intent?.replace(/^(?:正在)?执行\s*/, '') || '执行', object: firstString(input, 'command') ?? '命令', monospace: true }
     case 'read': return { action: '读取', object: path ?? '文件', monospace: !!path }
     case 'write': return { action: '写入', object: path ?? '文件', monospace: !!path }
     case 'edit':
@@ -40,8 +40,15 @@ export function getProcessActionLabel(block: SDKToolUseBlock): ProcessActionLabe
     case 'memory_write':
     case 'memory_append':
     case 'memory_str_replace': return { action: '更新记忆', object: path, monospace: true }
-    default:
-      return { action: (intent ?? getToolPhrase(name, input).label).replace(/^(?:正在)?执行\s*/, '') }
+    default: {
+      const phrase = intent ?? getToolPhrase(name, input).label
+      // 未知工具与 MCP 的通用短语包含原始工具名；极简日志只保留动宾描述。
+      if (!intent && (phrase.startsWith(name) || name.startsWith('mcp__'))) {
+        const object = path ?? firstString(input, 'title', 'subject', 'query', 'url', 'name', 'prompt')
+        return { action: '处理', object: object ?? '请求', monospace: !!path }
+      }
+      return { action: phrase.replace(/^正在/, '') }
+    }
   }
 }
 

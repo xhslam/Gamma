@@ -7,6 +7,7 @@ import { activePlanningRemindersAtom, planningSelectedTodoIdAtom } from '@/atoms
 import { openWorkspaceComponentAtom } from '@/atoms/agent-atoms'
 import { notificationsEnabledAtom, notificationSoundEnabledAtom, notificationSoundsAtom, playNotificationSoundForType } from '@/atoms/notifications'
 import { Button } from '@/components/ui/button'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 function formatTriggerTime(timestamp: number): string {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -88,10 +89,10 @@ export function PlanningReminderRail({ playSound = true }: { playSound?: boolean
         return (
           <section key={reminder.id} className="bg-background shadow-lg">
             <div className="flex items-start gap-3 px-3 py-3">
-              <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+              <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-sm font-medium">{reminder.targetTitle}</p>
+                  <FadeTitle as="p" className="truncate text-sm font-medium">{reminder.targetTitle}</FadeTitle>
                   <span className="shrink-0 text-xs text-muted-foreground">{formatTriggerTime(reminder.snoozedUntil ?? reminder.triggerAt)}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted-foreground">

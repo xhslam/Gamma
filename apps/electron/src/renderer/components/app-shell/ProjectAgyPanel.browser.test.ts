@@ -3,7 +3,16 @@ import { createElectronRendererHarness, type ElectronRendererHarness } from '../
 import { projectAgyPanelFixture } from '../../../test-utils/project-agy-panel-fixture'
 
 let renderer: ElectronRendererHarness
-beforeAll(async () => { renderer = await createElectronRendererHarness(projectAgyPanelFixture) }, 180_000)
+beforeAll(async () => {
+  renderer = await createElectronRendererHarness(projectAgyPanelFixture + `
+    import {agentSidePanelSplitMapAtom as layoutSplitAtom,agentSidePanelSplitRatioMapAtom as layoutRatioAtom} from '@/atoms/agent-atoms';
+    window.agyPanel.setSavedSplit=ratio=>{
+      store.set(layoutRatioAtom,{'s-a':ratio});
+      store.set(layoutSplitAtom,new Map([['s-a',{leftTab:'files',rightTab:'agy-terminal',focusedPane:'right',ratio}]]));
+    };
+    window.agyPanel.savedSplitRatio=()=>store.get(layoutRatioAtom)['s-a'];
+  `)
+}, 180_000)
 afterAll(async () => { await renderer?.dispose() })
 
 describe('真实项目 AGY 工作区集成', () => {
@@ -70,6 +79,35 @@ describe('真实项目 AGY 工作区集成', () => {
     expect(measured.split).toBe(true)
     expect(measured.narrowCols).toBeLessThan(measured.fullCols)
     expect(measured).toMatchObject({ launched: 1, kills: 0, errors: [] })
+  }, 30_000)
+
+  test('Given 720px外框与保存比例0.3/0.7 When 恢复分屏并用键盘调整 Then 按实际内宽保留320px且ARIA范围有效', async () => {
+    const results = await renderer.run<Array<{ left: number; right: number; valid: boolean; stored: number; requested: number }>>(`
+      const api=window.agyPanel;await api.boot();const results=[];
+      const measure=requested=>{
+        const handle=document.querySelector('[role="separator"][aria-label^="调整并排宽度"]');
+        const left=document.querySelector('section[aria-label="左侧 Pane：files"]').getBoundingClientRect().width,right=document.querySelector('section[aria-label="右侧 Pane：agy-terminal"]').getBoundingClientRect().width;
+        const min=Number(handle.getAttribute('aria-valuemin')),max=Number(handle.getAttribute('aria-valuemax')),now=Number(handle.getAttribute('aria-valuenow'));
+        return {left,right,valid:now>=min&&now<=max,stored:api.savedSplitRatio(),requested};
+      };
+      for(const requested of [0.3,0.7]){
+        api.size(720);api.setSavedSplit(requested);await api.until(()=>document.querySelector('section[aria-label="右侧 Pane：agy-terminal"]'));await api.delay(80);
+        results.push(measure(requested));
+        api.size(1100);await api.delay(80);results.push(measure(requested));
+      }
+      api.size(720);await api.delay(80);
+      for(const key of ['Home','End']){
+        document.querySelector('[role="separator"][aria-label^="调整并排宽度"]').dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));await api.delay(80);
+        const result=measure(api.savedSplitRatio());results.push(result);
+      }
+      return results;
+    `)
+    for (const result of results) {
+      expect(result.left).toBeGreaterThanOrEqual(319.9)
+      expect(result.right).toBeGreaterThanOrEqual(319.9)
+      expect(result.valid).toBe(true)
+      expect(result.stored).toBe(result.requested)
+    }
   }, 30_000)
 
   test('Given 面板隐藏和再显示 When 用户已经转到其他输入框 Then 后台恢复不得抢走焦点，主动点击终端仍可聚焦', async () => {

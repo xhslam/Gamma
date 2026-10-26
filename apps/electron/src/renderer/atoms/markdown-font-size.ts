@@ -13,7 +13,7 @@ import type { MarkdownFontSize } from '../../types'
 /** 各档位对应的根字号（px） */
 const FONT_SIZE_PX: Record<MarkdownFontSize, number> = {
   small: 13,
-  medium: 15,
+  medium: 15.5,
   large: 17,
 }
 

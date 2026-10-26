@@ -269,7 +269,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const api = window.leftSidebarRegression, fixture = await api.mount();
       fixture.button('收起侧边栏').click();
       await api.until(() => fixture.button('展开侧边栏'));
-      await api.until(() => Math.round(document.querySelector('[data-testid="fixture-content"]').getBoundingClientRect().left) === 0);
+      await api.until(() => document.querySelector('.crt-sidebar').getBoundingClientRect().width === 0);
       const sidebarContainer = document.querySelector('.crt-sidebar');
       const absent = !sidebarContainer || sidebarContainer.getBoundingClientRect().width === 0;
       const contentLeft = Math.round(document.querySelector('[data-testid="fixture-content"]').getBoundingClientRect().left);

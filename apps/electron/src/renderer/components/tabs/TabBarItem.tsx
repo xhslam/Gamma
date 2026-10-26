@@ -16,6 +16,7 @@ import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { tabMinimapCacheAtom } from '@/atoms/tab-atoms'
 import { Spinner } from '@/components/ui/spinner'
 import { TabPreviewPanel } from './TabPreviewPanel'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface TabBarItemProps {
   id: string
@@ -137,14 +138,14 @@ export function TabBarItem({
             {showAgentSpinner && <Spinner size="sm" className="mr-2 shrink-0 text-primary/70" />}
             {isAutomation && <Clock className="size-3 shrink-0 text-foreground/40" />}
             {isDelegation && !isAutomation && <GitBranch className="size-3 shrink-0 text-foreground/40" />}
-            <span className="min-w-0 truncate">{title}</span>
+            <FadeTitle className="min-w-0 truncate">{title}</FadeTitle>
           </span>
         )}
 
         {workspaceName && !isNarrow && (
-          <span className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[86px]">
+          <FadeTitle className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[86px]">
             {workspaceName}
-          </span>
+          </FadeTitle>
         )}
 
         <span

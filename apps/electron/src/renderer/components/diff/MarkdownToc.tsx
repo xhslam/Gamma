@@ -98,7 +98,7 @@ export function MarkdownToc({ containerRef, content, editorRef, editorReady, ena
         {onOpenChange && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" onClick={() => onOpenChange(false)} className="flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground/70" aria-label="收起目录">
+              <button data-icon-button="true" type="button" onClick={() => onOpenChange(false)} className="flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground/70" aria-label="收起目录">
                 <ChevronLeft className="size-3.5" />
               </button>
             </TooltipTrigger>

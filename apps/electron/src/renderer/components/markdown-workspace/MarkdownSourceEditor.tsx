@@ -3,10 +3,17 @@ import { EditorState, Compartment } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from '@codemirror/language'
+import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, indentUnit } from '@codemirror/language'
 import { normalizeMarkdownEditorPreferences } from '@gamma/shared'
 import type { MarkdownEditorPreferences } from '@gamma/shared'
 import { guardCodeMirrorKeyBinding, isImeKeyEvent, markCodeMirrorCompositionEnd } from './vmark/utils/imeGuard'
+
+// 保留原有语法结构/字重，只将默认高亮的独立色板换成暖色文字。
+const sourceHighlightStyle = HighlightStyle.define(defaultHighlightStyle.specs.map(spec => ({
+  ...spec,
+  color: spec.color ? 'hsl(var(--foreground))' : undefined,
+  backgroundColor: spec.backgroundColor ? 'hsl(var(--muted))' : undefined,
+})))
 
 export interface MarkdownSourceEditorHandle { view: () => EditorView | null; scrollTo: (offset: number) => void }
 interface Props {
@@ -39,13 +46,13 @@ export const MarkdownSourceEditor = React.forwardRef<MarkdownSourceEditorHandle,
   React.useEffect(() => {
     if (!root.current) return
     const view = new EditorView({ parent: root.current, state: EditorState.create({ doc: callbacks.current.value, extensions: [
-      markdown(), syntaxHighlighting(defaultHighlightStyle), history(),
+      markdown(), syntaxHighlighting(sourceHighlightStyle), history(),
       appearance.current.of(sourcePreferences(normalizeMarkdownEditorPreferences(callbacks.current.preferences))),
       editability.current.of([EditorState.readOnly.of(callbacks.current.readOnly), EditorView.editable.of(!callbacks.current.readOnly)]),
       keymap.of([guardCodeMirrorKeyBinding({ key: 'Mod-s', run: () => { callbacks.current.onSave?.(); return true } }), guardCodeMirrorKeyBinding(indentWithTab), ...defaultKeymap, ...historyKeymap]),
       EditorView.domEventHandlers({ compositionend: (_event, view) => { markCodeMirrorCompositionEnd(view) }, scroll: (_event, view) => { callbacks.current.onScroll?.(view.scrollDOM.scrollTop) } }),
       EditorView.updateListener.of(update => { if (update.docChanged && update.state.doc.toString() !== callbacks.current.value) callbacks.current.onChange(update.state.doc.toString()) }),
-      EditorView.theme({ '&': { height: '100%', backgroundColor: 'transparent', color: 'hsl(var(--foreground))' }, '.cm-scroller': { overflow: 'auto' }, '.cm-content': { padding: '24px 16px' }, '.cm-gutters': { background: 'transparent', color: 'hsl(var(--muted-foreground))', border: 'none' }, '&.cm-focused': { outline: 'none' }, '.cm-cursor': { borderLeftColor: 'hsl(var(--foreground))' }, '.cm-selectionBackground': { background: 'hsl(var(--accent)) !important' } }),
+      EditorView.theme({ '&': { height: '100%', backgroundColor: 'transparent', color: 'hsl(var(--foreground))' }, '.cm-scroller': { overflow: 'auto' }, '.cm-content': { padding: '24px 16px' }, '.cm-activeLineGutter': { backgroundColor: 'hsl(var(--muted))' }, '.cm-gutters': { background: 'transparent', color: 'hsl(var(--muted-foreground))', border: 'none' }, '&.cm-focused': { outline: 'none' }, '.cm-cursor': { borderLeftColor: 'hsl(var(--foreground))' }, '.cm-selectionBackground': { background: 'hsl(var(--accent)) !important' } }),
     ] }) })
     viewRef.current = view; view.scrollDOM.scrollTop = callbacks.current.initialScrollTop ?? 0
     if (callbacks.current.autoFocus) view.focus()

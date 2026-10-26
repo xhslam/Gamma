@@ -27,6 +27,7 @@ beforeAll(async () => {
         const store=createStore(), root=createRoot(document.getElementById('root')), calls=[], mounts={agent:0,workspace:0};
         window.electronAPI={setAgentBrowserLayout:async input=>calls.push(input)};
         store.set(currentAgentSessionIdAtom,'A');
+        store.set(agentSidePanelOpenAtomFamily('A'),true);
         store.set(agentSessionsAtom,[{id:'A',title:'会话A',updatedAt:2},{id:'B',title:'会话B',updatedAt:1}]);
         store.set(agentSidePanelLayoutMapAtom,layouts ?? {A:{width:300,hasOpenedWideWorkspace:false,widePanelWidthOverride:null}});
         const Draft=({name})=>{React.useEffect(()=>{mounts[name]++},[]);return React.createElement('input',{'aria-label':name+'草稿',defaultValue:name+'初稿'})};

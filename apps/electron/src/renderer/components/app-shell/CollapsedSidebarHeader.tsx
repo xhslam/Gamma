@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ShortcutKeycaps } from '@/components/shortcuts/ShortcutKeycaps'
 import { detectIsMac } from '@/lib/platform'
 import { cn } from '@/lib/utils'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 收起侧栏后仅保留一行标题与展开入口，不再占用左侧内容空间。 */
 export function CollapsedSidebarHeader(): React.ReactElement {
@@ -33,7 +34,7 @@ export function CollapsedSidebarHeader(): React.ReactElement {
       )}
     >
       <SidebarExpandButton />
-      <span className="min-w-0 truncate text-sm font-medium text-foreground/85" title={title}>{title}</span>
+      <FadeTitle className="min-w-0 truncate text-sm font-medium text-foreground/85" title={title}>{title}</FadeTitle>
     </header>
   )
 }

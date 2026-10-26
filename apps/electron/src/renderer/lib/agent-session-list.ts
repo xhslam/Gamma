@@ -8,9 +8,9 @@ interface AgentSessionTreeLike {
 
 const DELEGATION_STATUS_ICON_CLASS: Readonly<Record<SessionIndicatorStatus, string>> = {
   idle: 'text-foreground/40',
-  running: 'text-blue-500',
-  blocked: 'text-orange-500',
-  completed: 'text-green-500',
+  running: 'text-info',
+  blocked: 'text-warning',
+  completed: 'text-success',
 }
 
 /** Keep delegated-session status colors identical wherever its GitBranch icon is rendered. */

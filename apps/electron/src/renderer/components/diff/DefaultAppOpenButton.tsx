@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useDefaultAppForFile } from '@/hooks/useDefaultAppForFile'
 import { getDefaultAppOpenLabel } from '@/lib/default-app-open-label'
 import { cn } from '@/lib/utils'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface DefaultAppOpenButtonProps {
   filePath: string
@@ -64,7 +65,7 @@ export function DefaultAppOpenButton({
             <ExternalLink className={cn('shrink-0', labeled ? 'size-4' : 'size-3.5')} />
           )}
           {labeled && (
-            <span className="text-[11px] leading-none truncate">{info?.name ?? '系统默认应用'}</span>
+            <FadeTitle className="text-[11px] leading-none truncate">{info?.name ?? '系统默认应用'}</FadeTitle>
           )}
         </button>
       </TooltipTrigger>

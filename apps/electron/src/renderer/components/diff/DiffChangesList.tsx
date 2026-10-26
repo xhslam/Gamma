@@ -5,7 +5,7 @@
  */
 
 import * as React from 'react'
-import { Box, ChevronDown, ChevronRight, FolderSearch, Search, SquareTerminal, Undo2, X } from 'lucide-react'
+import { Box, FolderSearch, Search, SquareTerminal, Undo2, X } from 'lucide-react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { toast } from 'sonner'
@@ -22,6 +22,8 @@ import { buildDiffFileTree } from './diff-file-tree'
 import { getDiffProjectTitle } from './diff-project-title'
 import type { DiffFileTreeDirectoryNode, DiffFileTreeNode } from './diff-file-tree'
 import { collectDiffChangeSources, DIFF_CHANGE_SOURCE_CONFIG } from './diff-change-sources'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 interface GitFileEntry {
   filePath: string
@@ -388,7 +390,7 @@ export const DiffChangesList = React.memo(function DiffChangesList({
                 <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 tabular-nums">
                   {matchedFilesCount}
                 </span>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   aria-label="清除搜索"
                   className="flex-shrink-0 p-0.5 rounded-sm hover:bg-foreground/[0.08] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
@@ -515,7 +517,7 @@ function DiffGroupHeader({
 }): React.ReactElement {
   return (
     <div className="group flex h-full items-center gap-1.5 border-b border-border/40 px-3 text-[14px] font-medium text-muted-foreground">
-      <span className="min-w-0 flex-1 truncate">{group.dirName}</span>
+      <FadeTitle className="min-w-0 flex-1 truncate">{group.dirName}</FadeTitle>
       {group.sources.map((source) => {
         const config = DIFF_CHANGE_SOURCE_CONFIG[source]
         return (
@@ -526,13 +528,13 @@ function DiffGroupHeader({
       })}
       <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] font-normal tabular-nums">
         <span className="text-muted-foreground/60">{group.fileCount} 个文件</span>
-        {group.totalAdditions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{group.totalAdditions}</span>}
-        {group.totalDeletions > 0 && <span className="text-red-600 dark:text-red-400">-{group.totalDeletions}</span>}
+        {group.totalAdditions > 0 && <span className="text-success dark:text-success">+{group.totalAdditions}</span>}
+        {group.totalDeletions > 0 && <span className="text-destructive dark:text-destructive">-{group.totalDeletions}</span>}
       </span>
       {onOpenDirectoryTerminal && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               aria-label={`在 ${group.dirName} 打开终端`}
               title={`在 ${group.dirName} 打开终端`}
@@ -547,7 +549,7 @@ function DiffGroupHeader({
       )}
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
+          <button data-icon-button="true"
             type="button"
             aria-label={`在文件夹中显示 ${group.dirName}`}
             title={`在文件夹中显示 ${group.dirName}`}
@@ -588,7 +590,7 @@ function DirectoryRow({
     <div className="relative h-full">
       <RowGuides depth={depth} />
       <div className="group mx-2 flex h-full items-center gap-1.5 rounded-md pr-2 text-[13px] font-medium text-foreground/75 transition-colors hover:bg-accent/50">
-        <button
+        <button data-disclosure-trigger=""
           type="button"
           aria-expanded={!collapsed}
           title={node.name}
@@ -596,15 +598,15 @@ function DirectoryRow({
           style={{ paddingLeft: 8 + depth * 16 }}
           onClick={() => onToggle(stateKey)}
         >
-          <ChevronRight
+          <DisclosureChevron expanded={!collapsed} size={14}
             className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', !collapsed && 'rotate-90')}
           />
-          <span className="min-w-0 flex-1 truncate">{node.name}</span>
+          <FadeTitle className="min-w-0 flex-1 truncate">{node.name}</FadeTitle>
         </button>
         {onOpenDirectoryTerminal && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 aria-label={`在 ${node.name} 打开终端`}
                 title={`在 ${node.name} 打开终端`}
@@ -619,7 +621,7 @@ function DirectoryRow({
         )}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               aria-label={`在文件夹中显示 ${node.name}`}
               title={`在文件夹中显示 ${node.name}`}
@@ -700,20 +702,16 @@ function NonGitChangesList({
 
   return (
     <div className="shrink-0 py-1">
-      <button
+      <button data-disclosure-trigger=""
         type="button"
         aria-expanded={isExpanded}
         aria-controls={contentId}
         className="group flex min-h-9 w-full items-center gap-1.5 px-3 py-2 text-left text-[13px] font-medium text-muted-foreground tabular-nums transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={() => setIsExpanded((expanded) => !expanded)}
       >
-        {isExpanded ? (
-          <ChevronDown className="size-3.5 shrink-0 transition-transform duration-150" aria-hidden="true" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 transition-transform duration-150" aria-hidden="true" />
-        )}
+        <DisclosureChevron expanded={isExpanded} size={14} className="size-3.5 shrink-0 transition-transform duration-150" aria-hidden="true" />
         <Box className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate">{title}</span>
+        <FadeTitle className="min-w-0 flex-1 truncate">{title}</FadeTitle>
         <span className="sr-only">{isExpanded ? '，点击折叠' : '，点击展开'}</span>
       </button>
       <div id={contentId} hidden={!isExpanded}>
@@ -750,11 +748,7 @@ function NonGitRunGroup({
   const headerClassName = "flex w-full items-center gap-1.5 px-3 py-1 text-left text-[11px] font-medium text-muted-foreground tabular-nums"
   const headerContent = (
     <>
-      {collapsible && (isExpanded ? (
-        <ChevronDown className="size-3 shrink-0 transition-transform duration-150" aria-hidden="true" />
-      ) : (
-        <ChevronRight className="size-3 shrink-0 transition-transform duration-150" aria-hidden="true" />
-      ))}
+      {collapsible && (<DisclosureChevron expanded={isExpanded} size={12} className="size-3 shrink-0 transition-transform duration-150" aria-hidden="true" />)}
       <span>{title} · {changes.length}</span>
       {collapsible && <span className="sr-only">{isExpanded ? '，点击折叠' : '，点击展开'}</span>}
     </>
@@ -764,6 +758,7 @@ function NonGitRunGroup({
     <section className="pb-2">
       {collapsible ? (
         <button
+          data-disclosure-trigger=""
           type="button"
           aria-expanded={isExpanded}
           aria-controls={contentId}
@@ -807,7 +802,7 @@ function NonGitFileList({
                   className="flex h-full min-w-0 flex-1 items-center gap-2 px-3 text-left text-sm"
                 >
                   <FileTypeIcon name={name} isDirectory={false} size={16} />
-                  <span className="min-w-0 flex-1 truncate text-[13px]">{name}</span>
+                  <FadeTitle className="min-w-0 flex-1 truncate text-[13px]">{name}</FadeTitle>
                   {parent && <span className="max-w-[40%] truncate text-[11px] text-muted-foreground">{parent}</span>}
                   {change.kind === 'created' && <GitStatusMarker status="untracked" className="ml-2" />}
                 </button>
@@ -816,7 +811,7 @@ function NonGitFileList({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   aria-label="在文件夹中显示"
                   onClick={() => {
@@ -874,7 +869,7 @@ function FileRow({
       className={cn(
         'group/file relative mx-2 flex h-8 items-center rounded-md pr-2 text-[12px] transition-colors',
         isSelected
-          ? 'session-item-selected bg-primary/10 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+          ? 'session-item-selected bg-primary/10 shadow-[0_1px_2px_0_hsl(var(--shadow-ink)/0.05)]'
           : 'hover:bg-primary/5',
       )}
       style={{ paddingLeft: 8 + depth * 16 }}
@@ -897,7 +892,7 @@ function FileRow({
       </span>
       <Tooltip delayDuration={900}>
         <TooltipTrigger asChild>
-          <span className="ml-1.5 min-w-0 truncate">{fileName}</span>
+          <FadeTitle className="ml-1.5 min-w-0 truncate">{fileName}</FadeTitle>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-[400px] break-all">{fullPath}</TooltipContent>
       </Tooltip>
@@ -905,10 +900,10 @@ function FileRow({
       {hasLineChanges && (
         <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] tabular-nums transition-opacity group-hover/file:opacity-0">
           {file.additions > 0 && (
-            <span style={{ color: 'rgb(34 197 94)' }}>+{file.additions}</span>
+            <span style={{ color: 'hsl(var(--success))' }}>+{file.additions}</span>
           )}
           {file.deletions > 0 && (
-            <span style={{ color: 'rgb(239 68 68)' }}>-{file.deletions}</span>
+            <span style={{ color: 'hsl(var(--destructive))' }}>-{file.deletions}</span>
           )}
         </span>
       )}
@@ -916,7 +911,7 @@ function FileRow({
       {onRevert && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               aria-label="还原文件变更"
               className="absolute right-7 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-foreground/35 opacity-0 transition-opacity hover:text-foreground/80 focus-visible:text-foreground/80 focus-visible:opacity-100 focus-visible:outline-none group-hover/file:opacity-100"
@@ -946,9 +941,9 @@ function GitStatusMarker({
   className?: string
 }): React.ReactElement {
   const config: Record<ChangedFileStatus, { label: string; description: string; color: string }> = {
-    modified: { label: 'M', description: '已修改', color: 'text-amber-500' },
-    deleted: { label: 'D', description: '已删除', color: 'text-red-500' },
-    untracked: { label: 'U', description: '未追踪', color: 'text-emerald-500' },
+    modified: { label: 'M', description: '已修改', color: 'text-warning' },
+    deleted: { label: 'D', description: '已删除', color: 'text-destructive' },
+    untracked: { label: 'U', description: '未追踪', color: 'text-success' },
   }
   const { label, description, color } = config[status]
 

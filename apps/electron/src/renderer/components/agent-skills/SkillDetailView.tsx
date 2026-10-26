@@ -17,6 +17,7 @@ import { LiveMarkdownEditor } from '@/components/markdown/LiveMarkdownEditor'
 import { cn } from '@/lib/utils'
 import type { SkillMeta } from '@gamma/shared'
 import { extractSkillBody, rebuildSkillMd } from './skillMdUtils'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface SkillDetailViewProps {
   skill: SkillMeta
@@ -255,12 +256,12 @@ export function SkillDetailView({
         </div>
 
         <div className="mt-4 flex items-start gap-3">
-          <div className="rounded-xl bg-amber-500/12 p-2 text-amber-500 shadow-sm shrink-0">
+          <div className="rounded-xl bg-warning/12 p-2 text-warning shadow-sm shrink-0">
             <Sparkles size={18} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="truncate text-base font-semibold text-foreground">{skill.name}</h3>
+              <FadeTitle as="h3" className="truncate text-base font-semibold text-foreground">{skill.name}</FadeTitle>
               {skill.version && (
                 <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                   v{skill.version}
@@ -285,7 +286,7 @@ export function SkillDetailView({
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="sm" variant="ghost" onClick={onOpenFolder}>
+              <Button data-icon-button="true" size="sm" variant="ghost" onClick={onOpenFolder}>
                 <FolderOpen size={14} />
               </Button>
             </TooltipTrigger>
@@ -294,7 +295,7 @@ export function SkillDetailView({
           {!isBuiltin && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <Button data-icon-button="true"
                   size="sm"
                   variant="ghost"
                   onClick={onRequestDelete}

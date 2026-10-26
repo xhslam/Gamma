@@ -16,7 +16,7 @@ interface ProcessTimelineStepProps {
 export function ProcessTimelineStep({ block, allMessages, isStreaming, isLast, children }: ProcessTimelineStepProps): React.ReactElement {
   const toolId = block.type === 'tool_use' && typeof block.id === 'string' ? block.id : ''
   const { presentation } = useToolExecution(toolId, allMessages, isStreaming)
-  // 思考始终使用灰点；只有实际运行的工具显示琥珀色转圈环。
+  // 思考始终使用灰点；未结束的工具只用琥珀色细环，不添加转圈或呼吸动效。
   const status = toolId ? presentation.status : 'recorded'
   const running = status === 'running' || status === 'approval-submitting'
 

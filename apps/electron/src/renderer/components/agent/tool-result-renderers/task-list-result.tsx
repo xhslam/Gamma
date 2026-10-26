@@ -6,6 +6,7 @@ import * as React from 'react'
 import { CheckCircle2, Circle, Clock3, ListTodo, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DefaultResultRenderer } from './default-result'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface TaskListResultRendererProps {
   result: string
@@ -87,19 +88,19 @@ function statusMeta(status: string): {
     case 'in_progress':
       return {
         label: '进行中',
-        className: 'text-blue-600 dark:text-blue-400',
+        className: 'text-info dark:text-info',
         icon: Clock3,
       }
     case 'completed':
       return {
         label: '已完成',
-        className: 'text-green-600 dark:text-green-400',
+        className: 'text-success dark:text-success',
         icon: CheckCircle2,
       }
     case 'blocked':
       return {
         label: '已阻塞',
-        className: 'text-amber-700 dark:text-amber-400',
+        className: 'text-warning dark:text-warning',
         icon: Circle,
       }
     case 'cancelled':
@@ -160,14 +161,14 @@ export function TaskListResultRenderer({ result, isError }: TaskListResultRender
                 <StatusIcon className={cn('size-3', task.status === 'in_progress' && 'animate-pulse')} />
                 {meta.label}
               </span>
-              <span className={cn(
+              <FadeTitle className={cn(
                 'truncate text-[13px]',
                 task.status === 'completed'
                   ? 'text-muted-foreground/65 line-through'
                   : 'text-foreground/85',
               )}>
                 {task.subject}
-              </span>
+              </FadeTitle>
             </div>
           )
         })}

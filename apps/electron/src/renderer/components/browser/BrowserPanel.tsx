@@ -154,7 +154,7 @@ export function BrowserPanel({ sessionId, tabId, state, isAddTabMenuOpen = false
         </Tooltip>
         {state?.loading && <LoaderCircle className="size-3.5 text-muted-foreground animate-spin" />}
         {isBackgroundRun && (
-          <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="size-7 text-amber-600 hover:text-amber-700" onClick={() => void stopBackgroundRun()} aria-label="停止当前后台 Agent"><Square className="size-3.5 fill-current" /></Button></TooltipTrigger><TooltipContent>停止当前{state?.executionSource === 'automation' ? '自动任务' : '委派'}运行</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="size-7 text-warning hover:text-warning" onClick={() => void stopBackgroundRun()} aria-label="停止当前后台 Agent"><Square className="size-3.5 fill-current" /></Button></TooltipTrigger><TooltipContent>停止当前{state?.executionSource === 'automation' ? '自动任务' : '委派'}运行</TooltipContent></Tooltip>
         )}
       </div>
       {riskAcknowledged === true ? (
@@ -167,7 +167,7 @@ export function BrowserPanel({ sessionId, tabId, state, isAddTabMenuOpen = false
       ) : (
         <div className="flex flex-1 min-h-0 items-center justify-center bg-muted/15 px-8 text-center">
           <div className="max-w-sm space-y-2 text-muted-foreground">
-            <ShieldAlert className="mx-auto size-7 text-amber-500/90" />
+            <ShieldAlert className="mx-auto size-7 text-warning/90" />
             <p className="text-sm font-medium text-foreground">使用前请阅读风险告知</p>
             <p className="text-xs leading-5">受管浏览器将在确认后启用，登录状态只保存在本机。</p>
           </div>
@@ -176,7 +176,7 @@ export function BrowserPanel({ sessionId, tabId, state, isAddTabMenuOpen = false
       <AlertDialog open={riskAcknowledged === false} onOpenChange={(open) => { if (!open && !savingRiskAcknowledgement) void closeBrowser() }}>
         <AlertDialogContent className="max-w-xl">
           <AlertDialogHeader>
-            <div className="mb-1 flex size-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <div className="mb-1 flex size-10 items-center justify-center rounded-xl bg-warning/10 text-warning dark:text-warning">
               <ShieldAlert className="size-5" />
             </div>
             <AlertDialogTitle className="text-balance">首次使用受管浏览器</AlertDialogTitle>

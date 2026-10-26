@@ -17,6 +17,7 @@ import { getModelLogo, resolveModelProvider } from '@/lib/model-logo'
 import { channelsAtom } from '@/atoms/channel-atoms'
 import { cn } from '@/lib/utils'
 import type { TabMinimapItem } from '@/atoms/tab-atoms'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface TabPreviewPanelProps {
   title: string
@@ -88,9 +89,9 @@ export function TabPreviewPanel({ title, items, isLeaving }: TabPreviewPanelProp
     >
       {/* 标题栏 */}
       <div className="relative z-10 flex items-center justify-between px-3 py-2 border-b shrink-0 bg-popover">
-        <span className="text-xs font-medium text-popover-foreground/90 truncate flex-1 min-w-0">
+        <FadeTitle className="text-xs font-medium text-popover-foreground/90 truncate flex-1 min-w-0">
           {title}
-        </span>
+        </FadeTitle>
         <span className="text-[11px] text-muted-foreground tabular-nums ml-2 shrink-0">
           {items.length}
         </span>

@@ -14,9 +14,9 @@ const DIFF_CHANGE_SOURCE_ORDER: readonly ChangeSource[] = [
 
 /** 文件来源 badge 的颜色和文案。 */
 export const DIFF_CHANGE_SOURCE_CONFIG: Record<ChangeSource, { color: string; label: string }> = {
-  session: { color: 'bg-blue-500/10 text-blue-500', label: '会话文件' },
-  workspace: { color: 'bg-purple-500/10 text-purple-500', label: '项目文件' },
-  both: { color: 'bg-cyan-500/10 text-cyan-500', label: '会话+项目文件' },
+  session: { color: 'bg-info/10 text-info', label: '会话文件' },
+  workspace: { color: 'bg-info/10 text-info', label: '项目文件' },
+  both: { color: 'bg-info/10 text-info', label: '会话+项目文件' },
   none: { color: 'bg-muted text-muted-foreground', label: '附加目录文件' },
 }
 

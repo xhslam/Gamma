@@ -33,7 +33,7 @@ function TearOffButton({ sessionId }: { sessionId: string }): React.ReactElement
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={onClick}
           className="flex items-center justify-center size-7 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
