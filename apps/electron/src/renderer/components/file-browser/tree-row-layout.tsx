@@ -5,8 +5,9 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
+import { UI_LIST_ROW_HEIGHT_PX } from '@/lib/workbench-layout'
 
-const TREE_ROW_HEIGHT = 32
+const TREE_ROW_HEIGHT = UI_LIST_ROW_HEIGHT_PX
 const TREE_ROW_HORIZONTAL_MARGIN = 8
 const TREE_INDENT_WIDTH = 16
 /**

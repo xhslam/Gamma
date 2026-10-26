@@ -1,113 +1,76 @@
-/* 极简时间线：状态只由节点表达，文字始终保持中性。 */
-.process-timeline {
+/* 极简执行区：计划与实时状态共用主题变量，浅色主题保留相同比例的前景色。 */
+.process-timeline,
+.process-plan-card {
   --process-main: hsl(var(--foreground) / .72);
   --process-secondary: hsl(var(--foreground) / .40);
+  --process-status: hsl(var(--foreground) / .60);
+  --process-strong: hsl(var(--foreground) / .90);
+  --process-completed: hsl(var(--foreground) / .45);
   --process-line: hsl(var(--foreground) / .12);
-  color: var(--process-main);
-  font-size: 13px;
-}
-.dark .process-timeline {
-  --process-main: rgba(255, 255, 255, .72);
-  --process-secondary: rgba(255, 255, 255, .40);
-  --process-line: rgba(255, 255, 255, .12);
-}
-.process-timeline-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  height: 28px;
-  color: var(--process-secondary);
-  text-align: left;
-  font-size: 13px;
-}
-.process-timeline-step {
-  position: relative;
-  min-width: 0;
-  min-height: 28px;
-  padding-left: 20px;
-}
-.process-timeline-node {
-  position: absolute;
-  top: 10px;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  border: 0 solid transparent;
-  border-radius: 50%;
-  color: var(--process-secondary);
-  background-color: currentColor;
-  transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
-}
-.process-timeline-node[data-status='success'] { color: #5fb878; }
-.process-timeline-node[data-status='error'] { color: #e5645a; }
-.process-timeline-node[data-status='pending'],
-.process-timeline-node[data-status='approval-submitting'],
-.process-timeline-node[data-status='running'] {
-  color: #d9a05b;
-  border: 1px solid currentColor;
-  background-color: transparent;
-}
-.process-timeline-node[data-process-node-running] {
-  border-top-color: transparent;
-  animation: process-node-spin 900ms linear infinite, process-node-breathe 1800ms ease-in-out infinite;
-}
-.process-timeline-connector {
-  position: absolute;
-  top: 18px;
-  bottom: -10px;
-  left: 3.5px;
-  width: 1px;
-  background-color: var(--process-line);
-  pointer-events: none;
-  animation: process-line-extend 200ms ease-out both;
-}
-.process-timeline-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  height: 28px;
-  padding: 0;
-  border: none;
-  background: none;
+  --process-card-border: hsl(var(--foreground) / .06);
+  --process-card-background: hsl(var(--foreground) / .025);
   color: var(--process-main);
   font-size: 13px;
   line-height: 28px;
-  text-align: left;
 }
-.process-timeline-note {
-  min-width: 0;
-  max-width: 45%;
-  overflow: hidden;
-  color: var(--process-secondary);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+
+.process-plan-card {
+  padding: 8px 12px;
+  border: 1px solid var(--process-card-border);
+  border-radius: var(--radius);
+  background-color: var(--process-card-background);
+  margin-bottom: 4px;
 }
-.process-timeline-chevron {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  color: var(--process-secondary);
-  opacity: 0;
-  transition: opacity 150ms ease, transform 150ms ease;
+.process-plan-item { color: var(--process-status); transition: color 200ms ease; }
+.process-plan-item[data-plan-status='completed'],
+.process-plan-item[data-plan-status='cancelled'] { color: var(--process-completed); }
+.process-plan-item[data-plan-status='in_progress'],
+.process-plan-item[data-plan-status='approval'] { color: var(--process-strong); }
+.process-plan-row { display: flex; align-items: center; gap: 10px; height: 28px; min-width: 0; }
+.process-plan-circle { width: 16px; height: 16px; flex: 0 0 16px; overflow: visible; }
+.process-plan-shape { opacity: 0; transition: opacity 200ms ease; }
+.process-plan-shape[data-active='true'] { opacity: 1; }
+.process-plan-amber { color: hsl(var(--warning)); }
+.process-plan-done { color: hsl(var(--tertiary-foreground)); }
+.process-plan-failed { color: hsl(var(--destructive)); }
+.process-plan-check { stroke-dasharray: 1; }
+.process-plan-done[data-active='true'] > .process-plan-check { animation: process-check-draw 200ms ease-out both; }
+.process-plan-subject { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.process-plan-error { padding-left: 26px; height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--process-secondary); animation: process-status-fade 200ms ease both; }
+.process-live-status { display: flex; align-items: center; gap: 8px; min-width: 0; height: 28px; color: var(--process-status); }
+.process-live-action { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.process-live-action-text { animation: process-status-fade 200ms ease both; }
+.process-live-action-outgoing { position: absolute; inset: 0; overflow: hidden; text-overflow: ellipsis; animation: process-status-fade 200ms ease reverse both; }
+.process-live-time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.process-live-dots { display: inline-flex; flex-shrink: 0; color: hsl(var(--warning)); letter-spacing: 1px; }
+.process-live-dots[data-running='true'] > span { animation: process-dots-flow 1800ms ease-in-out infinite; }
+.process-live-dots > span:nth-child(2) { animation-delay: 200ms; }
+.process-live-dots > span:nth-child(3) { animation-delay: 400ms; }
+.process-timeline-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; width: 20px; height: 28px; padding: 0; border: none; background: none; color: var(--process-status); font-size: 13px; line-height: 28px; }
+.process-timeline-log { transition: opacity 200ms ease; }
+.process-timeline-log[data-expanded='true'] { animation: process-status-fade 200ms ease both; }
+.process-timeline-step { position: relative; min-width: 0; min-height: 28px; padding-left: 20px; }
+.process-timeline-node {
+  position: absolute; top: 10px; left: 0; width: 8px; height: 8px;
+  border: 0 solid transparent; border-radius: 50%; color: var(--process-secondary); background-color: currentColor;
+  transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
 }
-.process-timeline-row:hover > .process-timeline-chevron,
-.process-timeline-row:focus-visible > .process-timeline-chevron { opacity: 1; }
+.process-timeline-node[data-status='success'] { color: hsl(var(--success)); }
+.process-timeline-node[data-status='error'] { color: hsl(var(--destructive)); }
+.process-timeline-node[data-status='pending'],
+.process-timeline-node[data-status='approval-submitting'],
+.process-timeline-node[data-status='running'] { color: hsl(var(--warning)); border: 1px solid currentColor; background-color: transparent; }
+.process-timeline-connector { position: absolute; top: 18px; bottom: -10px; left: 3.5px; width: 1px; background-color: var(--process-line); pointer-events: none; }
+.process-timeline-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 28px; padding: 0; border: none; background: none; color: var(--process-main); font-size: 13px; line-height: 28px; text-align: left; }
 .process-timeline-row:focus-visible,
 .process-timeline-toggle:focus-visible { outline: 1px solid var(--process-secondary); outline-offset: 2px; }
 .process-timeline-text-row { height: auto; min-height: 28px; align-items: flex-start; }
-.process-timeline-text-row > .process-timeline-chevron { margin-top: 8px; }
 .process-timeline-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .process-timeline-thinking { color: var(--process-secondary); font-style: italic; }
 .process-timeline-details { padding: 4px 0 8px; color: var(--process-secondary); font-size: 13px; }
-@keyframes process-node-spin { to { transform: rotate(360deg); } }
-@keyframes process-node-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-@keyframes process-line-extend { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes process-check-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes process-status-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes process-dots-flow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .process-timeline-node, .process-timeline-connector, .process-timeline-chevron {
-    animation: none;
-    transition: none;
-  }
+  .process-timeline *, .process-plan-card * { animation: none !important; transition: none !important; }
 }

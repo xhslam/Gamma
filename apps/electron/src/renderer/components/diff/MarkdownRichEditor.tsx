@@ -140,8 +140,8 @@ export function MarkdownRichEditor({
     editorProps: {
       attributes: {
         class: cn(
-          'prose prose-sm dark:prose-invert max-w-none min-h-full cursor-text focus:outline-none',
-          'px-4 py-3 text-[length:var(--md-preview-font-size,15px)] leading-relaxed',
+          'reading-body prose dark:prose-invert min-h-full cursor-text focus:outline-none',
+          'px-4 py-3',
           '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           '[&_pre]:rounded-md [&_pre]:p-3',
           '[&_code]:bg-muted [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.875em]',

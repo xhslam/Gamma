@@ -10,7 +10,7 @@ export const inputToolbarActiveButtonClass =
   '!bg-transparent text-primary shadow-none hover:!bg-transparent hover:text-primary data-[state=open]:!bg-transparent [&_svg]:stroke-[2.75]'
 
 export const inputToolbarDangerButtonClass =
-  `${inputToolbarSquareControlClass} shrink-0 rounded-md text-destructive hover:!text-[hsl(0,75%,55%)] hover:!bg-[var(--stop-hover-bg)]`
+  `${inputToolbarSquareControlClass} shrink-0 rounded-md text-destructive hover:!text-destructive hover:!bg-[var(--stop-hover-bg)]`
 
 export const inputToolbarSendButtonClass =
   `${inputToolbarSquareControlClass} shrink-0 rounded-md text-primary hover:bg-primary/10`

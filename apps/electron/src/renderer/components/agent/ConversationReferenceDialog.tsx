@@ -15,7 +15,6 @@ import {
   MessageSquareText,
   Check,
   FolderGit2,
-  ChevronRight,
   Loader2,
 } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -33,6 +32,8 @@ import {
   type AgentSessionMeta,
 } from '@gamma/shared'
 import { toast } from 'sonner'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 export interface ConversationReferenceDialogProps {
   embedded?: boolean
@@ -359,7 +360,7 @@ export function ConversationReferenceDialog({
           {selected && <Check className="size-3" />}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs">{session.title || '无标题对话'}</div>
+          <FadeTitle as="div" className="truncate text-xs">{session.title || '无标题对话'}</FadeTitle>
           <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-muted-foreground">
             {loadingDetails[session.id] ? <Loader2 className="size-3 shrink-0 animate-spin" /> : null}
             <span className={cn('truncate', errorDetails[session.id] && 'text-destructive')}>
@@ -392,7 +393,7 @@ export function ConversationReferenceDialog({
           {!embedded && (
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] font-medium text-foreground"><MessageSquareText className="size-3.5" />引用对话</span>
-            <button type="button" aria-label="关闭" onClick={() => onOpenChange(false)} className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="size-3.5" /></button>
+            <button data-icon-button="true" type="button" aria-label="关闭" onClick={() => onOpenChange(false)} className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="size-3.5" /></button>
           </div>
           )}
           <p id={descriptionId} className="sr-only">选择历史对话作为背景资料，源对话不会被修改。</p>
@@ -400,7 +401,7 @@ export function ConversationReferenceDialog({
             <div className="relative min-w-0 basis-48 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input aria-label="搜索对话" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目、对话或内容…" className="h-7 rounded-md border-border/60 bg-muted/30 pl-9 pr-8 text-xs focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:ring-offset-0" autoFocus />
-              {query && <button type="button" aria-label="清空搜索" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"><X className="size-3" /></button>}
+              {query && <button data-icon-button="true" type="button" aria-label="清空搜索" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"><X className="size-3" /></button>}
             </div>
             <select aria-label="筛选项目" value={projectFilter} onChange={(event) => {
               setProjectFilter(event.target.value)
@@ -426,7 +427,7 @@ export function ConversationReferenceDialog({
             return (
               <Collapsible key={group.id} open={group.expanded} onOpenChange={(expanded) => setProjectExpanded(group.id, expanded)} className="py-0.5">
                 <CollapsibleTrigger asChild>
-                  <button type="button" data-reference-project={group.id} disabled={Boolean(normalizedQuery)}
+                  <button data-disclosure-trigger="" aria-expanded={group.expanded} type="button" data-reference-project={group.id} disabled={Boolean(normalizedQuery)}
                     onKeyDown={(event) => {
                       if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
                         event.preventDefault()
@@ -437,9 +438,9 @@ export function ConversationReferenceDialog({
                       }
                     }}
                     className="flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:bg-transparent">
-                    <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', group.expanded && 'rotate-90')} />
+                    <DisclosureChevron expanded={group.expanded} size={14} className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', group.expanded && 'rotate-90')} />
                     <FolderGit2 className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium">{group.title}</span>
+                    <FadeTitle className="min-w-0 flex-1 truncate text-xs font-medium">{group.title}</FadeTitle>
                     {group.isCurrent && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">当前项目</span>}
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count ? `已选 ${count} · ` : ''}{group.sessions.length}</span>
                   </button>

@@ -32,7 +32,7 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium 中的工作台密度', () => {
-  test('When 在浅深主题切换密度 Then 会话、项目及工具导航行严格为 28/36px 且保留键盘焦点', async () => {
+  test('When 在浅深主题切换密度 Then 会话、项目及工具导航行统一为34px 且保留键盘焦点', async () => {
     const results = await renderer.run<Array<{ row: number; project: number; nav: number; focused: boolean; dark: boolean }>>(`
       const api=window.leftSidebarRegression,results=[];
       for(const dark of [false,true]){
@@ -48,10 +48,10 @@ describe('Given 真实 Chromium 中的工作台密度', () => {
       return results;
     `)
     expect(results).toEqual([
-      { row: 28, project: 28, nav: 28, focused: true, dark: false },
-      { row: 36, project: 36, nav: 36, focused: true, dark: false },
-      { row: 28, project: 28, nav: 28, focused: true, dark: true },
-      { row: 36, project: 36, nav: 36, focused: true, dark: true },
+      { row: 34, project: 34, nav: 34, focused: true, dark: false },
+      { row: 34, project: 34, nav: 34, focused: true, dark: false },
+      { row: 34, project: 34, nav: 34, focused: true, dark: true },
+      { row: 34, project: 34, nav: 34, focused: true, dark: true },
     ])
   }, 30_000)
 

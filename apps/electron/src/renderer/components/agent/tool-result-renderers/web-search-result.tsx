@@ -5,6 +5,7 @@
 import * as React from 'react'
 import { Globe } from 'lucide-react'
 import { CollapsibleResult } from './collapsible-result'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface WebSearchResultRendererProps {
   result: string
@@ -93,9 +94,9 @@ export function WebSearchResultRenderer({ result, isError }: WebSearchResultRend
         <div key={i} className="rounded-md bg-muted/20 p-2.5 space-y-1">
           <div className="flex items-center gap-1.5">
             <Globe className="size-3 shrink-0 text-muted-foreground/50" />
-            <span className="text-[12px] font-medium text-foreground/80 truncate">
+            <FadeTitle className="text-[12px] font-medium text-foreground/80 truncate">
               {item.title}
-            </span>
+            </FadeTitle>
           </div>
           {item.url && (
             <div className="text-[11px] text-primary/60 font-mono truncate">

@@ -6,6 +6,7 @@ import type { SDKMessage, SDKUserMessage, SkillActivation } from '@gamma/shared'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { currentAgentSessionIdAtom, openWorkspaceComponentAtom, skillDetailNavigationAtomFamily } from '@/atoms/agent-atoms'
 import { cn } from '@/lib/utils'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface TurnSkillUsageSummaryProps {
   inputMessage?: SDKUserMessage
@@ -29,12 +30,12 @@ function SkillUsageChip({ activation }: { activation: SkillActivation }): React.
   }, [activation.slug, activation.workspaceSlug, openWorkspaceComponent, sessionId, setSkillDetailNavigation])
   const chipClassName = cn(
     'inline-flex max-w-[240px] items-center gap-[0.25em] rounded-md px-[0.35em] py-[0.15em] text-[0.875em] font-medium leading-none',
-    'bg-[hsl(270_60%_60%/0.15)] text-[hsl(270_60%_50%)]',
-    canOpen && 'cursor-pointer transition-colors hover:bg-[hsl(270_60%_60%/0.24)]',
+    'bg-muted text-foreground',
+    canOpen && 'cursor-pointer transition-colors hover:bg-muted',
   )
   const chipContent = <>
     <Sparkles className="size-3 shrink-0" />
-    <span className="truncate">{activation.name}</span>
+    <FadeTitle className="truncate">{activation.name}</FadeTitle>
   </>
 
   return (

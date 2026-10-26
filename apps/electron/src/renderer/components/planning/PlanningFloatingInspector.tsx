@@ -25,7 +25,7 @@ export function PlanningFloatingInspector({ label, onClose, children, inline = f
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
-  const panel = <aside role="dialog" aria-label={label} className={inline ? 'relative flex min-h-0 min-w-0 flex-col overflow-y-auto border-l border-foreground/20 bg-card scrollbar-thin' : fullWidth ? 'absolute inset-3 z-40 overflow-y-auto rounded-none border border-foreground/20 bg-card shadow-[0_12px_32px_rgb(0_0_0_/_0.12)] scrollbar-thin' : 'absolute bottom-3 right-3 top-3 z-40 w-[min(30rem,calc(100%-1.5rem))] overflow-y-auto rounded-none border border-foreground/20 bg-card shadow-[0_12px_32px_rgb(0_0_0_/_0.12)] scrollbar-thin'} onMouseDown={(event) => event.stopPropagation()}>
+  const panel = <aside role="dialog" aria-label={label} className={inline ? 'relative flex min-h-0 min-w-0 flex-col overflow-y-auto border-l border-foreground/20 bg-card scrollbar-thin' : fullWidth ? 'absolute inset-3 z-40 overflow-y-auto rounded-none border border-foreground/20 bg-card shadow-[0_12px_32px_hsl(var(--shadow-ink))] scrollbar-thin' : 'absolute bottom-3 right-3 top-3 z-40 w-[min(30rem,calc(100%-1.5rem))] overflow-y-auto rounded-none border border-foreground/20 bg-card shadow-[0_12px_32px_hsl(var(--shadow-ink))] scrollbar-thin'} onMouseDown={(event) => event.stopPropagation()}>
     <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 z-10 size-10" onClick={onClose} aria-label={`关闭${label}`} title="关闭 (Esc)"><X size={16} /></Button>
     {children}
   </aside>

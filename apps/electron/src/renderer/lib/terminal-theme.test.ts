@@ -1,9 +1,21 @@
+import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { dirname, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { build } from 'esbuild'
 import type { ITerminalOptions } from '@xterm/xterm'
-import { getTerminalAppearanceOptions, TERMINAL_BACKGROUND } from './terminal-theme'
+import { getTerminalAppearanceOptions as readTerminalAppearanceOptions } from './terminal-theme'
+import type { DesignColorReader } from './design-colors'
+
+const tokens = readFileSync(resolve(import.meta.dir, '../styles/design-tokens.css'), 'utf8')
+const darkColor: DesignColorReader = (role) => {
+  const name = role === 'accent' ? 'accent' : `dark-${role}`
+  const value = tokens.match(new RegExp(`--palette-${name}: (#[a-fA-F0-9]{6});`))?.[1]
+  if (!value) throw new Error(`测试缺少颜色令牌：${role}`)
+  return value.toLowerCase()
+}
+const getTerminalAppearanceOptions = () => readTerminalAppearanceOptions(darkColor)
+const TERMINAL_BACKGROUND = darkColor('background')
 
 interface RenderedSpan {
   className: string
@@ -146,7 +158,7 @@ function renderCell(options: ITerminalOptions, foreground = 0, background = 0, s
 }
 
 describe('终端文字对比度', () => {
-  test('Given 应用浅色或深色主题 When 使用独立终端色面 Then 正文和光标都清晰可辨', () => {
+  test('Given 应用深色主题 When 使用设计令牌终端色面 Then 正文和光标都清晰可辨', () => {
     const options = getTerminalAppearanceOptions()
     const rendered = renderCell(options)
     expect(rendered.background).toBe(TERMINAL_BACKGROUND)
@@ -156,7 +168,7 @@ describe('终端文字对比度', () => {
 
   test('Given CLI 输出与深底接近的 truecolor When 渲染正文 Then 自动提高实际文字对比度', () => {
     const rendered = renderCell(getTerminalAppearanceOptions(), xterm.Attributes.CM_RGB | 0x18181b)
-    expect(contrast('#18181b', rendered.background)).toBeLessThan(1.2)
+    expect(contrast('#18181b', rendered.background)).toBeLessThan(1.3)
     expect(contrast(rendered.foreground, rendered.background)).toBeGreaterThanOrEqual(7)
   })
 

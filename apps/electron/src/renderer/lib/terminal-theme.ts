@@ -1,38 +1,44 @@
 import type { ITerminalOptions, ITheme } from '@xterm/xterm'
+import { readDesignColor } from './design-colors'
+import type { DesignColorReader } from './design-colors'
 
-/** 终端使用独立深色面板，避免 CLI 的 ANSI/truecolor 文字受应用主题影响。 */
-export const TERMINAL_BACKGROUND = '#111113'
+/** 外壳可直接使用 CSS 变量；xterm 的具体色值由读取器解析。 */
+export const TERMINAL_BACKGROUND = 'var(--color-background)'
 
-const TERMINAL_THEME: ITheme = {
-  background: TERMINAL_BACKGROUND,
-  foreground: '#e6e6e9',
-  cursor: '#e6e6e9',
-  cursorAccent: TERMINAL_BACKGROUND,
-  selectionBackground: '#404964',
-  selectionInactiveBackground: '#32394f',
-  black: '#23232a',
-  red: '#f87171',
-  green: '#a3d977',
-  yellow: '#e5c07b',
-  blue: '#82aaff',
-  magenta: '#c792ea',
-  cyan: '#89ddff',
-  white: '#d4d4dc',
-  brightBlack: '#b7b7c0',
-  brightRed: '#fca5a5',
-  brightGreen: '#bef28d',
-  brightYellow: '#f6df9b',
-  brightBlue: '#a8c4ff',
-  brightMagenta: '#ddb6f2',
-  brightCyan: '#b5e9ff',
-  brightWhite: '#fafafa',
-}
-
-/** 不改写 PTY 输出；由 xterm 对真实背景自动修正 ANSI、256 色和 truecolor 的低对比文字。 */
-export function getTerminalAppearanceOptions(): Pick<ITerminalOptions, 'theme' | 'minimumContrastRatio'> {
+/** 不改写 PTY 输出；只统一终端默认表面、光标、选区和 ANSI 基色。 */
+export function getTerminalAppearanceOptions(readColor: DesignColorReader = readDesignColor): Pick<ITerminalOptions, 'theme' | 'minimumContrastRatio'> {
+  const background = readColor('background')
+  const text = readColor('text')
+  const secondary = readColor('secondary')
+  const accent = readColor('accent')
+  const inset = readColor('inset')
+  const theme: ITheme = {
+    background,
+    foreground: text,
+    cursor: text,
+    cursorAccent: background,
+    selectionBackground: inset,
+    selectionInactiveBackground: inset,
+    black: background,
+    red: accent,
+    green: secondary,
+    yellow: accent,
+    blue: secondary,
+    magenta: accent,
+    cyan: secondary,
+    white: text,
+    brightBlack: secondary,
+    brightRed: accent,
+    brightGreen: text,
+    brightYellow: accent,
+    brightBlue: text,
+    brightMagenta: accent,
+    brightCyan: text,
+    brightWhite: text,
+  }
   return {
-    theme: { ...TERMINAL_THEME },
-    // xterm 的 dim 分支按一半的阈值修正深灰提示，保留正文和次要文字的层次。
+    theme,
+    // CLI truecolor 是用户内容，仍由 xterm 修正过低对比度，不重写输出。
     minimumContrastRatio: 7,
   }
 }

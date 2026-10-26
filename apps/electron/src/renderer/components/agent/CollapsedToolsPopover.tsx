@@ -12,6 +12,7 @@ import {
   composeEventHandlers,
   useHoverPopover,
 } from '@/hooks/useHoverPopover'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 type TriggerElement = React.ReactElement<{
   onMouseEnter?: React.MouseEventHandler
@@ -76,13 +77,13 @@ export function CollapsedToolsPopover({
               )}
             >
               <span className="flex size-4 shrink-0 items-center justify-center">{item.icon}</span>
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              <FadeTitle className="min-w-0 flex-1 truncate">{item.label}</FadeTitle>
               {item.badge && (
                 <span className="rounded-full bg-primary px-1.5 text-[10px] font-medium leading-4 text-primary-foreground tabular-nums">
                   {item.badge}
                 </span>
               )}
-              {item.showUpdate && <span className="size-2 shrink-0 rounded-full bg-blue-500" />}
+              {item.showUpdate && <span className="size-2 shrink-0 rounded-full bg-info" />}
             </button>
           ))}
         </div>

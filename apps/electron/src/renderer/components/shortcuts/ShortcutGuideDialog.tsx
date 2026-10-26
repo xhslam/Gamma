@@ -215,7 +215,7 @@ export function ShortcutGuideDialog(): React.ReactElement {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/40 titlebar-no-drag transition-opacity duration-100 data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-overlay/40 titlebar-no-drag transition-opacity duration-100 data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className="fixed left-1/2 top-1/2 z-[100] flex h-[85vh] max-h-[752px] w-[85vw] max-w-[992px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-dialog text-dialog-foreground shadow-2xl titlebar-no-drag transition-all duration-100 data-[state=open]:opacity-100 data-[state=open]:scale-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.98]"
@@ -230,7 +230,7 @@ export function ShortcutGuideDialog(): React.ReactElement {
                 <p className="text-xs text-muted-foreground">{isMac ? 'macOS 当前生效按键' : '当前生效按键'}</p>
               </div>
             </div>
-            <DialogPrimitive.Close
+            <DialogPrimitive.Close data-icon-button="true"
               className={cn(
                 'rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground',
                 'focus-visible:bg-muted focus-visible:text-foreground',

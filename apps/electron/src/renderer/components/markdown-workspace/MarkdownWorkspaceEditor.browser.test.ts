@@ -389,6 +389,6 @@ describe('Given 真实 Chromium Markdown 编辑工作区', () => {
       if(!narrowFits) throw new Error('窄栏尺寸：'+JSON.stringify({width:footer.clientWidth,scrollWidth:footer.scrollWidth,children:[...footer.children].map(node=>({tag:node.tagName,label:node.getAttribute('aria-label'),width:node.getBoundingClientRect().width,display:getComputedStyle(node).display,position:getComputedStyle(node).position}))}));
       fixture.root.unmount(); return {centered,fontSize,quiet,bottom,narrowFits,sidebarOutline,noDuplicateOutline};
     `)
-    expect(result).toEqual({ centered: true, fontSize: 18, quiet: true, bottom: true, narrowFits: true, sidebarOutline: true, noDuplicateOutline: true })
+    expect(result).toEqual({ centered: true, fontSize: 15.5, quiet: true, bottom: true, narrowFits: true, sidebarOutline: true, noDuplicateOutline: true })
   }, 30_000)
 })

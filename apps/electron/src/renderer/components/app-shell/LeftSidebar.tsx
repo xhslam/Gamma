@@ -6,8 +6,9 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronRight, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen, TerminalSquare } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen, TerminalSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { UI_LIST_ROW_HEIGHT_PX } from '@/lib/workbench-layout'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SearchDialog } from './SearchDialog'
 import { UserAvatar } from '@/components/session/UserAvatar'
@@ -144,6 +145,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import type { AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 function formatAutomationCount(count: number): string {
   return count > 99 ? '99+' : String(count)
@@ -254,7 +257,7 @@ function WorkspaceComponentSidebarEntry({ label, icon, active, onClick, badge }:
         <span className={cn('flex size-4 shrink-0 items-center justify-center [&>svg]:stroke-[1.5]', active ? 'text-foreground' : 'text-muted-foreground')}>
           {icon}
         </span>
-        <span className="truncate">{label}</span>
+        <FadeTitle className="truncate">{label}</FadeTitle>
       </span>
       {badge && <span className="ml-2 flex shrink-0 items-center">{badge}</span>}
     </button>
@@ -586,7 +589,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   const updateStatus = useAtomValue(updateStatusAtom)
   const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom)
   const density = useAtomValue(workbenchDensityAtom)
-  const sidebarRowHeight = density === 'comfortable' ? 36 : 28
+  const sidebarRowHeight = UI_LIST_ROW_HEIGHT_PX
   const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
   const productivityTools = useAtomValue(productivityToolsAtom)
 
@@ -2150,7 +2153,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           <div className="pl-1 pr-3">
             <section className="relative py-0.5 rounded-md">
               <div className="group/project relative flex items-center">
-                <button
+                <button data-disclosure-trigger=""
                   type="button"
                   aria-expanded={!collapsed}
                   aria-current={isCurrentProject ? 'true' : undefined}
@@ -2166,7 +2169,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                     <FolderOpen size={14} className="flex-shrink-0 text-[hsl(var(--sidebar-primary-foreground)/0.78)] dark:text-[hsl(var(--sidebar-primary-foreground)/0.65)]" />
                   )}
                   <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="min-w-0 truncate text-[13px] font-medium leading-[18px]">{group.label}</span>
+                    <FadeTitle className="min-w-0 truncate text-[13px] font-medium leading-[18px]">{group.label}</FadeTitle>
                     <LocalProjectBadge
                       projectRootPath={group.workspace?.projectRootPath}
                       projectRootStatus={group.workspace?.projectRootStatus}
@@ -2174,7 +2177,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                   </span>
                   <span className="min-w-[4px] flex-1" aria-hidden="true" />
                   {group.kind === 'automation' && (
-                    <ChevronRight
+                    <DisclosureChevron expanded={!(collapsed)}
                       size={12}
                       className={cn(
                         'flex-shrink-0 text-foreground/30 transition-transform duration-150',
@@ -2287,7 +2290,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
         estimateSize: sidebarRowHeight,
         content: (
           <div
-            className="ml-7"
+            className="ml-5"
             onDragOver={projectWorkspaceId ? (event) => handleProjectDragOver(event, projectWorkspaceId) : undefined}
             onDragLeave={projectWorkspaceId ? handleProjectDragLeave : undefined}
             onDrop={projectWorkspaceId ? (event) => handleProjectDrop(event, projectWorkspaceId) : undefined}
@@ -2330,7 +2333,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             content: (
               <div
                 className={cn(
-                  'ml-7 border-l border-foreground/10 pl-2',
+                  'ml-5 border-l border-foreground/10 pl-2',
                   childIndex === 0 && 'pt-0.5',
                 )}
                 onDragOver={projectWorkspaceId ? (event) => handleProjectDragOver(event, projectWorkspaceId) : undefined}
@@ -2382,7 +2385,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   disabled={!hasExpandedProject}
                   onClick={() => {
@@ -2402,7 +2405,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   onClick={() => void handleCreateProjectFromFolder()}
                   className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
@@ -2415,7 +2418,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   onClick={handleStartCreateProject}
                   className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
@@ -2574,10 +2577,11 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   return (
     <div
       ref={sidebarRootRef}
+      data-panel="sidebar"
       data-workbench-density={density}
       data-session-switch-hints={quickSwitchHintsVisible ? 'true' : undefined}
       className={cn(
-        'gamma-sidebar relative h-full flex flex-col',
+        'gamma-panel gamma-sidebar relative h-full flex flex-col',
         !noTransition && 'transition-[width] duration-300',
         'bg-[hsl(var(--sidebar-surface))]'
       )}
@@ -2587,16 +2591,16 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
         height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.expandedMac : SIDEBAR_DRAG_STRIP_HEIGHT.expanded}
       />
 
-      {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
-      <div className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[30px]' : 'h-1')} />
+      {/* 面板内边距承担顶部留白；macOS仅补8px，避免叠加旧30px补偿并挤压历史区。 */}
+      <div className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-2' : 'h-0')} />
 
       {/* 字标与窗口控制独立成行，为工作模式和列表保留清晰层级。 */}
-      <div className="titlebar-drag-region shrink-0 px-4">
+      <div className="titlebar-drag-region shrink-0">
         <div className="flex h-12 items-center justify-between">
           <span className="gamma-wordmark select-none text-2xl leading-none tracking-tight text-foreground">Gamma</span>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 aria-label="收起侧边栏"
                 onClick={() => setSidebarCollapsed(true)}
@@ -2622,7 +2626,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       </div>
 
       {/* 新建始终在主导航首位，搜索置于底部账户区。 */}
-      <div className="shrink-0 px-2">
+      <div className="shrink-0">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -2654,7 +2658,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       </div>
 
       {/* 项目级组件：每一行直接打开对应的右侧工作区 Tab。 */}
-      <nav aria-label="工作区" className="shrink-0 px-2 pt-1">
+      <nav aria-label="工作区" className="shrink-0 pt-1">
         <WorkspaceComponentSidebarEntry
           label="AGY"
           icon={<TerminalSquare size={16} />}
@@ -2706,17 +2710,16 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             icon={<Blocks size={16} />}
             active={isWorkspaceComponentActive('skills') || isWorkspaceComponentActive('mcp')}
             onClick={handleOpenMcpSkillsComponents}
-            badge={(capabilities?.skills.filter((skill) => skill.hasUpdate).length ?? 0) > 0 ? <span className="size-2 rounded-full bg-blue-500" /> : undefined}
+            badge={(capabilities?.skills.filter((skill) => skill.hasUpdate).length ?? 0) > 0 ? <span className="size-2 rounded-full bg-info" /> : undefined}
           />
         )}
       </nav>
 
-      <div className="h-4 shrink-0" aria-hidden="true" />
 
       {/* 原生与虚拟列表共享顶部反馈，切换视图时不沿用上一列表的滚动状态。 */}
       {viewMode === 'active' ? (
         <SidebarScrollBoundary key="agent-active-boundary">
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin titlebar-no-drag px-2 pb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin titlebar-no-drag">
             {agentActiveVirtualRows.map((row) => (
               <React.Fragment key={row.id}>{row.content}</React.Fragment>
             ))}
@@ -2738,7 +2741,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             <SidebarScrollBoundary key="agent-archived-boundary">
               <VirtualSidebarList
                 key="agent-archived-list"
-                className="flex-1 px-3 pt-2 pb-3"
+                className="flex-1 pt-2"
                 rows={agentArchivedVirtualRows}
                 activeRowId={activeSessionId ? `agent-archived-${activeSessionId}` : null}
               />
@@ -2748,7 +2751,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       )}
 
       {/* 已归档入口 / 返回活跃对话 */}
-      <div className="shrink-0 px-3 pb-1">
+      <div className="shrink-0 pb-1">
         {viewMode === 'active' ? (
           <button
             type="button"
@@ -2770,8 +2773,8 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       </div>
 
       {/* 底部账户区保留个人资料、搜索、更新与设置入口。 */}
-      <div className="shrink-0 border-t border-foreground/[0.06] px-2 py-2">
-        <div className="flex items-center gap-1 rounded-md px-2 py-1 text-foreground/75 titlebar-no-drag">
+      <div className="shrink-0 border-t border-foreground/[0.06]">
+        <div className="flex items-center gap-1 rounded-md text-foreground/75 titlebar-no-drag">
           <button
             type="button"
             aria-label="个人资料与设置"
@@ -2779,7 +2782,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
           >
             <UserAvatar avatar={userProfile.avatar} size={28} />
-            <span className="flex-1 truncate text-left text-sm">{userProfile.userName || 'Gamma'}</span>
+            <FadeTitle className="flex-1 truncate text-left text-sm">{userProfile.userName || 'Gamma'}</FadeTitle>
           </button>
           {hasUpdate && (
             <SidebarUpdateButton
@@ -2794,7 +2797,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 aria-label="搜索"
                 onClick={() => setSearchDialogOpen(true)}
@@ -2819,7 +2822,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             <div className="relative flex-shrink-0">
               <Settings size={16} strokeWidth={1.5} />
               {hasEnvironmentIssues && (
-                <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-red-500" />
+                <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-destructive" />
               )}
             </div>
           </button>
@@ -3004,7 +3007,7 @@ function SessionItemActions({
           content={archiveConfirming ? '再次点击确认归档' : archived ? '取消归档' : '归档'}
           side="top"
         >
-          <button
+          <button data-icon-button="true"
             type="button"
             aria-label={archiveConfirming ? '再次点击确认归档' : archived ? '取消归档' : '归档'}
             className={cn(
@@ -3022,7 +3025,7 @@ function SessionItemActions({
         </SafeTooltip>
         <DropdownMenu onOpenChange={handleMenuOpenChange}>
           <DropdownMenuTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               aria-label="更多会话操作"
               title="更多会话操作"
@@ -3051,15 +3054,15 @@ function SessionItemActions({
 /** 会话行左侧状态条的颜色 — 与 SessionIndicatorStatus 呼应 */
 type SessionLeftAccent = 'orange' | 'blue' | 'green'
 const SESSION_ACCENT_ROW_CLASS: Record<SessionLeftAccent, string> = {
-  orange: 'bg-orange-500/[0.08] text-foreground font-medium',
+  orange: 'bg-warning/[0.08] text-foreground font-medium',
   blue: 'text-foreground font-medium hover:bg-foreground/[0.03]',
   green: 'text-foreground font-medium hover:bg-foreground/[0.03]',
 }
 
 const SESSION_ACCENT_INDICATOR_CLASS: Record<SessionLeftAccent, string> = {
-  orange: 'bg-orange-500',
-  blue: 'bg-blue-500',
-  green: 'bg-green-500',
+  orange: 'bg-warning',
+  blue: 'bg-info',
+  green: 'bg-success',
 }
 
 function getSessionLeftAccent(status: SessionIndicatorStatus): SessionLeftAccent | undefined {
@@ -3292,7 +3295,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
           onMouseLeave={() => { setRowHovered(false); preview.handleMouseLeave() }}
           style={active ? undefined : {
             contentVisibility: 'auto',
-            containIntrinsicSize: 'auto var(--workbench-sidebar-row-height, 28px)',
+            containIntrinsicSize: 'auto var(--workbench-sidebar-row-height, 34px)',
           }}
           className={cn(
             'session-quick-switch-row group relative w-full flex items-center gap-1.5 rounded-lg py-1.5 pl-2.5 pr-1.5 transition-colors duration-150 titlebar-no-drag text-left',
@@ -3337,7 +3340,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                 {session.sourceDelegationId && (
                   <GitBranch size={11} className={cn('flex-shrink-0', getDelegationStatusIconClass(indicatorStatus))} />
                 )}
-                <span
+                <FadeTitle
                   className="truncate"
                   onDoubleClick={(event) => {
                     event.stopPropagation()
@@ -3345,9 +3348,9 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                   }}
                 >
                   {session.title}
-                </span>
+                </FadeTitle>
                 <SafeTooltip content={session.starred ? '取消星标' : '添加星标'} side="top">
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     aria-label={session.starred ? '取消星标' : '添加星标'}
                     aria-pressed={!!session.starred}
@@ -3370,7 +3373,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                     className={cn(
                       'flex-shrink-0 inline-flex size-6 -my-1 items-center justify-center rounded transition-colors',
                       session.starred
-                        ? 'text-amber-500 hover:text-amber-500'
+                        ? 'text-warning hover:text-warning'
                         : cn('text-foreground/45 hover:bg-foreground/[0.055] hover:text-foreground/70 group-focus-within:w-6 group-focus-within:ml-0 group-focus-within:opacity-100', rowHovered ? 'opacity-100' : 'w-0 overflow-hidden opacity-0 -ml-1.5'),
                     )}
                   >
@@ -3378,9 +3381,9 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                   </button>
                 </SafeTooltip>
                 {workspaceName && (
-                  <span className="flex-shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[80px]">
+                  <FadeTitle className="flex-shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[80px]">
                     {workspaceName}
-                  </span>
+                  </FadeTitle>
                 )}
               </div>
             )}
@@ -3397,7 +3400,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                     {delegationSummary.settled}/{delegationSummary.total}
                   </span>
                   <SafeTooltip content={delegationSummary.expanded ? '收起子会话' : '展开子会话'} side="top">
-                    <button
+                    <button data-disclosure-trigger="" aria-expanded={delegationSummary.expanded}
                       type="button"
                       aria-label={`${delegationSummary.expanded ? '收起' : '展开'}子会话`}
                       onMouseEnter={preview.closeNow}
@@ -3417,7 +3420,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                       }}
                       className="session-delegation-toggle inline-flex size-6 -my-1 items-center justify-center rounded text-foreground/45 hover:bg-foreground/[0.055] hover:text-foreground/70 transition-colors"
                     >
-                      <ChevronRight
+                      <DisclosureChevron expanded={delegationSummary.expanded}
                         size={11}
                         className={cn(
                           'transition-transform duration-150',
@@ -3725,7 +3728,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
             />
           </div>
         ) : (
-          <button
+          <button data-disclosure-trigger=""
             type="button"
             aria-expanded={!collapsed}
             aria-controls={hideSessions ? undefined : `project-sessions-${group.workspace.id}`}
@@ -3748,9 +3751,9 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               <FolderOpen size={14} className="flex-shrink-0 text-[hsl(var(--sidebar-primary-foreground)/0.78)] dark:text-[hsl(var(--sidebar-primary-foreground)/0.65)]" />
             )}
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="min-w-0 truncate text-[13px] font-medium leading-[18px]">
+              <FadeTitle className="min-w-0 truncate text-[13px] font-medium leading-[18px]">
                 {group.workspace.name}
-              </span>
+              </FadeTitle>
               <LocalProjectBadge
                 projectRootPath={group.workspace.projectRootPath}
                 projectRootStatus={group.workspace.projectRootStatus}
@@ -3758,7 +3761,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
             </span>
             <span className="min-w-[4px] flex-1" aria-hidden="true" />
             {isAutomationGroup && (
-              <ChevronRight
+              <DisclosureChevron expanded={!(collapsed)}
                 size={12}
                 className={cn(
                   'flex-shrink-0 text-foreground/30 transition-transform duration-150',
@@ -3772,7 +3775,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         {!isAutomationGroup && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               aria-label={`在「${group.workspace.name}」中新建会话`}
               onClick={(e) => {
@@ -3796,7 +3799,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         {!isAutomationGroup && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               aria-label="项目菜单"
               className="absolute right-5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/30 opacity-0 transition-colors hover:bg-foreground/[0.055] hover:text-foreground/60 group-hover/project:opacity-100 data-[state=open]:opacity-100 titlebar-no-drag"

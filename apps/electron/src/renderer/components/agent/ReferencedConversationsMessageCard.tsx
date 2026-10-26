@@ -6,6 +6,7 @@ import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { messageAttachmentClassName } from '@/components/session/attachment-styles'
 import type { AgentContextRef } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface ReferencedConversationsMessageCardProps {
   refs?: AgentContextRef[]
@@ -34,7 +35,7 @@ export function ReferencedConversationsMessageCard({
             title={`${title} · ${mode}${ref.estTokens ? ` · 约 ${ref.estTokens} tokens` : ''}${deleted ? ' · 源对话已删除' : ' · 打开源对话'}`}
           >
             <MessageSquareText className="size-3.5 shrink-0" />
-            <span className="truncate max-w-[200px]">{title}</span>
+            <FadeTitle className="truncate max-w-[200px]">{title}</FadeTitle>
             <span className="shrink-0 text-[10px] opacity-60">{deleted ? '源对话已删除' : mode}</span>
           </button>
         )

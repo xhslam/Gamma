@@ -24,6 +24,7 @@ import {
   composeEventHandlers,
   useHoverPopover,
 } from '@/hooks/useHoverPopover'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 type TriggerElement = React.ReactElement<{
   onClick?: React.MouseEventHandler
@@ -131,7 +132,7 @@ export function CollapsedDelegatedSessionsPopover({
                   )}
                 >
                   <GitBranch className={cn('size-3.5 shrink-0', getDelegationStatusIconClass(status))} />
-                  <span className="min-w-0 flex-1 truncate">{session.title || '未命名子会话'}</span>
+                  <FadeTitle className="min-w-0 flex-1 truncate">{session.title || '未命名子会话'}</FadeTitle>
                 </button>
               )
             })}

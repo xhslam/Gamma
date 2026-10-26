@@ -1072,11 +1072,11 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                   <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-2">
                     <div>在任意可访问网络的浏览器中打开链接，并输入设备码：<span className="font-mono font-medium text-foreground">{codexDeviceCode.userCode}</span></div>
                     <a href={codexDeviceCode.verificationUri} target="_blank" rel="noreferrer" className="text-primary hover:underline">打开 ChatGPT 授权页面</a>
-                    {codexDeviceCode.qrCodeData && <img src={codexDeviceCode.qrCodeData} alt="ChatGPT 设备码授权二维码" className="h-28 w-28 rounded bg-white p-1" />}
+                    {codexDeviceCode.qrCodeData && <img src={codexDeviceCode.qrCodeData} alt="ChatGPT 设备码授权二维码" className="h-28 w-28 rounded bg-card p-1" />}
                   </div>
                 )}
                 {hasRequiredSecret ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <div className="flex items-center gap-1.5 text-xs text-success">
                     <CheckCircle2 size={12} className="shrink-0" />
                     <span>已登录 ChatGPT 订阅{codexCredentials?.accountId ? `（账号 ${codexCredentials.accountId.slice(0, 8)}…）` : ''}</span>
                   </div>
@@ -1110,11 +1110,11 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                   <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-2">
                     <div>在 GitHub 授权页面输入设备码：<span className="font-mono font-medium text-foreground">{githubCopilotDeviceCode.userCode}</span></div>
                     <a href={githubCopilotDeviceCode.verificationUri} target="_blank" rel="noreferrer" className="text-primary hover:underline">打开 GitHub 授权页面</a>
-                    {githubCopilotDeviceCode.qrCodeData && <img src={githubCopilotDeviceCode.qrCodeData} alt="GitHub Copilot 设备码授权二维码" className="h-28 w-28 rounded bg-white p-1" />}
+                    {githubCopilotDeviceCode.qrCodeData && <img src={githubCopilotDeviceCode.qrCodeData} alt="GitHub Copilot 设备码授权二维码" className="h-28 w-28 rounded bg-card p-1" />}
                   </div>
                 )}
                 {hasRequiredSecret ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <div className="flex items-center gap-1.5 text-xs text-success">
                     <CheckCircle2 size={12} className="shrink-0" />
                     <span>已登录 GitHub Copilot 订阅（{githubCopilotCredentials?.availableModelIds.length ?? 0} 个可用模型）</span>
                   </div>
@@ -1144,11 +1144,11 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                     <a href={xaiDeviceCode.verificationUri} target="_blank" rel="noreferrer" className="text-primary hover:underline">
                       打开 xAI 授权页面
                     </a>
-                    {xaiDeviceCode.qrCodeData && <img src={xaiDeviceCode.qrCodeData} alt="xAI 设备码授权二维码" className="h-28 w-28 rounded bg-white p-1" />}
+                    {xaiDeviceCode.qrCodeData && <img src={xaiDeviceCode.qrCodeData} alt="xAI 设备码授权二维码" className="h-28 w-28 rounded bg-card p-1" />}
                   </div>
                 )}
                 {hasRequiredSecret ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <div className="flex items-center gap-1.5 text-xs text-success">
                     <CheckCircle2 size={12} className="shrink-0" />
                     <span>已登录 xAI（Grok）订阅</span>
                   </div>
@@ -1165,7 +1165,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                     required={!isEdit}
                     className="pr-10"
                   />
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -1210,7 +1210,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                   required={!isEdit}
                   className="pr-10"
                 />
-                <button
+                <button data-icon-button="true"
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -1223,7 +1223,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
             {testResult && (
               <div className={cn(
                 'flex items-start gap-1.5 text-xs',
-                testResult.success ? 'text-emerald-600' : 'text-destructive'
+                testResult.success ? 'text-success' : 'text-destructive'
               )}>
                 {testResult.success
                   ? <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
@@ -1258,14 +1258,14 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                   key={model.id}
                   className="flex items-center gap-2 px-4 py-2.5 group"
                 >
-                  <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                  <CheckCircle2 size={14} className="text-success flex-shrink-0" />
                   <span className="text-sm text-foreground flex-1">
                     {model.name}
                     {model.name !== model.id && (
                       <span className="text-muted-foreground ml-1">({model.id})</span>
                     )}
                   </span>
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     onClick={() => handleToggleModel(model.id)}
                     className="p-0.5 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
@@ -1305,7 +1305,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
         {fetchResult && (
           <div className={cn(
             'flex items-center gap-1.5 text-xs px-1',
-            fetchResult.success ? 'text-emerald-600' : 'text-destructive'
+            fetchResult.success ? 'text-success' : 'text-destructive'
           )}>
             {fetchResult.success ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
             <span>{fetchResult.message}</span>
@@ -1352,7 +1352,7 @@ export function ChannelForm({ channel, onSaved, onCancel }: ChannelFormProps): R
                       <span className="text-muted-foreground ml-1">({model.id})</span>
                     )}
                   </span>
-                  <button
+                  <button data-icon-button="true"
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleRemoveModel(model.id) }}
                     className="p-0.5 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"

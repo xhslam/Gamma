@@ -13,6 +13,7 @@ import { ExternalLink } from 'lucide-react'
 import { CodeBlock } from '@gamma/ui'
 import { cn } from '@/lib/utils'
 import { copyTextToClipboard } from '@/lib/clipboard'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface ReleaseNotesViewerProps {
   /** Release 数据 */
@@ -62,9 +63,9 @@ export function ReleaseNotesViewer({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-semibold truncate">
+              <FadeTitle as="h3" className="text-sm font-semibold truncate">
                 {releaseName}
-              </h3>
+              </FadeTitle>
               {release.prerelease && (
                 <Badge variant="secondary" className="text-xs">
                   预发布

@@ -33,6 +33,7 @@ import {
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { Bot, GitBranch } from 'lucide-react'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export function TabSwitcher(): ReactElement | null {
   const store = useStore()
@@ -268,7 +269,7 @@ export function TabSwitcher(): ReactElement | null {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-overlay/40" />
 
       <div className="relative bg-popover border border-border/50 rounded-xl shadow-2xl min-w-[420px] max-w-[540px] overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-border/40 bg-muted/30">
@@ -383,11 +384,11 @@ function SwitcherCandidateRow({
           </>
         )}
       </span>
-      <span className="flex-1 min-w-0 truncate">{candidate.title}</span>
+      <FadeTitle className="flex-1 min-w-0 truncate">{candidate.title}</FadeTitle>
       {candidate.workspaceName && (
-        <span className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[110px]">
+        <FadeTitle className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[110px]">
           {candidate.workspaceName}
-        </span>
+        </FadeTitle>
       )}
     </button>
   )
@@ -403,7 +404,7 @@ function Kbd({ children }: { children: ReactNode }): ReactElement {
 
 function getIndicatorColor(status: SessionIndicatorStatus): string | undefined {
   if (status === 'idle') return undefined
-  if (status === 'completed') return 'bg-green-500'
-  if (status === 'blocked') return 'bg-orange-500'
-  return 'bg-blue-500'
+  if (status === 'completed') return 'bg-success'
+  if (status === 'blocked') return 'bg-warning'
+  return 'bg-info'
 }

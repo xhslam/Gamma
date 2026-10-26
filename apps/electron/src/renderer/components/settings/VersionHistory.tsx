@@ -6,9 +6,11 @@
 
 import * as React from 'react'
 import type { GitHubRelease } from '@gamma/shared'
-import { RefreshCw, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshCw, Loader2} from 'lucide-react'
 import { ReleaseNotesViewer } from './ReleaseNotesViewer'
 import { SettingsCard } from './primitives'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 /**
  * VersionHistory 组件
@@ -108,16 +110,16 @@ export function VersionHistory(): React.ReactElement {
             return (
               <div key={release.id} className="p-4">
                 {/* 版本标题（可点击展开） */}
-                <button
+                <button data-disclosure-trigger="" aria-expanded={isExpanded}
                   onClick={() => toggleExpand(release.id)}
                   className="w-full flex items-center justify-between text-left hover:bg-accent/50 -m-4 p-4 rounded-lg transition-colors"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium font-mono truncate">
+                        <FadeTitle className="text-sm font-medium font-mono truncate">
                           {release.tag_name}
-                        </span>
+                        </FadeTitle>
                         {isLatest && (
                           <span className="text-xs text-primary font-medium">
                             最新
@@ -125,20 +127,16 @@ export function VersionHistory(): React.ReactElement {
                         )}
                       </div>
                       {release.name && release.name !== release.tag_name && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        <FadeTitle as="p" className="text-xs text-muted-foreground mt-0.5 truncate">
                           {release.name}
-                        </p>
+                        </FadeTitle>
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground shrink-0">
                       {new Date(release.published_at).toLocaleDateString('zh-CN')}
                     </span>
                   </div>
-                  {isExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
-                  )}
+                  <DisclosureChevron expanded={isExpanded} size={16} className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
                 </button>
 
                 {/* Release Notes（展开时显示） */}

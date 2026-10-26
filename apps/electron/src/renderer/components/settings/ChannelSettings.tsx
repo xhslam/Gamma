@@ -218,12 +218,12 @@ function AuthorizationSuccessNotice({
     <div
       role="status"
       aria-live="polite"
-      className="flex items-start gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-3 text-emerald-950 shadow-[0_1px_2px_rgba(16,185,129,0.08)] dark:text-emerald-100"
+      className="flex items-start gap-3 rounded-xl border border-success/25 bg-success/[0.08] px-4 py-3 text-success shadow-[0_1px_2px_hsl(var(--shadow-ink)/0.08)] dark:text-success"
     >
-      <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+      <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-success dark:text-success" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-wrap-pretty">GitHub Copilot 已授权并保存</p>
-        <p className="mt-0.5 text-xs leading-5 text-emerald-800/80 dark:text-emerald-200/80">
+        <p className="mt-0.5 text-xs leading-5 text-success/80 dark:text-success/80">
           已启用 <span className="font-medium tabular-nums">{enabledModelCount}</span> 个当前订阅可用模型；现在可在 Agent 的模型选择器中使用。
         </p>
         <Button
@@ -231,15 +231,15 @@ function AuthorizationSuccessNotice({
           variant="link"
           size="sm"
           onClick={onViewModels}
-          className="mt-1 h-7 px-0 text-emerald-800 hover:text-emerald-950 dark:text-emerald-200 dark:hover:text-emerald-50"
+          className="mt-1 h-7 px-0 text-success hover:text-success dark:text-success dark:hover:text-success"
         >
           查看已启用模型
         </Button>
       </div>
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={onDismiss}
-        className="-mr-1 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-emerald-800/70 transition-colors hover:bg-emerald-500/10 hover:text-emerald-950 active:scale-[0.96] dark:text-emerald-200/70 dark:hover:text-emerald-50"
+        className="-mr-1 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-success/70 transition-colors hover:bg-success/10 hover:text-success active:scale-[0.96] dark:text-success/70 dark:hover:text-success"
         title="关闭授权成功提示"
         aria-label="关闭授权成功提示"
       >
@@ -277,14 +277,14 @@ function ChannelRow({ channel, onEdit, onDelete, onToggle }: ChannelRowProps): R
     >
       <div className="flex items-center gap-2">
         {/* 操作按钮 */}
-        <button
+        <button data-icon-button="true"
           onClick={onEdit}
           className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100"
           title="编辑"
         >
           <Pencil size={14} />
         </button>
-        <button
+        <button data-icon-button="true"
           onClick={onDelete}
           className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
           title="删除"

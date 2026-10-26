@@ -8,8 +8,9 @@
  */
 
 import * as React from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import {} from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 interface CollapsibleResultProps {
   /** 内容文本 */
@@ -47,19 +48,19 @@ export function CollapsibleResult({
       {renderContent(displayContent)}
 
       {needsCollapse && (
-        <button
+        <button data-disclosure-trigger="" aria-expanded={expanded}
           type="button"
           onClick={() => setExpanded(!expanded)}
           className="mt-2 flex items-center gap-1 text-[11px] text-foreground/35 transition-colors hover:text-foreground/55"
         >
           {expanded ? (
             <>
-              <ChevronUp className="size-3" />
+              <DisclosureChevron expanded={expanded} size={12} className="size-3" />
               收起
             </>
           ) : (
             <>
-              <ChevronDown className="size-3" />
+              <DisclosureChevron expanded={expanded} size={12} className="size-3" />
               展开全部
             </>
           )}

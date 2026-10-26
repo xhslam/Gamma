@@ -1,3 +1,5 @@
+import { WORKSPACE_LAYOUT_INSETS_PX } from '@/lib/workbench-layout'
+
 export const RIGHT_PANEL_MAX_VIEWPORT_RATIO = 3 / 5
 export const MIN_MAIN_AREA_WIDTH = 320
 
@@ -15,7 +17,7 @@ export function getRightPanelMaxWidth(
 ): number {
   viewportWidth = Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0
   leftSidebarOccupiedWidth = Number.isFinite(leftSidebarOccupiedWidth) ? Math.max(0, leftSidebarOccupiedWidth) : 0
-  const availableWidth = viewportWidth - leftSidebarOccupiedWidth - MIN_MAIN_AREA_WIDTH
+  const availableWidth = viewportWidth - leftSidebarOccupiedWidth - WORKSPACE_LAYOUT_INSETS_PX - MIN_MAIN_AREA_WIDTH
   return Math.max(
     0,
     allowFullAvailableWidth

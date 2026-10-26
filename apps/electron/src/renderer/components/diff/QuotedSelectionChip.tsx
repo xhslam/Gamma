@@ -65,7 +65,7 @@ export function QuotedSelectionChip({
           {sourceLabel ?? truncatePath(filePath)}
         </span>
       </div>
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={handleRemoveClick}
         className={cn(

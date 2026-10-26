@@ -38,6 +38,7 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '../ui/dropdown-menu'
 import './markdown-workspace.css'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 interface Props { workspaceId?: string; sessionId?: string }
 interface Confirmation { kind: 'format' | 'close' | 'reload'; documentId: string; formatted?: string; original?: string }
@@ -440,7 +441,7 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
                   aria-pressed={isActive}
                   onClick={() => setState(current => ({ ...current, activeId: id, loadingKey: null }))}
                 >
-                  <span className="truncate">{item.name}</span>
+                  <FadeTitle className="truncate">{item.name}</FadeTitle>
                   {dirty && <span className="tab-dirty-dot markdown-document-dirty" aria-label="未保存">•</span>}
                 </button>
                 <Button

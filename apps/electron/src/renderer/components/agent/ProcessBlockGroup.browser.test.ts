@@ -18,18 +18,19 @@ beforeAll(async () => {
     const root=createRoot(document.getElementById('root')),store=createStore();
     window.electronAPI={};
     window.timeline={
-      async render({blocks,results=[],streaming=true,tail=true,approvalSession,approvalToolId='a',childBlocks}){
+      async render({blocks,results=[],streaming=true,tail=true,approvalSession,approvalToolId='a',childBlocks,tasks=[],startedAt,durationMs,expand=true}){
         const messages=results.map(r=>({type:'user',message:{role:'user',content:[{type:'tool_result',tool_use_id:r.id,content:r.text??'',is_error:r.error}]},parent_tool_use_id:null}));
         store.set(allPendingPermissionRequestsAtom,approvalSession?new Map([[approvalSession,[{sessionId:approvalSession,requestId:'p',toolUseId:approvalToolId,toolName:'Bash',toolInput:{},description:'确认',dangerLevel:'normal'}]]]):new Map());
         root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,
-          React.createElement(ProcessBlockGroup,{blocks,allMessages:messages,isStreaming:streaming,renderChildren:()=>blocks.map((block,i)=>React.createElement(React.Fragment,{key:i},React.createElement(ContentBlock,{block,allMessages:messages,isStreaming:streaming,childBlocks})))})))));
-        await this.wait(100);return this.read();
+          React.createElement(ProcessBlockGroup,{blocks,allMessages:messages,isStreaming:streaming,startedAt,durationMs,taskActivities:tasks.map(task=>({toolUseId:'task-'+task.id,toolName:'TaskUpdate',input:{taskId:task.id,...task},done:true})),renderChildren:()=>{this.renderCalls++;return blocks.map((block,i)=>React.createElement(React.Fragment,{key:i},React.createElement(ContentBlock,{block,allMessages:messages,isStreaming:streaming,childBlocks})))}})))));
+        await this.wait(260);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
       },
-      async renderTurn(blocks){
+      renderCalls:0,
+      async renderTurn(blocks,results=[],expand=true){
         const message={type:'assistant',uuid:'assistant-1',parent_tool_use_id:null,message:{role:'assistant',content:blocks}};
-        const turn={assistantMessages:[message],turnMessages:[message]};
-        root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,React.createElement(AssistantTurnRenderer,{turn,allMessages:[message],isStreaming:true})))));
-        await this.wait(100);return this.read();
+        const messages=[message,...results.map(r=>({type:'user',message:{role:'user',content:[{type:'tool_result',tool_use_id:r.id,content:r.text??'',is_error:r.error}]},parent_tool_use_id:null}))];const turn={type:'assistant-turn',assistantMessages:[message],turnMessages:messages};
+        root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,React.createElement(AssistantTurnRenderer,{turn,allMessages:messages,isStreaming:true})))));
+        await this.wait(260);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
       },
       wait:ms=>new Promise(r=>setTimeout(r,ms)),
       read(){const button=document.querySelector('[data-process-group-toggle]');return {
@@ -41,7 +42,7 @@ beforeAll(async () => {
         colors:[...document.querySelectorAll('[data-process-step-indicator]')].map(e=>getComputedStyle(e).color),
         labels:[...document.querySelectorAll('[data-process-step-indicator]')].map(e=>e.getAttribute('aria-label'))
       };},
-      async toggle(){document.querySelector('[data-process-group-toggle]').click();await this.wait(550);return this.read();}
+      async toggle(){document.querySelector('[data-process-group-toggle]').click();await this.wait(260);return this.read();}
     };
   `)
 }, 60_000)
@@ -60,7 +61,7 @@ interface TimelineSnapshot {
 const tools = `[ {type:'tool_use',id:'a',name:'Bash',input:{command:'pwd'}}, {type:'tool_use',id:'b',name:'Bash',input:{command:'ls'}} ]`
 
 describe('Given 可折叠执行过程时间线', () => {
-  test('When 并行工具运行且逐一收到结果 Then 只为未完成工具转圈并连续连接节点', async () => {
+  test('When 并行工具运行且逐一收到结果 Then 只为未完成工具保留运行圆环并连续连接节点', async () => {
     const snapshots = await renderer.run<TimelineSnapshot[]>(`
       const blocks=${tools},api=window.timeline;
       return [await api.render({blocks}),await api.render({blocks,results:[{id:'a'}]}),await api.render({blocks,results:[{id:'a'},{id:'b',text:'文件不存在',error:true}]})];
@@ -81,10 +82,10 @@ describe('Given 可折叠执行过程时间线', () => {
     expect(snapshots[0]?.spinners).toBe(1)
   }, 30_000)
 
-  test('When 历史工具未收到结果或被明确取消/拒绝 Then 不误标成功，也不转圈', async () => {
+  test('When 历史工具未收到结果或被明确取消/拒绝 Then 不误标成功或正在运行', async () => {
     const snapshot = await renderer.run<TimelineSnapshot>(`
       const blocks=[...${tools},{type:'tool_use',id:'c',name:'Bash',input:{command:'ls'}}];
-      await window.timeline.render({blocks,streaming:false,results:[{id:'b',text:'操作已中止',error:true},{id:'c',text:'用户拒绝了此操作',error:true}]});
+      await window.timeline.render({blocks,streaming:false,expand:false,results:[{id:'b',text:'操作已中止',error:true},{id:'c',text:'用户拒绝了此操作',error:true}]});
       return window.timeline.toggle();
     `)
     expect(snapshot.statuses).toEqual(['unknown', 'cancelled', 'denied'])
@@ -148,32 +149,32 @@ describe('Given 可折叠执行过程时间线', () => {
   test('When 深色时间线显示多种状态 Then 节点为精确8px纯色圆点/细环且没有节点内图标', async () => {
     const view = await renderer.run<{
       size: string[][]; colors: string[]; backgrounds: string[]; icons: number;
-      header: string; rows: string[]; rowHeights: number[]; fontSizes: string[];
-      textColor: string; lineColor: string; summaries: string[]; chevronOpacity: string[];
+      header: { expanded: string; glyph: string; label: string }; rows: string[]; rowHeights: number[]; fontSizes: string[];
+      textColor: string; lineColor: string; summaries: string[]; rowIcons: number;
     }>(`
       document.documentElement.classList.add('dark');const api=window.timeline;
       await api.render({blocks:[...${tools},{type:'tool_use',id:'c',name:'Bash',input:{command:'bun run typecheck'}},{type:'tool_use',id:'d',name:'Bash',input:{command:'bun run build'}}],results:[{id:'a'},{id:'b',text:'Error: 文件不存在\\n详细堆栈',error:true}],approvalSession:'A',approvalToolId:'d'});
       const nodes=[...document.querySelectorAll('[data-process-step-indicator]')],rows=[...document.querySelectorAll('[data-process-action-row]')];
       return {size:nodes.map(e=>[getComputedStyle(e).width,getComputedStyle(e).height]),colors:nodes.map(e=>getComputedStyle(e).color),backgrounds:nodes.map(e=>getComputedStyle(e).backgroundColor),icons:document.querySelectorAll('[data-process-step-indicator] svg').length,
-        header:document.querySelector('[data-process-group-toggle]').textContent,
+        header:{expanded:document.querySelector('[data-process-group-toggle] svg[data-disclosure-chevron]').getAttribute('data-expanded'),glyph:document.querySelector('[data-process-group-toggle] svg').tagName,label:document.querySelector('[data-process-group-toggle]').getAttribute('aria-label')},
         rows:rows.map(e=>e.textContent),rowHeights:rows.map(e=>e.getBoundingClientRect().height),fontSizes:rows.map(e=>getComputedStyle(e).fontSize),
         textColor:rows[0]&&getComputedStyle(rows[0]).color,lineColor:getComputedStyle(document.querySelector('[data-process-step-connector]')).backgroundColor,
-        summaries:[...document.querySelectorAll('[data-process-step-note]')].map(e=>e.textContent),chevronOpacity:rows.map(e=>getComputedStyle(e.querySelector('svg')).opacity)};
+        summaries:[...document.querySelectorAll('[data-process-step-note]')].map(e=>e.textContent),rowIcons:rows.reduce((count,e)=>count+e.querySelectorAll('svg').length,0)};
     `)
     expect(view.size).toEqual(Array(4).fill(['8px', '8px']))
-    expect(view.colors).toEqual(['rgb(95, 184, 120)', 'rgb(229, 100, 90)', 'rgb(217, 160, 91)', 'rgb(217, 160, 91)'])
+    expect(view.colors).toEqual(['rgb(176, 174, 165)', 'rgb(217, 119, 87)', 'rgb(217, 119, 87)', 'rgb(217, 119, 87)'])
     expect(view.backgrounds.slice(2)).toEqual(['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'])
     expect(view.icons).toBe(0)
-    expect(view.header).toBe('4 次工具调用 · 0 条思考')
-    expect(view.rows[0]).toBe('pwd')
-    expect(view.rows[1]).toContain('文件不存在')
+    expect(view.header).toEqual({ expanded: 'true', glyph: 'svg', label: '收起工具调用日志' })
+    expect(view.rows[0]).toBe('执行 pwd')
+    expect(view.rows[1]).toBe('执行 ls')
     expect(view.rows.join(' ')).not.toMatch(/Bash|已完成|执行失败|正在执行|详细堆栈/)
     expect(view.rowHeights).toEqual([28, 28, 28, 28])
     expect(view.fontSizes).toEqual(Array(4).fill('13px'))
-    expect(view.textColor).toBe('rgba(255, 255, 255, 0.72)')
-    expect(view.lineColor).toBe('rgba(255, 255, 255, 0.12)')
-    expect(view.summaries).toEqual(['文件不存在', '等待授权'])
-    expect(view.chevronOpacity).toEqual(Array(4).fill('0'))
+    expect(view.textColor).toBe('rgba(240, 238, 230, 0.72)')
+    expect(view.lineColor).toBe('rgba(240, 238, 230, 0.12)')
+    expect(view.summaries).toEqual([])
+    expect(view.rowIcons).toBe(0)
   }, 30_000)
 
   test('When 思考超过两行 Then 默认两行淡色斜体且可展开，没有标签、背景和边框', async () => {
@@ -201,4 +202,124 @@ describe('Given 可折叠执行过程时间线', () => {
     expect(result.texts).toBe(1)
   }, 30_000)
 
+})
+
+describe('Given 计划清单加单行实时状态', () => {
+  test('When 实时执行且尚未点击箭头 Then 默认不渲染日志，点击当前动作也不会展开', async () => {
+    const view = await renderer.run<{ before: TimelineSnapshot; afterText: TimelineSnapshot; opened: TimelineSnapshot; calls: number; text: string; arrow: string }>(`
+      const api=window.timeline;
+      const before=await api.render({blocks:${tools},expand:false,startedAt:Date.now()-18000});
+      const calls=api.renderCalls;
+      document.querySelector('[data-process-current-action]').click();await api.wait(260);
+      const afterText=api.read(),text=document.querySelector('[data-process-live-status]').textContent;
+      const arrow=document.querySelector('[data-process-group-toggle] svg[data-disclosure-chevron]').getAttribute('data-expanded');
+      return {before,afterText,opened:await api.toggle(),calls,text,arrow};
+    `)
+    expect(view.before.expanded).toBe('false')
+    expect(view.before.statuses).toEqual([])
+    expect(view.afterText.expanded).toBe('false')
+    expect(view.calls).toBe(0)
+    expect(view.opened.expanded).toBe('true')
+    expect(view.opened.statuses).toEqual(['running', 'running'])
+    expect(view.text).toMatch(/^···正在执行 ls18s$/)
+    expect(view.arrow).toBe('false')
+    expect(view.text).not.toMatch(/工具调用|思考|Bash/)
+  }, 30_000)
+
+  test('When 历史执行过程初次出现 Then 同样默认收起且不补造时间', async () => {
+    const view = await renderer.run<{ expanded: string; elapsed: boolean; animation: string }>(`
+      const api=window.timeline;await api.render({blocks:${tools},streaming:false,expand:false});
+      return {expanded:api.read().expanded,elapsed:!!document.querySelector('[data-process-elapsed]'),animation:getComputedStyle(document.querySelector('.process-live-dots > span')).animationName};
+    `)
+    expect(view).toEqual({ expanded: 'false', elapsed: false, animation: 'none' })
+  }, 30_000)
+
+  test('When 深色主题计划包含完成、运行、未开始、失败、审批 Then 只显示规定的圆圈、文字和错误摘要', async () => {
+    const view = await renderer.run<{
+      order: boolean; heights: number[]; sizes: string[][]; gaps: string[]; fonts: string[]; colors: string[];
+      error: { text: string; color: string; height: number }; border: string; background: string; rowText: string[];
+      liveColor: string; dotColor: string; dotCount: number; buttons: number; circleFills: string[];
+    }>(`
+      document.documentElement.classList.add('dark');const api=window.timeline;
+      await api.render({blocks:${tools},expand:false,tasks:[
+        {id:'done',subject:'定位组件',status:'completed'},
+        {id:'live',subject:'修改样式',status:'in_progress'},
+        {id:'next',subject:'运行验证',status:'pending'},
+        {id:'error',subject:'检查输入',status:'error',description:'Error: 文件不存在\\n完整堆栈'},
+        {id:'approval',subject:'授权操作',status:'blocked'}
+      ]});
+      const card=document.querySelector('[data-process-plan]'),rows=[...card.querySelectorAll('.process-plan-row')],error=card.querySelector('[data-plan-error]');
+      return {order:!!(card.compareDocumentPosition(document.querySelector('[data-process-live-status]'))&Node.DOCUMENT_POSITION_FOLLOWING),
+        heights:rows.map(e=>e.getBoundingClientRect().height),sizes:rows.map(e=>{const s=getComputedStyle(e.querySelector('svg'));return [s.width,s.height]}),gaps:rows.map(e=>getComputedStyle(e).gap),fonts:rows.map(e=>getComputedStyle(e).fontSize),colors:rows.map(e=>getComputedStyle(e).color),
+        error:{text:error.textContent,color:getComputedStyle(error).color,height:error.getBoundingClientRect().height},border:getComputedStyle(card).borderTop,background:getComputedStyle(card).backgroundColor,rowText:rows.map(e=>e.textContent),liveColor:getComputedStyle(document.querySelector('[data-process-live-status]')).color,dotColor:getComputedStyle(document.querySelector('.process-live-dots')).color,dotCount:document.querySelector('.process-live-dots').children.length,buttons:card.querySelectorAll('button').length,
+        circleFills:[getComputedStyle(card.querySelector('.process-plan-done')).color,getComputedStyle(card.querySelector('.process-plan-failed')).color]};
+    `)
+    expect(view.order).toBe(true)
+    expect(view.heights).toEqual(Array(5).fill(28))
+    expect(view.sizes).toEqual(Array(5).fill(['16px', '16px']))
+    expect(view.gaps).toEqual(Array(5).fill('10px'))
+    expect(view.fonts).toEqual(Array(5).fill('13px'))
+    expect(view.colors).toEqual(['rgba(240, 238, 230, 0.45)', 'rgba(240, 238, 230, 0.9)', 'rgba(240, 238, 230, 0.6)', 'rgba(240, 238, 230, 0.6)', 'rgba(240, 238, 230, 0.6)'])
+    expect(view.error).toEqual({ text: '文件不存在', color: 'rgba(240, 238, 230, 0.4)', height: 28 })
+    expect(view.border).toBe('1px solid rgba(240, 238, 230, 0.06)')
+    // Chromium 的颜色序列化会把 alpha 量化到 8-bit，允许一个量化步长。
+    expect(Number(view.background.match(/, ([\d.]+)\)$/)?.[1])).toBeCloseTo(0.025, 2)
+    expect(view.rowText).toEqual(['定位组件', '修改样式', '运行验证', '检查输入', '授权操作'])
+    expect(view.liveColor).toBe('rgba(240, 238, 230, 0.6)')
+    expect(view.dotColor).toBe('rgb(217, 119, 87)')
+    expect(view.dotCount).toBe(3)
+    expect(view.buttons).toBe(0)
+    expect(view.circleFills).toEqual(['rgb(133, 131, 123)', 'rgb(217, 119, 87)'])
+  }, 30_000)
+
+  test('When 当前会话审批在等待或迟到 Then 只在确实未结束时将进行中圆圈改为琥珀空心圆', async () => {
+    const views = await renderer.run<Array<{ status: string; waiting: boolean }>>(`
+      const api=window.timeline,tasks=[{id:'live',subject:'修改样式',status:'in_progress'}];
+      const read=()=>({status:document.querySelector('[data-plan-status]').dataset.planStatus,waiting:document.querySelector('[data-process-current-action]').textContent.includes('等待确认')});
+      await api.render({blocks:${tools},expand:false,tasks,approvalSession:'A'});const a=read();
+      await api.render({blocks:${tools},expand:false,tasks,approvalSession:'B'});const b=read();
+      await api.render({blocks:${tools},expand:false,tasks,approvalSession:'A',results:[{id:'a'}]});return [a,b,read()];
+    `)
+    expect(views).toEqual([{ status: 'approval', waiting: true }, { status: 'in_progress', waiting: false }, { status: 'in_progress', waiting: false }])
+  }, 30_000)
+
+  test('When 只有已确认计划、没有工具节点 Then 仍显示清单且没有空日志节点', async () => {
+    const view = await renderer.run<{ plans: number; statuses: string[]; text: string }>(`
+      const api=window.timeline;
+      await api.renderTurn([{type:'tool_use',id:'task',name:'TaskCreate',input:{subject:'检查布局'}}],[{id:'task',text:JSON.stringify({task:{id:'first',subject:'检查布局',status:'pending'}})}],false);
+      return {plans:document.querySelectorAll('[data-plan-row]').length,statuses:api.read().statuses,text:document.querySelector('[data-process-plan]')?.textContent};
+    `)
+    expect(view).toEqual({ plans: 1, statuses: [], text: '检查布局' })
+  }, 30_000)
+
+  test('When 运行结束 Then 时间停止且保留手动展开选择，200ms 淡变没有缩放或呼吸节点', async () => {
+    const view = await renderer.run<{ elapsed: string; frozen: string; expanded: string; duration: string; animations: string[]; transforms: string[] }>(`
+      const api=window.timeline,blocks=${tools};await api.render({blocks,startedAt:Date.now()-18000});
+      await api.render({blocks,streaming:false,durationMs:19000,results:[{id:'a'},{id:'b'}]});
+      const elapsed=document.querySelector('[data-process-elapsed]').textContent;await api.wait(1200);
+      return {elapsed,frozen:document.querySelector('[data-process-elapsed]').textContent,expanded:api.read().expanded,duration:getComputedStyle(document.querySelector('[data-process-log]')).transitionDuration,
+        animations:[...document.querySelectorAll('.process-timeline-node,.process-timeline-connector')].map(e=>getComputedStyle(e).animationName),transforms:[...document.querySelectorAll('.process-plan-circle,.process-timeline-node')].map(e=>getComputedStyle(e).transform)};
+    `)
+    expect(view.elapsed).toBe('19s')
+    expect(view.frozen).toBe('19s')
+    expect(view.expanded).toBe('true')
+    expect(view.duration).toBe('0.2s')
+    expect(view.animations.every((name) => name === 'none')).toBe(true)
+    expect(view.transforms.every((name) => name === 'none')).toBe(true)
+  }, 30_000)
+
+  test('When 切换浅色主题和窄宽度 Then 保留单行省略和可访问的小箭头，不发生横向溢出', async () => {
+    const view = await renderer.run<{ overflow: boolean; color: string; background: string; rowHeight: number; actionHeight: number; focused: boolean }>(`
+      document.documentElement.classList.remove('dark');document.getElementById('root').style.width='220px';
+      await window.timeline.render({blocks:[{type:'tool_use',id:'a',name:'Edit',input:{path:'/repo/VeryLongProductCardFilenameWithMoreCharacters.tsx'}}],expand:false,tasks:[{id:'a',subject:'很长的计划标题需要在有限宽度内维持一行显示且不能溢出',status:'pending'}],startedAt:Date.now()-18000});
+      const root=document.getElementById('root'),card=root.querySelector('[data-process-plan]'),action=root.querySelector('[data-process-current-action]'),button=root.querySelector('[data-process-group-toggle]');button.focus();
+      return {overflow:root.scrollWidth>root.clientWidth,color:getComputedStyle(action).color,background:getComputedStyle(card).backgroundColor,rowHeight:root.querySelector('.process-plan-row').getBoundingClientRect().height,actionHeight:action.getBoundingClientRect().height,focused:document.activeElement===button};
+    `)
+    expect(view.overflow).toBe(false)
+    expect(view.color).not.toBe('rgba(240, 238, 230, 0.6)')
+    expect(view.background).not.toBe('rgba(240, 238, 230, 0.025)')
+    expect(view.rowHeight).toBe(28)
+    expect(view.actionHeight).toBe(28)
+    expect(view.focused).toBe(true)
+  }, 30_000)
 })

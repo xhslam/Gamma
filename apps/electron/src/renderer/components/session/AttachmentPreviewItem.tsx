@@ -12,6 +12,7 @@ import { X, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { composerAttachmentClassName, attachmentRemoveClassName } from './attachment-styles'
 import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbox'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 同批图片附件（用于大图预览时左右翻页） */
 export interface AttachmentSibling {
@@ -46,11 +47,6 @@ interface AttachmentPreviewItemProps {
 /** 判断是否为图片类型 */
 function isImage(mediaType: string): boolean {
   return mediaType.startsWith('image/')
-}
-
-/** 截断文件名显示 */
-function truncateName(name: string, max: number = 20): string {
-  return name.length > max ? name.slice(0, max - 3) + '...' : name
 }
 
 export function AttachmentPreviewItem({
@@ -108,16 +104,16 @@ export function AttachmentPreviewItem({
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
         {/* hover 关闭按钮 */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={handleRemoveClick}
           onKeyDown={handleRemoveKeyDown}
           className={cn(
             'absolute top-1 right-1 size-[18px] rounded-full',
-            'bg-black/50 text-white backdrop-blur-sm',
+            'bg-overlay/50 text-inverse-foreground backdrop-blur-sm',
             'flex items-center justify-center',
             'opacity-0 group-hover/attachment:opacity-100 transition-opacity duration-200',
-            'hover:bg-black/70'
+            'hover:bg-overlay/70'
           )}
         >
           <X className="size-3" />
@@ -155,9 +151,9 @@ export function AttachmentPreviewItem({
       } : undefined}
     >
       <Paperclip className="size-4 shrink-0" />
-      <span className="max-w-[160px] truncate">{truncateName(filename)}</span>
+      <FadeTitle className="max-w-[160px] truncate" title={filename}>{filename}</FadeTitle>
       {/* 关闭按钮 */}
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={handleRemoveClick}
         onKeyDown={handleRemoveKeyDown}

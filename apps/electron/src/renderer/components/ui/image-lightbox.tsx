@@ -123,8 +123,8 @@ export function ImageLightbox({
   const showNav = mode === 'preview' && hasMultiple
   const navBtn = cn(
     'absolute top-1/2 -translate-y-1/2 z-10 rounded-full p-2',
-    'bg-black/50 text-white/80 backdrop-blur-md shadow-lg transition-colors duration-150',
-    'hover:bg-black/70 hover:text-white focus-visible:bg-black/70 focus-visible:text-white',
+    'bg-overlay/50 text-inverse-foreground/80 backdrop-blur-md shadow-lg transition-colors duration-150',
+    'hover:bg-overlay/70 hover:text-inverse-foreground focus-visible:bg-overlay/70 focus-visible:text-inverse-foreground',
     iconButtonNoRingFocusClass,
   )
 
@@ -134,7 +134,7 @@ export function ImageLightbox({
         {/* 遮罩层 — 与 DialogOverlay 完全一致 */}
         <DialogPrimitive.Overlay
           className={cn(
-            'fixed inset-0 z-[200] bg-black/40 titlebar-no-drag',
+            'fixed inset-0 z-[200] bg-overlay/40 titlebar-no-drag',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none'
           )}
@@ -169,13 +169,13 @@ export function ImageLightbox({
           {/* 翻页按钮（多图，预览模式） */}
           {showNav && (
             <>
-              <button type="button" onClick={goPrev} className={cn(navBtn, 'left-4')} title="上一张">
+              <button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={goPrev} className={cn(navBtn, 'left-4')} title="上一张">
                 <ChevronLeft className="size-6" /><span className="sr-only">上一张</span>
               </button>
-              <button type="button" onClick={goNext} className={cn(navBtn, 'right-4')} title="下一张">
+              <button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={goNext} className={cn(navBtn, 'right-4')} title="下一张">
                 <ChevronRight className="size-6" /><span className="sr-only">下一张</span>
               </button>
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 rounded-full bg-black/50 px-3 py-1 text-xs text-white/90 backdrop-blur-md">
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 rounded-full bg-overlay/50 px-3 py-1 text-xs text-inverse-foreground/90 backdrop-blur-md">
                 {safeIndex + 1} / {total}
               </div>
             </>
@@ -185,11 +185,11 @@ export function ImageLightbox({
               关闭立即卸载手势层；退出动画仅由 Radix 管理，快速重开不会遗留快照。 */}
           {open && (mode === 'preview' ? (
             <ImageLightboxPreview key={`${safeIndex}:${current.src}`} src={current.src} alt={current.alt}>
-                <DialogPrimitive.Close className={cn('rounded-full p-1.5 text-white/80 transition-colors duration-150', 'hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white', iconButtonNoRingFocusClass)}>
+                <DialogPrimitive.Close data-icon-button="true" data-icon-button-tone="inverse" className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)}>
                   <X className="size-5" /><span className="sr-only">关闭</span>
                 </DialogPrimitive.Close>
-                {showEdit && (<><div className="mx-1.5 h-5 w-px bg-white/20" aria-hidden /><button type="button" onClick={() => setMode('editing')} className={cn('rounded-full p-1.5 text-white/80 transition-colors duration-150', 'hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white', iconButtonNoRingFocusClass)} title="编辑图片"><Pencil className="size-5" /></button></>)}
-                {current.onSave && (<><div className="mx-1.5 h-5 w-px bg-white/20" aria-hidden /><button type="button" onClick={current.onSave} className={cn('rounded-full p-1.5 text-white/80 transition-colors duration-150', 'hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white', iconButtonNoRingFocusClass)} title="保存图片"><Download className="size-5" /></button></>)}
+                {showEdit && (<><div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden /><button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={() => setMode('editing')} className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)} title="编辑图片"><Pencil className="size-5" /></button></>)}
+                {current.onSave && (<><div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden /><button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={current.onSave} className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)} title="保存图片"><Download className="size-5" /></button></>)}
             </ImageLightboxPreview>
           ) : (
             <ImageEditor key={`${safeIndex}:${current.src}`} src={current.src} onSave={handleEditSave} onCancel={handleEditCancel} />

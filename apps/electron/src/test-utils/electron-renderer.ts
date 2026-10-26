@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { build } from 'vite'
 import tailwindcss from 'tailwindcss'
 import loadTailwindConfig from 'tailwindcss/loadConfig'
@@ -50,14 +50,21 @@ export async function createElectronRendererHarness(entrySource: string, options
     const output = (Array.isArray(result) ? result : [result]).flatMap((item) => 'output' in item ? item.output : [])
     const chunk = output.find((item) => item.type === 'chunk' && item.isEntry)
     if (!chunk || chunk.type !== 'chunk') throw new Error('Renderer 回归构建没有生成可执行入口')
-    const css = output.filter((item) => item.type === 'asset' && item.fileName.endsWith('.css'))
-      .map((item) => item.type === 'asset' ? typeof item.source === 'string' ? item.source : new TextDecoder().decode(item.source) : '')
-      .join('\n')
+    const cssAssets = output.filter((item) => item.type === 'asset' && item.fileName.endsWith('.css'))
+    // 保留 Vite 的资源路径；把 CSS 扁平写到根目录会令字体等相对 URL 失效，
+    // 仅检查 font-family 将无法发现真实字形加载失败。
+    const assets = output.filter((item) => item.type === 'asset')
+    const stylesheets = cssAssets.map((item) => `<link rel="stylesheet" href="${item.fileName}">`).join('')
     await Promise.all([
       ...(options.preloadSource ? [writeFile(join(directory, 'preload.cjs'), options.preloadSource)] : []),
       writeFile(join(directory, 'renderer.js'), chunk.code),
-      writeFile(join(directory, 'renderer.css'), css),
-      writeFile(join(directory, 'index.html'), '<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>'),
+      ...assets.map(async (item) => {
+        if (item.type !== 'asset') return
+        const target = join(directory, item.fileName)
+        await mkdir(dirname(target), { recursive: true })
+        await writeFile(target, item.source)
+      }),
+      writeFile(join(directory, 'index.html'), `<!doctype html><html><head><meta charset="UTF-8">${stylesheets}</head><body><div id="root"></div><script src="renderer.js"></script></body></html>`),
     ])
   } catch (error) {
     await rm(directory, { recursive: true, force: true })

@@ -7,7 +7,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { RefreshCw, Loader2, CheckCircle2, AlertCircle, Info, Terminal, ChevronDown, ChevronUp, ExternalLink, RotateCw } from 'lucide-react'
+import { RefreshCw, Loader2, CheckCircle2, AlertCircle, Info, Terminal, ExternalLink, RotateCw } from 'lucide-react'
 import type { EnvironmentCheckResult, RuntimeStatus, WindowsShellPreference } from '@gamma/shared'
 import {
   SettingsSection,
@@ -22,6 +22,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { ReleaseNotesViewer } from './ReleaseNotesViewer'
 import { VersionHistory } from './VersionHistory'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 /** 从 package.json 构建时由 Vite define 注入 */
 declare const __APP_VERSION__: string
@@ -140,16 +141,12 @@ function UpdateCard(): React.ReactElement | null {
       {/* Release Notes（新版本可用时显示） */}
       {status.status === 'available' && hasReleaseNotes && (
         <div className="px-4 pb-4 border-t">
-          <button
+          <button data-disclosure-trigger="" aria-expanded={showReleaseNotes}
             onClick={() => setShowReleaseNotes(!showReleaseNotes)}
             className="w-full flex items-center justify-between py-3 text-left hover:opacity-80 transition-opacity"
           >
             <span className="text-sm font-medium">更新日志</span>
-            {showReleaseNotes ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
+            <DisclosureChevron expanded={showReleaseNotes} size={16} className="h-4 w-4 text-muted-foreground" />
           </button>
 
           {showReleaseNotes && release && (

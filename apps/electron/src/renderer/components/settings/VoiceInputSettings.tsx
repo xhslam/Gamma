@@ -171,11 +171,11 @@ export function VoiceInputSettings(): React.ReactElement {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {micPermission.status === 'granted' ? (
-                  <Mic className="size-4 text-green-500" />
+                  <Mic className="size-4 text-success" />
                 ) : micPermission.status === 'denied' ? (
                   <MicOff className="size-4 text-destructive" />
                 ) : micPermission.status === 'not-determined' ? (
-                  <Mic className="size-4 text-amber-500" />
+                  <Mic className="size-4 text-warning" />
                 ) : (
                   <Mic className="size-4 text-muted-foreground" />
                 )}

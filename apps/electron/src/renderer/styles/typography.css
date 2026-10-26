@@ -1,0 +1,71 @@
+/* 指定字体随应用打包；按 unicode-range 加载实际使用的本地字形，不访问字体 CDN。 */
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource/source-serif-4/latin-400.css';
+@import '@fontsource/source-serif-4/latin-400-italic.css';
+@import '@fontsource/source-serif-4/latin-700.css';
+@import '@fontsource/noto-serif-sc/400.css';
+@import '@fontsource/noto-serif-sc/700.css';
+
+:root {
+  --font-ui: 'Inter Variable', 'Inter', 'PingFang SC', system-ui, sans-serif;
+  --font-body: 'Source Serif 4', 'Noto Serif SC', 'Songti SC', serif;
+  --font-sans: var(--font-ui);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  --body-font-size: 15.5px;
+  --body-line-height: 1.7;
+  --body-font-weight: 400;
+  --body-max-width: 680px;
+  --reading-font-size: var(--md-preview-font-size, var(--body-font-size));
+}
+
+/* 只标记正文，不将侧栏、短摘要、工具状态和操作控件一起改为衬线体。 */
+.reading-body.reading-body {
+  width: 100%;
+  max-width: var(--body-max-width);
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--reading-font-size);
+  line-height: var(--body-line-height);
+  font-weight: var(--body-font-weight);
+  font-feature-settings: normal;
+  font-variant-numeric: normal;
+  font-optical-sizing: auto;
+  letter-spacing: normal;
+  overflow-wrap: anywhere;
+}
+.reading-body :where(p, li, blockquote) {
+  line-height: var(--body-line-height);
+}
+.reading-body-collapsed {
+  max-height: calc(var(--reading-font-size) * var(--body-line-height) * 4);
+}
+
+/* 编辑器的外壳/滚动区域不收窄，只限制正文可读行宽。 */
+.live-markdown-editor {
+  --ink-font-family: var(--font-body);
+  --ink-editor-font-size: var(--reading-font-size);
+  --ink-editor-line-height: var(--body-line-height);
+  font-size: var(--reading-font-size);
+  font-weight: var(--body-font-weight);
+}
+.live-markdown-editor .cm-content {
+  width: 100%;
+  max-width: var(--body-max-width);
+  min-width: 0;
+  font-feature-settings: normal;
+  font-variant-numeric: normal;
+  font-optical-sizing: auto;
+}
+
+/* 代码/图表工具栏、引用标签和编辑控件是 UI，不继承正文的衬线字体。 */
+button, input, select, textarea,
+.code-block-wrapper > div:first-child,
+.mermaid-block-wrapper,
+.rich-text-input [class*='-chip'] {
+  font-family: var(--font-ui);
+}
+/* 代码只保留原有等宽字体；本步骤不修改其边框、背景、圆角或内边距。 */
+.reading-body pre,
+.reading-body code {
+  font-family: var(--font-mono);
+}

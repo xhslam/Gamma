@@ -50,12 +50,12 @@ function formatBytes(bytes: number): string {
 }
 
 const BAR_COLORS = [
-  'bg-blue-500',
-  'bg-purple-500',
-  'bg-amber-500',
-  'bg-emerald-500',
-  'bg-rose-500',
-  'bg-cyan-500',
+  'bg-info',
+  'bg-info',
+  'bg-warning',
+  'bg-success',
+  'bg-destructive',
+  'bg-info',
 ]
 
 function StorageBar({ categories, totalBytes }: { categories: StorageCategory[]; totalBytes: number }): React.ReactElement {
@@ -227,7 +227,7 @@ export function StorageSettings(): React.ReactElement {
       {lastResult && (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
           {lastResult.freedBytes > 0 ? (
-            <span className="text-emerald-600 dark:text-emerald-400">
+            <span className="text-success dark:text-success">
               已释放 {formatBytes(lastResult.freedBytes)}，删除 {lastResult.deletedCount} 个文件
             </span>
           ) : (

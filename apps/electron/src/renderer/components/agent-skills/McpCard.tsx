@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { McpServerEntry } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 const TRANSPORT_LABELS: Record<string, string> = { stdio: 'stdio', http: 'HTTP', sse: 'SSE' }
 
@@ -68,7 +69,7 @@ export function McpCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-[15px] font-semibold text-foreground [text-wrap:balance]">{name}</span>
+            <FadeTitle className="truncate text-[15px] font-semibold text-foreground [text-wrap:balance]">{name}</FadeTitle>
             <span className={cn(
               'shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium',
               isBuiltin ? 'bg-primary/12 text-primary' : 'bg-muted text-muted-foreground',
@@ -144,7 +145,7 @@ export function McpCard({
         {!isBuiltin && !readOnly && onRequestDelete && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
                 className="ml-auto flex size-8 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-[color,opacity,background-color] hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"

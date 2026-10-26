@@ -9,7 +9,7 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { toast } from 'sonner'
-import { Loader2, CheckCircle2, XCircle, ExternalLink, Users, User, Trash2, RefreshCw, Copy, Check, Power, PowerOff, Plus, ChevronRight, PlayCircle, QrCode, MessageSquare, AlertTriangle, Archive, ArchiveRestore, Search } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, ExternalLink, Users, User, Trash2, RefreshCw, Copy, Check, Power, PowerOff, Plus, PlayCircle, QrCode, MessageSquare, AlertTriangle, Archive, ArchiveRestore, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -57,6 +57,8 @@ import {
   type FeishuBindingViewMode,
 } from '@/lib/feishu-bindings'
 import type { AgentSessionMeta, AgentWorkspace, FeishuTestResult, FeishuChatBinding, FeishuBotConfig, FeishuBotBridgeState, FeishuDomain, FeishuRegisterAppQRCode, FeishuRegisterAppStatus, FeishuSessionMirrorSettings, FeishuSessionSyncMode } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 // ===== 常量 =====
 
@@ -69,10 +71,10 @@ const TAB_OPTIONS: Array<{ value: FeishuTab; label: string }> = [
 
 /** 连接状态颜色映射 */
 const STATUS_CONFIG = {
-  disconnected: { color: 'bg-gray-400', label: '未连接' },
-  connecting: { color: 'bg-amber-400 animate-pulse', label: '连接中...' },
-  connected: { color: 'bg-green-500', label: '已连接' },
-  error: { color: 'bg-red-500', label: '连接错误' },
+  disconnected: { color: 'bg-muted', label: '未连接' },
+  connecting: { color: 'bg-warning animate-pulse', label: '连接中...' },
+  connected: { color: 'bg-success', label: '已连接' },
+  error: { color: 'bg-destructive', label: '连接错误' },
 } as const
 
 
@@ -189,7 +191,7 @@ function FeishuTutorialVideo(): React.ReactElement | null {
       description={FEISHU_TUTORIAL_VIDEO.description}
     >
       <SettingsCard divided={false}>
-        <button
+        <button data-disclosure-trigger="" aria-expanded={expanded}
           type="button"
           onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer text-left"
@@ -197,11 +199,11 @@ function FeishuTutorialVideo(): React.ReactElement | null {
           <span className="text-sm text-muted-foreground">
             {expanded ? '点击收起视频' : '点击展开视频教程（约 3 分钟）'}
           </span>
-          <ChevronRight size={16} className={cn('text-muted-foreground transition-transform duration-200', expanded && 'rotate-90')} />
+          <DisclosureChevron expanded={expanded} size={16} className={cn('text-muted-foreground transition-transform duration-200', expanded && 'rotate-90')} />
         </button>
         {expanded && (
           <div className="px-4 pb-4 animate-in fade-in-0 slide-in-from-top-1 duration-200">
-            <div className="relative w-full overflow-hidden rounded-md bg-black" style={{ aspectRatio: '16 / 9' }}>
+            <div className="relative w-full overflow-hidden rounded-md bg-overlay" style={{ aspectRatio: '16 / 9' }}>
               {video.isIframe ? (
                 <iframe
                   src={video.embedUrl}
@@ -284,7 +286,7 @@ function PermissionsStep(): React.ReactElement {
           onClick={handleCopy}
           className={cn(
             'gap-2 transition-all',
-            copied && 'bg-green-600 hover:bg-green-600 text-white'
+            copied && 'bg-success hover:bg-success text-background'
           )}
         >
           {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -292,12 +294,12 @@ function PermissionsStep(): React.ReactElement {
         </Button>
 
         {/* 次要：展开查看每个权限对应的能力 */}
-        <button
+        <button data-disclosure-trigger="" aria-expanded={expanded}
           type="button"
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           onClick={() => setExpanded(!expanded)}
         >
-          <ChevronRight size={14} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
+          <DisclosureChevron expanded={expanded} size={14} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
           <span>{expanded ? '收起权限明细' : '查看每个权限的作用'}</span>
         </button>
         {expanded && (
@@ -368,12 +370,12 @@ function FeishuCliSection(): React.ReactElement {
       <SettingsCard divided={false}>
         <div className="px-4 py-4 space-y-2 text-sm text-muted-foreground">
           <p className="text-xs">复制配置提示词，并前往飞书Bot日常绑定的<strong>项目</strong>，创建新的 Gamma Agent 对话并发送即可让 Gamma 协助完成配置。</p>
-          <button
+          <button data-disclosure-trigger="" aria-expanded={expanded}
             type="button"
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             onClick={() => setExpanded(!expanded)}
           >
-            <ChevronRight size={14} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
+            <DisclosureChevron expanded={expanded} size={14} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
             <span>{expanded ? '收起配置步骤' : '展开查看配置步骤'}</span>
           </button>
 
@@ -451,7 +453,7 @@ const FeishuBindingCard = React.memo(function FeishuBindingCard({
         <div className="flex items-center gap-2.5">
           <div className={cn(
             'flex items-center justify-center w-8 h-8 rounded-lg',
-            isGroup ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'
+            isGroup ? 'bg-info/10 text-info dark:text-info' : 'bg-success/10 text-success dark:text-success'
           )}>
             {isGroup ? <Users size={16} /> : <User size={16} />}
           </div>
@@ -510,7 +512,7 @@ const FeishuBindingCard = React.memo(function FeishuBindingCard({
           <SelectTrigger className="h-8 text-xs">
             <SelectValue placeholder="选择项目">
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate">{currentWorkspace?.name ?? '未知项目'}</span>
+                <FadeTitle className="truncate">{currentWorkspace?.name ?? '未知项目'}</FadeTitle>
                 <LocalProjectBadge
                   projectRootPath={currentWorkspace?.projectRootPath}
                   projectRootStatus={currentWorkspace?.projectRootStatus}
@@ -976,7 +978,7 @@ function RegisterFeishuDialog({ open, onOpenChange, onSuccess }: RegisterFeishuD
 
           {phase === 'qrcode' && qrcode && (
             <>
-              <div className="bg-white rounded-lg p-3 shadow-sm">
+              <div className="bg-card rounded-lg p-3 shadow-sm">
                 {qrcode.dataUrl ? (
                   <img
                     src={qrcode.dataUrl}
@@ -1012,7 +1014,7 @@ function RegisterFeishuDialog({ open, onOpenChange, onSuccess }: RegisterFeishuD
           {phase === 'success' && (
             <div className="w-full flex flex-col items-center gap-4 py-2">
               <div className="flex flex-col items-center gap-2 text-sm">
-                <CheckCircle2 size={32} className="text-green-600" />
+                <CheckCircle2 size={32} className="text-success" />
                 <span className="text-foreground font-medium">应用创建成功</span>
                 <span className="text-xs text-muted-foreground">已自动保存配置，正在启动 Bot…</span>
               </div>
@@ -1024,7 +1026,7 @@ function RegisterFeishuDialog({ open, onOpenChange, onSuccess }: RegisterFeishuD
 
           {phase === 'error' && (
             <div className="flex flex-col items-center gap-2 py-8 text-sm">
-              <XCircle size={32} className="text-red-600" />
+              <XCircle size={32} className="text-destructive" />
               <span className="text-foreground font-medium">创建失败</span>
               <span className="text-xs text-muted-foreground text-center max-w-[300px]">{errorMsg || '未知错误，请稍后重试'}</span>
             </div>
@@ -1151,27 +1153,27 @@ function SessionMirrorSection({ bots }: { bots: FeishuBotConfig[] }): React.Reac
             </Select>
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 px-3 py-3 text-xs text-blue-700 dark:text-blue-300">
+          <div className="flex items-start gap-2 rounded-lg bg-info/10 px-3 py-3 text-xs text-info dark:text-info">
             <MessageSquare size={15} className="mt-0.5 flex-shrink-0" />
             <div className="leading-relaxed">
               实时同步模式下，一个 Gamma Session 对应一个飞书群。即使配置了多个 Bot，也只会使用这里选中的 Bot，避免同一 Session 被多个 Bot 重复建群或拆散上下文。
             </div>
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-amber-800 dark:text-amber-300">
+          <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-3 text-xs text-warning dark:text-warning">
             <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
             <div className="space-y-1 leading-relaxed">
-              <div className="font-medium text-amber-900 dark:text-amber-200">想在仅你和 Bot 的群里不 @Bot 也能继续发送消息，需要额外申请两个权限。</div>
+              <div className="font-medium text-warning dark:text-warning">想在仅你和 Bot 的群里不 @Bot 也能继续发送消息，需要额外申请两个权限。</div>
               <div>
                 请在飞书开放平台为同步 Bot 申请并发布以下权限：
               </div>
               <div className="flex flex-col gap-1 pl-1">
                 <div>
-                  <code className="rounded bg-amber-500/15 px-1 py-0.5 text-[11px] text-amber-900 dark:text-amber-100">im:message.group_msg</code>
+                  <code className="rounded bg-warning/15 px-1 py-0.5 text-[11px] text-warning dark:text-warning">im:message.group_msg</code>
                   {' '}— 接收群聊中所有用户消息（否则飞书不会把非 @ 的群消息推送给 Gamma）
                 </div>
                 <div>
-                  <code className="rounded bg-amber-500/15 px-1 py-0.5 text-[11px] text-amber-900 dark:text-amber-100">im:chat</code>
+                  <code className="rounded bg-warning/15 px-1 py-0.5 text-[11px] text-warning dark:text-warning">im:chat</code>
                   {' '}— 读取群基础信息以判断群里只有你和 Bot（缺少时无法识别 2 人群，仍需 @Bot）
                 </div>
               </div>
@@ -1182,7 +1184,7 @@ function SessionMirrorSection({ bots }: { bots: FeishuBotConfig[] }): React.Reac
           </div>
 
           {showBotBindingWarning && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-amber-800 dark:text-amber-300">
+            <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-3 text-xs text-warning dark:text-warning">
               <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
               <div className="leading-relaxed">
                 当前同步 Bot 还没有历史聊天绑定。通过 Gamma「扫码创建」的 Bot 已保存扫码账号的当前组织身份，可直接为新 Session 建群；手动填写 App ID/Secret 添加的 Bot，请先在飞书里向「{selectedBot?.name ?? '该 Bot'}」发送一条消息，让 Gamma 记录当前组织的 open_id。
@@ -1425,7 +1427,7 @@ function BotConfigCard({ bot, state, onSaved, onRemoved }: BotConfigCardProps): 
           {testResult && (
             <div className={cn(
               'p-3 rounded-lg flex items-start gap-2 text-sm',
-              testResult.success ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'
+              testResult.success ? 'bg-success/10 text-success dark:text-success' : 'bg-destructive/10 text-destructive dark:text-destructive'
             )}>
               {testResult.success
                 ? <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
@@ -1436,7 +1438,7 @@ function BotConfigCard({ bot, state, onSaved, onRemoved }: BotConfigCardProps): 
           )}
 
           {state?.status === 'error' && state.errorMessage && (
-            <div className="p-2.5 rounded-lg bg-red-500/10 text-red-700 dark:text-red-400 text-sm">
+            <div className="p-2.5 rounded-lg bg-destructive/10 text-destructive dark:text-destructive text-sm">
               {state.errorMessage}
             </div>
           )}
@@ -1703,7 +1705,7 @@ function FeishuConfigTab(): React.ReactElement {
             </div>
 
             {/* 提示 */}
-            <div className="pl-7 p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
+            <div className="pl-7 p-3 rounded-lg bg-warning/10 text-warning dark:text-warning text-xs">
               版本审核通过并发布后，在飞书中搜索机器人名称添加到聊天，
               即可通过飞书向 Gamma Agent 发送指令。
             </div>

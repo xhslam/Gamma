@@ -7,10 +7,7 @@
 // 首个依赖先迁移缓存，后续主题/Jotai 模块才能读取既有用户选择。
 import './lib/legacy-storage-migration'
 
-// 引入 Inter Variable 自托管字体（含 400/500/600/700 等所有字重）
-// index.css 声明了全部语言子集（latin/latin-ext/cyrillic/greek/vietnamese 等），
-// 但每个 @font-face 都带 unicode-range，浏览器仅按需下载实际用到的子集（本应用主要是 latin）。
-import '@fontsource-variable/inter/index.css'
+// 字体由 globals.css → typography.css 统一自托管加载，主窗口和独立预览共用。
 
 import React, { useEffect, useMemo, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
@@ -349,7 +346,7 @@ function UpdaterInitializer(): null {
 
     const versionLabel = version.startsWith('v') ? version : `v${version}`
     readyToastIdRef.current = toast.custom((toastId) => (
-      <div className="w-[344px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5 backdrop-blur-xl dark:ring-white/10">
+      <div className="w-[344px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_hsl(var(--shadow-ink)/0.14)] ring-1 ring-border/5 backdrop-blur-xl dark:ring-border/10">
         <div className="flex items-center gap-2.5">
           <img src={GammaLogo} alt="Gamma" className="size-8 rounded-lg" />
           <div className="min-w-0 flex-1">
@@ -399,7 +396,7 @@ function UpdaterInitializer(): null {
                     }
 
                     scheduledToastIdRef.current = toast.custom((scheduledToastId) => (
-                      <div className="w-[312px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5 backdrop-blur-xl dark:ring-white/10">
+                      <div className="w-[312px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_hsl(var(--shadow-ink)/0.14)] ring-1 ring-border/5 backdrop-blur-xl dark:ring-border/10">
                         <div className="flex items-center gap-2.5">
                           <img src={GammaLogo} alt="Gamma" className="size-7 rounded-md" />
                           <div className="min-w-0 flex-1">

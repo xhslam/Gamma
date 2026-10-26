@@ -3,6 +3,12 @@ import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES, isMarkdownEditorShortcut, mergeMar
 import type { MarkdownEditorPreferences } from './markdown-workspace'
 
 describe('Markdown 编辑器偏好合同', () => {
+  test('Given 新默认正文排版 When 初始化和往返读取 Then 保留15.5px字号与1.7行高，既有自定义选项不丢失', () => {
+    expect(DEFAULT_MARKDOWN_EDITOR_PREFERENCES.fontSize).toBe(15.5)
+    expect(DEFAULT_MARKDOWN_EDITOR_PREFERENCES.lineHeight).toBe(1.7)
+    expect(normalizeMarkdownEditorPreferences({ fontSize: 15.5, lineHeight: 1.7 })).toEqual(DEFAULT_MARKDOWN_EDITOR_PREFERENCES)
+    expect(mergeMarkdownEditorPreferences({ fontSize: 24, lineHeight: 2, latinFont: 'sans' }, { theme: 'night' })).toMatchObject({ fontSize: 24, lineHeight: 2, latinFont: 'sans', theme: 'night' })
+  })
   test('Given 旧配置、数组或空值 When 规范化 Then 完整默认值且每次快捷键对象独立', () => {
     for (const value of [undefined, null, [], 'legacy', 18]) {
       expect(normalizeMarkdownEditorPreferences(value)).toEqual(DEFAULT_MARKDOWN_EDITOR_PREFERENCES)

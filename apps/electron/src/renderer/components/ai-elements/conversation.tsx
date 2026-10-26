@@ -124,7 +124,7 @@ export function ConversationScrollButton({
   if (distance <= CONVERSATION_JUMP_DISTANCE) return null
 
   return (
-    <Button
+    <Button data-icon-button="true"
       className={cn(
         'absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-[17px] size-9',
         'bg-card shadow-sm hover:bg-accent/80',

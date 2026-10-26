@@ -15,7 +15,6 @@ import { useAtomValue } from 'jotai'
 import { useFileTreeExpanded } from './use-file-tree-expanded'
 import { toast } from 'sonner'
 import {
-  ChevronRight,
   Trash2,
   RotateCw,
   ExternalLink,
@@ -61,6 +60,8 @@ import { setFilePanelDragData, dispatchInsertFileMention } from '@/lib/file-pane
 import { getFileBrowserRootsFromKey, getFileBrowserRootsKey } from './file-browser-roots'
 import { isCurrentFileBrowserLoadRequest, shouldShowFileBrowserEmptyState } from './file-browser-load-state'
 import type { FileBrowserRoot, FileScope } from './file-browser-roots'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 export type { FileBrowserRoot, FileScope } from './file-browser-roots'
 
@@ -847,11 +848,11 @@ function FileTreeItem({
 
   return (
     <div className="relative" onClick={handleWrapperClick}>
-      <div
+      <div data-disclosure-group=""
         ref={rowRef}
         data-sticky-row={isSticky ? 'true' : undefined}
         className={cn(
-          'file-tree-row relative flex h-8 items-center gap-1 pr-2 text-sm cursor-pointer group',
+          'gamma-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
           isSticky && STICKY_ROW_BASE_CLASS,
         )}
         style={{
@@ -886,12 +887,17 @@ function FileTreeItem({
         )}
         {/* 展开/收起图标 */}
         {entry.isDirectory ? (
-          <ChevronRight
-            className={cn(
-              'relative z-10 size-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150',
-              expanded && 'rotate-90',
-            )}
-          />
+          <button
+            type="button"
+            data-disclosure-trigger=""
+            className="gamma-disclosure-button"
+            style={{ width: 14 }}
+            aria-expanded={expanded}
+            aria-label={(expanded ? '收起目录 ' : '展开目录 ') + entry.name}
+            onClick={handleClick}
+          >
+            <DisclosureChevron expanded={expanded} size={14} className="relative z-10 text-muted-foreground" />
+          </button>
         ) : (
           <span className="relative z-10 w-3.5 flex-shrink-0" />
         )}
@@ -928,7 +934,7 @@ function FileTreeItem({
           </div>
         ) : (
           <>
-            <span className="relative z-10 truncate text-xs flex-1">{entry.name}</span>
+            <FadeTitle className="relative z-10 truncate text-xs flex-1">{entry.name}</FadeTitle>
             {showSessionBadge && entry.scope === 'session' && (
               <span className="relative z-10 flex-shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
                 会话文件
@@ -940,7 +946,7 @@ function FileTreeItem({
         {entry.isDirectory && onOpenDirectoryTerminal && !isRenaming && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 aria-label={`在 ${entry.name} 打开终端`}
                 title={`在 ${entry.name} 打开终端`}
@@ -968,7 +974,7 @@ function FileTreeItem({
           {showMenu && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 className={cn(
                   'h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70 text-muted-foreground hover:text-foreground',

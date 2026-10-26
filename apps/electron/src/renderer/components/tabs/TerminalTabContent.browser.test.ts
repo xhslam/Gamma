@@ -316,8 +316,8 @@ describe('侧边栏终端的真实 Chromium 粘贴事件', () => {
     `)
     expect(results).toHaveLength(3)
     for (const result of results) {
-      expect(result.background).toBe('rgb(17, 17, 19)')
-      expect(result.outerBackground).toBe('rgb(17, 17, 19)')
+      expect(result.background).toBe(result.theme ? 'rgb(31, 30, 29)' : 'rgb(250, 249, 245)')
+      expect(result.outerBackground).toBe(result.background)
       expect(result.textShadow).toBe('none')
       expect(result.contrast).toBeGreaterThanOrEqual(7)
     }

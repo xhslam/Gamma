@@ -26,6 +26,7 @@ import type {
   SDKUserMessage,
 } from '@gamma/shared'
 import { getSDKCompactStatus } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export type SessionMiniMapType = 'agent'
 
@@ -300,7 +301,7 @@ function getPreferredPanelHeight({
 
 function getMessageBubbleClass(item: TabMinimapItem): string {
   if (item.role === 'user') return 'bg-primary/[0.06]'
-  if (item.role === 'status') return 'bg-amber-500/[0.08]'
+  if (item.role === 'status') return 'bg-warning/[0.08]'
   return ''
 }
 
@@ -333,7 +334,7 @@ function ItemIcon({ item, type }: { item: TabMinimapItem; type: SessionMiniMapTy
     )
   }
   if (item.role === 'assistant') {
-    return <Bot className="size-4 shrink-0 mt-0.5 text-blue-500/70" />
+    return <Bot className="size-4 shrink-0 mt-0.5 text-info/70" />
   }
   if (item.role === 'status') {
     return <AlertTriangle className="size-4 shrink-0 mt-0.5 text-muted-foreground/60" />
@@ -416,19 +417,19 @@ function SessionMiniMapPopoverContent({
     >
       <div
         className={cn(
-          'session-minimap-popover h-full rounded-xl bg-popover shadow-xl ring-1 ring-black/[0.05] dark:ring-white/[0.08] flex flex-col overflow-hidden',
+          'session-minimap-popover h-full rounded-xl bg-popover shadow-xl ring-1 ring-border/[0.05] dark:ring-border/[0.08] flex flex-col overflow-hidden',
           isLeaving ? 'session-minimap-popover-exit' : 'session-minimap-popover-enter',
         )}
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 shrink-0 bg-muted/35 border-b border-border/35">
           <div className="min-w-0 flex items-center gap-2">
-            <span className="truncate text-xs font-medium text-popover-foreground/85">
+            <FadeTitle className="truncate text-xs font-medium text-popover-foreground/85">
               {target.title}
-            </span>
+            </FadeTitle>
             {target.workspaceName && (
-              <span className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[92px]">
+              <FadeTitle className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[92px]">
                 {target.workspaceName}
-              </span>
+              </FadeTitle>
             )}
           </div>
           <span className="w-[44px] shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">

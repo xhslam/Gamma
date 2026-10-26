@@ -25,12 +25,12 @@ export function AgyPermissionNotice({ active, embedded }: { active: boolean; emb
       'flex shrink-0 items-center gap-2 border-b border-border/50 text-muted-foreground',
       embedded ? 'px-2.5 py-1 text-[10px] leading-4' : 'px-4 py-1.5 text-[11px] leading-5',
     )}>
-      <AlertTriangle size={embedded ? 10 : 12} className="shrink-0 text-amber-500" />
+      <AlertTriangle size={embedded ? 10 : 12} className="shrink-0 text-warning" />
       <span className="min-w-0 flex-1 truncate">
-        <span className="text-amber-600 dark:text-amber-400/90">已跳过权限确认</span>
+        <span className="text-warning dark:text-warning/90">已跳过权限确认</span>
         {embedded ? '：可直接执行命令、改写文件，范围不限当前目录。' : '：AGY 可执行命令、修改或删除文件，访问范围不限当前目录；切换到其他页面不会中断进程。'}
       </span>
-      <button
+      <button data-icon-button="true"
         type="button"
         aria-label="关闭权限提示"
         title="关闭提示，以后不再显示"

@@ -230,7 +230,7 @@ export function WorkspaceMemoryWindowApp(): React.ReactElement {
           <aside className="min-h-0 border-r border-border/70 bg-muted/20">
             <div className="flex h-10 items-center justify-between border-b border-border/60 px-3">
               <span className="text-xs font-medium text-muted-foreground">记忆文件</span>
-              <button type="button" aria-label="刷新文件列表" className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [-webkit-app-region:no-drag]" onClick={() => void refreshFiles()}><RefreshCw size={14} /></button>
+              <button data-icon-button="true" type="button" aria-label="刷新文件列表" className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [-webkit-app-region:no-drag]" onClick={() => void refreshFiles()}><RefreshCw size={14} /></button>
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
               {loading ? <div className="p-3 text-xs text-muted-foreground">读取中…</div> : allFiles.length === 0 ? (
@@ -255,7 +255,7 @@ export function WorkspaceMemoryWindowApp(): React.ReactElement {
                 <Button size="sm" onClick={() => void save()} disabled={!selectedPath || !dirty || saving || remoteChanged}>{saving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Save size={14} className="mr-1.5" />}{saving ? '保存中' : '保存'}</Button>
               </div>
             </div>
-            {remoteChanged && <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-200"><span>该文件已在其他位置更新。重新载入后再编辑，以免覆盖新内容。</span><Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => selectedPath && void openFile(selectedPath)}>重新载入</Button></div>}
+            {remoteChanged && <div className="flex shrink-0 items-center justify-between gap-3 border-b border-warning/30 bg-warning/10 px-4 py-2 text-xs text-warning dark:text-warning"><span>该文件已在其他位置更新。重新载入后再编辑，以免覆盖新内容。</span><Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => selectedPath && void openFile(selectedPath)}>重新载入</Button></div>}
             {loadingFile ? <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">读取文件中…</div> : selectedPath && viewMode === 'edit' ? <textarea value={text} onChange={(event) => { dirtyRef.current = true; textRef.current = event.target.value; setText(event.target.value); setDirty(true) }} disabled={saving} spellCheck={false} className="min-h-0 flex-1 resize-none bg-transparent p-5 font-mono text-[13px] leading-6 text-foreground outline-none" placeholder="# Memory\n\n记录稳定、可复用的协作知识。" /> : selectedPath ? <div className="min-h-0 flex-1 overflow-y-auto p-6">{text.trim() ? <MessageResponse className="text-[14px] prose-headings:scroll-mt-4">{text}</MessageResponse> : <div className="flex h-full min-h-[240px] items-center justify-center rounded-lg border border-dashed border-border/70 text-sm text-muted-foreground">当前文件为空，切换到编辑后可以写入 Markdown 内容。</div>}</div> : <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">从左侧选择一个记忆文件</div>}
           </section>
         </main>

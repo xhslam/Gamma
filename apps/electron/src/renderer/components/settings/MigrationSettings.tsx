@@ -98,7 +98,7 @@ export function MigrationSettings(): React.ReactElement {
       >
         <div className="relative rounded-lg border border-border/60 bg-muted/30 p-4 pr-14">
           <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-muted-foreground">{RESTORE_MIGRATION_PROMPT}</pre>
-          <button
+          <button data-icon-button="true"
             aria-label="复制恢复数据提示词"
             title="复制恢复数据提示词"
             onClick={handleCopyRestorePrompt}
@@ -109,7 +109,7 @@ export function MigrationSettings(): React.ReactElement {
         </div>
       </SettingsSection>
 
-      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-800 dark:text-amber-200">
+      <div className="rounded-lg border border-warning/25 bg-warning/10 px-4 py-3 text-sm leading-6 text-warning dark:text-warning">
         数据文件夹可能包含会话记录、文件和配置。请仅通过可信渠道传输并妥善保管压缩包。系统钥匙串中的 API Key 和登录凭据不会随文件夹复制，迁移后可能需要重新登录或配置。
       </div>
     </div>

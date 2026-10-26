@@ -58,7 +58,7 @@ export function ImageLightboxPreview({ src, alt, children }: ImageLightboxPrevie
     }
   }, [reset, zoom])
 
-  const buttonClass = cn('rounded-full p-1.5 text-white/80 hover:bg-white/15 hover:text-white focus-visible:bg-white/15 disabled:opacity-40', iconButtonNoRingFocusClass)
+  const buttonClass = cn('rounded-full p-1.5 text-inverse-foreground/80 hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 disabled:opacity-40', iconButtonNoRingFocusClass)
   return (
     <div className="flex flex-col items-center">
       <div
@@ -92,15 +92,15 @@ export function ImageLightboxPreview({ src, alt, children }: ImageLightboxPrevie
           className="max-h-full max-w-full shrink-0 rounded-lg object-contain shadow-2xl"
           style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`, visibility: failed ? 'hidden' : undefined }}
         />
-        {failed && <p role="status" className="absolute text-white">图片加载失败</p>}
+        {failed && <p role="status" className="absolute text-inverse-foreground">图片加载失败</p>}
       </div>
-      <div className="mt-3 flex items-center gap-0.5 rounded-full bg-black/50 px-3 py-2.5 shadow-lg backdrop-blur-md">
+      <div className="mt-3 flex items-center gap-0.5 rounded-full bg-overlay/50 px-3 py-2.5 shadow-lg backdrop-blur-md">
         {children}
-        <div className="mx-1.5 h-5 w-px bg-white/20" aria-hidden />
-        <button type="button" aria-label="缩小图片" title="缩小图片" className={buttonClass} disabled={!loaded || transform.scale <= 1} onClick={() => zoom(transformRef.current.scale / 1.25)}><Minus className="size-5" /></button>
+        <div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden />
+        <button data-icon-button="true" data-icon-button-tone="inverse" type="button" aria-label="缩小图片" title="缩小图片" className={buttonClass} disabled={!loaded || transform.scale <= 1} onClick={() => zoom(transformRef.current.scale / 1.25)}><Minus className="size-5" /></button>
         <button type="button" aria-label="重置图片缩放" title="重置图片缩放" className={cn(buttonClass, 'min-w-16 text-xs tabular-nums')} onClick={reset}>{Math.round(transform.scale * 100)}%</button>
-        <button type="button" aria-label="放大图片" title="放大图片" className={buttonClass} disabled={!loaded || transform.scale >= MAX_IMAGE_SCALE} onClick={() => zoom(transformRef.current.scale * 1.25)}><Plus className="size-5" /></button>
-        <button type="button" aria-label="适应窗口" title="适应窗口" className={buttonClass} onClick={reset}><RotateCcw className="size-5" /></button>
+        <button data-icon-button="true" data-icon-button-tone="inverse" type="button" aria-label="放大图片" title="放大图片" className={buttonClass} disabled={!loaded || transform.scale >= MAX_IMAGE_SCALE} onClick={() => zoom(transformRef.current.scale * 1.25)}><Plus className="size-5" /></button>
+        <button data-icon-button="true" data-icon-button-tone="inverse" type="button" aria-label="适应窗口" title="适应窗口" className={buttonClass} onClick={reset}><RotateCcw className="size-5" /></button>
       </div>
     </div>
   )

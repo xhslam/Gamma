@@ -1,0 +1,54 @@
+/* 行内代码的几何参数独立于面板圆角；不跟随历史主题的直角化规则。 */
+:root {
+  --inline-code-font-size: 0.875em;
+  --inline-code-font-weight: 400;
+  --inline-code-border-width: 1px;
+  --inline-code-radius: 6px;
+  --inline-code-padding-block: 0.1em;
+  --inline-code-padding-inline: 0.4em;
+}
+
+/* 普通 Markdown/Tiptap code 与 ink-mde 的内容片段共用外观。
+ * 排除所有 pre/代码块，避免把块级代码也画成胶囊。
+ * 色值在节点上直接读取最近作用域，文档局部亮暗主题不继承错误的根级颜色快照。
+ */
+.gamma-inline-code,
+code:not(pre code, .code-block-wrapper code, .markdown-code-block code, .markdown-code-edit-layer code),
+.live-markdown-editor .ink-mde .cm-line .cm-code:not(.cm-code-open, .cm-code-close) {
+  font-family: var(--md-editor-mono, var(--font-mono));
+  font-size: var(--inline-code-font-size);
+  font-weight: var(--inline-code-font-weight);
+  line-height: inherit;
+  color: inherit;
+  background-color: hsl(var(--inset));
+  border: var(--inline-code-border-width) solid var(--color-border);
+  border-radius: var(--inline-code-radius);
+  padding: var(--inline-code-padding-block) var(--inline-code-padding-inline);
+}
+
+/* 历史 terminal 主题会把所有 rounded utility 强制直角化；仅让行内代码保持本步 6px。 */
+.theme-terminal-dark code:not(pre code, .code-block-wrapper code, .markdown-code-block code, .markdown-code-edit-layer code) {
+  border-radius: var(--inline-code-radius) !important;
+}
+
+/* 语法 span 只继承行内代码，不重复缩小字号或附加语法颜色。 */
+.gamma-inline-code :where(*),
+code:not(pre code, .code-block-wrapper code, .markdown-code-block code, .markdown-code-edit-layer code) :where(*),
+.live-markdown-editor .ink-mde .cm-line .cm-code:not(.cm-code-open, .cm-code-close) :where(*) {
+  font: inherit;
+  color: inherit;
+  background-color: transparent;
+}
+
+/* 编辑状态的反引号是源码标记，不为三个片段各画一个胶囊。
+ * 显隐仍由既有 CodeMirror decorations 管理，保留光标、选区和撤销行为。
+ */
+.live-markdown-editor .ink-mde .cm-line .cm-code:is(.cm-code-open, .cm-code-close) {
+  font-family: var(--font-mono);
+  font-size: var(--inline-code-font-size);
+  color: inherit;
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}

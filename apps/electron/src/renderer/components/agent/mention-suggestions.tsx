@@ -23,6 +23,7 @@ import {
   type PlanningReferenceMenuItem,
   type PlanningReferenceType,
 } from './planning-reference-state'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 // ===== 泛型工厂 =====
 
@@ -255,8 +256,8 @@ export function createSkillMentionSuggestion(
       keyExtractor: (item) => item.id,
       renderItem: (item) => (
         <>
-          <Sparkles className="size-3.5 text-violet-500 flex-shrink-0" />
-          <span className="truncate font-medium flex-1 min-w-0">{item.name}</span>
+          <Sparkles className="size-3.5 text-info flex-shrink-0" />
+          <FadeTitle className="truncate font-medium flex-1 min-w-0">{item.name}</FadeTitle>
           {item.description && (
             <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">{item.description}</span>
           )}
@@ -320,8 +321,8 @@ export function createMcpMentionSuggestion(
       keyExtractor: (item) => item.id,
       renderItem: (item) => (
         <>
-          <Server className="size-3.5 text-emerald-500 flex-shrink-0" />
-          <span className="truncate font-medium flex-1 min-w-0">{item.name}</span>
+          <Server className="size-3.5 text-success flex-shrink-0" />
+          <FadeTitle className="truncate font-medium flex-1 min-w-0">{item.name}</FadeTitle>
           <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">{item.type}</span>
         </>
       ),
@@ -363,8 +364,8 @@ export function createSessionMentionSuggestion(
       keyExtractor: (item) => item.sessionId,
       renderItem: (item) => (
         <>
-          <MessageSquareText className="size-3.5 text-sky-500 flex-shrink-0" />
-          <span className="truncate font-medium flex-1 min-w-0">{item.title}</span>
+          <MessageSquareText className="size-3.5 text-info flex-shrink-0" />
+          <FadeTitle className="truncate font-medium flex-1 min-w-0">{item.title}</FadeTitle>
           {(item.workspaceName || item.workspaceSlug || item.snippet) && (
             <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">
               {formatSessionReferenceDescription(item)}
@@ -409,7 +410,7 @@ export function createPlanningMentionSuggestion(
           {item.referenceType === 'todo'
             ? <ListTodo className="size-3.5 shrink-0 text-primary" />
             : <CalendarDays className="size-3.5 shrink-0 text-primary" />}
-          <span className="truncate font-medium flex-1 min-w-0">{item.label}</span>
+          <FadeTitle className="truncate font-medium flex-1 min-w-0">{item.label}</FadeTitle>
           <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">{item.description}</span>
         </>
       ),

@@ -1,7 +1,15 @@
 import * as React from 'react'
-import { ChevronRight } from 'lucide-react'
+import { useAtomValue } from 'jotai'
+import { allPendingPermissionRequestsAtom } from '@/atoms/agent-atoms'
+import type { ToolActivity } from '@/atoms/agent-atoms'
+import { useMessageSessionId } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { ProcessTimelineStep } from './ProcessTimelineStep'
+import { ProcessLiveStatus } from './ProcessLiveStatus'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
+import { getProcessLiveStatus } from './process-live-status'
+import { TaskProgressCard } from './TaskProgressCard'
+import { aggregateTaskItems } from './task-progress'
 import './process-timeline.css'
 import type {
   SDKMessage,
@@ -14,16 +22,19 @@ interface ProcessBlockGroupProps {
   blocks: SDKContentBlock[]
   allMessages?: SDKMessage[]
   isStreaming?: boolean
+  taskActivities?: ToolActivity[]
+  historicalTaskSubjects?: Map<string, string>
+  startedAt?: number
+  durationMs?: number
   /** 惰性生成过程项；流式与历史态均渲染完整内容。 */
   renderChildren: () => React.ReactNode
 }
 
 const EMPTY_MESSAGES: SDKMessage[] = []
+const EMPTY_ACTIVITIES: ToolActivity[] = []
 const PROCESS_GROUP_VIEWPORT_HEIGHT = 320
 const PROCESS_GROUP_LIVE_CHILD_WINDOW = 4
-const PROCESS_GROUP_COLLAPSE_DURATION_MS = 500
-const PROCESS_GROUP_AUTO_COLLAPSE_SOUND_DELAY_MS = 900
-const PROCESS_GROUP_AUTO_COLLAPSE_DELAY_MS = 3000
+const PROCESS_GROUP_COLLAPSE_DURATION_MS = 200
 const PROCESS_GROUP_FOLLOW_BOTTOM_THRESHOLD = 24
 const PROGRESS_SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '])
 
@@ -116,14 +127,6 @@ export function stabilizeProcessBlockReferences(
   return previous
 }
 
-function buildProcessGroupSummary(blocks: SDKContentBlock[]): string {
-  const tools = blocks.filter((block) => block.type === 'tool_use').length
-  const thoughts = blocks.filter((block) => block.type === 'thinking').length
-  return `${tools} 次工具调用 · ${thoughts} 条思考`
-}
-
-type ProcessGroupDisplayMode = 'collapsed' | 'expanded'
-
 export function isProgressViewportAtBottom({
   clientHeight,
   scrollHeight,
@@ -163,77 +166,49 @@ const StableProcessChild = React.memo(
   (previous, next) => previous.child === next.child,
 )
 
-export function ProcessBlockGroup({ blocks, allMessages = EMPTY_MESSAGES, isStreaming, renderChildren }: ProcessBlockGroupProps): React.ReactElement {
+export function ProcessBlockGroup({
+  blocks, allMessages = EMPTY_MESSAGES, isStreaming = false,
+  taskActivities = EMPTY_ACTIVITIES, historicalTaskSubjects, startedAt, durationMs, renderChildren,
+}: ProcessBlockGroupProps): React.ReactElement {
   const contentId = React.useId()
-  const initialDisplayMode: ProcessGroupDisplayMode = !isStreaming
-    ? 'collapsed'
-    : 'expanded'
-  const [displayMode, setDisplayMode] = React.useState<ProcessGroupDisplayMode>(initialDisplayMode)
-  const [shouldRenderContent, setShouldRenderContent] = React.useState(initialDisplayMode !== 'collapsed')
-  const [keepProgressViewport, setKeepProgressViewport] = React.useState(!!isStreaming)
-  const userToggledRef = React.useRef(false)
+  // 日志始终由用户的小箭头控制；流式开始、结束和审批都不能自动展开或折叠。
+  const [isContentExpanded, setContentExpanded] = React.useState(false)
+  const [shouldRenderContent, setShouldRenderContent] = React.useState(false)
   const followLatestRef = React.useRef(true)
   const smoothScrollTargetRef = React.useRef<number | null>(null)
   const scrollFrameRef = React.useRef<number | null>(null)
-  const wasStreamingRef = React.useRef(!!isStreaming)
-  const autoCollapseTimersRef = React.useRef<number[]>([])
   const contentRef = React.useRef<HTMLDivElement>(null)
   const contentInnerRef = React.useRef<HTMLDivElement>(null)
   const stableChildrenRef = React.useRef(new Map<string, StableProcessChildCacheEntry>())
   const stableProcessBlocksRef = React.useRef(blocks)
   stableProcessBlocksRef.current = stabilizeProcessBlockReferences(stableProcessBlocksRef.current, blocks)
   const stableProcessBlocks = stableProcessBlocksRef.current
-  const collapseFrameRef = React.useRef<number | null>(null)
-  const [measuredHeight, setMeasuredHeight] = React.useState<number | undefined>(undefined)
-
-  const isContentExpanded = displayMode === 'expanded'
+  const keepProgressViewport = isStreaming && isContentExpanded
   const shouldShowContent = isContentExpanded || shouldRenderContent
   const visibleChildren = shouldShowContent ? renderChildren() : null
-
-  const clearAutoCollapseTimers = React.useCallback(() => {
-    for (const timer of autoCollapseTimersRef.current) window.clearTimeout(timer)
-    autoCollapseTimersRef.current = []
-  }, [])
+  const sessionId = useMessageSessionId()
+  const pendingPermissions = useAtomValue(allPendingPermissionRequestsAtom)
+  const pendingToolIds = React.useMemo(() => new Set(
+    sessionId ? pendingPermissions.get(sessionId)?.map((request) => request.toolUseId).filter((id): id is string => !!id) : [],
+  ), [sessionId, pendingPermissions])
+  const taskItems = React.useMemo(
+    () => aggregateTaskItems(taskActivities, !isStreaming, historicalTaskSubjects),
+    [taskActivities, isStreaming, historicalTaskSubjects],
+  )
+  const activeForm = taskItems.findLast((item) => item.status === 'in_progress')?.activeForm
+  const liveStatus = React.useMemo(
+    () => getProcessLiveStatus(blocks, allMessages, isStreaming, pendingToolIds, activeForm),
+    [blocks, allMessages, isStreaming, pendingToolIds, activeForm],
+  )
 
   React.useEffect(() => {
-    clearAutoCollapseTimers()
-
-    if (isStreaming) {
-      setKeepProgressViewport(true)
-      if (!wasStreamingRef.current) {
-        userToggledRef.current = false
-        followLatestRef.current = true
-        smoothScrollTargetRef.current = null
-        if (scrollFrameRef.current !== null) {
-          cancelAnimationFrame(scrollFrameRef.current)
-          scrollFrameRef.current = null
-        }
-      }
-      if (!userToggledRef.current) setDisplayMode('expanded')
-      wasStreamingRef.current = true
+    if (isContentExpanded) {
+      setShouldRenderContent(true)
       return
     }
-
-    const shouldAutoCollapseAfterCompletion = wasStreamingRef.current && !userToggledRef.current
-    wasStreamingRef.current = false
-
-    if (!shouldAutoCollapseAfterCompletion) {
-      setKeepProgressViewport(false)
-      if (!userToggledRef.current) setDisplayMode('collapsed')
-      return
-    }
-
-    const timer = window.setTimeout(() => {
-      setDisplayMode('collapsed')
-      autoCollapseTimersRef.current.push(window.setTimeout(
-        () => setKeepProgressViewport(false),
-        PROCESS_GROUP_COLLAPSE_DURATION_MS,
-      ))
-    }, PROCESS_GROUP_AUTO_COLLAPSE_SOUND_DELAY_MS + PROCESS_GROUP_AUTO_COLLAPSE_DELAY_MS)
-    autoCollapseTimersRef.current.push(timer)
-
-    return clearAutoCollapseTimers
-  }, [clearAutoCollapseTimers, isStreaming])
+    const timer = window.setTimeout(() => setShouldRenderContent(false), PROCESS_GROUP_COLLAPSE_DURATION_MS)
+    return () => window.clearTimeout(timer)
+  }, [isContentExpanded])
 
   const scrollToLatest = React.useCallback(() => {
     if (!followLatestRef.current) return
@@ -311,43 +286,6 @@ export function ProcessBlockGroup({ blocks, allMessages = EMPTY_MESSAGES, isStre
     if (PROGRESS_SCROLL_KEYS.has(event.key)) handleProgressScrollIntent()
   }, [handleProgressScrollIntent])
 
-  // 折叠前测量实际高度，用于丝滑的 height 过渡（子元素不 reflow，只裁剪边界）
-  React.useEffect(() => {
-    if (isContentExpanded) {
-      if (collapseFrameRef.current !== null) {
-        cancelAnimationFrame(collapseFrameRef.current)
-        collapseFrameRef.current = null
-      }
-      setShouldRenderContent(true)
-      setMeasuredHeight(undefined)
-      return
-    }
-
-    // 折叠时：先测量当前高度，触发 height 过渡动画，动画结束后卸载 DOM
-    const el = contentRef.current
-    if (el) {
-      const h = el.clientHeight
-      setMeasuredHeight(h)
-      collapseFrameRef.current = requestAnimationFrame(() => {
-        collapseFrameRef.current = null
-        setMeasuredHeight(0)
-      })
-    }
-
-    const timer = window.setTimeout(() => setShouldRenderContent(false), PROCESS_GROUP_COLLAPSE_DURATION_MS)
-    return () => {
-      window.clearTimeout(timer)
-      if (collapseFrameRef.current !== null) {
-        cancelAnimationFrame(collapseFrameRef.current)
-        collapseFrameRef.current = null
-      }
-    }
-  }, [isContentExpanded])
-
-  const summary = React.useMemo(
-    () => buildProcessGroupSummary(blocks),
-    [blocks],
-  )
   // 只让最近几项参与高频更新；旧项保留在 DOM 中供用户滚动查看，但冻结其 React 子树。
   const renderContentChildren = (): React.ReactNode => {
     const childArray = React.Children.toArray(visibleChildren)
@@ -389,37 +327,37 @@ export function ProcessBlockGroup({ blocks, allMessages = EMPTY_MESSAGES, isStre
 
   return (
     <div className="process-timeline">
-      <button
-        type="button"
-        data-process-group-toggle=""
-        aria-expanded={isContentExpanded}
-        aria-controls={contentId}
-        className="process-timeline-toggle"
-        aria-label={`执行过程：${summary}`}
-        onClick={() => {
-          userToggledRef.current = true
-          clearAutoCollapseTimers()
-          if (!isStreaming) setKeepProgressViewport(false)
-          setDisplayMode((previous) => previous === 'collapsed' ? 'expanded' : 'collapsed')
-        }}
-      >
-        <ChevronRight
-          className={cn(
-            'size-3 shrink-0 transition-transform duration-150',
-            isContentExpanded && 'rotate-90',
-          )}
-        />
-        <span className="min-w-0 truncate">{summary}</span>
-      </button>
-
-      {shouldRenderContent && (
+      <TaskProgressCard
+        activities={taskActivities}
+        streamEnded={!isStreaming}
+        historicalTaskSubjects={historicalTaskSubjects}
+        approvalPending={liveStatus.waiting}
+      />
+      <ProcessLiveStatus status={liveStatus} streaming={isStreaming} startedAt={startedAt} durationMs={durationMs}>
+        <button
+          type="button"
+          data-process-group-toggle=""
+          data-disclosure-trigger=""
+          data-icon-button="true"
+          aria-expanded={isContentExpanded}
+          aria-controls={contentId}
+          className="process-timeline-toggle"
+          aria-label={isContentExpanded ? '收起工具调用日志' : '展开工具调用日志'}
+          onClick={() => setContentExpanded((previous) => !previous)}
+        >
+          <DisclosureChevron expanded={isContentExpanded} size={12} />
+        </button>
+      </ProcessLiveStatus>
+      {shouldShowContent && (
         <div
           ref={contentRef}
           id={contentId}
           aria-hidden={!isContentExpanded}
+          data-process-log=""
+          data-expanded={isContentExpanded}
           data-agent-history-selection-excluded={isContentExpanded ? undefined : 'true'}
           className={cn(
-            'overflow-hidden focus:outline-none',
+            'process-timeline-log overflow-hidden focus:outline-none',
             keepProgressViewport && 'overflow-y-auto overscroll-contain scrollbar-none',
           )}
           tabIndex={keepProgressViewport ? 0 : undefined}
@@ -430,11 +368,8 @@ export function ProcessBlockGroup({ blocks, allMessages = EMPTY_MESSAGES, isStre
           onKeyDown={keepProgressViewport ? handleProgressKeyDown : undefined}
           style={{
             maxHeight: keepProgressViewport ? `${PROCESS_GROUP_VIEWPORT_HEIGHT}px` : undefined,
-            height: measuredHeight !== undefined ? `${measuredHeight}px` : 'auto',
             opacity: isContentExpanded ? 1 : 0,
-            transition: measuredHeight !== undefined
-              ? `height ${PROCESS_GROUP_COLLAPSE_DURATION_MS}ms ease-in-out, opacity ${PROCESS_GROUP_COLLAPSE_DURATION_MS}ms ease-in-out`
-              : `opacity ${PROCESS_GROUP_COLLAPSE_DURATION_MS}ms ease-in-out`,
+            pointerEvents: isContentExpanded ? undefined : 'none',
           }}
         >
           <div ref={contentInnerRef} className="pl-1">

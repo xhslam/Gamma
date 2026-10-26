@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowDown, ArrowUp, Check, ChevronRight, CircleAlert, Copy, LoaderCircle, Square, Terminal, Wrench } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, CircleAlert, Copy, LoaderCircle, Square, Terminal, Wrench } from 'lucide-react'
 import type { AgyActivityEvent, AgyTaskStatus } from '@gamma/shared'
 import { agyTaskKey, agyTaskViewsAtom, applyAgyTaskUpdateAtom, isAgyTaskActive } from '@/atoms/agy-task-atoms'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { agyEventStateLabel, formatAgyDuration, groupAgyActivity } from '@/lib/a
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { clearStopGenerationTarget, rememberStopGenerationTarget } from '@/lib/stop-generation-target'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 const STATUS: Record<AgyTaskStatus, string> = {
   starting: '正在启动', running: '运行中', completed: '已完成', failed: '失败',
@@ -30,8 +31,8 @@ interface DetailsProps {
 }
 function Details({ label, children, defaultOpen = false, className }: DetailsProps): React.ReactElement {
   return <Collapsible defaultOpen={defaultOpen} className={cn('group/details min-w-0', className)}>
-    <CollapsibleTrigger className="group/disclosure flex min-h-8 w-full items-center gap-2 rounded-md py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-data-[state=open]/disclosure:rotate-90" />
+    <CollapsibleTrigger data-disclosure-trigger="" className="group/disclosure flex min-h-8 w-full items-center gap-2 rounded-md py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <DisclosureChevron size={14} aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-data-[state=open]/disclosure:rotate-90" />
       <span>{label}</span>
     </CollapsibleTrigger>
     <CollapsibleContent className="min-w-0 pb-2 pl-5 pt-2">{children}</CollapsibleContent>
@@ -189,8 +190,8 @@ export function AgyActivityPanel({ sessionId, taskId }: { sessionId: string; tas
             {view.task.structuredOutput !== undefined && <Details label="结构化最终结果" defaultOpen><PlainText>{JSON.stringify(view.task.structuredOutput, null, 2)}</PlainText></Details>}
           </article>}
           <Collapsible open={activityOpen} onOpenChange={setShowActivity} className="group/activity">
-            <CollapsibleTrigger className="flex min-h-8 w-full items-center gap-2 rounded-md text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-data-[state=open]/activity:rotate-90" />
+            <CollapsibleTrigger data-disclosure-trigger="" className="flex min-h-8 w-full items-center gap-2 rounded-md text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <DisclosureChevron size={14} aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-data-[state=open]/activity:rotate-90" />
               <span>执行过程</span><span className="text-muted-foreground/70">{view.events.length} 条活动{duration ? ` · ${duration}` : ''}</span>
               {notices > 0 && <span className="ml-auto flex shrink-0 items-center gap-1"><CircleAlert aria-hidden="true" className="size-3" />{notices} 条提示</span>}
             </CollapsibleTrigger>

@@ -74,13 +74,13 @@ export function MarkdownWorkspaceToolbar({ editor, onLink, onSourcePeek, shortcu
   return (
     <div className="markdown-format-toolbar flex shrink-0 items-center justify-center gap-1 px-3 py-1" role="toolbar" aria-label="Markdown 格式工具栏" aria-orientation="horizontal">
       {tools.map(({ name, icon: Icon, active, action }, index) => (
-        <Button key={name} data-format-index={index} variant="ghost" size="sm" className="markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title={name} aria-label={name} aria-pressed={active} onMouseDown={event => event.preventDefault()} onClick={() => run(action)}>
+        <Button data-icon-button="true" key={name} data-format-index={index} variant="ghost" size="sm" className="markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title={name} aria-label={name} aria-pressed={active} onMouseDown={event => event.preventDefault()} onClick={() => run(action)}>
           <Icon aria-hidden="true" />
         </Button>
       ))}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="markdown-format-overflow markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title="更多格式" aria-label="更多格式">
+          <Button data-icon-button="true" variant="ghost" size="sm" className="markdown-format-overflow markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title="更多格式" aria-label="更多格式">
             <MoreHorizontal aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
@@ -103,10 +103,10 @@ export function MarkdownWorkspaceToolbar({ editor, onLink, onSourcePeek, shortcu
         </DropdownMenuContent>
       </DropdownMenu>
       <span className="markdown-format-divider mx-1 h-4 w-px shrink-0 bg-border/60" aria-hidden="true" />
-      <Button variant="ghost" size="sm" className="markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title="链接" aria-label="链接" aria-pressed={state.link} onMouseDown={event => event.preventDefault()} onClick={() => run(onLink)}>
+      <Button data-icon-button="true" variant="ghost" size="sm" className="markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title="链接" aria-label="链接" aria-pressed={state.link} onMouseDown={event => event.preventDefault()} onClick={() => run(onLink)}>
         <Link aria-hidden="true" />
       </Button>
-      <Button variant="ghost" size="sm" className="markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title={`段落源码 (${shortcutLabel})`} aria-label="段落源码" onMouseDown={event => event.preventDefault()} onClick={() => run(onSourcePeek)}>
+      <Button data-icon-button="true" variant="ghost" size="sm" className="markdown-format-button h-7 w-7 shrink-0 px-0 text-muted-foreground" title={`段落源码 (${shortcutLabel})`} aria-label="段落源码" onMouseDown={event => event.preventDefault()} onClick={() => run(onSourcePeek)}>
         <FileCode2 aria-hidden="true" />
       </Button>
     </div>

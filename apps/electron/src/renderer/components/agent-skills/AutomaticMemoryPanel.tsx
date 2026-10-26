@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue } from 'jotai'
-import { Brain, ChevronDown, ChevronsDownUp, ChevronsUpDown, FolderOpen, LockKeyhole, Pencil, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
+import { Brain, ChevronsDownUp, ChevronsUpDown, FolderOpen, LockKeyhole, Pencil, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import type { AutomaticMemoryCategory, AutomaticMemoryEntry, AutomaticMemorySettings, AutomaticMemorySnapshot } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -12,6 +12,8 @@ import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom, automaticMem
 import { AUTOMATIC_MEMORY_CATEGORIES, filterAutomaticMemoryEntries } from '@/lib/automatic-memory-presentation'
 import { useAutomaticMemoryChanges } from '@/hooks/useAutomaticMemoryChanges'
 import { cn } from '@/lib/utils'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 interface AutomaticMemoryPanelProps {
   workspaceSlug: string
@@ -131,7 +133,7 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
       <Collapsible open={view.open} onOpenChange={(open) => setView((previous) => ({ ...previous, open }))}>
         <div className="flex items-center gap-2 p-3">
           <CollapsibleTrigger asChild>
-            <button type="button" aria-label={view.open ? '折叠记忆面板' : '展开记忆面板'} className={cn(triggerClass, 'flex min-w-0 flex-1 items-center gap-3 p-1.5 text-left')}>
+            <button data-disclosure-trigger="" aria-expanded={view.open} type="button" aria-label={view.open ? '折叠记忆面板' : '展开记忆面板'} className={cn(triggerClass, 'flex min-w-0 flex-1 items-center gap-3 p-1.5 text-left')}>
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Brain size={20} /></span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -144,7 +146,7 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
                   {editing && <span className="text-primary">· 编辑中</span>}
                 </span>
               </span>
-              <ChevronDown size={15} className={cn('shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', !view.open && '-rotate-90')} />
+              <DisclosureChevron expanded={view.open} size={15} className={cn('shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', !view.open && '-rotate-90')} />
             </button>
           </CollapsibleTrigger>
           <Button size="icon-sm" variant="ghost" aria-label="刷新记忆" title="刷新记忆" disabled={busy || loading} onClick={() => void refresh()} className="shrink-0 text-muted-foreground">
@@ -161,11 +163,11 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
           <div className="space-y-3 border-t border-border/40 px-4 pb-4 pt-3">
             <Collapsible open={view.settingsOpen} onOpenChange={(settingsOpen) => setView((previous) => ({ ...previous, settingsOpen }))} className="rounded-xl bg-muted/35">
               <CollapsibleTrigger asChild>
-                <button type="button" aria-label="记忆设置" className={cn(triggerClass, 'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs text-muted-foreground')}>
+                <button data-disclosure-trigger="" aria-expanded={view.settingsOpen} type="button" aria-label="记忆设置" className={cn(triggerClass, 'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs text-muted-foreground')}>
                   <Settings2 size={14} />
                   <span className="flex-1 font-medium text-foreground/80">记忆设置</span>
                   <span className="text-[10px]">{snapshot?.settings.includeSensitive ? '允许敏感信息' : '敏感信息已关闭'}</span>
-                  <ChevronDown size={13} className={cn('transition-transform motion-reduce:transition-none', !view.settingsOpen && '-rotate-90')} />
+                  <DisclosureChevron expanded={view.settingsOpen} size={13} className={cn('transition-transform motion-reduce:transition-none', !view.settingsOpen && '-rotate-90')} />
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent forceMount className="data-[state=closed]:hidden">
@@ -230,11 +232,11 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
                       return (
                         <Collapsible key={category.key} data-memory-category={category.key} open={open} onOpenChange={(next) => toggleCategory(category.key, next)}>
                           <CollapsibleTrigger asChild>
-                            <button type="button" disabled={categoryEntries.length === 0} className={cn(triggerClass, 'flex w-full items-center gap-2 px-2 py-2 text-left disabled:opacity-45')}>
+                            <button data-disclosure-trigger="" aria-expanded={open} type="button" disabled={categoryEntries.length === 0} className={cn(triggerClass, 'flex w-full items-center gap-2 px-2 py-2 text-left disabled:opacity-45')}>
                               <Icon size={14} className="shrink-0 text-muted-foreground" />
                               <span className="flex-1 text-xs font-medium">{category.label}</span>
                               <span className="min-w-5 rounded-md bg-muted/70 px-1.5 text-center text-[10px] leading-5 tabular-nums text-muted-foreground">{categoryEntries.length}</span>
-                              <ChevronDown size={13} className={cn('shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', !open && '-rotate-90')} />
+                              <DisclosureChevron expanded={open} size={13} className={cn('shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', !open && '-rotate-90')} />
                             </button>
                           </CollapsibleTrigger>
                           <CollapsibleContent forceMount className="data-[state=closed]:hidden">
@@ -244,11 +246,11 @@ export function AutomaticMemoryPanel({ workspaceSlug, entryId }: AutomaticMemory
                                   <article tabIndex={-1} data-memory-entry-id={entry.id} className={cn('min-w-0 rounded-xl border border-border/40 bg-muted/15 outline-none transition-colors focus:ring-2 focus:ring-ring/40', focusedId === entry.id && 'border-primary/30 bg-primary/5')}>
                                     <div className="flex items-start gap-1 p-1.5">
                                       <CollapsibleTrigger asChild>
-                                        <button type="button" aria-label={`${view.expandedEntries.includes(entry.id) ? '折叠' : '展开'} ${entry.title}`} className={cn(triggerClass, 'min-w-0 flex-1 px-2 py-1.5 text-left')}>
+                                        <button data-disclosure-trigger="" aria-expanded={view.expandedEntries.includes(entry.id)} type="button" aria-label={`${view.expandedEntries.includes(entry.id) ? '折叠' : '展开'} ${entry.title}`} className={cn(triggerClass, 'min-w-0 flex-1 px-2 py-1.5 text-left')}>
                                           <span className="flex items-start gap-2">
-                                            <ChevronDown size={13} className={cn('mt-0.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', !view.expandedEntries.includes(entry.id) && '-rotate-90')} />
+                                            <DisclosureChevron expanded={view.expandedEntries.includes(entry.id)} size={13} className={cn('mt-0.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', !view.expandedEntries.includes(entry.id) && '-rotate-90')} />
                                             <span className="min-w-0 flex-1">
-                                              <span className="block truncate text-[13px] font-medium leading-5" title={entry.title}>{entry.title}</span>
+                                              <FadeTitle className="block truncate text-[13px] font-medium leading-5" title={entry.title}>{entry.title}</FadeTitle>
                                               <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-4 text-muted-foreground">
                                                 <time dateTime={new Date(entry.updatedAt).toISOString()} title={new Date(entry.updatedAt).toLocaleString()}>{new Date(entry.updatedAt).toLocaleDateString()}</time>
                                                 <span className={cn('inline-flex items-center gap-1', entry.manuallyEdited && 'text-primary')}>

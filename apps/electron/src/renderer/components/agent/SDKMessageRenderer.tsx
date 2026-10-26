@@ -92,6 +92,7 @@ import {
   isThinkingSignatureError,
 } from '@gamma/shared'
 import type { ToolActivity } from '@/atoms/agent-atoms'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 // ===== SDKMessageRenderer Props =====
 
@@ -137,8 +138,8 @@ function PermissionDeniedNotice({ message }: { message: SDKSystemMessage }): Rea
 
   return (
     <div className="my-3 pl-[46px] pr-1">
-      <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-foreground/80">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+      <div className="flex items-start gap-2.5 rounded-md border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-foreground/80">
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-foreground">权限检查已拒绝操作</span>
@@ -371,6 +372,39 @@ export function buildTaskProgressDataForTurn(turn: AssistantTurn): { taskActivit
 }
 
 
+/** 压缩会把同一个 run 分成多个 turn；内联清单沿用此前已确认阶段，但不跨真实用户输入或新 run。 */
+export function buildTaskProgressDataForProcess(turn: AssistantTurn, allMessages: SDKMessage[]): { taskActivities: ToolActivity[] } {
+  const firstAssistant = turn.assistantMessages[0]
+  const lastMessage = turn.turnMessages.at(-1)
+  const matches = (message: SDKMessage, target: SDKMessage | undefined): boolean => message === target
+    || (!!target && 'uuid' in message && 'uuid' in target && !!message.uuid && message.uuid === target.uuid)
+  const firstIndex = allMessages.findIndex((message) => matches(message, firstAssistant))
+  const lastIndex = allMessages.findLastIndex((message) => matches(message, lastMessage))
+  if (firstIndex < 0 || lastIndex < firstIndex) return buildTaskProgressDataForTurn(turn)
+
+  const runRecord = firstAssistant as unknown as Record<string, unknown>
+  const runStartedAt = runRecord._gammaLiveRunStartedAt
+  const runGeneration = runRecord._gammaLiveRunGeneration
+  let startIndex = firstIndex
+  while (startIndex > 0) {
+    const previous = allMessages[startIndex - 1]!
+    const previousRecord = previous as Record<string, unknown>
+    const previousRun = previousRecord._gammaLiveRunStartedAt
+    const previousGeneration = previousRecord._gammaLiveRunGeneration
+    if (typeof runGeneration === 'number' && typeof previousGeneration === 'number' && runGeneration !== previousGeneration) break
+    if (typeof runStartedAt === 'number' && typeof previousRun === 'number' && runStartedAt !== previousRun) break
+    if (previous.type === 'user' && isUserInputMessage(previous as SDKUserMessage)) break
+    if (previous.type === 'result' && !(previous as SDKResultMessage).isSyntheticCompactionResult) break
+    startIndex -= 1
+  }
+  const messages = allMessages.slice(startIndex, lastIndex + 1)
+  return buildTaskProgressDataForTurn({
+    type: 'assistant-turn',
+    assistantMessages: messages.filter((message): message is SDKAssistantMessage => message.type === 'assistant'),
+    turnMessages: messages,
+  })
+}
+
 export interface AssistantTurnRendererProps {
   turn: AssistantTurn
   /** 所有消息（全局，供工具结果查找跨 turn 的结果） */
@@ -433,8 +467,10 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     }
   }
 
-  // 从 turnMessages 中提取 result 消息的耗时和用量
+  // 从 turnMessages 中提取 result 消息的耗时和用量。
   const { durationMs, usage } = extractTurnUsage(turn.turnMessages)
+  const runStartedAt = (turn.assistantMessages[0] as unknown as Record<string, unknown> | undefined)?._gammaLiveRunStartedAt
+  const processStartedAt = typeof runStartedAt === 'number' ? runStartedAt : turn.createdAt
 
   // 只在用户点击停止时显示中断徽章。
   // aborted_streaming / aborted_tools 是流式追加消息时的软中断，语义是继续补充信息。
@@ -463,6 +499,11 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
       topLevelBlocks.push(eb.block)
     }
   }
+
+  const { taskActivities } = React.useMemo(
+    () => buildTaskProgressDataForProcess(turn, allMessages),
+    [turn, allMessages],
+  )
 
   // 检测是否有主要内容（text 块），用于决定 tool/thinking 是否 dimmed
   const hasTextContent = topLevelBlocks.some(
@@ -499,7 +540,7 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
   if (enrichedBlocks.length === 0 && !hasError) return null
 
   const renderTopLevelBlock = (block: SDKContentBlock, i: number): React.ReactNode => {
-    // 任务进度由底部浮层统一呈现，输出记录不再重复显示任务卡。
+    // 任务由执行区顶部清单统一呈现，不再生成独立工具卡或空时间线节点。
     if (block.type === 'tool_use' && TASK_TOOL_NAMES.has((block as SDKToolUseBlock).name)) {
       return null
     }
@@ -544,12 +585,12 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
               return renderTopLevelBlock(item.item.block, item.item.index)
             }
 
-            // 不为浮层接管的任务工具或不支持的内容块生成空时间线节点。
+            // 任务工具只进入计划清单；不支持的内容块不生成空时间线节点。
             const visibleItems = item.items.filter(({ block }) =>
               block.type === 'text' || block.type === 'thinking'
               || (block.type === 'tool_use' && !TASK_TOOL_NAMES.has((block as SDKToolUseBlock).name)),
             )
-            if (visibleItems.length === 0) return null
+            if (visibleItems.length === 0 && taskActivities.length === 0) return null
             const groupBlocks = visibleItems.map((groupItem) => groupItem.block)
             const firstIndex = item.items[0]?.index ?? 0
             const groupKey = `process-${firstIndex}`
@@ -559,6 +600,9 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
                 blocks={groupBlocks}
                 allMessages={allMessages}
                 isStreaming={isStreaming}
+                taskActivities={taskActivities}
+                startedAt={processStartedAt}
+                durationMs={durationMs}
                 renderChildren={() => visibleItems.map((groupItem) => (
                   <React.Fragment key={groupItem.index}>
                     {renderProcessGroupBlock(groupItem.block, groupItem.index)}
@@ -836,10 +880,10 @@ function AttachedImageThumb({ file, index, onOpen, onLoaded }: {
         className="max-w-[300px] max-h-[200px] rounded-lg object-contain cursor-pointer"
         onClick={() => onOpen(index)}
       />
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={handleSave}
-        className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+        className="absolute bottom-2 right-2 p-1.5 rounded-md bg-overlay/50 text-inverse-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-overlay/70"
         title="保存图片"
       >
         <Download className="size-4" />
@@ -875,7 +919,7 @@ function AttachedFileChip({ file }: { file: AttachedFileRef }): React.ReactEleme
       title={file.path}
     >
       <Icon className="size-3.5 shrink-0" />
-      <span className="truncate max-w-[200px]">{file.filename}</span>
+      <FadeTitle className="truncate max-w-[200px]">{file.filename}</FadeTitle>
     </button>
   )
 }
@@ -887,7 +931,7 @@ function QuoteChip({ quote }: { quote: QuotedFileRef }): React.ReactElement {
   return (
     <div className="inline-flex items-center gap-1.5 rounded-md bg-primary/8 border border-primary/20 px-2.5 py-1 text-[12px] text-muted-foreground">
       <Quote className="size-3.5 shrink-0 text-primary/60" />
-      <span className="truncate max-w-[200px]">{label}</span>
+      <FadeTitle className="truncate max-w-[200px]">{label}</FadeTitle>
     </div>
   )
 }

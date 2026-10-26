@@ -16,7 +16,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { Brain, ChevronDown } from 'lucide-react'
+import { Brain} from 'lucide-react'
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import { normalizeLatexDelimiters } from '@/lib/normalize-latex'
 import type { ComponentProps, ReactNode } from 'react'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 // ===== 上下文 =====
 
@@ -171,7 +172,7 @@ export const ReasoningTrigger = React.memo(function ReasoningTrigger({
   const { isStreaming, isOpen, duration } = useReasoning()
 
   return (
-    <CollapsibleTrigger
+    <CollapsibleTrigger data-disclosure-trigger=""
       className={cn(
         'flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground',
         className
@@ -182,7 +183,7 @@ export const ReasoningTrigger = React.memo(function ReasoningTrigger({
         <>
           <Brain className="size-4" />
           {getThinkingMessage(isStreaming, duration)}
-          <ChevronDown
+          <DisclosureChevron size={16}
             className={cn(
               'size-4 transition-transform',
               isOpen ? 'rotate-180' : 'rotate-0'

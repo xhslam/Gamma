@@ -18,9 +18,11 @@ import { cn } from '@/lib/utils'
 import { attachScrollFade } from '@/components/ui/scroll-fade'
 import type { FileIndexEntry } from '@gamma/shared'
 import { FileTypeIcon } from './FileTypeIcon'
-import { ChevronRight, FileText, MessageSquareText } from 'lucide-react'
+import { FileText, MessageSquareText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 export type ReferencePickerTab = 'files' | 'conversations'
 
@@ -462,7 +464,7 @@ function TreeNodeList({
       <React.Fragment key={getTreeNodeKey(node)}>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
-            <button
+            <button data-disclosure-trigger=""
           type="button"
           data-mention-item=""
           id={`${listId}-option-${idx}`}
@@ -472,7 +474,7 @@ function TreeNodeList({
           aria-level={node.depth + 1}
           aria-expanded={node.type === 'dir' && node.children.length > 0 ? node.expanded : undefined}
           className={cn(
-            'w-full flex items-center gap-1.5 px-2.5 py-1 text-left text-xs transition-colors',
+            'gamma-list-row w-full flex items-center gap-1.5 px-2.5 text-left text-xs transition-colors',
             isSelected
               ? 'bg-accent text-accent-foreground'
               : 'hover:bg-accent/50',
@@ -504,7 +506,7 @@ function TreeNodeList({
         >
           {/* 目录展开/折叠箭头 */}
           {node.type === 'dir' && node.children.length > 0 ? (
-            <ChevronRight
+            <DisclosureChevron expanded={node.expanded} size={12}
               className={cn(
                 'size-3 shrink-0 text-muted-foreground transition-transform duration-150',
                 node.expanded && 'rotate-90',
@@ -525,7 +527,7 @@ function TreeNodeList({
           />
 
           {/* 名称 */}
-          <span className="truncate flex-1">{node.name}</span>
+          <FadeTitle className="truncate flex-1">{node.name}</FadeTitle>
           {node.source === 'session' && (
             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground shrink-0">会话文件</span>
           )}

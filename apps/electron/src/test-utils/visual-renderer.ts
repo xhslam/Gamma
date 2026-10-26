@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { build } from 'vite'
 import tailwindcss from 'tailwindcss'
 import loadTailwindConfig from 'tailwindcss/loadConfig'
@@ -11,6 +11,8 @@ export interface VisualRendererOptions {
   dpr?: number
   zoom?: number
   reducedMotion?: boolean
+  forcedColors?: boolean
+  touch?: boolean
   screenshot?: string
   hoverSelector?: string
   keyboard?: boolean
@@ -48,13 +50,17 @@ export async function createVisualRendererHarness(entrySource: string): Promise<
     const output = (Array.isArray(result) ? result : [result]).flatMap((item) => 'output' in item ? item.output : [])
     const chunk = output.find((item) => item.type === 'chunk' && item.isEntry)
     if (!chunk || chunk.type !== 'chunk') throw new Error('Renderer 回归构建没有生成可执行入口')
-    const css = output.filter((item) => item.type === 'asset' && item.fileName.endsWith('.css'))
-      .map((item) => item.type === 'asset' ? typeof item.source === 'string' ? item.source : new TextDecoder().decode(item.source) : '')
-      .join('\n')
+    const assets = output.filter((item) => item.type === 'asset')
+    const styles = assets.filter((item) => item.fileName.endsWith('.css'))
+      .map((item) => `<link rel="stylesheet" href="${item.fileName}">`).join('')
     await Promise.all([
       writeFile(join(directory, 'renderer.js'), chunk.code),
-      writeFile(join(directory, 'renderer.css'), css),
-      writeFile(join(directory, 'index.html'), '<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>'),
+      writeFile(join(directory, 'index.html'), `<!doctype html><html><head><meta charset="UTF-8">${styles}</head><body><div id="root"></div><script src="renderer.js"></script></body></html>`),
+      ...assets.map(async (asset) => {
+        const path = join(directory, asset.fileName)
+        await mkdir(dirname(path), { recursive: true })
+        await writeFile(path, asset.source)
+      }),
     ])
   } catch (error) {
     await rm(directory, { recursive: true, force: true })
@@ -81,11 +87,15 @@ app.whenReady().then(async () => {
     window.webContents.setZoomFactor(${options.zoom ?? 1});
     window.webContents.debugger.attach('1.3');
     await window.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
-      width: Math.round(900 / ${options.zoom ?? 1}), height: Math.round(600 / ${options.zoom ?? 1}), deviceScaleFactor: ${options.dpr ?? 1}, mobile: false,
+      width: Math.round(900 / ${options.zoom ?? 1}), height: Math.round(600 / ${options.zoom ?? 1}), deviceScaleFactor: ${options.dpr ?? 1}, mobile: ${options.touch ?? false},
     });
     await window.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-reduced-motion', value: ${JSON.stringify(options.reducedMotion ? 'reduce' : 'no-preference')} }],
+      features: [
+        { name: 'prefers-reduced-motion', value: ${JSON.stringify(options.reducedMotion ? 'reduce' : 'no-preference')} },
+        { name: 'forced-colors', value: ${JSON.stringify(options.forcedColors ? 'active' : 'none')} },
+      ],
     });
+    await window.webContents.debugger.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: ${options.touch ?? false}, maxTouchPoints: 1 });
     await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
     ${options.keyboard ? `await window.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', windowsVirtualKeyCode: 9 });
     await window.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', windowsVirtualKeyCode: 9 });` : ''}

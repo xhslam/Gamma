@@ -32,6 +32,7 @@ import { ComputerModals } from '@/components/computer-use'
 import { detectIsWindows } from '@/lib/platform'
 import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
+import { PANEL_GAP_PX } from '@/lib/workbench-layout'
 import { Toaster } from '@/components/ui/sonner'
 
 const MIN_RIGHT_PANEL_WIDTH = 300
@@ -149,7 +150,7 @@ export function AppShell(): React.ReactElement {
     ? MIN_SPLIT_PANEL_WIDTH
     : ordinaryRightPanelMinimumWidth
   // 收起时不保留图标栏或分隔线，释放全部左侧空间。
-  const leftSidebarOccupiedWidth = sidebarCollapsed ? 0 : LEFT_SIDEBAR_WIDTH + 1
+  const leftSidebarOccupiedWidth = sidebarCollapsed ? 0 : LEFT_SIDEBAR_WIDTH + PANEL_GAP_PX
   // 右侧面板是完整的工作区：不论当前为文件、改动或扩展 Tab，继续向左拖拽时
   // 都应能收起左侧 Sidebar，并使用释放出的全部宽度；主区域仍由 MIN_MAIN_AREA_WIDTH 兜底。
   const canUseCollapsedSidebarSpace = sidebarCollapsed
@@ -245,7 +246,7 @@ export function AppShell(): React.ReactElement {
           activeRightPanelSplit !== null || isExpandedRightWorkspace || rightPanelLayout.hasOpenedWideWorkspace
         )
         latestWidth = clampRightPanelWidth(requestedWidth, viewportWidth, rightPanelMinimumWidth,
-          sidebarCollapsedDuringDrag ? 0 : LEFT_SIDEBAR_WIDTH + 1, allowFullAvailableWidth)
+          sidebarCollapsedDuringDrag ? 0 : LEFT_SIDEBAR_WIDTH + PANEL_GAP_PX, allowFullAvailableWidth)
         setDraggedRightPanelWidth(latestWidth)
       },
       finish: commit => {
@@ -284,10 +285,11 @@ export function AppShell(): React.ReactElement {
     <>
       <WindowControls />
 
-      <div data-workbench-density={density} className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
+      <div data-workbench-density={density} className="shell-bg relative h-screen w-screen overflow-hidden bg-background">
         <div
           ref={appContentRef}
-          className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
+          data-sidebar-collapsed={sidebarCollapsed}
+          className={cn('gamma-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
         >
             <SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />

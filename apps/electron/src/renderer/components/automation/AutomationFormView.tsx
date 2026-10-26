@@ -47,6 +47,7 @@ import type {
   FeishuChatBinding,
   UpdateAutomationInput,
 } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 const NO_FEISHU_BINDING = '__none__'
 
@@ -255,13 +256,13 @@ function SaveStatusBadge({
     icon = <Loader2 className="size-3 animate-spin" />
     text = '保存中…'
   } else if (status === 'saved') {
-    icon = <Check className="size-3 text-emerald-500" />
+    icon = <Check className="size-3 text-success" />
     text = '已保存 · 刚刚'
     tone = 'text-foreground/70'
   } else if (status === 'error') {
     icon = <AlertTriangle className="size-3" />
     text = '保存失败'
-    tone = 'text-red-500'
+    tone = 'text-destructive'
   } else {
     icon = <Check className="size-3 text-muted-foreground/50" />
     text = '已保存'
@@ -622,7 +623,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
                 className="flex-1 bg-transparent text-sm font-semibold text-foreground border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
                 maxLength={100}
               />
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => { void commitName() }}
@@ -633,10 +634,10 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
             </div>
           ) : (
             <div className="titlebar-no-drag flex items-center gap-1.5 flex-1 min-w-0">
-              <span className="truncate text-sm font-semibold text-foreground">
+              <FadeTitle className="truncate text-sm font-semibold text-foreground">
                 {form.name.trim() || (isEdit ? '未命名任务' : '新建定时任务')}
-              </span>
-              <button
+              </FadeTitle>
+              <button data-icon-button="true"
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={startEditName}
@@ -676,7 +677,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
       <div className="w-[340px] flex-shrink-0 border-l border-border/50 flex flex-col bg-content-area">
         <div className="relative flex items-center justify-between gap-2 px-4 py-4 flex-shrink-0">
           <span className="text-sm font-semibold text-foreground">配置</span>
-          <button
+          <button data-icon-button="true"
             onClick={close}
             className="titlebar-no-drag p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors"
           >
@@ -733,7 +734,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
                 </div>
               )}
               {live?.completedAt && (
-                <div className="flex items-center gap-1.5 pt-0.5 text-emerald-600 dark:text-emerald-400">
+                <div className="flex items-center gap-1.5 pt-0.5 text-success dark:text-success">
                   <Check className="size-3" />
                   <span>任务已完成（重新启用可再跑一轮）</span>
                 </div>
@@ -1056,7 +1057,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
           <div className="flex flex-col gap-2">
             <Label>项目</Label>
             {workspaces.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-md border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+              <div className="flex items-center gap-2 rounded-md border border-warning dark:border-warning/50 bg-muted dark:bg-muted px-3 py-2 text-sm text-foreground dark:text-foreground">
                 <Settings size={14} className="shrink-0" />
                 <span>尚未创建任何项目</span>
                 <button
@@ -1173,7 +1174,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
           {/* 会话模式选择已隐藏：默认采用 daily（同日复用、跨日新建）。
               schema/scheduler/Agent 工具层仍保留 reuse 模式，方便老配置和高级用户继续使用。 */}
 
-          <div className="flex gap-2 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+          <div className="flex gap-2 rounded-lg bg-warning/10 p-3 text-xs text-warning dark:text-warning">
             <AlertTriangle className="size-4 shrink-0 mt-0.5" />
             <span>此任务将以「完全权限」无人值守运行，可自主读写文件、执行命令。请确认任务内容安全可信。</span>
           </div>

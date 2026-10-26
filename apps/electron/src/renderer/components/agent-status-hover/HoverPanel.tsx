@@ -10,10 +10,10 @@ import { cn } from '@/lib/utils'
 
 const PHASE_DOT_CLASS: Record<AgentIslandPhase, string> = {
   idle: 'bg-transparent',
-  running: 'bg-blue-500',
-  'needs-interaction': 'bg-orange-500',
-  error: 'bg-red-500',
-  completed: 'bg-green-500',
+  running: 'bg-info',
+  'needs-interaction': 'bg-warning',
+  error: 'bg-destructive',
+  completed: 'bg-success',
 }
 
 const PHASE_LABEL: Record<AgentIslandPhase, string> = {
@@ -33,7 +33,7 @@ const INTERACTION_ICON: Partial<Record<AgentIslandInteractionKind, React.Compone
 function SessionIndicator({ session }: { session: AgentIslandSessionSnapshot }): React.ReactElement {
   if (session.phase === 'needs-interaction' && session.interactionKind) {
     const Icon = INTERACTION_ICON[session.interactionKind]
-    if (Icon) return <Icon className="mt-0.5 size-3.5 shrink-0 text-orange-500" />
+    if (Icon) return <Icon className="mt-0.5 size-3.5 shrink-0 text-warning" />
   }
   return <span className={cn('mt-1 size-2 shrink-0 rounded-full', PHASE_DOT_CLASS[session.phase])} />
 }

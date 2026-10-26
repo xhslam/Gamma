@@ -26,6 +26,7 @@ import {
   createEmptyDraft,
 } from '@/atoms/automation-atoms'
 import type { Automation } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 把调度配置格式化为可读文案 */
 function formatSchedule(a: Automation): string {
@@ -226,7 +227,7 @@ function Section({ title, automations, onEdit, onRefresh, onDelete }: SectionPro
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-[14px] font-medium text-foreground truncate">{a.name}</span>
+                <FadeTitle className="text-[14px] font-medium text-foreground truncate">{a.name}</FadeTitle>
                 <span className="text-[12px] text-foreground/45 truncate">
                   {a.prompt.slice(0, 60)}{a.prompt.length > 60 ? '…' : ''}
                 </span>
@@ -241,7 +242,7 @@ function Section({ title, automations, onEdit, onRefresh, onDelete }: SectionPro
               <div className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <button data-icon-button="true"
                       type="button"
                       aria-label={`立即运行 ${a.name}`}
                       onClick={(e) => { void handleRunNow(e, a) }}
@@ -254,7 +255,7 @@ function Section({ title, automations, onEdit, onRefresh, onDelete }: SectionPro
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <button data-icon-button="true"
                       type="button"
                       aria-label={`删除 ${a.name}`}
                       onClick={(e) => handleDelete(e, a)}
@@ -269,7 +270,7 @@ function Section({ title, automations, onEdit, onRefresh, onDelete }: SectionPro
             </div>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   aria-label={a.active ? `暂停 ${a.name}` : `启用 ${a.name}`}
                   onClick={(e) => { void handleToggle(e, a) }}
@@ -277,7 +278,7 @@ function Section({ title, automations, onEdit, onRefresh, onDelete }: SectionPro
                     'p-1.5 -m-1.5 shrink-0 flex items-center justify-center rounded-md transition-colors',
                     a.active
                       ? 'text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/70 group-hover:text-foreground/55'
-                      : 'text-foreground/30 hover:bg-emerald-500/10 hover:text-emerald-500 group-hover:text-foreground/45',
+                      : 'text-foreground/30 hover:bg-success/10 hover:text-success group-hover:text-foreground/45',
                   )}
                 >
                   {a.active ? <Pause className="size-3.5" /> : <Power className="size-3.5" />}

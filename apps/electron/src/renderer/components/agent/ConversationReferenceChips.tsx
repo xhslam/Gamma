@@ -26,6 +26,7 @@ import {
   type ReferenceSummaryStatus,
   type ReferenceSummaryProgress,
 } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface ConversationReferenceChipsProps {
   embedded?: boolean
@@ -120,7 +121,7 @@ export function ConversationReferenceChips({
             key={ref.refId}
             className={cn(
               composerAttachmentClassName,
-              !isDeleted && (ref.estTokens ?? 0) > effectiveBudget / Math.max(1, refs.length) && 'text-amber-600 border-amber-500/50',
+              !isDeleted && (ref.estTokens ?? 0) > effectiveBudget / Math.max(1, refs.length) && 'text-warning border-warning/50',
               isDeleted
                 ? 'text-muted-foreground border-dashed border-destructive/30 opacity-80'
                 : ''
@@ -140,8 +141,8 @@ export function ConversationReferenceChips({
                     isDeleted
                       ? 'text-muted-foreground/50 cursor-not-allowed'
                       : isLive
-                        ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
-                        : 'text-sky-600 dark:text-sky-400 hover:bg-sky-500/10'
+                        ? 'text-success dark:text-success hover:bg-success/10'
+                        : 'text-info dark:text-info hover:bg-info/10'
                   )}
                 >
                   {isDeleted ? (
@@ -173,19 +174,19 @@ export function ConversationReferenceChips({
             {/* 标题 */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <span
+                <FadeTitle
                   className={cn(
                     'max-w-[160px] truncate text-[13px]',
                     isDeleted ? 'line-through text-muted-foreground' : 'text-foreground/90'
                   )}
                 >
                   {displayTitle}
-                </span>
+                </FadeTitle>
               </TooltipTrigger>
               <TooltipContent side="top">
                 {isRenamed && <p>原标题：{ref.titleAtAttach}</p>}
                 {isCrossChannel && (
-                  <p className="text-amber-500 font-medium">内容将发送给当前渠道的模型</p>
+                  <p className="text-warning font-medium">内容将发送给当前渠道的模型</p>
                 )}
               </TooltipContent>
             </Tooltip>
@@ -195,7 +196,7 @@ export function ConversationReferenceChips({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className="flex items-center text-amber-500 hover:text-amber-600 transition-colors cursor-help"
+                    className="flex items-center text-warning hover:text-warning transition-colors cursor-help"
                     data-testid="cross-channel-indicator"
                     aria-label="内容将发送给当前渠道的模型"
                   >
@@ -241,7 +242,7 @@ export function ConversationReferenceChips({
             )}
 
             {/* 删除按钮 */}
-            <button
+            <button data-icon-button="true"
               type="button"
               onClick={() => onRemoveRef(ref.refId)}
               className={attachmentRemoveClassName}
@@ -271,7 +272,7 @@ export function ConversationReferenceChips({
         return Boolean(s?.channelId && currentChannelId && s.channelId !== currentChannelId)
       }) && (
         <div
-          className="basis-full flex items-center gap-1 text-[11px] text-amber-600/90 dark:text-amber-400/90"
+          className="basis-full flex items-center gap-1 text-[11px] text-warning/90 dark:text-warning/90"
           data-testid="cross-channel-notice"
         >
           <ArrowRightLeft className="size-3 shrink-0" />
@@ -281,7 +282,7 @@ export function ConversationReferenceChips({
 
       {/* 超出预算提示 */}
       {shouldShowSummaryWarning && (
-        <div className="basis-full flex items-center gap-1 text-[11px] text-amber-600/90 dark:text-amber-400/90">
+        <div className="basis-full flex items-center gap-1 text-[11px] text-warning/90 dark:text-warning/90">
           <AlertTriangle className="size-3 shrink-0" />
           <span>引用内容较多，部分对话将由模型提炼结构化摘要注入（不影响正常发送）。</span>
         </div>

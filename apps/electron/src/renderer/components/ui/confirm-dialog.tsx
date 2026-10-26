@@ -53,7 +53,7 @@ export function ConfirmDialog({
           <AlertDialogAction
             onClick={onConfirm}
             disabled={loading}
-            className={variant === 'destructive' ? 'bg-destructive text-white hover:bg-destructive/90' : undefined}
+            className={variant === 'destructive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
           >
             {loading ? (loadingLabel ?? confirmLabel) : confirmLabel}
           </AlertDialogAction>

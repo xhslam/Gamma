@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { LocalProjectBadge } from './LocalProjectBadge'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** Popover hover 关闭延迟（ms），与项目其他 hover popover 一致 */
 const HOVER_CLOSE_DELAY = 150
@@ -130,7 +131,7 @@ export function CollapsedWorkspacePopover({
             Agent 模式 · 项目
           </span>
           <div className="flex items-center gap-0.5">
-            <button
+            <button data-icon-button="true"
               type="button"
               onClick={() => void createProjectFromFolder()}
               className="p-1 rounded hover:bg-foreground/[0.06] text-foreground/35 hover:text-foreground/60 transition-colors"
@@ -138,7 +139,7 @@ export function CollapsedWorkspacePopover({
             >
               <FolderInput size={13} />
             </button>
-            <button
+            <button data-icon-button="true"
               type="button"
               onClick={handleStartCreate}
               className="p-1 rounded hover:bg-foreground/[0.06] text-foreground/35 hover:text-foreground/60 transition-colors"
@@ -159,12 +160,12 @@ export function CollapsedWorkspacePopover({
               className={cn(
                 'w-full flex items-center gap-2 px-2 py-[5px] rounded-md text-[13px] transition-colors duration-100 text-left',
                 ws.id === currentWorkspaceId
-                  ? 'bg-foreground/[0.08] text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+                  ? 'bg-foreground/[0.08] text-foreground shadow-[0_1px_2px_0_hsl(var(--shadow-ink)/0.05)]'
                   : 'text-foreground/70 hover:bg-foreground/[0.04]',
               )}
             >
               <FolderOpen size={13} className="flex-shrink-0 text-foreground/40" />
-              <span className="flex-1 min-w-0 truncate">{ws.name}</span>
+              <FadeTitle className="flex-1 min-w-0 truncate">{ws.name}</FadeTitle>
               <LocalProjectBadge
                 projectRootPath={ws.projectRootPath}
                 projectRootStatus={ws.projectRootStatus}

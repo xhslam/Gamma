@@ -22,7 +22,7 @@ import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { CalendarDays, ChevronDown, ChevronUp, Paperclip, FileText, ListTodo, Sparkles, Server, Download, MessageSquareText, Quote } from 'lucide-react'
+import { CalendarDays, Paperclip, FileText, ListTodo, Sparkles, Server, Download, MessageSquareText, Quote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { shouldInspectMermaidCodeBlock, shouldRenderMermaidCodeBlock } from '@/lib/mermaid-detection'
 import { normalizeLatexDelimiters } from '@/lib/normalize-latex'
@@ -48,6 +48,7 @@ import { useAgentBrowserLink } from '@/components/browser/AgentBrowserLinkProvid
 import type { HTMLAttributes, ComponentProps, ReactNode } from 'react'
 import type { FileAttachment } from '@gamma/shared'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 // ===== Message 根容器 =====
 
@@ -266,11 +267,11 @@ type MentionType = 'file' | 'skill' | 'mcp' | 'session' | 'todo' | 'calendar_eve
 
 const MENTION_STYLES: Record<MentionType, { icon: typeof FileText; className: string }> = {
   file: { icon: FileText, className: 'bg-primary/10 text-primary' },
-  skill: { icon: Sparkles, className: 'bg-[hsl(270_60%_60%/0.15)] text-[hsl(270_60%_50%)]' },
-  mcp: { icon: Server, className: 'bg-[hsl(160_60%_45%/0.15)] text-[hsl(160_60%_35%)]' },
-  session: { icon: MessageSquareText, className: 'bg-[hsl(200_80%_50%/0.14)] text-[hsl(200_80%_40%)]' },
-  todo: { icon: ListTodo, className: 'bg-amber-500/15 text-amber-800 dark:text-amber-200' },
-  calendar_event: { icon: CalendarDays, className: 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-200' },
+  skill: { icon: Sparkles, className: 'bg-muted text-foreground' },
+  mcp: { icon: Server, className: 'bg-muted text-foreground' },
+  session: { icon: MessageSquareText, className: 'bg-muted text-foreground' },
+  todo: { icon: ListTodo, className: 'bg-warning/15 text-foreground dark:text-warning' },
+  calendar_event: { icon: CalendarDays, className: 'bg-info/15 text-info dark:text-info' },
   quote: { icon: Quote, className: 'bg-primary/10 text-primary' },
 }
 
@@ -383,7 +384,7 @@ function MentionChip({ type, value }: { type: MentionType; value: string }): Rea
         disabled={!canNavigate}
         onClick={canNavigate ? () => onAgentHistoryQuoteClick?.(quote) : undefined}
         className={cn(
-          'inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline',
+          'inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-sans font-medium whitespace-nowrap align-baseline',
           style.className,
           canNavigate ? 'cursor-pointer hover:bg-primary/[0.16]' : 'cursor-default',
         )}
@@ -416,7 +417,7 @@ function MentionChip({ type, value }: { type: MentionType; value: string }): Rea
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline',
+        'inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-sans font-medium whitespace-nowrap align-baseline',
         style.className
       )}
       title={type === 'file' || isNamedReference ? (label || referenceId) : undefined}
@@ -731,7 +732,7 @@ const MarkdownInlineCode = React.memo(function MarkdownInlineCode({
   const text = typeof codeChildren === 'string' ? codeChildren : ''
   const fallbackCode = (
     <code
-      className="rounded bg-foreground/10 px-[0.35em] py-[0.15em] text-[0.875em] font-mono font-medium"
+      className="gamma-inline-code"
       {...codeProps}
     >
       {codeChildren}
@@ -815,8 +816,8 @@ export const MessageResponse = React.memo(
     return (
       <div
         className={cn(
-          'prose dark:prose-invert max-w-none text-[length:var(--md-preview-font-size,15px)]',
-          'prose-p:my-1.5 prose-p:leading-[1.6] prose-li:leading-[1.6] prose-pre:my-0 prose-headings:my-2 prose-hr:my-3',
+          'reading-body prose dark:prose-invert',
+          'prose-p:my-1.5 prose-pre:my-0 prose-headings:my-2 prose-hr:my-3',
           '[&_.code-block-wrapper+.code-block-wrapper]:mt-4',
           '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           className
@@ -872,7 +873,7 @@ export const UserMessageContent = React.memo(
       if (!element || !content) return
 
       const measure = (): void => {
-        const lineHeight = parseFloat(getComputedStyle(element).lineHeight)
+        const lineHeight = parseFloat(getComputedStyle(content).lineHeight)
         const maxHeight = lineHeight * COLLAPSE_LINE_THRESHOLD
         setShouldCollapse(element.scrollHeight > maxHeight + 10)
       }
@@ -893,7 +894,7 @@ export const UserMessageContent = React.memo(
           className={cn(
             'overflow-hidden transition-[max-height] duration-200',
             '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-            shouldCollapse && !isExpanded && 'max-h-[6.5em]'
+            shouldCollapse && !isExpanded && 'reading-body-collapsed'
           )}
         >
           <AgentHistoryQuoteClickContext.Provider value={onAgentHistoryQuoteClick}>
@@ -901,7 +902,7 @@ export const UserMessageContent = React.memo(
           </AgentHistoryQuoteClickContext.Provider>
         </div>
         {shouldCollapse && (
-          <button
+          <button data-disclosure-trigger="" aria-expanded={isExpanded}
             type="button"
             onClick={toggleExpand}
             className={cn(
@@ -911,12 +912,12 @@ export const UserMessageContent = React.memo(
           >
             {isExpanded ? (
               <>
-                <ChevronUp className="size-3" />
+                <DisclosureChevron expanded={isExpanded} size={12} className="size-3" />
                 <span>收起</span>
               </>
             ) : (
               <>
-                <ChevronDown className="size-3" />
+                <DisclosureChevron expanded={isExpanded} size={12} className="size-3" />
                 <span>展开全部</span>
               </>
             )}
@@ -1114,10 +1115,10 @@ function MessageAttachmentImage({ attachment, isSingle = false, index, onOpen, o
   return (
     <div className="relative group inline-block">
       {imgElement}
-      <button
+      <button data-icon-button="true"
         type="button"
         onClick={handleSave}
-        className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+        className="absolute bottom-2 right-2 p-1.5 rounded-md bg-overlay/50 text-inverse-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-overlay/70"
         title="保存图片"
       >
         <Download className="size-4" />
@@ -1140,7 +1141,7 @@ function MessageAttachmentFile({ attachment }: MessageAttachmentFileProps): Reac
     : attachment.filename
 
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-[#37a5aa]/10 border border-[#37a5aa]/20 px-3 py-1.5 text-[13px] text-[#37a5aa] shrink-0">
+    <div className="flex items-center gap-2 rounded-lg bg-muted/10 border border-border/20 px-3 py-1.5 text-[13px] text-foreground shrink-0">
       <Paperclip className="size-4" />
       <span>{displayName}</span>
     </div>

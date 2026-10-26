@@ -12,7 +12,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Blocks, ChevronDown, ChevronRight, Search, Plus, Store, FolderOpen, Check, Sparkles, Loader2 } from 'lucide-react'
+import { Blocks, ChevronDown, Search, Plus, Store, FolderOpen, Check, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -42,6 +42,8 @@ import { EMBEDDED_CATALOG_TWO_COLUMN_MIN_WIDTH, IntegrationCatalog } from './Int
 import { CredentialDialog } from './CredentialDialog'
 import { OAuthClientSecretDialog } from './OAuthClientSecretDialog'
 import { buildCatalogMcpGuidePrompt, MCP_INTEGRATION_CATALOG, getCatalogServerNames, isCatalogIntegrationVisible, matchesCatalogSearch, type CatalogCliIntegration, type CatalogCliProbeState, type CatalogCredentialIntegration, type CatalogGuidedIntegration, type CatalogMcpIntegration } from './integration-catalog'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 const embeddedMcpSectionContainerQuery = `
   @container (min-width: ${EMBEDDED_CATALOG_TWO_COLUMN_MIN_WIDTH}) {
@@ -592,7 +594,7 @@ export function AgentSkillsView({
               className="titlebar-no-drag flex items-center gap-2 rounded-lg border border-border/60 bg-content-area px-3 py-1.5 text-[13px] font-medium text-foreground/80 transition-colors hover:bg-foreground/[0.04]"
             >
               <FolderOpen size={14} className="text-foreground/45" />
-              <span className="max-w-[180px] truncate">{data.workspaceName}</span>
+              <FadeTitle className="max-w-[180px] truncate">{data.workspaceName}</FadeTitle>
               <LocalProjectBadge
                 projectRootPath={currentWorkspace?.projectRootPath}
                 projectRootStatus={currentWorkspace?.projectRootStatus}
@@ -619,7 +621,7 @@ export function AgentSkillsView({
                     : 'text-foreground/80 hover:bg-accent/50',
                 )}
               >
-                <span className="min-w-0 flex-1 truncate">{w.name}</span>
+                <FadeTitle className="min-w-0 flex-1 truncate">{w.name}</FadeTitle>
                 <LocalProjectBadge
                   projectRootPath={w.projectRootPath}
                   projectRootStatus={w.projectRootStatus}
@@ -882,7 +884,7 @@ function SkillsTab({
   return (
     <div className="flex flex-col gap-8">
       {updateCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2 text-[13px] text-blue-600 dark:text-blue-400">
+        <div className="flex items-center gap-2 rounded-lg border border-info/20 bg-info/[0.06] px-3 py-2 text-[13px] text-info dark:text-info">
           有 {updateCount} 个 Skill 可更新到来源最新版本
         </div>
       )}
@@ -931,12 +933,12 @@ function SkillSection({ title, skills, embedded, isBuiltin, updatingSkill, onOpe
           const collapsed = collapsedGroups.has(group.id)
           return (
             <div key={group.id} className="flex flex-col gap-3">
-              <button
+              <button data-disclosure-trigger="" aria-expanded={!collapsed}
                 type="button"
                 onClick={() => toggleGroup(group.id)}
                 className="flex h-8 items-center gap-2 rounded-lg px-1 text-left text-[13px] font-medium text-foreground/65 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
               >
-                <ChevronRight size={14} className={cn('text-foreground/35 transition-transform', !collapsed && 'rotate-90')} />
+                <DisclosureChevron expanded={!collapsed} size={14} className={cn('text-foreground/35 transition-transform', !collapsed && 'rotate-90')} />
                 <span>{group.title}</span>
                 <span className="text-[12px] tabular-nums text-foreground/35">{group.skills.length}</span>
               </button>

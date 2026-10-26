@@ -98,7 +98,7 @@ describe('Given 真实 Chromium 渲染的会话 UI', () => {
       const result = await renderer.run<VisualResult>(`window.setTheme('${dark ? 'dark' : ''}'); return window.visual()`, {
         screenshot: artifacts ? join(artifacts, `claude-${dark ? 'dark' : 'light'}.png`) : undefined,
       })
-      expect(result.primary).toBe(dark ? '20 61% 64%' : '18 48% 42%')
+      expect(result.primary).toBe('14.76923077 63.10679612% 59.60784314%')
       expect(result.medium).toBe(`"wght" ${dark ? 465 : 500}`)
       expect(result.semibold).toBe(`"wght" ${dark ? 560 : 600}`)
       expect(result.bold).toBe(`"wght" ${dark ? 660 : 700}`)
@@ -108,10 +108,9 @@ describe('Given 真实 Chromium 渲染的会话 UI', () => {
     }, 30_000)
   }
   for (const theme of ['theme-ocean-light', 'dark theme-ocean-dark', 'theme-forest-light', 'dark theme-forest-dark', 'theme-slate-light', 'dark theme-slate-dark', 'dark theme-terminal-dark']) {
-    test(`When 选择特色主题 ${theme} Then 保留其强调色与终端几何`, async () => {
+    test(`When 选择历史主题 ${theme} Then 使用统一暖色强调色并保留控件几何`, async () => {
       const result = await renderer.run<VisualResult>(`window.setTheme(${JSON.stringify(theme)}); return window.visual()`)
-      expect(result.primary).not.toBe('18 48% 42%')
-      expect(result.primary).not.toBe('20 61% 64%')
+      expect(result.primary).toBe('14.76923077 63.10679612% 59.60784314%')
       if (theme.includes('terminal')) {
         expect(result.inputRadius).toBe('0px')
         expect(result.medium).toBe('normal')
@@ -120,7 +119,7 @@ describe('Given 真实 Chromium 渲染的会话 UI', () => {
       }
     }, 30_000)
   }
-  test('When 输入框 hover/focus Then 阴影反馈不同且焦点轮廓仍清晰', async () => {
+  test('When 输入框 hover/focus Then 细轮廓反馈仍清晰且不增加模糊阴影', async () => {
     const resting = await renderer.run<VisualResult>('return window.visual()')
     const hovering = await renderer.run<VisualResult>('return window.visual()', { hoverSelector: '#composer' })
     const focused = await renderer.run<VisualResult>("document.getElementById('editor').focus(); return window.visual()")
@@ -165,24 +164,27 @@ describe('Given 真实 Chromium 渲染的会话 UI', () => {
     expect(result.variant).toBe('tabular-nums')
     expect(result.largeVisible).toBe(true)
   }, 30_000)
-  test('When 默认深浅主题使用四层表面与浮层 Then 层级有区分且浮层使用 DPR 轮廓', async () => {
+  test('When 默认深浅主题使用窗口、面板与下沉层 Then 精确使用既定色板且浮层为实体1px描边', async () => {
     const result = await renderer.run<{ palettes: string[][]; border: string; shadow: string }>(`
       const palettes = [];
       for (const theme of ['', 'dark']) {
         window.setTheme(theme);
         const colors = [];
-        for (let level = 0; level < 4; level++) {
-          const sample = document.createElement('div'); sample.style.background = 'hsl(var(--surface-' + level + '))';
+        for (const token of ['background','panel','inset']) {
+          const sample = document.createElement('div'); sample.style.background = 'hsl(var(--' + token + '))';
           document.body.append(sample); colors.push(getComputedStyle(sample).backgroundColor); sample.remove();
         }
         palettes.push(colors);
       }
-      const floating = document.createElement('div'); floating.className = 'ui-floating-surface rounded-dialog'; document.body.append(floating);
+      const floating = document.createElement('div'); floating.className = 'gamma-panel ui-floating-surface rounded-dialog'; floating.dataset.panel='floating'; document.body.append(floating);
       return { palettes, border:getComputedStyle(floating).borderTopWidth, shadow:getComputedStyle(floating).boxShadow };
     `, { dpr: 2 })
-    for (const palette of result.palettes) expect(new Set(palette).size).toBe(4)
-    expect(result.border).toBe('0px')
-    expect(result.shadow).toContain('0px 0px 0px 0.5px')
+    expect(result.palettes).toEqual([
+      ['rgb(250, 249, 245)', 'rgb(255, 255, 255)', 'rgb(240, 238, 230)'],
+      ['rgb(31, 30, 29)', 'rgb(38, 38, 36)', 'rgb(48, 48, 46)'],
+    ])
+    expect(result.border).toBe('1px')
+    expect(result.shadow).toBe('none')
   }, 30_000)
   test('When 普通字体回退或使用行内图标 Then 字重有静态回退且 flex 图标不偏移', async () => {
     const result = await renderer.run<{ fallback: string; weight: string; baseline: string; flexAlign: string }>(`

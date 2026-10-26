@@ -22,7 +22,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-[100] bg-black/40 titlebar-no-drag",
+      "fixed inset-0 z-[100] bg-overlay/40 titlebar-no-drag",
       "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
@@ -44,10 +44,11 @@ const DialogContent = React.forwardRef<
   <DialogPortal container={container ?? undefined}>
     <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
+      data-panel="floating"
       ref={ref}
       className={cn(
-        // 保留 Radix 焦点圈定/恢复；内容使用 16px 圆角与主题语义阴影。
-        // hairline 边框（border/50）替代默认实色边；动画时长稍微拉长到 250ms 配合 blur 过渡更自然
+        "gamma-panel",
+        // 保留 Radix 焦点圈定/恢复；12px圆角、1px描边和16px内边距由共享面板规则提供。
         "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4",
         "border border-border/50 bg-dialog text-dialog-foreground rounded-2xl p-6 shadow-[var(--shadow-dialog,var(--shadow-xl))] duration-200 titlebar-no-drag",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -60,7 +61,7 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {!hideClose && (
-        <DialogPrimitive.Close
+        <DialogPrimitive.Close data-icon-button="true"
           className={cn(
             "absolute right-4 top-4 rounded-md p-1 opacity-60 transition-all duration-150",
             "hover:bg-accent/60 hover:opacity-100 focus-visible:bg-accent/60 focus-visible:text-foreground focus-visible:opacity-100",

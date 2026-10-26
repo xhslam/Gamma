@@ -3,33 +3,50 @@ import type { MarkdownEditorPreferences } from '@gamma/shared'
 
 interface EditorStyle extends CSSProperties { [key: `--${string}`]: string | number }
 interface DocumentTheme { id: MarkdownEditorPreferences['theme']; label: string; background: string; surface: string; text: string; secondary: string; accent: string; border: string; dark: boolean }
-// 配色基于 xiaolai/vmark 的主题令牌；Copyright (c) 2026 Xiaolai Li，ISC 许可见 vmark/LICENSE。
-export const MARKDOWN_DOCUMENT_THEMES: DocumentTheme[] = [
-  { id: 'white', label: '白色', background: '#FFFFFF', surface: '#eeeeee', text: '#1a1a1a', secondary: '#666666', accent: '#0065ca', border: '#eeeeee', dark: false },
-  { id: 'paper', label: '纸张', background: '#EEEDED', surface: '#dedddd', text: '#1a1a1a', secondary: '#5e5e5e', accent: '#005cb9', border: '#d5d4d4', dark: false },
-  { id: 'mint', label: '薄荷', background: '#CCE6D0', surface: '#b8d9bd', text: '#2d3a35', secondary: '#4f4f4f', accent: '#165a3e', border: '#a8c9ad', dark: false },
-  { id: 'sepia', label: '棕褐色', background: '#F9F0DB', surface: '#ebdfc2', text: '#5c4b37', secondary: '#5c5c5c', accent: '#8b4513', border: '#e0d5bc', dark: false },
-  { id: 'night', label: '夜间', background: '#23262b', surface: '#2e323a', text: '#d6d9de', secondary: '#a2a8ad', accent: '#61abff', border: '#3a3f46', dark: true },
-  { id: 'solarized', label: 'Solarized', background: '#002b36', surface: '#073642', text: '#93a1a1', secondary: '#91a0a2', accent: '#53a4de', border: '#0e4753', dark: true },
-]
-function hsl(hex: string): string {
-  const rgb = [1, 3, 5].map(offset => parseInt(hex.slice(offset, offset + 2), 16) / 255)
-  const [r, g, b] = rgb as [number, number, number]
-  const max = Math.max(...rgb); const min = Math.min(...rgb); const delta = max - min; const lightness = (max + min) / 2
-  const hue = delta === 0 ? 0 : max === r ? ((g - b) / delta + (g < b ? 6 : 0)) * 60 : max === g ? ((b - r) / delta + 2) * 60 : ((r - g) / delta + 4) * 60
-  const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1))
-  return `${hue.toFixed(2)} ${(saturation * 100).toFixed(2)}% ${(lightness * 100).toFixed(2)}%`
+function documentTheme(id: DocumentTheme['id'], label: string, dark: boolean): DocumentTheme {
+  const prefix = `--palette-${dark ? 'dark' : 'light'}`
+  return { id, label, dark, background: `var(${prefix}-background)`, surface: `var(${prefix}-inset)`, text: `var(${prefix}-text)`, secondary: `var(${prefix}-secondary)`, accent: 'var(--palette-accent)', border: `hsl(var(${dark ? '--palette-light-background' : '--palette-light-text'}-hsl) / 0.08)` }
 }
+export const MARKDOWN_DOCUMENT_THEMES: DocumentTheme[] = [
+  documentTheme('white', '白色', false),
+  documentTheme('paper', '纸张', false),
+  documentTheme('mint', '薄荷', false),
+  documentTheme('sepia', '棕褐色', false),
+  documentTheme('night', '夜间', true),
+  documentTheme('solarized', 'Solarized', true),
+]
 export function markdownThemeStyle(id: MarkdownEditorPreferences['theme']): EditorStyle {
   const theme = MARKDOWN_DOCUMENT_THEMES.find(item => item.id === id)
   if (!theme) return {}
-  return { colorScheme: theme.dark ? 'dark' : 'light', '--background': hsl(theme.background), '--foreground': hsl(theme.text), '--muted': hsl(theme.surface), '--muted-foreground': hsl(theme.secondary), '--accent': hsl(theme.surface), '--accent-foreground': hsl(theme.text), '--primary': hsl(theme.accent), '--primary-foreground': hsl(theme.background), '--ring': hsl(theme.accent), '--border': hsl(theme.border), '--input': hsl(theme.border), '--popover': hsl(theme.background), '--popover-foreground': hsl(theme.text), '--dialog': hsl(theme.background), '--dialog-foreground': hsl(theme.text) }
+  const prefix = `--palette-${theme.dark ? 'dark' : 'light'}`
+  const channel = (role: string): string => `var(${prefix}-${role}-hsl)`
+  const foreground = channel('text')
+  const surface = channel('inset')
+  const background = channel('background')
+  const panel = channel('panel')
+  const primary = 'var(--palette-accent-hsl)'
+  const border = `var(${theme.dark ? '--palette-light-background' : '--palette-light-text'}-hsl) / 0.08`
+  return {
+    colorScheme: theme.dark ? 'dark' : 'light',
+    '--color-background': theme.background, '--color-panel': `var(${prefix}-panel)`, '--color-inset': theme.surface,
+    '--color-text': theme.text, '--color-secondary': theme.secondary, '--color-tertiary': `var(${prefix}-tertiary)`,
+    '--color-accent': theme.accent,
+    '--background': background, '--foreground': foreground, '--panel': panel,
+    '--muted': surface, '--inset': surface, '--muted-foreground': channel('secondary'),
+    '--tertiary-foreground': channel('tertiary'), '--accent': surface, '--accent-foreground': foreground,
+    '--primary': primary, '--primary-foreground': 'var(--palette-light-text-hsl)', '--ring': primary,
+    '--border': border, '--color-border': `hsl(${border})`, '--input': border,
+    '--card': panel, '--card-foreground': foreground, '--popover': panel, '--popover-foreground': foreground,
+    '--dialog': panel, '--dialog-foreground': foreground, '--secondary': surface, '--secondary-foreground': foreground,
+    '--code-bg': surface, '--code-foreground': foreground, '--syntax-text': `hsl(${foreground})`,
+    '--syntax-secondary': `hsl(${channel('secondary')})`, '--syntax-accent': `hsl(${primary})`,
+  }
 }
 export function markdownEditorStyle(preferences: MarkdownEditorPreferences): EditorStyle {
-  const latin = { system: '-apple-system, BlinkMacSystemFont', serif: 'Georgia, "Times New Roman"', sans: 'Arial, Helvetica' }[preferences.latinFont]
-  const cjk = { system: '"PingFang SC", "Microsoft YaHei"', song: '"Songti SC", "Noto Serif CJK SC", SimSun', hei: '"Heiti SC", "Noto Sans CJK SC", SimHei', kai: '"Kaiti SC", KaiTi, STKaiti' }[preferences.cjkFont]
+  const latin = { system: '"Source Serif 4"', serif: '"Source Serif 4"', sans: '"Inter Variable", Inter' }[preferences.latinFont]
+  const cjk = { system: '"Noto Serif SC", "Songti SC"', song: '"Noto Serif SC", "Songti SC"', hei: '"Heiti SC", "Noto Sans CJK SC", SimHei', kai: '"Kaiti SC", KaiTi, STKaiti' }[preferences.cjkFont]
   const mono = { system: 'ui-monospace, SFMono-Regular, Consolas', menlo: 'Menlo, Consolas', monaco: 'Monaco, Consolas' }[preferences.monoFont]
-  return { ...markdownThemeStyle(preferences.theme), '--md-editor-font': `${latin}, ${cjk}, sans-serif`, '--md-editor-mono': `${mono}, monospace`, '--md-editor-size': `${preferences.fontSize}px`, '--md-editor-line-height': preferences.lineHeight, '--md-editor-spacing': preferences.blockSpacing, '--md-editor-letter-spacing': `${preferences.letterSpacing}em`, '--md-editor-width': preferences.contentWidth === 0 ? '100%' : `${preferences.contentWidth}em`, '--md-editor-heading-align': preferences.headingAlign }
+  return { ...markdownThemeStyle(preferences.theme), '--md-editor-font': `${latin}, ${cjk}, ${preferences.latinFont === 'sans' ? 'sans-serif' : 'serif'}`, '--md-editor-mono': `${mono}, monospace`, '--md-editor-size': `${preferences.fontSize}px`, '--md-editor-line-height': preferences.lineHeight, '--md-editor-spacing': preferences.blockSpacing, '--md-editor-letter-spacing': `${preferences.letterSpacing}em`, '--md-editor-width': preferences.contentWidth === 0 ? '100%' : `${preferences.contentWidth}em`, '--md-editor-heading-align': preferences.headingAlign }
 }
 export function markdownShortcutMatches(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>, accelerator: string): boolean {
   const parts = accelerator.split('+'); const key = parts.pop() ?? ''

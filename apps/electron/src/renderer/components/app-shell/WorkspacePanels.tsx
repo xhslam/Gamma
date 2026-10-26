@@ -22,8 +22,7 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
   ]
   if (workspace !== null) {
     const workspacePane = (
-      <div key="workspace" data-workspace-pane="workspace" data-workspace-side={workspaceSide} className="relative z-[60] flex min-h-0 flex-shrink-0 items-stretch crt-sidebar">
-        <div aria-hidden="true" className={cn('pointer-events-none absolute top-0 bottom-0 z-10 w-px bg-border/80 dark:bg-border/70', workspaceSide === 'left' ? 'right-0' : 'left-0')} />
+      <div key="workspace" data-workspace-pane="workspace" data-workspace-open={workspaceOpen} data-workspace-side={workspaceSide} className="relative z-[60] flex min-h-0 flex-shrink-0 items-stretch crt-sidebar">
         {workspaceOpen && (
           <div
             role="separator"
@@ -34,7 +33,7 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
             aria-valuenow={Math.round(workspaceWidth)}
             aria-valuetext={`${Math.round(workspaceWidth)} 像素`}
             tabIndex={0}
-            className={cn('absolute top-0 bottom-0 w-2 touch-none cursor-col-resize active:bg-primary/50 transition-colors z-20 focus-visible:bg-primary/20 focus-visible:outline-none', workspaceSide === 'left' ? 'right-0 translate-x-1/2' : 'left-0 -translate-x-1/2')}
+            className={cn('absolute top-0 bottom-0 w-2 touch-none cursor-col-resize active:bg-primary/50 transition-colors z-20 focus-visible:bg-primary/20 focus-visible:outline-none', workspaceSide === 'left' ? 'right-0 translate-x-full' : 'left-0 -translate-x-full')}
             onPointerDown={onResizeStart}
             onDoubleClick={onResizeReset}
             onKeyDown={onResizeKeyDown}
@@ -48,5 +47,5 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
   }
   // 列布局中的 flex 子项必须允许纵向收缩；面板再通过 flex 传递剩余高度，
   // 否则 h-full 子树会按长内容计算高度，挤出输入框并使内部滚动失效。
-  return <div className="flex min-h-0 min-w-0 flex-1 items-stretch" data-testid="agent-workspace-layout">{panes}</div>
+  return <div className="gamma-workspace-layout flex min-h-0 min-w-0 flex-1 items-stretch" data-workspace-open={workspace !== null && workspaceOpen} data-testid="agent-workspace-layout">{panes}</div>
 }

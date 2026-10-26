@@ -8,10 +8,12 @@
 import * as React from 'react'
 import { Crop, RotateCw, Pencil, Square, Undo2, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { readDesignColor } from '@/lib/design-colors'
+import type { DesignColorRole } from '@/lib/design-colors'
 
 type Tool = 'crop' | 'rect' | 'draw' | 'none'
 
-const DRAW_COLORS = ['#ff3b30', '#ffcc00', '#007aff', '#34c759', '#ff9500']
+const DRAW_COLORS: DesignColorRole[] = ['accent', 'text', 'secondary', 'tertiary', 'inverse-text']
 const BRUSH_SIZES = [3, 6]
 
 interface ImageEditorProps {
@@ -22,7 +24,7 @@ interface ImageEditorProps {
 
 export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.ReactElement {
   const [tool, setTool] = React.useState<Tool>('none')
-  const [drawColor, setDrawColor] = React.useState('#ff3b30')
+  const [drawColor, setDrawColor] = React.useState<DesignColorRole>('accent')
   const [brushSize, setBrushSize] = React.useState(3)
   const [rotation, setRotation] = React.useState(0)
   const [imageLoaded, setImageLoaded] = React.useState(false)
@@ -47,6 +49,15 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
   const scaleRef = React.useRef(1)
   const displayDimRef = React.useRef({ w: 1, h: 1 })
   const rotationRef = React.useRef(0)
+
+  React.useEffect(() => {
+    const observer = new MutationObserver(() => {
+      checkerPatternRef.current = null
+      setDrawVersion(version => version + 1)
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] })
+    return () => observer.disconnect()
+  }, [])
 
   // 同步 cropRect 到 ref，handleExport 可读取最新值
   React.useEffect(() => { cropRectRef.current = cropRect }, [cropRect])
@@ -142,10 +153,10 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
       pCanvas.height = 16
       const pCtx = pCanvas.getContext('2d')
       if (pCtx) {
-        pCtx.fillStyle = '#e0e0e0'
+        pCtx.fillStyle = readDesignColor('inset')
         pCtx.fillRect(0, 0, 8, 8)
         pCtx.fillRect(8, 8, 8, 8)
-        pCtx.fillStyle = '#ffffff'
+        pCtx.fillStyle = readDesignColor('panel')
         pCtx.fillRect(8, 0, 8, 8)
         pCtx.fillRect(0, 8, 8, 8)
         checkerPatternRef.current = dCtx.createPattern(pCanvas, 'repeat')
@@ -175,14 +186,16 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
       const { x: rx, y: ry, w: rw, h: rh } = cropRect
       if (tool === 'crop') {
         // 裁剪：四边暗色覆盖
-        dCtx.fillStyle = 'rgba(0,0,0,0.45)'
+        dCtx.fillStyle = readDesignColor('overlay')
+        dCtx.globalAlpha = 0.45
         if (ry > 0) dCtx.fillRect(0, 0, sw, ry)
         if (ry + rh < sh) dCtx.fillRect(0, ry + rh, sw, sh - ry - rh)
         if (rx > 0) dCtx.fillRect(0, ry, rx, rh)
         if (rx + rw < sw) dCtx.fillRect(rx + rw, ry, sw - rx - rw, rh)
       }
-      // 共同：白色虚线边框
-      dCtx.strokeStyle = '#fff'
+      dCtx.globalAlpha = 1
+      // 共同：暖色虚线边框
+      dCtx.strokeStyle = readDesignColor('inverse-text')
       dCtx.lineWidth = 2 / scale
       dCtx.setLineDash([6 / scale, 3 / scale])
       dCtx.strokeRect(rx, ry, rw, rh)
@@ -372,7 +385,7 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
       if (ctx) {
         ctx.beginPath()
         ctx.moveTo(pos.x, pos.y)
-        ctx.strokeStyle = drawColor
+        ctx.strokeStyle = readDesignColor(drawColor)
         ctx.lineWidth = brushSize
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
@@ -416,7 +429,7 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
     if (tool === 'rect' && cropRect && cropRect.w > 2 && cropRect.h > 2) {
       const ctx = drawCtxRef.current
       if (ctx) {
-        ctx.strokeStyle = drawColor
+        ctx.strokeStyle = readDesignColor(drawColor)
         ctx.lineWidth = brushSize
         ctx.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h)
       }
@@ -445,7 +458,7 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
       if (ctx) {
         ctx.beginPath()
         ctx.moveTo(pos.x, pos.y)
-        ctx.strokeStyle = drawColor
+        ctx.strokeStyle = readDesignColor(drawColor)
         ctx.lineWidth = brushSize
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
@@ -490,7 +503,7 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
     if (tool === 'rect' && cropRect && cropRect.w > 2 && cropRect.h > 2) {
       const ctx = drawCtxRef.current
       if (ctx) {
-        ctx.strokeStyle = drawColor
+        ctx.strokeStyle = readDesignColor(drawColor)
         ctx.lineWidth = brushSize
         ctx.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h)
       }
@@ -503,19 +516,19 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
     }
   }, [tool, cropRect, drawColor, brushSize])
 
-  if (!src) return <div className="flex flex-col items-center gap-3 text-white/50"><span className="text-sm">无图片数据</span><button type="button" onClick={onCancel} className="rounded-full px-4 py-1.5 text-sm bg-white/10 hover:bg-white/20 transition-colors">返回</button></div>
+  if (!src) return <div className="flex flex-col items-center gap-3 text-inverse-foreground/50"><span className="text-sm">无图片数据</span><button type="button" onClick={onCancel} className="rounded-full px-4 py-1.5 text-sm bg-card/10 hover:bg-card/20 transition-colors">返回</button></div>
 
   return (
     <div className="flex flex-col items-center gap-3 w-full max-w-[90vw]">
       {/* 显示画布 — 尺寸与预览 img 完全一致 */}
       <div className="relative flex items-center justify-center">
         {imageError && (
-          <div className="flex flex-col items-center gap-3 text-white/50">
+          <div className="flex flex-col items-center gap-3 text-inverse-foreground/50">
             <span className="text-sm">图片加载失败</span>
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-full px-4 py-1.5 text-sm bg-white/10 hover:bg-white/20 transition-colors"
+              className="rounded-full px-4 py-1.5 text-sm bg-card/10 hover:bg-card/20 transition-colors"
             >
               返回
             </button>
@@ -546,18 +559,18 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
       {/* 下方工具栏 — 工具 + 操作合并为一个悬浮岛 */}
       <div className={cn(
         'flex items-center gap-1 rounded-full',
-        'bg-black/50 backdrop-blur-md shadow-lg',
+        'bg-overlay/50 backdrop-blur-md shadow-lg',
         'px-3 py-2.5'
       )}>
         {/* 裁剪 */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={() => { setTool(tool === 'crop' ? 'none' : 'crop'); setCropRect(null); cropStartRef.current = null }}
           className={cn(
-            'rounded-full p-2 text-white/70 transition-colors duration-150',
-            'hover:bg-white/15 hover:text-white',
+            'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
+            'hover:bg-card/15 hover:text-inverse-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-            tool === 'crop' && 'bg-white/20 text-white'
+            tool === 'crop' && 'bg-card/20 text-inverse-foreground'
           )}
           title="裁剪"
         >
@@ -565,12 +578,12 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
         </button>
 
         {/* 旋转 */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={handleRotate}
           className={cn(
-            'rounded-full p-2 text-white/70 transition-colors duration-150',
-            'hover:bg-white/15 hover:text-white',
+            'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
+            'hover:bg-card/15 hover:text-inverse-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
           )}
           title="旋转 90°"
@@ -579,14 +592,14 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
         </button>
 
         {/* 矩形（默认绘制工具） */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={() => setTool(tool === 'rect' ? 'none' : 'rect')}
           className={cn(
-            'rounded-full p-2 text-white/70 transition-colors duration-150',
-            'hover:bg-white/15 hover:text-white',
+            'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
+            'hover:bg-card/15 hover:text-inverse-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-            tool === 'rect' && 'bg-white/20 text-white'
+            tool === 'rect' && 'bg-card/20 text-inverse-foreground'
           )}
           title="矩形"
         >
@@ -594,14 +607,14 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
         </button>
 
         {/* 画笔 */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={() => setTool(tool === 'draw' ? 'none' : 'draw')}
           className={cn(
-            'rounded-full p-2 text-white/70 transition-colors duration-150',
-            'hover:bg-white/15 hover:text-white',
+            'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
+            'hover:bg-card/15 hover:text-inverse-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-            tool === 'draw' && 'bg-white/20 text-white'
+            tool === 'draw' && 'bg-card/20 text-inverse-foreground'
           )}
           title="画笔"
         >
@@ -611,7 +624,7 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
         {/* 绘制颜色 + 笔触（矩形和画笔共用） */}
         {(tool === 'draw' || tool === 'rect') && (
           <>
-            <div className="mx-0.5 h-5 w-px bg-white/20" aria-hidden />
+            <div className="mx-0.5 h-5 w-px bg-card/20" aria-hidden />
             {DRAW_COLORS.map((c) => (
               <button
                 key={c}
@@ -619,9 +632,9 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
                 onClick={() => setDrawColor(c)}
                 className={cn(
                   'size-[22px] rounded-full border-2 transition-transform',
-                  drawColor === c ? 'border-white scale-110' : 'border-transparent'
+                  drawColor === c ? 'border-border scale-110' : 'border-transparent'
                 )}
-                style={{ backgroundColor: c }}
+                style={{ backgroundColor: `var(--color-${c})` }}
                 title={c}
               />
             ))}
@@ -631,9 +644,9 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
                 type="button"
                 onClick={() => setBrushSize(s)}
                 className={cn(
-                  'rounded-full flex items-center justify-center text-white/70 transition-colors size-[22px]',
-                  'hover:bg-white/15',
-                  brushSize === s ? 'bg-white/20 text-white' : ''
+                  'rounded-full flex items-center justify-center text-inverse-foreground/70 transition-colors size-[22px]',
+                  'hover:bg-card/15',
+                  brushSize === s ? 'bg-card/20 text-inverse-foreground' : ''
                 )}
                 title={`笔触 ${s}px`}
               >
@@ -649,13 +662,13 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
         {/* 裁剪时显示应用按钮 */}
         {tool === 'crop' && cropRect && cropRect.w > 4 && cropRect.h > 4 && (
           <>
-            <div className="mx-0.5 h-5 w-px bg-white/20" aria-hidden />
-            <button
+            <div className="mx-0.5 h-5 w-px bg-card/20" aria-hidden />
+            <button data-icon-button="true"
               type="button"
               onClick={applyCrop}
               className={cn(
-                'rounded-full p-2 text-[#34c759] transition-colors duration-150',
-                'hover:bg-white/15',
+                'rounded-full p-2 text-success transition-colors duration-150',
+                'hover:bg-card/15',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
               )}
               title="应用裁剪"
@@ -665,15 +678,15 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
           </>
         )}
 
-        <div className="mx-1.5 h-5 w-px bg-white/20" aria-hidden />
+        <div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden />
 
         {/* 重置 */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={handleReset}
           className={cn(
-            'rounded-full p-2 text-white/70 transition-colors duration-150',
-            'hover:bg-white/15 hover:text-white',
+            'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
+            'hover:bg-card/15 hover:text-inverse-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
           )}
           title="重置"
@@ -682,12 +695,12 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
         </button>
 
         {/* 取消 */}
-        <button
+        <button data-icon-button="true"
           type="button"
           onClick={onCancel}
           className={cn(
-            'rounded-full p-2 text-white/70 transition-colors duration-150',
-            'hover:bg-white/15 hover:text-white',
+            'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
+            'hover:bg-card/15 hover:text-inverse-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
           )}
           title="取消"
@@ -702,10 +715,10 @@ export function ImageEditor({ src, onSave, onCancel }: ImageEditorProps): React.
           disabled={!imageLoaded}
           className={cn(
             'rounded-full px-3 py-2 text-sm font-medium',
-            'bg-white/15 text-white hover:bg-white/25',
+            'bg-card/15 text-inverse-foreground hover:bg-card/25',
             'transition-colors duration-150',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-            !imageLoaded && 'opacity-40 cursor-not-allowed hover:bg-white/15'
+            !imageLoaded && 'opacity-40 cursor-not-allowed hover:bg-card/15'
           )}
         >
           保存

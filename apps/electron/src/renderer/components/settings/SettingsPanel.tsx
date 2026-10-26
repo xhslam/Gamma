@@ -252,8 +252,8 @@ export function SettingsPanel({
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-content-area text-foreground">
-      <div className="relative h-[35px] flex-shrink-0 bg-[hsl(var(--sidebar-surface))]">
+    <div className="gamma-settings-shell flex h-full min-h-0 flex-col text-foreground">
+      <div className="relative h-[35px] flex-shrink-0">
         <div
           aria-hidden="true"
           className="titlebar-drag-region pointer-events-none absolute inset-y-0 left-0"
@@ -262,16 +262,16 @@ export function SettingsPanel({
       </div>
 
       {/* 主体：左导航 + 右内容 */}
-      <div className="flex flex-1 min-h-0">
+      <div className="gamma-settings-layout flex flex-1 min-h-0">
         {/* 左侧 Tab 导航 */}
-        <div className="flex h-full min-h-0 w-[277px] flex-shrink-0 flex-col border-r border-border/80 bg-[hsl(var(--sidebar-surface))] dark:border-border/70">
-          <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pt-5 scrollbar-thin">
+        <div data-panel="settings-nav" className="gamma-panel flex h-full min-h-0 w-[277px] flex-shrink-0 flex-col">
+          <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto scrollbar-thin">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors",
+                  "gamma-list-row flex items-center gap-2 rounded-md px-3 text-sm transition-colors",
                   activeTab === tab.id
                     ? "bg-muted text-foreground font-medium"
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -280,15 +280,15 @@ export function SettingsPanel({
                 {tab.icon}
                 <span>{tab.label}</span>
                 {tab.id === "about" && (hasUpdate || hasEnvironmentIssues) && (
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="w-2 h-2 rounded-full bg-destructive" />
                 )}
               </button>
             ))}
           </nav>
-          <div className="flex-shrink-0 p-3">
+          <div className="flex-shrink-0 pt-2">
             <button
               onClick={handleClose}
-              className="group flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+              className="gamma-list-row group flex w-full items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
             >
               <ArrowLeft size={16} />
               <span>返回</span>
@@ -300,8 +300,8 @@ export function SettingsPanel({
         </div>
 
         {/* 右侧内容区域 */}
-        <ScrollArea className="min-w-0 flex-1 bg-content-area">
-          <div className="mx-auto w-full max-w-[1080px] px-5 py-8 pb-12 sm:px-8">
+        <ScrollArea data-panel="settings-content" className="gamma-panel min-w-0 flex-1">
+          <div className="mx-auto w-full max-w-[1080px]">
             {renderTabContent(activeTab)}
           </div>
         </ScrollArea>

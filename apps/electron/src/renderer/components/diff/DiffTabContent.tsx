@@ -1579,7 +1579,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
             />
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button data-icon-button="true"
                   type="button"
                   onClick={handleRevealInFolder}
                   className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
@@ -1612,7 +1612,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         )}
 
         {previewOnly && isHtml && (
-          <button
+          <button data-icon-button="true"
             type="button"
             onClick={() => setHtmlSourceMode((sourceMode) => !sourceMode)}
             className="ml-auto p-1 rounded hover:bg-foreground/[0.06] text-foreground/40 hover:text-foreground/60 shrink-0"
@@ -1626,7 +1626,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         {previewOnly && isPlainTextEditable && !readOnly && (
           markdownEditing ? (
             <div className="ml-auto flex items-center gap-1">
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={exitMarkdownEdit}
                 disabled={markdownSaving}
@@ -1635,14 +1635,14 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
               >
                 <X className="size-3.5" />
               </button>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={() => void saveMarkdownEdit()}
                 disabled={markdownSaving}
                 className={cn(
                   'p-1 rounded hover:bg-foreground/[0.06] disabled:opacity-50 shrink-0 transition-colors duration-300',
-                  autosaveStatus === 'saved' && 'text-green-500 hover:text-green-500',
-                  autosaveStatus === 'error' && 'text-red-500 hover:text-red-500',
+                  autosaveStatus === 'saved' && 'text-success hover:text-success',
+                  autosaveStatus === 'error' && 'text-destructive hover:text-destructive',
                   autosaveStatus !== 'saved' && autosaveStatus !== 'error' && 'text-foreground/40 hover:text-foreground/60',
                 )}
                 title={
@@ -1657,7 +1657,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
               </button>
             </div>
           ) : (
-            <button
+            <button data-icon-button="true"
               type="button"
               onClick={startMarkdownEdit}
               className="ml-auto p-1 rounded hover:bg-foreground/[0.06] text-foreground/40 hover:text-foreground/60 shrink-0"
@@ -1670,13 +1670,13 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               onClick={handleCopy}
               className={cn('p-1 rounded hover:bg-foreground/[0.06] text-foreground/40 hover:text-foreground/60 shrink-0', previewOnly && !isEditableText && 'ml-auto')}
               aria-label={copied ? '已复制文件内容' : '复制文件内容'}
             >
-              {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
+              {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{copied ? '已复制文件内容' : '复制文件内容'}</TooltipContent>
@@ -1684,7 +1684,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               onClick={handleManualRefresh}
               className="p-1 rounded hover:bg-foreground/[0.06] text-foreground/40 hover:text-foreground/60 shrink-0"
@@ -1699,7 +1699,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         {canTogglePreviewWrap && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={() => setCodeWrap((v) => !v)}
                 className={cn(
@@ -1720,7 +1720,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         {isMarkdown && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={() => setTocOpen((v) => !v)}
                 className={cn(
@@ -1760,7 +1760,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         {isMarkdown && !tocOpen && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <button data-icon-button="true"
                 type="button"
                 onClick={() => setTocOpen(true)}
                 className="mx-2 mb-2 mt-4 flex size-7 shrink-0 items-center justify-center self-start rounded-md bg-muted/40 text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground/70"
@@ -1889,7 +1889,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
               htmlPreviewUrl ? (
                 <iframe
                   src={htmlPreviewUrl}
-                  className="h-full w-full border-0 bg-white"
+                  className="h-full w-full border-0 bg-card"
                   title={`${filePath.split('/').pop() || 'HTML'} 渲染预览`}
                   sandbox="allow-scripts allow-forms"
                   referrerPolicy="no-referrer"

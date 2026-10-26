@@ -30,7 +30,7 @@ export function AutomaticMemoryNotice({ kind, sessionId, workspaceSlug }: Automa
     <section aria-label="本会话记忆保存结果" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-muted/30 px-3 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 text-xs leading-4 text-muted-foreground">已保存到工作区记忆 · 本次运行期提示</p>
-        <button
+        <button data-icon-button="true"
           type="button"
           aria-label="关闭记忆保存提示"
           title="关闭提示，不影响已保存的记忆"

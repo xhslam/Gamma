@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import type { Channel, ModelOption, ProviderType } from '@gamma/shared'
 import { ChannelPlanQuotaBadge } from './ChannelPlanQuotaBadge'
 import { getModelSelectorOptionVisualState } from './model-selector-visual-state'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 渠道标题与模型项共享的三列栅格，确保左右边距和文字起点一致。 */
 const MODEL_SELECTOR_ROW_LAYOUT =
@@ -278,11 +279,11 @@ export function ModelSelector({
               ) : (
                 <Cpu className="size-3.5" />
               )}
-              <span className="max-w-[200px] truncate">
+              <FadeTitle className="max-w-[200px] truncate">
                 {displayModelInfo
                   ? (showChannelInTrigger ? `${displayModelInfo.channelName} · ${displayModelInfo.modelName}` : displayModelInfo.modelName)
                   : '选择模型'}
-              </span>
+              </FadeTitle>
               <ChevronDown className="size-3" />
             </button>
           </PopoverTrigger>
@@ -340,9 +341,9 @@ export function ModelSelector({
                       <ModelSelectorListIcon
                         src={channel ? getChannelLogo(channel) : DefaultLogo}
                       />
-                      <span className="min-w-0 truncate text-xs font-medium text-muted-foreground/80">
+                      <FadeTitle className="min-w-0 truncate text-xs font-medium text-muted-foreground/80">
                         {first.channelName}
-                      </span>
+                      </FadeTitle>
                       {channel ? <ChannelPlanQuotaBadge channel={channel} /> : null}
                     </div>
 
@@ -377,12 +378,12 @@ export function ModelSelector({
                           <ModelSelectorListIcon
                             src={getModelLogo(option.modelId, option.provider)}
                           />
-                          <span className={cn(
+                          <FadeTitle className={cn(
                             'min-w-0 truncate text-sm',
                             isSelected ? 'font-medium text-foreground' : 'text-foreground/80',
                           )}>
                             {option.modelName}
-                          </span>
+                          </FadeTitle>
                           <span className="flex size-5 items-center justify-center" aria-hidden="true">
                             {isSelected ? <Check className="size-4 text-primary" strokeWidth={2.5} /> : null}
                           </span>

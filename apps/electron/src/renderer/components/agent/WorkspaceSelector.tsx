@@ -25,6 +25,7 @@ import { useProjectActions } from '@/hooks/useProjectActions'
 import { LocalProjectBadge } from './LocalProjectBadge'
 import { agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
 import type { AgentWorkspace } from '@gamma/shared'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 export function WorkspaceSelector(): React.ReactElement {
   const { workspaces, currentWorkspaceId, selectProject, createProject, createProjectFromFolder } = useProjectActions()
@@ -276,14 +277,14 @@ export function WorkspaceSelector(): React.ReactElement {
         <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border/40">
           <span className="text-[11px] font-medium text-foreground/50 uppercase tracking-wide">项目</span>
           <div className="flex items-center gap-0.5">
-            <button
+            <button data-icon-button="true"
               onClick={() => void createProjectFromFolder()}
               className="p-1 rounded hover:bg-foreground/[0.06] text-foreground/35 hover:text-foreground/60 transition-colors titlebar-no-drag"
               title="从本地文件夹创建项目"
             >
               <FolderInput size={13} />
             </button>
-            <button
+            <button data-icon-button="true"
               onClick={handleStartCreate}
               className="p-1 rounded hover:bg-foreground/[0.06] text-foreground/35 hover:text-foreground/60 transition-colors titlebar-no-drag"
               title="新建空白项目"
@@ -317,7 +318,7 @@ export function WorkspaceSelector(): React.ReactElement {
                 className={cn(
                   'group w-full flex items-center gap-1 px-1 py-[5px] rounded-md text-[13px] transition-colors duration-100 cursor-pointer titlebar-no-drag',
                   ws.id === currentWorkspaceId
-                    ? 'workspace-item-selected bg-foreground/[0.08] text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+                    ? 'workspace-item-selected bg-foreground/[0.08] text-foreground shadow-[0_1px_2px_0_hsl(var(--shadow-ink)/0.05)]'
                     : 'text-foreground/70 hover:bg-foreground/[0.04]',
                   dragId === ws.id && 'opacity-40',
                 )}
@@ -340,14 +341,14 @@ export function WorkspaceSelector(): React.ReactElement {
                 />
               ) : (
                 <>
-                  <span className="flex-1 min-w-0 truncate">{ws.name}</span>
+                  <FadeTitle className="flex-1 min-w-0 truncate">{ws.name}</FadeTitle>
                   <LocalProjectBadge
                     projectRootPath={ws.projectRootPath}
                     projectRootStatus={ws.projectRootStatus}
                   />
 
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button
+                    <button data-icon-button="true"
                       onClick={(e) => handleStartRename(e, ws)}
                       className="p-0.5 rounded hover:bg-foreground/[0.08] text-foreground/30 hover:text-foreground/60 transition-colors"
                       title="重命名"
@@ -355,7 +356,7 @@ export function WorkspaceSelector(): React.ReactElement {
                       <Pencil size={12} />
                     </button>
                     {canDelete(ws) && (
-                      <button
+                      <button data-icon-button="true"
                         onClick={(e) => handleStartDelete(e, ws.id)}
                         className="p-0.5 rounded hover:bg-destructive/10 text-foreground/30 hover:text-destructive transition-colors"
                         title="删除"

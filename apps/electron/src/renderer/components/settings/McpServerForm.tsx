@@ -436,7 +436,7 @@ export function McpServerForm({ server, workspaceSlug, onSaved, onChanged, onCan
               'flex items-center gap-1.5 text-xs',
               saveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
             )}>
-              {saveStatus === 'saved' && <CheckCircle2 size={12} className="text-emerald-600" />}
+              {saveStatus === 'saved' && <CheckCircle2 size={12} className="text-success" />}
               {saveStatus === 'error' && <XCircle size={12} />}
               <span>
                 {saveStatus === 'saved' && '已保存'}
@@ -571,8 +571,8 @@ export function McpServerForm({ server, workspaceSlug, onSaved, onChanged, onCan
                 className={cn(
                   'flex items-start gap-2 px-3 py-2 rounded-md text-sm',
                   testResult.success
-                    ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                    : 'bg-red-500/10 text-red-700 dark:text-red-400'
+                    ? 'bg-success/10 text-success dark:text-success'
+                    : 'bg-destructive/10 text-destructive dark:text-destructive'
                 )}
               >
                 {testResult.success ? (
@@ -591,7 +591,7 @@ export function McpServerForm({ server, workspaceSlug, onSaved, onChanged, onCan
 
             {/* 未测试警告 */}
             {!testResult && !testing && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-md text-sm bg-amber-500/10 text-amber-700 dark:text-amber-400">
+              <div className="flex items-start gap-2 px-3 py-2 rounded-md text-sm bg-warning/10 text-warning dark:text-warning">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <div className="text-xs">
                   尚未测试连接。如需排查配置，可以点击"测试连接"。

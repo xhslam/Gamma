@@ -21,7 +21,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-[100] bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-[100] bg-overlay/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
@@ -31,7 +31,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
 
 const sheetVariants = cva(
-  // shadow-xl 多层柔阴影 + dialog 背景 token + hairline 边框。z-[100] 与 Overlay 对齐，高于 AppShell z-[60]
+  // 外壳统一使用共享面板规则；z-[100] 与 Overlay 对齐，高于 AppShell z-[60]。
   "fixed z-[100] gap-4 bg-dialog text-dialog-foreground p-6 shadow-xl transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
@@ -69,12 +69,13 @@ const SheetContent = React.forwardRef<
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
+        data-panel="floating"
         ref={ref}
-        className={cn(sheetVariants({ side }), className)}
+        className={cn("gamma-panel", sheetVariants({ side }), className)}
         {...props}
       >
         {!shouldHideClose && (
-          <SheetPrimitive.Close
+          <SheetPrimitive.Close data-icon-button="true"
             className={cn(
               "absolute right-4 top-4 rounded-sm opacity-70 transition-colors hover:bg-secondary hover:opacity-100",
               "focus-visible:bg-secondary focus-visible:text-foreground focus-visible:opacity-100 disabled:pointer-events-none",

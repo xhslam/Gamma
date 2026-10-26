@@ -1,8 +1,9 @@
 import * as React from 'react'
 import { atom, useAtom } from 'jotai'
-import { ChevronDown, ChevronUp, Circle, Loader2, Monitor, Square, X } from 'lucide-react'
+import { Circle, Loader2, Monitor, Square, X } from 'lucide-react'
 import type { ComputerPreview } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 interface PreviewView {
   preview: ComputerPreview | null
@@ -125,19 +126,19 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
         {preview && <Button variant="outline" size="sm" onClick={() => { void stop() }} disabled={view.stopping} aria-label="停止当前电脑操作" className="gap-2 rounded-full">
           {view.stopping ? <Loader2 className="size-3 animate-spin" /> : <Square className="size-3 fill-current" />}停止
         </Button>}
-        <Button variant="ghost" size="icon" className="size-8 rounded-full" aria-label={view.expanded ? '收起操作画面' : '展开操作画面'} aria-expanded={view.expanded} onClick={toggle}>
-          {view.expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        <Button data-disclosure-trigger="" variant="ghost" size="icon" className="size-8 rounded-full" aria-label={view.expanded ? '收起操作画面' : '展开操作画面'} aria-expanded={view.expanded} onClick={toggle}>
+          <DisclosureChevron expanded={view.expanded} size={16} className="size-4" />
         </Button>
       </div>
       {view.expanded && <>
         <div className="relative flex min-h-40 items-center justify-center border-y border-border/40 bg-muted/40">
           {preview?.frame?.dataUrl ? <img src={preview.frame.dataUrl} alt={`${preview.appName || '电脑'}实时监控画面`} className="max-h-72 w-full object-contain" />
             : <div className="flex h-48 items-center gap-2 text-xs text-muted-foreground"><Monitor className="size-4" />{view.error || preview?.mode === 'unavailable' ? '实时画面暂不可用，正在重新连接' : '正在连接实时画面…'}</div>}
-          {preview?.mode === 'live' && preview.frame && <span className="absolute bottom-2 left-2 flex items-center gap-2 rounded-full bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm"><span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />实时画面</span>}
+          {preview?.mode === 'live' && preview.frame && <span className="absolute bottom-2 left-2 flex items-center gap-2 rounded-full bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm"><span className="size-1.5 rounded-full bg-success" aria-hidden="true" />实时画面</span>}
         </div>
         <div className="space-y-3 px-4 py-3">
           <div className="flex items-center gap-2 text-sm" role="status">
-            {running && !view.error ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" /> : latest?.status === 'failed' ? <X className="size-3.5 text-amber-600" /> : <Circle className="size-3 shrink-0 text-muted-foreground" />}
+            {running && !view.error ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" /> : latest?.status === 'failed' ? <X className="size-3.5 text-warning" /> : <Circle className="size-3 shrink-0 text-muted-foreground" />}
             <span className="min-w-0 flex-1 truncate">{view.error ? '操作状态待确认' : `${label}${latest?.status === 'returned' ? ' · 已返回' : latest?.status === 'failed' ? ' · 未完成' : ''}`}</span>
             <span className="shrink-0 text-xs text-muted-foreground">⌃⌥Esc 停止</span>
           </div>
@@ -147,7 +148,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
           </details>}
         </div>
       </>}
-      {view.error && <div role="alert" className="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-amber-700 dark:text-amber-400"><span className="flex-1">{view.error}</span><Button variant="ghost" size="sm" onClick={() => retry.current()}>重试</Button></div>}
+      {view.error && <div role="alert" className="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-warning dark:text-warning"><span className="flex-1">{view.error}</span><Button variant="ghost" size="sm" onClick={() => retry.current()}>重试</Button></div>}
     </section>
   )
 }

@@ -1,0 +1,81 @@
+/* 目录行保留原图形宽度，以独立原生button提供键盘入口，不嵌套行尾按钮。 */
+.gamma-disclosure-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+/* 内容折叠图形固定占位。状态旋转与普通操作图标的微动互相独立。 */
+:root .gamma-disclosure-indicator[data-disclosure-chevron] {
+  flex: 0 0 var(--disclosure-size, 14px);
+  width: var(--disclosure-size, 14px);
+  height: var(--disclosure-size, 14px);
+  opacity: 0;
+  transform: rotate(0deg);
+  transform-origin: center;
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+:root [data-disclosure-trigger]:is(:hover, :focus-visible, :focus-within, [aria-selected="true"]) .gamma-disclosure-indicator[data-disclosure-chevron],
+:root [data-disclosure-group]:is(:hover, :focus-within) .gamma-disclosure-indicator[data-disclosure-chevron] {
+  opacity: 1;
+}
+:root .gamma-disclosure-indicator[data-disclosure-chevron][data-expanded="true"],
+:root [data-disclosure-trigger]:is([aria-expanded="true"], [data-state="open"]) .gamma-disclosure-indicator[data-disclosure-chevron]:not([data-expanded]) {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+:root [data-disclosure-trigger]:not(.gamma-ui):focus-visible {
+  outline: 1px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+/* 显式标记操作图标；不匹配图表、正文图形或所有含 svg 的任意元素。 */
+:root [data-icon-button="true"] {
+  transition-property: background-color, color, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+}
+:root [data-icon-button-tone="inverse"] {
+  --icon-hover-foreground: hsl(var(--inverse-foreground));
+  --icon-hover-background: hsl(var(--inverse-foreground) / 0.14);
+}
+:root [data-icon-button="true"]:not(:disabled, [aria-disabled="true"], [data-disabled]):is(:hover, :focus-visible) {
+  color: var(--icon-hover-foreground, hsl(var(--foreground)));
+  background-color: var(--icon-hover-background, hsl(var(--inset)));
+}
+:root [data-icon-button="true"]:not([class*="outline-none"]):focus-visible {
+  outline: 1px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+:root [data-icon-button="true"] > svg:not([class*="animate-"], .gamma-disclosure-indicator, .process-plan-circle, [data-icon-motion="none"]) {
+  translate: 0 0;
+  transition: translate 180ms ease-out, transform 150ms ease-out;
+}
+@media (hover: hover) and (pointer: fine) {
+  :root [data-icon-button="true"]:not(:disabled, [aria-disabled="true"], [data-disabled]):hover > svg:not([class*="animate-"], .gamma-disclosure-indicator, .process-plan-circle, [data-icon-motion="none"]) {
+    translate: 0 -1px;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  :root .gamma-disclosure-indicator[data-disclosure-chevron] { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .gamma-disclosure-indicator[data-disclosure-chevron],
+  :root [data-icon-button="true"],
+  :root [data-icon-button="true"] > svg {
+    transition: none !important;
+  }
+  :root [data-icon-button="true"] > svg { translate: none !important; }
+}
+@media (forced-colors: active) {
+  :root [data-icon-button="true"]:not(:disabled, [aria-disabled="true"], [data-disabled]):is(:hover, :focus-visible) {
+    color: HighlightText;
+    background-color: Highlight;
+  }
+}

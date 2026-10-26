@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import {
-  ChevronRight,
   FileText,
   Folder,
   FolderOpen,
@@ -23,6 +22,8 @@ import {
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog'
+import { FadeTitle } from '@/components/ui/fade-title'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
 export interface MarkdownDocumentListProps {
   id?: string
@@ -170,7 +171,7 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
             className={`flex items-center justify-between rounded-md pr-1.5 transition-colors hover:bg-muted/70 ${isActive ? 'bg-accent text-accent-foreground font-medium' : ''}`}
             style={{ paddingLeft: 8 + depth * 14 }}
           >
-            <Button
+            <Button data-disclosure-trigger="" aria-expanded={isDir ? isExpanded : undefined}
               variant="ghost"
               size="sm"
               className="h-7 min-w-0 flex-1 justify-start gap-1.5 px-1 text-xs font-normal hover:bg-transparent"
@@ -178,13 +179,13 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
             >
               {isDir ? (
                 <>
-                  <ChevronRight className={`size-3 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                  <DisclosureChevron expanded={isExpanded} size={12} className={`size-3 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   {isExpanded ? <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" /> : <Folder className="size-3.5 shrink-0 text-muted-foreground" />}
                 </>
               ) : (
                 <FileText className={`size-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
               )}
-              <span className="truncate">{entry.name}</span>
+              <FadeTitle className="truncate">{entry.name}</FadeTitle>
             </Button>
 
             {isDir && (
@@ -308,7 +309,7 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
               return (
                 <div key={source.id} className="group/root mb-1">
                   <div className="flex items-center justify-between rounded-md pr-1 hover:bg-muted/70">
-                    <Button
+                    <Button data-disclosure-trigger="" aria-expanded={isDir ? isExpanded : undefined}
                       variant="ghost"
                       size="sm"
                       className="h-7 min-w-0 flex-1 justify-start gap-1.5 px-1.5 text-xs font-semibold hover:bg-transparent"
@@ -318,13 +319,13 @@ export function MarkdownDocumentList(props: MarkdownDocumentListProps): React.Re
                         <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
                       ) : isDir ? (
                         <>
-                          <ChevronRight className={`size-3 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          <DisclosureChevron expanded={isExpanded} size={12} className={`size-3 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                           {isExpanded ? <FolderOpen className="size-3.5 shrink-0 text-primary" /> : <Folder className="size-3.5 shrink-0 text-primary" />}
                         </>
                       ) : (
                         <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="truncate">{source.name}</span>
+                      <FadeTitle className="truncate">{source.name}</FadeTitle>
                     </Button>
 
                     <div className="flex items-center gap-0.5 opacity-0 group-hover/root:opacity-100 transition-opacity">

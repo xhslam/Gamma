@@ -46,7 +46,7 @@ export function VisionRelaySettings(): React.ReactElement {
         <SettingsCard>
           <SettingsRow
             label="启用视觉助手"
-            icon={<Eye className="size-4 text-violet-500" />}
+            icon={<Eye className="size-4 text-info" />}
             description={configured
               ? 'Agent 在需要理解已授权图片时，会请求使用下方选择的视觉模型。'
               : '先选择一个支持图片输入的已配置模型。'}
@@ -79,7 +79,7 @@ export function VisionRelaySettings(): React.ReactElement {
         <SettingsCard>
           <SettingsRow
             label="启用后自动使用视觉模型"
-            icon={<ShieldCheck className="size-4 text-emerald-500" />}
+            icon={<ShieldCheck className="size-4 text-success" />}
             description="启用即授权 Agent 在需要时将当前会话或用户已附加目录中的 PNG、JPEG、GIF、WebP 图片，以及最多 1000 字符的视觉问题发送给所选模型；单张上限 10MB。视觉结果只会以文本 JSON 返回给 Agent。"
           />
         </SettingsCard>

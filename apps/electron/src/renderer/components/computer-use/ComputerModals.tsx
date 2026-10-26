@@ -115,10 +115,10 @@ export function ComputerModals(): React.ReactElement {
 
       {/* 高风险操作确认 */}
       <Dialog open={!!riskReq} onOpenChange={(open) => { if (!open) void handleRiskDecision(false) }}>
-        <DialogContent className="max-w-md border-amber-500/20 dark:border-amber-500/30">
+        <DialogContent className="max-w-md border-warning/20 dark:border-warning/30">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-warning dark:text-warning">
                 <ShieldAlert className="h-5 w-5" />
               </div>
               <div>
@@ -132,9 +132,9 @@ export function ComputerModals(): React.ReactElement {
             </div>
           </DialogHeader>
 
-          <div className="my-2 space-y-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+          <div className="my-2 space-y-2 rounded-xl border border-warning/20 bg-warning/5 p-3.5 text-xs text-warning dark:text-warning">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-warning" />
               <div className="space-y-1">
                 <div className="font-medium text-foreground">
                   {riskReq?.reason}
@@ -161,7 +161,7 @@ export function ComputerModals(): React.ReactElement {
               type="button"
               variant="default"
               size="sm"
-              className="bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500"
+              className="bg-warning text-primary-foreground hover:bg-warning dark:bg-warning dark:hover:bg-warning"
               onClick={() => void handleRiskDecision(true)}
             >
               确认执行

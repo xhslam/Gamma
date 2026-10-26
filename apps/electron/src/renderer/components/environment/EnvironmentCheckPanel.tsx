@@ -154,13 +154,13 @@ export function EnvironmentCheckPanel({
       </div>
 
       {!shellOk && runtime && (
-        <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-[12px] text-yellow-700 dark:text-yellow-400">
+        <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-[12px] text-warning dark:text-warning">
           未检测到 Git Bash 或 WSL：仍可使用基础 Agent，但本次不会提供 Bash 命令工具。
         </div>
       )}
 
       {!nodeOk && runtime && (
-        <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-[12px] text-yellow-700 dark:text-yellow-400">
+        <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-[12px] text-warning dark:text-warning">
           未检测到 Node.js。如果不使用基于 npx 的 MCP 服务器，可以忽略此项。
         </div>
       )}

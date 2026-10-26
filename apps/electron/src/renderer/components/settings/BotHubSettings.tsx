@@ -24,6 +24,7 @@ import dingtalkLogo from '@/assets/bots/dingding.png'
 import slackLogo from '@/assets/bots/slack.png'
 import wechatLogo from '@/assets/bots/wechat.png'
 import gammaLogo from '@/assets/models/gamma.png'
+import { FadeTitle } from '@/components/ui/fade-title'
 
 // ===== 类型 =====
 
@@ -47,25 +48,25 @@ const PLATFORMS: readonly BotPlatformDef[] = [
     id: 'feishu',
     name: '飞书',
     iconSrc: feishuLogo,
-    iconBgClass: 'bg-blue-500/15',
+    iconBgClass: 'bg-info/15',
   },
   {
     id: 'slack',
     name: 'Slack',
     iconSrc: slackLogo,
-    iconBgClass: 'bg-violet-500/15',
+    iconBgClass: 'bg-info/15',
   },
   {
     id: 'wechat',
     name: '微信',
     iconSrc: wechatLogo,
-    iconBgClass: 'bg-green-500/15',
+    iconBgClass: 'bg-success/15',
   },
   {
     id: 'dingtalk',
     name: '钉钉',
     iconSrc: dingtalkLogo,
-    iconBgClass: 'bg-orange-500/15',
+    iconBgClass: 'bg-warning/15',
   },
   {
     id: 'defaults',
@@ -84,10 +85,10 @@ const PLATFORMS: readonly BotPlatformDef[] = [
 
 /** 连接状态颜色映射 */
 const BRIDGE_STATUS_COLORS = {
-  disconnected: 'bg-gray-400',
-  connecting: 'bg-yellow-400 animate-pulse',
-  connected: 'bg-green-500',
-  error: 'bg-red-500',
+  disconnected: 'bg-muted',
+  connecting: 'bg-warning animate-pulse',
+  connected: 'bg-success',
+  error: 'bg-destructive',
 } as const
 
 // ===== 子组件 =====
@@ -108,7 +109,7 @@ function PlatformStatusDot({ platformId }: { platformId: BotPlatformId }): React
     wechat: wechatState.status,
   }
   const status = statusMap[platformId] ?? 'disconnected'
-  const colorClass = BRIDGE_STATUS_COLORS[status as keyof typeof BRIDGE_STATUS_COLORS] ?? 'bg-gray-400'
+  const colorClass = BRIDGE_STATUS_COLORS[status as keyof typeof BRIDGE_STATUS_COLORS] ?? 'bg-muted'
 
   return <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', colorClass)} />
 }
@@ -160,9 +161,9 @@ function PlatformSidebarItem({
       )}
 
       {/* 名称 */}
-      <span className="text-sm flex-1 min-w-0 truncate">
+      <FadeTitle className="text-sm flex-1 min-w-0 truncate">
         {platform.name}
-      </span>
+      </FadeTitle>
 
       {/* 状态点 */}
       <PlatformStatusDot platformId={platform.id} />

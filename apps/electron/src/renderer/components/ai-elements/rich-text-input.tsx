@@ -727,8 +727,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       },
       attributes: {
         class: cn(
-          'prose dark:prose-invert max-w-none focus:outline-none',
-          'min-h-[101px] w-full text-[15px] leading-[1.6]',
+          'reading-body prose dark:prose-invert focus:outline-none',
+          'min-h-[101px] w-full',
           '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           '[&_pre]:rounded-md [&_pre]:p-3',
           '[&_code]:bg-muted [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-foreground',
@@ -1311,7 +1311,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       {showCollapseToggle && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <button data-icon-button="true"
               type="button"
               className="sticky bottom-1 float-right mr-2 z-10 p-0.5 rounded hover:bg-muted/80 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
               onClick={() => setIsManuallyCollapsed((prev) => !prev)}
@@ -1416,8 +1416,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           flex-shrink: 0;
         }
         .skill-mention-chip {
-          background-color: hsl(270 60% 60% / 0.15);
-          color: hsl(270 60% 50%);
+          background-color: hsl(var(--muted) / 0.15);
+          color: hsl(var(--foreground));
           border-radius: 4px;
           padding: 1px 4px 1px 2px;
           font-size: 13px;
@@ -1440,8 +1440,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           flex-shrink: 0;
         }
         .mcp-mention-chip {
-          background-color: hsl(160 60% 45% / 0.15);
-          color: hsl(160 60% 35%);
+          background-color: hsl(var(--muted) / 0.15);
+          color: hsl(var(--foreground));
           border-radius: 4px;
           padding: 1px 4px 1px 2px;
           font-size: 13px;
@@ -1476,12 +1476,12 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           vertical-align: baseline;
         }
         .todo-mention-chip {
-          background-color: hsl(38 90% 50% / 0.16);
-          color: hsl(32 80% 38%);
+          background-color: hsl(var(--muted) / 0.16);
+          color: hsl(var(--foreground));
         }
         .calendar-event-mention-chip {
-          background-color: hsl(190 75% 45% / 0.14);
-          color: hsl(190 72% 34%);
+          background-color: hsl(var(--muted) / 0.14);
+          color: hsl(var(--foreground));
         }
         .todo-mention-chip::before,
         .calendar-event-mention-chip::before {
@@ -1501,8 +1501,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E");
         }
         .session-mention-chip {
-          background-color: hsl(200 80% 50% / 0.14);
-          color: hsl(200 80% 40%);
+          background-color: hsl(var(--muted) / 0.14);
+          color: hsl(var(--foreground));
           border-radius: 4px;
           padding: 1px 4px 1px 2px;
           font-size: 13px;

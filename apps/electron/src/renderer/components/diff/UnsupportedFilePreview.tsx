@@ -42,7 +42,7 @@ export function UnsupportedFilePreview({
 }: UnsupportedFilePreviewProps): React.ReactElement {
   return (
     <div className="flex h-full items-center justify-center px-6 py-10 text-center">
-      <div className="w-full max-w-sm rounded-xl bg-muted/35 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.05)]">
+      <div className="w-full max-w-sm rounded-xl bg-muted/35 p-5 shadow-[0_1px_2px_hsl(var(--shadow-ink)/0.06),0_8px_24px_hsl(var(--shadow-ink)/0.05)]">
         <FileWarning className="mx-auto size-7 text-muted-foreground/80" aria-hidden="true" />
         <h2 className="mt-3 text-sm font-medium text-foreground text-balance">无法安全内联预览</h2>
         <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground text-pretty">{reason}</p>

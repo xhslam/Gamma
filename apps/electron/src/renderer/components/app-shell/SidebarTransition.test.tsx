@@ -12,12 +12,12 @@ function renderSidebar(collapsed: boolean): string {
 }
 
 describe('Given 可折叠的主导航动画外壳', () => {
-  test('When 展开 Then 包含固定宽度内容和分隔线并占据 257px', () => {
+  test('When 展开 Then 固定内容占256px且不额外占用分隔线宽度', () => {
     const html = renderSidebar(false)
-    expect(html).toContain('width:257px')
+    expect(html).not.toContain('width:257px')
     expect(html).toContain('width:256px')
     expect(html).toContain('visibility:visible')
-    expect(html).toContain('aria-hidden="true"') // 装饰性分隔线
+    expect(html).not.toContain('aria-hidden="true"') // 间隙由布局承担，不再额外画分隔线
     expect(html).not.toContain('inert=""')
     expect(html).toContain('<button>导航内容</button>')
   })
