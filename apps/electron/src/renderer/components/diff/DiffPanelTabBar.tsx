@@ -48,7 +48,7 @@ export interface WorkspacePanelTab {
   status?: SessionIndicatorStatus
 }
 
-interface DiffPanelTabBarProps {
+export interface DiffPanelTabBarProps {
   tabs: WorkspacePanelTab[]
   activeTab: AgentSidePanelTab
   onTabChange: (tab: AgentSidePanelTab) => void

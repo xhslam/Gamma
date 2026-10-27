@@ -7,12 +7,20 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Check, ChevronDown, PanelLeft, PanelRight, Pencil, Split, X } from 'lucide-react'
-import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, agentSidePanelLayoutAtomFamily, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
+import {
+  agentSessionsAtom,
+  agentSideTemporaryAgentMapAtom,
+  agentDiffPanelTabAtom,
+  agentSidePanelLayoutAtomFamily,
+  currentSessionSidePanelOpenAtom,
+  getExplorationSidePanelTab,
+} from '@/atoms/agent-atoms'
 import { sidebarCollapsedAtom, tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
 import { SidebarExpandButton } from '@/components/app-shell/CollapsedSidebarHeader'
 import { detectIsMac } from '@/lib/platform'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { cn } from '@/lib/utils'
+import { OnDemandRightPanelNav } from './OnDemandRightPanelNav'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,14 +38,14 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   const session = sessions.find((s) => s.id === sessionId) ?? null
   const setAgentSessions = useSetAtom(agentSessionsAtom)
   const setTabs = useSetAtom(tabsAtom)
-  const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
-  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
-  const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
+  const isRightPanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
   const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const workspaceSide = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)).workspaceSide === 'left' ? 'left' : 'right'
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
+  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const ownsWindowControls = sidebarCollapsed && (!isRightPanelOpen || workspaceSide === 'right')
 
   const explorationBranches = React.useMemo(() => sessions
@@ -58,9 +66,8 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
       }])
       return next
     })
-    setRightPanelOpen(true)
     setSidePanelTabMap((prev) => new Map(prev).set(sessionId, getExplorationSidePanelTab(branch.id)))
-  }, [sessionId, setRightPanelOpen, setSidePanelTabMap, setSideTemporaryAgentMap])
+  }, [sessionId, setSidePanelTabMap, setSideTemporaryAgentMap])
 
   if (!session) return null
 
@@ -158,12 +165,13 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {explorationBranches.length > 0 && (
+      {/* S2 大面板展开时，保留恢复历史探索分支入口 */}
+      {isRightPanelOpen && explorationBranches.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="titlebar-no-drag inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
+              className="titlebar-no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
               aria-label={`打开 ${explorationBranches.length} 个探索分支`}
               title={`打开探索分支（${explorationBranches.length}）`}
             >
@@ -175,7 +183,6 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           <DropdownMenuContent
             align="end"
             className="z-[100] w-64 titlebar-no-drag"
-            // 选择或失焦关闭后不要把焦点回跳到「探索」触发器，避免出现残留 focus 框。
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             {explorationBranches.map((branch) => (
@@ -187,17 +194,8 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {!isRightPanelOpen && (
-        <button
-          type="button"
-          onClick={() => setRightPanelOpen(true)}
-          className="titlebar-no-drag ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-          aria-label={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
-          title={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
-        >
-          {workspaceSide === 'left' ? <PanelLeft className="size-4" /> : <PanelRight className="size-4" />}
-        </button>
-      )}
+      {/* S0/S1 右侧按需入口（文件/改动/动态调研/展开工作区） */}
+      <OnDemandRightPanelNav sessionId={sessionId} />
     </div>
   )
 }

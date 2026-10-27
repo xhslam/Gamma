@@ -27,6 +27,7 @@ import { useAttachedDirectoryChildren } from '@/components/file-browser/use-atta
 import { productivityToolsAtom } from '@/atoms/ui-preferences'
 import { markdownToHtml } from '@/lib/markdown-rich-text'
 import { FileBrowser, FileDropZone, FileTypeIcon, FileSearchBar, computeRevealAncestors, isPathUnderRoot, computeTreeRowLayout, AncestorGuides, STICKY_ROW_BASE_CLASS, canBeSticky } from '@/components/file-browser'
+import { OnDemandRightPanelNav } from '@/components/agent/OnDemandRightPanelNav'
 import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
 import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components/diff/DiffPanelTabBar'
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
@@ -1775,7 +1776,9 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
         >
-          <DiffPanelTabBar
+          <OnDemandRightPanelNav
+            presentation="tabs"
+            sessionId={sessionId}
             key={sessionId}
             tabs={workspaceTabs}
             activeTab={effectiveActiveTab}
