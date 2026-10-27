@@ -64,7 +64,8 @@ import pkg from '../../../package.json' with { type: 'json' }
 
 /** 当前配置版本 */
 const CONFIG_VERSION = 7
-const RETIRED_VOLCENGINE_PROVIDERS = new Set<ProviderType>(['doubao', 'ark-coding-plan'])
+// 存量 JSON 仍可能带有已从 ProviderType 移除的旧值，迁移识别必须保留这些字符串。
+const RETIRED_VOLCENGINE_PROVIDERS = new Set<string>(['doubao', 'ark-coding-plan'])
 const RETIRED_OPENCODE_PROVIDER = 'opencode-go-openai'
 const RETIRED_OPENCODE_MESSAGE = 'OpenCode Go 渠道已停止支持，请选择其他供应商或自定义渠道'
 
@@ -1898,7 +1899,7 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
         if (provider === 'openai-codex') {
           const credentials = parseCodexCredentials(input.apiKey)
           if (!credentials) throw new Error('ChatGPT 登录凭据无效或缺失，请重新登录')
-          const codexModels = await listCodexModels(credentials)
+          const codexModels = await listCodexModels(credentials, proxyUrl)
           return {
             success: true,
             message: `已加载 ${codexModels.length} 个 ChatGPT (Codex) 模型`,

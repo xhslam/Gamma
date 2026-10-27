@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { createRequire } from 'node:module'
 import pkg from './package.json' with { type: 'json' }
+
+const require = createRequire(import.meta.url)
 
 export default defineConfig({
   plugins: [react()],
@@ -15,10 +18,13 @@ export default defineConfig({
     emptyOutDir: true,
   },
   resolve: {
-    alias: {
-      '@/types': resolve(__dirname, 'src/types'),
-      '@': resolve(__dirname, 'src/renderer'),
-    },
+    alias: [
+      // xterm 6 的 ESM 模式枚举经 tree-shaking 后产生未声明变量，DECRQM 会中断解析。
+      // 使用同版本官方 CJS 构建；精确匹配保留 @xterm/xterm/css/xterm.css 子路径。
+      { find: /^@xterm\/xterm$/, replacement: require.resolve('@xterm/xterm') },
+      { find: '@/types', replacement: resolve(__dirname, 'src/types') },
+      { find: '@', replacement: resolve(__dirname, 'src/renderer') },
+    ],
   },
   server: {
     // Chromium can resolve localhost to IPv4 while Vite binds only ::1 on macOS.

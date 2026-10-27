@@ -16,6 +16,8 @@ export const TERMINAL_IPC_CHANNELS = {
   AGENT_CLOSE: 'terminal:agent-close',
   OUTPUT: 'terminal:output',
   EXIT: 'terminal:exit',
+  SAVE_PASTED_IMAGE: 'terminal:save-pasted-image',
+  GET_CLIPBOARD_CONTENT: 'terminal:get-clipboard-content',
 } as const
 
 export type TerminalProfile = 'default' | 'zsh' | 'bash' | 'pwsh' | 'powershell' | 'cmd' | 'git-bash' | 'wsl'
@@ -84,6 +86,8 @@ export interface TerminalSnapshot {
   state: TerminalState
   output: string
   sequence: number
+  /** 已退出 Tab 保留最终输出，重挂载不得重新启动 shell。 */
+  exitCode?: number
 }
 
 /** 主进程通知 Renderer：Agent 已创建一个应呈现在其右侧工作区的终端。 */
@@ -104,6 +108,23 @@ export interface TerminalExitEvent {
   terminalId: string
   exitCode: number
   signal?: number
+}
+
+export interface TerminalSavePastedImageInput {
+  /** 可选 base64 编码的图片数据；若未提供则从系统剪贴板原生读取图片 */
+  data?: string
+  mimeType?: string
+}
+
+export interface TerminalSavePastedImageResult {
+  filePath: string
+}
+
+export interface TerminalClipboardContentResult {
+  type: 'image' | 'files' | 'text' | 'empty'
+  text?: string
+  filePath?: string
+  filePaths?: string[]
 }
 
 export function isTerminalProfile(value: unknown): value is TerminalProfile {

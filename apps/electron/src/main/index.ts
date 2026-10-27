@@ -52,6 +52,7 @@ function registerProtocolsAndHandlers(): void {
 
 
 import { getSettings, updateSettings } from './lib/settings-service'
+import { restoreAppIconVariant } from './lib/app-icon-service'
 import { handlePromaFileRequest } from './lib/local-file-protocol'
 
 // 处理 EPIPE 错误：当 stdout/stderr 管道被关闭时（如 electronmon 重启），忽略写入错误
@@ -751,14 +752,16 @@ async function bootstrap(): Promise<void> {
   // 确保 Dock 图标可见（dev 模式下通过 spawn 启动时可能不会自动显示）
   // 如果用户有保存的图标偏好则使用，否则用默认图标
   if (process.platform === 'darwin' && app.dock) {
-    await app.dock.show()
-    const { resolveAppIconPath } = require('./ipc')
-    const settings = getSettings()
-    const variantId = settings.appIconVariant
-    const dockIconPath = resolveAppIconPath(variantId ?? 'default')
-    if (dockIconPath && existsSync(dockIconPath)) {
-      app.dock.setIcon(dockIconPath)
-    }
+    const dock = app.dock
+    await dock.show()
+    restoreAppIconVariant({
+      platform: process.platform,
+      resourcesDir: app.isPackaged ? process.resourcesPath : join(__dirname, 'resources'),
+      fileExists: existsSync,
+      setDockIcon: (iconPath) => dock.setIcon(iconPath),
+      readVariant: () => getSettings().appIconVariant,
+      saveVariant: (id) => { updateSettings({ appIconVariant: id }) },
+    })
   }
 
   // Create main window (will be shown when ready)

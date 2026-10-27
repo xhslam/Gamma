@@ -1,7 +1,7 @@
 /**
  * TaskProgressCard — 内联聚合式任务进度卡片
  *
- * 将消息流中散落的 TaskCreate / TaskUpdate / TodoWrite 工具调用
+ * 将消息流中散落的 TaskCreate / TaskUpdate 工具调用
  * 聚合为一个实时更新的进度卡片。
  *
  * 数据来源：直接从 ToolActivity[] 中提取 task 相关活动并聚合状态。
@@ -26,9 +26,10 @@ import { aggregateTaskItems, getTaskProgressCounts, type TaskItem } from './task
 
 interface TaskRowProps {
   item: TaskItem
+  streamEnded: boolean
 }
 
-function TaskRow({ item }: TaskRowProps): React.ReactElement {
+function TaskRow({ item, streamEnded }: TaskRowProps): React.ReactElement {
   const isCompleted = item.status === 'completed'
   const isInProgress = item.status === 'in_progress'
   const isCancelled = item.status === 'cancelled'
@@ -48,7 +49,7 @@ function TaskRow({ item }: TaskRowProps): React.ReactElement {
           <Circle className="size-2.5 text-muted-foreground/40" />
         )}
         {isInProgress && (
-          <Loader2 className="size-2 animate-spin text-blue-500" />
+          <Loader2 className={cn('size-2 text-blue-500', !streamEnded && 'animate-spin')} />
         )}
         {isCompleted && (
           <CheckCircle2 className="size-2.5 text-green-500" />
@@ -74,7 +75,7 @@ function TaskRow({ item }: TaskRowProps): React.ReactElement {
           !isCompleted && !isInProgress && !isCancelled && !isError && 'text-muted-foreground',
         )}
       >
-        {isInProgress && item.activeForm ? item.activeForm : item.subject}
+        {isInProgress && !streamEnded && item.activeForm ? item.activeForm : item.subject}
       </span>
     </div>
   )
@@ -101,7 +102,7 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
 const MAX_VISIBLE = 8
 
 interface TaskProgressCardProps {
-  /** 包含 TaskCreate/TaskUpdate/TodoWrite 的活动列表 */
+  /** 包含 TaskCreate/TaskUpdate 的活动列表 */
   activities: ToolActivity[]
   /** 是否处于流式状态 */
   animate?: boolean
@@ -144,7 +145,7 @@ export function TaskProgressCard({ activities, animate = false, streamEnded = fa
         {/* 任务列表 */}
         <div className="space-y-0">
           {visibleItems.map((item) => (
-            <TaskRow key={item.id} item={item} />
+            <TaskRow key={item.id} item={item} streamEnded={streamEnded} />
           ))}
         </div>
 

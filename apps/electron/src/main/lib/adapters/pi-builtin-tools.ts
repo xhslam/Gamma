@@ -91,6 +91,7 @@ import {
 import { updateSettings } from '../settings-service'
 import { getConfiguredVaultFileSystem, getVaultConfig } from '../vault-service'
 import type { ProductivityToolsSettings } from '../../../types'
+import { buildPiWebTools } from './pi-web-tools'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 
@@ -1642,6 +1643,13 @@ export async function buildPiBuiltinTools(
     tools.push(...buildBrowserTools(sdk, ctx))
   } catch (error) {
     console.error('[Pi 桥接] 注入受管浏览器工具失败:', error)
+  }
+
+  // 公开搜索和静态正文读取在所有来源的会话中可用，权限仍由运行时统一包装。
+  try {
+    tools.push(...buildPiWebTools(sdk))
+  } catch (error) {
+    console.error('[Pi 桥接] 注入公开网络查询工具失败:', error)
   }
 
   // 视觉助手仅在仍不支持原生视觉的 DeepSeek V4 Pro 用户会话中按需出现。

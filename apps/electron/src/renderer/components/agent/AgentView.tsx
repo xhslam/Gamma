@@ -48,7 +48,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
-import { Slider } from '@/components/ui/slider'
+import { ReasoningStrengthSlider } from './ReasoningStrengthSlider'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -301,54 +301,27 @@ function getErrorMessage(error: unknown): string {
 
 // ===== 思考模式 Hover Popover =====
 
-const OPENAI_THINKING_LEVELS = ['off', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly AgentThinkingLevel[]
-const OPENAI_STANDARD_THINKING_LEVELS = OPENAI_THINKING_LEVELS.slice(0, -1)
-type OpenAIThinkingLevel = AgentThinkingLevel
-const OPENAI_THINKING_LABELS: Record<OpenAIThinkingLevel, string> = {
-  off: '关闭',
-  minimal: '最小',
-  low: '低',
-  medium: '中',
-  high: '高',
-  xhigh: '极高',
-  max: '最大',
-}
-
-function normalizeOpenAIThinkingLevel(
-  level: AgentThinkingLevel | undefined,
-  levels: readonly OpenAIThinkingLevel[],
-): OpenAIThinkingLevel {
-  if (level === 'minimal') return 'low'
-  // max 会话设置在切到非 GPT-5.6 时由主进程降级为 xhigh；UI 同步展示有效档位。
-  if (level === 'max' && !levels.includes('max')) return 'xhigh'
-  return levels.includes(level as OpenAIThinkingLevel) ? level as OpenAIThinkingLevel : 'off'
-}
-
-interface CodexThinkingConfig {
+interface SessionThinkingConfig {
   thinkingLevel: AgentThinkingLevel
-  levels: readonly OpenAIThinkingLevel[]
+  capability: ReasoningCapability
   onThinkingLevelChange: (level: AgentThinkingLevel) => void
 }
 
 interface AgentThinkingPopoverProps {
   agentThinking: import('@proma/shared').ThinkingConfig | undefined
   onToggle: () => void
-  codexConfig?: CodexThinkingConfig
+  reasoningConfig?: SessionThinkingConfig
+  subscriptionThinkingState?: 'loading' | 'unavailable'
 }
 
-function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThinkingPopoverProps): React.ReactElement {
+function AgentThinkingPopover({ agentThinking, onToggle, reasoningConfig, subscriptionThinkingState }: AgentThinkingPopoverProps): React.ReactElement {
   const [open, setOpen] = React.useState(false)
   const hoverTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const popoverReceivedFocusRef = React.useRef(false)
-  const isCodex = Boolean(codexConfig)
-  const thinkingLevels = codexConfig?.levels ?? OPENAI_STANDARD_THINKING_LEVELS
-  const normalizedLevel = normalizeOpenAIThinkingLevel(
-    codexConfig?.thinkingLevel,
-    thinkingLevels,
-  )
-  const supportsThinkingToggle = thinkingLevels.includes('off')
-  const isEnabled = isCodex ? !supportsThinkingToggle || normalizedLevel !== 'off' : agentThinking?.type === 'adaptive'
-  const sliderPosition = thinkingLevels.indexOf(normalizedLevel)
+  const keyboardOpenRef = React.useRef(false)
+  const isEnabled = reasoningConfig
+    ? normalizeReasoningCapabilityLevel(reasoningConfig.capability, reasoningConfig.thinkingLevel) !== 'off'
+    : !subscriptionThinkingState && agentThinking?.type === 'adaptive'
 
   const handleMouseEnter = React.useCallback(() => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
@@ -365,10 +338,12 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
     }
   }, [])
 
-  const handleButtonClick = (): void => {
-    if (codexConfig) {
-      if (!supportsThinkingToggle) return
-      codexConfig.onThinkingLevelChange(isEnabled ? 'off' : 'high')
+  const handleButtonClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    // 推理模型点击仅展开设置，不能顺手切换会话强度。
+    if (reasoningConfig || subscriptionThinkingState) {
+      event.preventDefault()
+      keyboardOpenRef.current = event.detail === 0
+      setOpen(true)
       return
     }
     onToggle()
@@ -383,6 +358,7 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
           size="icon"
           className={cn(inputToolbarButtonClass, isEnabled && inputToolbarActiveButtonClass)}
           onClick={handleButtonClick}
+          aria-label="推理设置"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -399,35 +375,29 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
         onFocusCapture={() => {
           popoverReceivedFocusRef.current = true
         }}
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          if (!keyboardOpenRef.current) event.preventDefault()
+          keyboardOpenRef.current = false
+        }}
         onCloseAutoFocus={(event) => {
           preventHoverPopoverFocusRestore(event, popoverReceivedFocusRef.current)
           popoverReceivedFocusRef.current = false
         }}
       >
         <div className="flex flex-col gap-3">
-          {codexConfig ? (
-            <>
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-xs font-medium text-foreground/80">思考深度</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {OPENAI_THINKING_LABELS[normalizedLevel]}
-                  </span>
-                </div>
-                <Slider
-                  value={[sliderPosition]}
-                  onValueChange={([position]) => codexConfig.onThinkingLevelChange(thinkingLevels[position!]!)}
-                  min={0}
-                  max={thinkingLevels.length - 1}
-                  step={1}
-                  aria-label="思考深度"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  {thinkingLevels.map((level) => <span key={level}>{OPENAI_THINKING_LABELS[level]}</span>)}
-                </div>
-              </div>
-            </>
+          {reasoningConfig ? (
+            <ReasoningStrengthSlider
+              thinkingLevel={reasoningConfig.thinkingLevel}
+              capability={reasoningConfig.capability}
+              onThinkingLevelChange={reasoningConfig.onThinkingLevelChange}
+            />
+          ) : subscriptionThinkingState ? (
+            <div className="space-y-2" role="status">
+              <span className="text-xs font-medium text-foreground/80">推理强度</span>
+              <p className="text-xs text-muted-foreground">
+                {subscriptionThinkingState === 'loading' ? '正在读取模型推理档位…' : '当前模型目录未提供可用的推理档位'}
+              </p>
+            </div>
           ) : (
             <div className="flex items-center justify-between gap-4">
               <span className="text-xs text-foreground/70">思考模式</span>
@@ -782,10 +752,11 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     ? stableChannel.id
     : null
   const planQuotaChannelUpdatedAt = planQuotaChannelId ? stableChannel?.updatedAt : undefined
-  const agentChannelProvider = React.useMemo(
-    () => globalChannels.find((c) => c.id === agentChannelId)?.provider,
+  const agentSelectedChannel = React.useMemo(
+    () => globalChannels.find((channel) => channel.id === agentChannelId),
     [globalChannels, agentChannelId],
   )
+  const agentChannelProvider = agentSelectedChannel?.provider
   const isCodexFastModeAvailable = hasSessionMeta
     && agentChannelProvider === 'openai-codex'
     && isCodexFastModeSupportedModel(agentModelId ?? undefined)
@@ -796,7 +767,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       transport: inferReasoningTransport(agentChannelProvider),
     })
     : undefined
-  const reasoningCapabilityKey = `${agentChannelId ?? ''}:${agentModelId ?? ''}`
+  const reasoningCapabilityKey = `${agentChannelId ?? ''}:${agentModelId ?? ''}:${agentSelectedChannel?.updatedAt ?? ''}`
   const [piReasoningCapability, setPiReasoningCapability] = React.useState<{
     key: string
     capability: ReasoningCapability | undefined
@@ -825,7 +796,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     ? piReasoningCapability.capability ?? resolveReasoningCapability({ profile: reasoningProfile })
     : resolveReasoningCapability({ profile: reasoningProfile })
   const isSessionThinkingAvailable = Boolean(effectiveReasoningCapability)
-  const openAIThinkingLevels = effectiveReasoningCapability?.levels ?? OPENAI_STANDARD_THINKING_LEVELS
+  const subscriptionThinkingState = agentChannelProvider === 'openai-codex' && !isSessionThinkingAvailable
+    ? piReasoningCapability.key === reasoningCapabilityKey ? 'unavailable' as const : 'loading' as const
+    : undefined
   const fallbackOpenAIThinkingLevel: AgentThinkingLevel = agentEffort === 'max'
     ? 'xhigh'
     : agentEffort ?? (agentThinking?.type === 'adaptive' ? 'high' : 'off')
@@ -2835,9 +2808,11 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
             setAgentThinking(next)
             window.electronAPI.updateSettings({ agentThinking: next })
           }}
-          codexConfig={isSessionThinkingAvailable ? {
+          key={`${reasoningCapabilityKey}:${effectiveReasoningCapability?.levels.join(',') ?? ''}`}
+          subscriptionThinkingState={subscriptionThinkingState}
+          reasoningConfig={effectiveReasoningCapability ? {
             thinkingLevel: openAIThinkingLevel,
-            levels: openAIThinkingLevels,
+            capability: effectiveReasoningCapability,
             onThinkingLevelChange: (level) => { void updateReasoningLevel(level) },
           } : undefined}
         />
@@ -2884,7 +2859,9 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     handleCodexFastModeChange,
     isSessionThinkingAvailable,
     openAIThinkingLevel,
-    openAIThinkingLevels,
+    effectiveReasoningCapability,
+    reasoningCapabilityKey,
+    subscriptionThinkingState,
     updateReasoningLevel,
     backgroundWaiting,
     sessionId,

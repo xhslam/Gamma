@@ -1257,6 +1257,8 @@ export const AgentMessages = React.memo(function AgentMessages({
           key={sessionId}
           activities={liveTaskActivities}
           streaming={streaming}
+          runGeneration={streamState?.runGeneration}
+          startedAt={startedAt}
           contextCompaction={contextCompaction}
         />
           </Conversation>

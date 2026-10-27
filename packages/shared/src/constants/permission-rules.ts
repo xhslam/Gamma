@@ -10,6 +10,8 @@ export const SAFE_TOOLS: readonly string[] = [
   'Read',            // 文件读取
   'Glob',            // 文件名搜索
   'Grep',            // 内容搜索
+  'WebSearch',       // 搜索公开网页
+  'WebFetch',        // 只读 HTTP(S) 正文；网络服务禁止 URL 凭据和本地文件协议
   // Pi 受管浏览器：网页隔离、下载与弹窗策略已在主进程处理，网页权限默认拒绝。
   'BrowserObserve',
   'BrowserFind',

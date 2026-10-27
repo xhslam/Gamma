@@ -1,9 +1,28 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { AgentPermissionService, type CanUseToolOptions } from './agent-permission-service'
 
 function permissionOptions(signal: AbortSignal, toolUseID: string): CanUseToolOptions {
   return { signal, toolUseID, displayName: '删除分组', description: '删除 Todo 分组' }
 }
+
+describe('公开网络查询权限', () => {
+  for (const toolName of ['WebSearch', 'WebFetch']) {
+    test(`Given ${toolName} 只读工具 When 检查自动模式权限 Then 不创建用户审批等待`, async () => {
+      const service = new AgentPermissionService()
+      const requests: string[] = []
+      const input = toolName === 'WebSearch' ? { query: 'Proma' } : { url: 'https://example.com' }
+      const result = await service.createCanUseTool('web-session', (request) => requests.push(request.requestId))(
+        toolName,
+        input,
+        permissionOptions(new AbortController().signal, 'web-tool'),
+      )
+
+      expect(result).toEqual({ behavior: 'allow', updatedInput: input })
+      expect(requests).toEqual([])
+      expect(service.getPendingRequests()).toEqual([])
+    })
+  }
+})
 
 
 test('Given a destructive planning request When it is approved Then approval is single-use and cannot create a session whitelist', async () => {

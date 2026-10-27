@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
   TERMINAL_IPC_CHANNELS,
-  type AgentTerminalCloseEvent,
   type AgentTerminalOpenEvent,
   assertTerminalProfileSupported,
   parseTerminalProfile,
@@ -26,6 +25,8 @@ import { requireTerminalCwd, resolveTerminalCwd } from './terminal-cwd'
 import { terminalRuntimeClient } from './terminal-runtime-client'
 
 const terminals = new Map<string, TerminalState>()
+// 退出的 Tab 仍可恢复最终屏幕；只有显式关闭才删除状态和有限缓冲。
+const terminalExitCodes = new Map<string, number>()
 const pendingTerminals = new Map<string, Promise<TerminalState>>()
 const cancelledPendingTerminalIds = new Set<string>()
 const terminalSessionOwners = new Map<string, string>()
@@ -33,6 +34,10 @@ const terminalOutputBuffers = new Map<string, TerminalOutputBuffer>()
 const agentTerminals = new Map<string, AgentTerminalRecord>()
 const MAX_REPLAY_CHARS = 1_000_000
 let initialized = false
+// 已绑定的持久解析器使用解析 credit；未绑定或窗口已丢失时由主进程接收即 ACK。
+const outputConsumers = new Set<string>()
+const pendingOutputAcks = new Map<string, number>()
+let observedConsumerWindowId: number | undefined
 
 export interface AgentTerminalRecord {
   sessionId: string
@@ -48,21 +53,25 @@ function initialize(): void {
   if (initialized) return
   initialized = true
   terminalRuntimeClient.onOutput((event) => {
-    if (!terminals.has(event.terminalId) && !pendingTerminals.has(event.terminalId)) return
-    appendOutputBuffer(event)
-    getMainWindow()?.webContents.send(TERMINAL_IPC_CHANNELS.OUTPUT, event)
+    try {
+      if (!terminals.has(event.terminalId) && !pendingTerminals.has(event.terminalId)) return
+      appendOutputBuffer(event)
+      if (!notifyRenderer(TERMINAL_IPC_CHANNELS.OUTPUT, event)) outputConsumers.delete(event.terminalId)
+    } finally {
+      if (outputConsumers.has(event.terminalId)) pendingOutputAcks.set(event.terminalId, event.sequence)
+      else terminalRuntimeClient.acknowledgeOutput({ terminalId: event.terminalId, sequence: event.sequence })
+    }
   })
   terminalRuntimeClient.onExit((event) => {
-    terminals.delete(event.terminalId)
+    if (!terminals.has(event.terminalId) && !pendingTerminals.has(event.terminalId)) return
+    terminalExitCodes.set(event.terminalId, event.exitCode)
     const agentTerminal = agentTerminals.get(event.terminalId)
     if (agentTerminal) {
       // Agent 可在命令退出后读取结果；缓冲会随显式关闭或会话回收一并释放。
       agentTerminal.status = 'exited'
       agentTerminal.exitCode = event.exitCode
-    } else {
-      terminalOutputBuffers.delete(event.terminalId)
     }
-    getMainWindow()?.webContents.send(TERMINAL_IPC_CHANNELS.EXIT, event)
+    notifyRenderer(TERMINAL_IPC_CHANNELS.EXIT, event)
   })
 }
 
@@ -103,6 +112,7 @@ export async function createTerminal(
       cancelledPendingTerminalIds.delete(input.terminalId)
       terminalSessionOwners.delete(input.terminalId)
       terminalOutputBuffers.delete(input.terminalId)
+      terminalExitCodes.delete(input.terminalId)
     },
   )
   return creation
@@ -113,13 +123,14 @@ export async function writeTerminal(input: TerminalInput): Promise<void> {
   validateTerminalId(input.terminalId)
   if (typeof input.data !== 'string' || input.data.length > 64 * 1024) throw new Error('终端输入无效或过长')
   if (!terminals.has(input.terminalId)) throw new Error('终端不存在')
+  if (terminalExitCodes.has(input.terminalId)) throw new Error('终端已退出，请新建终端')
   await terminalRuntimeClient.input(input)
 }
 
 export async function resizeTerminal(input: TerminalResizeInput): Promise<void> {
   initialize()
   validateTerminalId(input.terminalId)
-  if (!terminals.has(input.terminalId)) return
+  if (!terminals.has(input.terminalId) || terminalExitCodes.has(input.terminalId)) return
   await terminalRuntimeClient.resize({
     terminalId: input.terminalId,
     cols: normalizeDimension(input.cols),
@@ -129,12 +140,18 @@ export async function resizeTerminal(input: TerminalResizeInput): Promise<void> 
 
 export function killTerminal(terminalId: string): void {
   validateTerminalId(terminalId)
+  const sessionId = terminalSessionOwners.get(terminalId)
   if (pendingTerminals.has(terminalId)) cancelledPendingTerminalIds.add(terminalId)
   terminals.delete(terminalId)
+  terminalExitCodes.delete(terminalId)
+  outputConsumers.delete(terminalId)
+  pendingOutputAcks.delete(terminalId)
   terminalSessionOwners.delete(terminalId)
   terminalOutputBuffers.delete(terminalId)
   agentTerminals.delete(terminalId)
   terminalRuntimeClient.kill(terminalId)
+  // 包括手动终端和会话删除：renderer 必须回收后台保留的解析资源。
+  if (sessionId) notifyRenderer(TERMINAL_IPC_CHANNELS.AGENT_CLOSE, { sessionId, terminalId })
 }
 
 /** 为 Agent 创建其会话归属的可见终端，目录仍受现有文件授权范围限制；profile 决定交互 shell。 */
@@ -160,7 +177,12 @@ export async function openAgentTerminal(input: {
     resolvedProfile = 'default'
     await createTerminal({ terminalId, sessionId: input.sessionId, cwd, profile: resolvedProfile, cols: 80, rows: 24 }, { strictCwd: true })
   }
-  const record: AgentTerminalRecord = { sessionId: input.sessionId, terminalId, title, cwd, profile: resolvedProfile, status: 'running' }
+  const exitCode = terminalExitCodes.get(terminalId)
+  const record: AgentTerminalRecord = {
+    sessionId: input.sessionId, terminalId, title, cwd, profile: resolvedProfile,
+    status: exitCode === undefined ? 'running' : 'exited',
+    ...(exitCode === undefined ? {} : { exitCode }),
+  }
   agentTerminals.set(terminalId, record)
   notifyAgentTerminalOpen(record)
   return record
@@ -231,8 +253,6 @@ export async function interruptAgentTerminal(sessionId: string, terminalId: stri
 export function closeAgentTerminal(sessionId: string, terminalId: string): void {
   getOwnedAgentTerminal(sessionId, terminalId)
   killTerminal(terminalId)
-  const event: AgentTerminalCloseEvent = { sessionId, terminalId }
-  getMainWindow()?.webContents.send(TERMINAL_IPC_CHANNELS.AGENT_CLOSE, event)
 }
 
 /** 终止并回收指定 Agent 会话的全部交互和 Agent 执行终端。 */
@@ -247,24 +267,67 @@ export function getTerminalSnapshot(terminalId: string): TerminalSnapshot {
   const state = terminals.get(terminalId)
   if (!state) throw new Error('终端不存在')
   const buffer = terminalOutputBuffers.get(terminalId) ?? { output: '', sequence: 0, startOffset: 0, endOffset: 0 }
-  return { state, ...buffer }
+  const exitCode = terminalExitCodes.get(terminalId)
+  return { state, ...buffer, ...(exitCode === undefined ? {} : { exitCode }) }
+}
+
+/** 由 renderer SNAPSHOT handler 绑定；Tab 切换不会解绑持久解析器。 */
+export function attachTerminalOutputConsumer(terminalId: string): void {
+  validateTerminalId(terminalId)
+  if (!terminals.has(terminalId) || terminalExitCodes.has(terminalId)) return
+  const mainWindow = getMainWindow()
+  if (!mainWindow) return
+  const contents = mainWindow.webContents
+  if (observedConsumerWindowId !== contents.id) {
+    releaseTerminalOutputConsumers()
+    observedConsumerWindowId = contents.id
+    contents.on('render-process-gone', releaseTerminalOutputConsumers)
+    contents.on('destroyed', releaseTerminalOutputConsumers)
+    contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) releaseTerminalOutputConsumers()
+    })
+  }
+  outputConsumers.add(terminalId)
+}
+
+function releaseTerminalOutputConsumers(): void {
+  outputConsumers.clear()
+  for (const [terminalId, sequence] of pendingOutputAcks) terminalRuntimeClient.acknowledgeOutput({ terminalId, sequence })
+  pendingOutputAcks.clear()
 }
 
 export function acknowledgeTerminalOutput(input: TerminalOutputAck): void {
   validateTerminalId(input.terminalId)
   if (!Number.isSafeInteger(input.sequence) || input.sequence < 1) throw new Error('终端输出序号无效')
-  if (!terminals.has(input.terminalId)) return
+  if (pendingOutputAcks.get(input.terminalId) !== input.sequence) return
+  pendingOutputAcks.delete(input.terminalId)
   terminalRuntimeClient.acknowledgeOutput(input)
 }
 
 export async function stopAllTerminals(): Promise<void> {
   terminals.clear()
+  terminalExitCodes.clear()
+  outputConsumers.clear()
+  pendingOutputAcks.clear()
   pendingTerminals.clear()
   cancelledPendingTerminalIds.clear()
   terminalSessionOwners.clear()
   terminalOutputBuffers.clear()
   agentTerminals.clear()
   await terminalRuntimeClient.stop()
+}
+
+function notifyRenderer(channel: string, event: unknown): boolean {
+  try {
+    const mainWindow = getMainWindow()
+    if (!mainWindow) return false
+    mainWindow.webContents.send(channel, event)
+    return true
+  } catch (error) {
+    // 窗口关闭与输出并发时 send 可能抛错；缓冲和 PTY 生命周期仍须继续。
+    console.warn('[Terminal] 无法通知终端视图：', error)
+    return false
+  }
 }
 
 function notifyAgentTerminalOpen(record: AgentTerminalRecord): void {

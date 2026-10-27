@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, VAULT_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isPromaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@proma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS, TRAY_IPC_CHANNELS } from '../types'
+import { setAppIconVariant } from './lib/app-icon-service'
 import type {
   QuickTaskSubmitInput,
   VoiceDictationAudioChunkInput,
@@ -154,11 +155,13 @@ import type {
   BrowserNavigateInput,
   BrowserTabInput,
   BrowserCreateTabInput,
+  TerminalSavePastedImageInput,
 } from '@proma/shared'
 import type { UserProfile, AppSettings } from '../types'
 import { getRuntimeStatus, getGitRepoStatus, reinitializeRuntime } from './lib/runtime-init'
 import { browserController } from './lib/browser-controller'
-import { acknowledgeTerminalOutput, closeTerminalsForSession, createTerminal, getTerminalSnapshot, killTerminal, resizeTerminal, writeTerminal } from './lib/terminal-service'
+import { acknowledgeTerminalOutput, attachTerminalOutputConsumer, closeTerminalsForSession, createTerminal, getTerminalSnapshot, killTerminal, resizeTerminal, writeTerminal } from './lib/terminal-service'
+import { saveTerminalPastedImage, getTerminalClipboardContent } from './lib/terminal-clipboard-service'
 import { getMainWindow } from './lib/main-window-store'
 import { resolveBrowserProfileKey } from './lib/browser-profile-policy'
 import { getUnstagedChanges, invalidateGitDiffCache, getFileDiff, getUntrackedContent, revertFile, getDiffContents, listWorktrees, getWorktreeChanges, getMainRepoRoot } from './lib/git-diff-service'
@@ -1355,17 +1358,6 @@ function cacheNull(key: string): null {
   return null
 }
 
-/**
- * 解析应用图标变体的文件路径
- */
-export function resolveAppIconPath(variantId: string): string | null {
-  const resourcesDir = getBundledResourcesDir()
-  if (!variantId || variantId === 'default') {
-    return join(resourcesDir, 'icon.png')
-  }
-  return join(resourcesDir, 'proma-logos', `proma-${variantId}.png`)
-}
-
 function releaseDirectoryWatcherIfUnreferenced(dirPath: string): void {
   const isStillReferenced = listAgentWorkspaces().some((workspace) =>
     workspace.projectRootPath === dirPath
@@ -1430,11 +1422,21 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle(TERMINAL_IPC_CHANNELS.SNAPSHOT, async (event, terminalId: string) => {
     assertMainTerminalRenderer(event.sender.id)
-    return getTerminalSnapshot(terminalId)
+    const snapshot = getTerminalSnapshot(terminalId)
+    attachTerminalOutputConsumer(terminalId)
+    return snapshot
   })
   ipcMain.on(TERMINAL_IPC_CHANNELS.ACK_OUTPUT, (event, input) => {
     assertMainTerminalRenderer(event.sender.id)
     acknowledgeTerminalOutput(input)
+  })
+  ipcMain.handle(TERMINAL_IPC_CHANNELS.SAVE_PASTED_IMAGE, async (event, input?: TerminalSavePastedImageInput) => {
+    assertMainTerminalRenderer(event.sender.id)
+    return saveTerminalPastedImage(input)
+  })
+  ipcMain.handle(TERMINAL_IPC_CHANNELS.GET_CLIPBOARD_CONTENT, async (event) => {
+    assertMainTerminalRenderer(event.sender.id)
+    return getTerminalClipboardContent()
   })
 
   console.log('[IPC] 正在注册 IPC 处理器...')
@@ -2385,28 +2387,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     APP_ICON_IPC_CHANNELS.SET,
-    async (_, variantId: string): Promise<boolean> => {
-      try {
-        // 解析图标文件路径
-        const iconPath = resolveAppIconPath(variantId)
-        if (!iconPath || !existsSync(iconPath)) {
-          console.warn('[图标] 图标文件不存在:', iconPath)
-          return false
-        }
-
-        // macOS: 设置 Dock 图标
-        if (process.platform === 'darwin' && app.dock) {
-          app.dock.setIcon(iconPath)
-        }
-
-        // 持久化到设置
-        await updateSettings({ appIconVariant: variantId })
-        console.log(`[图标] 已切换到: ${variantId}`)
-        return true
-      } catch (error) {
-        console.error('[图标] 切换失败:', error)
-        return false
-      }
+    async (_, variantId: unknown): Promise<boolean> => {
+      const dock = app.dock
+      const success = setAppIconVariant(variantId, {
+        platform: process.platform,
+        resourcesDir: getBundledResourcesDir(),
+        fileExists: existsSync,
+        setDockIcon: dock ? (iconPath) => dock.setIcon(iconPath) : undefined,
+        readVariant: () => getSettings().appIconVariant,
+        saveVariant: (id) => { updateSettings({ appIconVariant: id }) },
+      })
+      if (success) console.log(`[图标] 已切换到: ${variantId}`)
+      return success
     }
   )
 

@@ -172,6 +172,9 @@ import type {
   TerminalOutputAck,
   TerminalSnapshot,
   TerminalExitEvent,
+  TerminalSavePastedImageInput,
+  TerminalSavePastedImageResult,
+  TerminalClipboardContentResult,
 } from '@proma/shared'
 import type {
   UserProfile,
@@ -227,6 +230,8 @@ export interface ElectronAPI {
   killTerminal: (terminalId: string) => Promise<void>
   getTerminalSnapshot: (terminalId: string) => Promise<TerminalSnapshot>
   acknowledgeTerminalOutput: (input: TerminalOutputAck) => void
+  saveTerminalPastedImage: (input?: TerminalSavePastedImageInput) => Promise<TerminalSavePastedImageResult>
+  getTerminalClipboardContent: () => Promise<TerminalClipboardContentResult>
   onAgentTerminalOpen: (callback: (event: AgentTerminalOpenEvent) => void) => () => void
   onAgentTerminalClose: (callback: (event: AgentTerminalCloseEvent) => void) => () => void
   onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
@@ -1389,6 +1394,8 @@ const electronAPI: ElectronAPI = {
   killTerminal: (terminalId: string) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.KILL, terminalId),
   getTerminalSnapshot: (terminalId: string) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.SNAPSHOT, terminalId),
   acknowledgeTerminalOutput: (input: TerminalOutputAck) => ipcRenderer.send(TERMINAL_IPC_CHANNELS.ACK_OUTPUT, input),
+  saveTerminalPastedImage: (input?: TerminalSavePastedImageInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.SAVE_PASTED_IMAGE, input),
+  getTerminalClipboardContent: () => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.GET_CLIPBOARD_CONTENT),
   onAgentTerminalOpen: (callback: (event: AgentTerminalOpenEvent) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, event: AgentTerminalOpenEvent): void => callback(event)
     ipcRenderer.on(TERMINAL_IPC_CHANNELS.AGENT_OPEN, listener)

@@ -30,10 +30,10 @@ type RuntimeTerminalCreateInput = TerminalCreateInput & {
 }
 
 type RuntimeRequest =
-  | { type: 'terminal.create'; input: RuntimeTerminalCreateInput }
+  | { type: 'terminal.create'; attemptId: number; input: RuntimeTerminalCreateInput }
   | { type: 'terminal.input'; input: TerminalInput }
   | { type: 'terminal.resize'; input: TerminalResizeInput }
-  | { type: 'terminal.kill'; terminalId: string }
+  | { type: 'terminal.kill'; terminalId: string; attemptId?: number }
   | { type: 'terminal.ack-output'; input: TerminalOutputAck }
   | { type: 'terminal.shutdown' }
 
@@ -43,17 +43,19 @@ type InFlightOutput = {
 }
 
 type ManagedTerminal = {
+  attemptId: number
   pty: IPty
   state: TerminalState
   output: string
-  droppedOutputChars: number
+  paused: boolean
   nextSequence: number
   inFlight: InFlightOutput | undefined
   flushTimer: ReturnType<typeof setTimeout> | undefined
   exitEvent: TerminalExitEvent | undefined
 }
 
-const MAX_PENDING_OUTPUT_CHARS = 1_000_000
+const OUTPUT_HIGH_WATERMARK_CHARS = 64 * 1024
+const OUTPUT_LOW_WATERMARK_CHARS = 32 * 1024
 const OUTPUT_FLUSH_DELAY_MS = 16
 const terminals = new Map<string, ManagedTerminal>()
 const parentPort = (process as typeof process & { parentPort?: ParentPortLike }).parentPort
@@ -85,18 +87,16 @@ function handleRequest(raw: unknown): void {
   if (!isRuntimeRequest(raw)) return
   switch (raw.type) {
     case 'terminal.create':
-      createTerminal(raw.input)
+      createTerminal(raw.input, raw.attemptId)
       return
     case 'terminal.input':
-      terminals.get(raw.input.terminalId)?.pty.write(raw.input.data)
+      operateTerminal(raw.input.terminalId, (terminal) => terminal.pty.write(raw.input.data))
       return
-    case 'terminal.resize': {
-      const terminal = terminals.get(raw.input.terminalId)
-      if (terminal) terminal.pty.resize(normalizeDimension(raw.input.cols), normalizeDimension(raw.input.rows))
+    case 'terminal.resize':
+      operateTerminal(raw.input.terminalId, (terminal) => terminal.pty.resize(normalizeDimension(raw.input.cols), normalizeDimension(raw.input.rows)))
       return
-    }
     case 'terminal.kill':
-      destroyTerminal(raw.terminalId)
+      destroyTerminal(raw.terminalId, raw.attemptId)
       return
     case 'terminal.ack-output':
       acknowledgeOutput(raw.input)
@@ -108,10 +108,10 @@ function handleRequest(raw: unknown): void {
   }
 }
 
-function createTerminal(input: RuntimeTerminalCreateInput): void {
+function createTerminal(input: RuntimeTerminalCreateInput, attemptId: number): void {
   const existing = terminals.get(input.terminalId)
   if (existing) {
-    runtimePort?.postMessage({ type: 'terminal.created', state: existing.state })
+    runtimePort?.postMessage({ type: 'terminal.created', attemptId, state: existing.state })
     return
   }
   const profile = isTerminalProfile(input.profile) ? input.profile : 'default'
@@ -133,32 +133,33 @@ function createTerminal(input: RuntimeTerminalCreateInput): void {
       pid: pty.pid,
     }
     const managed: ManagedTerminal = {
+      attemptId,
       pty,
       state,
       output: '',
-      droppedOutputChars: 0,
+      paused: false,
       nextSequence: 1,
       inFlight: undefined,
       flushTimer: undefined,
       exitEvent: undefined,
     }
     terminals.set(input.terminalId, managed)
-    runtimePort?.postMessage({ type: 'terminal.created', state })
-    pty.onData((data) => enqueueOutput(input.terminalId, data))
+    runtimePort?.postMessage({ type: 'terminal.created', attemptId, state })
+    pty.onData((data) => {
+      if (terminals.get(input.terminalId) === managed) enqueueOutput(input.terminalId, data)
+    })
     pty.onExit(({ exitCode, signal }) => {
       const event: TerminalExitEvent = { terminalId: input.terminalId, exitCode, ...(signal === undefined ? {} : { signal }) }
-      const terminal = terminals.get(input.terminalId)
-      if (!terminal) {
-        runtimePort?.postMessage({ type: 'terminal.exit', event })
-        return
-      }
-      terminal.exitEvent = event
+      // kill 后同 ID 已创建新 PTY 时，旧实例的迟到事件不能修改新实例。
+      if (terminals.get(input.terminalId) !== managed) return
+      managed.exitEvent = event
       flushOutput(input.terminalId)
       emitExitWhenDrained(input.terminalId)
     })
   } catch (error) {
     runtimePort?.postMessage({
       type: 'terminal.error',
+      attemptId,
       terminalId: input.terminalId,
       message: error instanceof Error ? error.message : String(error),
     })
@@ -168,13 +169,12 @@ function createTerminal(input: RuntimeTerminalCreateInput): void {
 function enqueueOutput(terminalId: string, data: string): void {
   const terminal = terminals.get(terminalId)
   if (!terminal) return
-  const remaining = MAX_PENDING_OUTPUT_CHARS - terminal.output.length
-  if (remaining <= 0) {
-    terminal.droppedOutputChars += data.length
-    return
+  terminal.output += data
+  if (!terminal.paused && terminal.output.length >= OUTPUT_HIGH_WATERMARK_CHARS) {
+    // 暂停 PTY 读取，让内核背压限制生产者；不能任意截断 TUI 控制序列。
+    terminal.paused = true
+    terminal.pty.pause()
   }
-  if (data.length > remaining) terminal.droppedOutputChars += data.length - remaining
-  terminal.output += data.length > remaining ? data.slice(0, remaining) : data
   if (!terminal.flushTimer) {
     terminal.flushTimer = setTimeout(() => flushOutput(terminalId), OUTPUT_FLUSH_DELAY_MS)
   }
@@ -186,18 +186,14 @@ function flushOutput(terminalId: string): void {
   if (terminal.flushTimer) clearTimeout(terminal.flushTimer)
   terminal.flushTimer = undefined
   if (terminal.inFlight) return
-  if (!terminal.output && terminal.droppedOutputChars === 0) return
-  const lossMarker = terminal.droppedOutputChars > 0
-    ? `\r\n\x1b[33m[Proma：终端输出过快，已丢弃 ${terminal.droppedOutputChars} 个字符]\x1b[0m\r\n`
-    : ''
-  const data = terminal.output + lossMarker
-  terminal.output = ''
-  terminal.droppedOutputChars = 0
+  if (!terminal.output) return
+  const data = terminal.output.slice(0, OUTPUT_HIGH_WATERMARK_CHARS)
+  terminal.output = terminal.output.slice(data.length)
   const sequence = terminal.nextSequence
   terminal.nextSequence += 1
   terminal.inFlight = { sequence, data }
   const event: TerminalOutputEvent = { terminalId, sequence, data }
-  runtimePort?.postMessage({ type: 'terminal.output', event })
+  runtimePort?.postMessage({ type: 'terminal.output', attemptId: terminal.attemptId, event })
 }
 
 function acknowledgeOutput(input: TerminalOutputAck): void {
@@ -205,25 +201,42 @@ function acknowledgeOutput(input: TerminalOutputAck): void {
   if (!terminal?.inFlight || terminal.inFlight.sequence !== input.sequence) return
   terminal.inFlight = undefined
   flushOutput(input.terminalId)
+  if (terminal.paused && !terminal.exitEvent && terminal.output.length < OUTPUT_LOW_WATERMARK_CHARS) {
+    terminal.paused = false
+    terminal.pty.resume()
+  }
   emitExitWhenDrained(input.terminalId)
 }
 
 function emitExitWhenDrained(terminalId: string): void {
   const terminal = terminals.get(terminalId)
-  if (!terminal?.exitEvent || terminal.inFlight || terminal.output || terminal.droppedOutputChars > 0) return
+  if (!terminal?.exitEvent || terminal.inFlight || terminal.output) return
   terminals.delete(terminalId)
-  runtimePort?.postMessage({ type: 'terminal.exit', event: terminal.exitEvent })
+  runtimePort?.postMessage({ type: 'terminal.exit', attemptId: terminal.attemptId, event: terminal.exitEvent })
 }
 
-function destroyTerminal(terminalId: string): void {
+function destroyTerminal(terminalId: string, attemptId?: number): void {
   const terminal = terminals.get(terminalId)
-  if (!terminal) return
-  flushOutput(terminalId)
+  if (!terminal || (attemptId !== undefined && terminal.attemptId !== attemptId)) return
+  if (terminal.flushTimer) clearTimeout(terminal.flushTimer)
+  terminal.flushTimer = undefined
   terminals.delete(terminalId)
   try {
     terminal.pty.kill()
   } catch {
     // 进程已退出时 node-pty 可能抛错；终端生命周期在此收束即可。
+  }
+}
+
+function operateTerminal(terminalId: string, operation: (terminal: ManagedTerminal) => void): void {
+  const terminal = terminals.get(terminalId)
+  if (!terminal || terminal.exitEvent) return
+  try {
+    operation(terminal)
+  } catch (error) {
+    console.error('[TerminalRuntime] 终端操作失败：', error)
+    destroyTerminal(terminalId)
+    runtimePort?.postMessage({ type: 'terminal.exit', attemptId: terminal.attemptId, event: { terminalId, exitCode: -1 } })
   }
 }
 

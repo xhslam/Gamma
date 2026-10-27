@@ -37,6 +37,12 @@ import type { Api, KnownProvider, Model } from '@earendil-works/pi-ai/compat'
 import type { PiAgentQueryOptions } from './pi-agent-adapter'
 import { rememberXaiOAuthCredentials, refreshXaiOAuthCredentialsSerial } from '../xai-oauth-credentials'
 import { supportsPiDeveloperRole } from './pi-provider-compat'
+import { CodexModelStore } from './pi-codex-model-store'
+import {
+  createPiRequestProxyDispatcher,
+  installPiRequestProxyFetch,
+  runWithManagedPiRequestProxy,
+} from './pi-request-proxy'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 type PiAiCompat = typeof import('@earendil-works/pi-ai/compat')
@@ -857,9 +863,13 @@ function isSupportedCodexModel(model: Pick<PiCatalogModel, 'id'>): boolean {
     && !UNSUPPORTED_CODEX_MODEL_PREFIXES.some((prefix) => modelId === prefix || modelId.startsWith(`${prefix}-`))
 }
 
+/** 能力查询与会话恢复共用受管目录，避免在线新模型在 UI 中退回思考开关。 */
 export async function getCodexCatalogModels(): Promise<PiCatalogModel[]> {
   const { getModels } = await loadPiAiCompat()
-  return mergeCodexModels(getModels('openai-codex')).filter(isSupportedCodexModel)
+  const cached = await new CodexModelStore().read('openai-codex')
+  const models = new Map<string, PiCatalogModel>(getModels('openai-codex').map((model) => [model.id, model]))
+  for (const model of cached?.models ?? []) models.set(model.id, model)
+  return mergeCodexModels([...models.values()]).filter(isSupportedCodexModel)
 }
 
 /**
@@ -881,16 +891,17 @@ export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
       input.codexOAuthCredentials,
       input.onCodexOAuthCredentialsRefreshed,
     ),
+    modelsPath: null,
+    modelsStore: new CodexModelStore(),
     allowModelNetwork: false,
   })
 
   const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
-  const runtimeModels = modelRuntime.getModels('openai-codex').filter(isSupportedCodexModel)
-  const codexModels = await getCodexCatalogModels()
+  const runtimeModels = mergeCodexModels(modelRuntime.getModels('openai-codex')).filter(isSupportedCodexModel)
+  // ModelRuntime 已通过同一 store 恢复目录，不再独立读取默认缓存或混入另一份目录。
   const model = resolvedModelId
-    ? findCatalogModelById(codexModels, resolvedModelId)
-      ?? runtimeModels.find((candidate) => candidate.id === resolvedModelId)
-      ?? createCodexAstraFamilyModel(codexModels, resolvedModelId)
+    ? findCatalogModelById(runtimeModels, resolvedModelId)
+      ?? createCodexAstraFamilyModel(runtimeModels, resolvedModelId)
     : runtimeModels[0]
 
   if (!model) {
@@ -902,20 +913,45 @@ export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
   return { modelRuntime, model }
 }
 
-/**
- * List Codex models through Pi's availability abstraction. Codex currently uses
- * Pi's catalog, while a future provider-level subscription filter will be honored automatically.
- */
+/** 在线刷新仅针对 Codex；超时或失败时沿用 Pi 恢复的缓存和 Proma 补充目录。 */
+export async function refreshCodexModels(
+  modelRuntime: Pick<Awaited<ReturnType<PiSdk['ModelRuntime']['create']>>, 'refresh' | 'getAvailable'>,
+): Promise<PiCatalogModel[]> {
+  const result = await modelRuntime.refresh({
+    providers: ['openai-codex'],
+    allowNetwork: process.env.PI_OFFLINE === undefined,
+    force: true,
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (result.aborted || result.errors.has('openai-codex')) {
+    console.warn('[Codex 模型] 在线目录刷新失败，使用缓存或内置目录')
+  }
+  const available = await modelRuntime.getAvailable('openai-codex')
+  // 无可用认证时不能凭补充目录制造「可用模型」。
+  if (available.length === 0) return []
+  return mergeCodexModels(available).filter(isSupportedCodexModel)
+}
+
+/** 使用 Pi 在线目录检测模型，保持 OAuth 认证和请求代理的隔离边界。 */
 export async function listCodexModels(
   credentials: CodexOAuthCredentials,
+  proxyUrl?: string,
 ): Promise<{ id: string; name: string }[]> {
   const sdk = await import('@earendil-works/pi-coding-agent')
-  const modelRuntime = await sdk.ModelRuntime.create({
-    credentials: createCodexRuntimeCredentialStore(credentials),
-    allowModelNetwork: false,
-  })
-  return (await modelRuntime.getAvailable('openai-codex'))
-    .filter(isSupportedCodexModel)
+  installPiRequestProxyFetch()
+  const models = await runWithManagedPiRequestProxy(
+    createPiRequestProxyDispatcher({ proxyUrl }),
+    async () => {
+      const modelRuntime = await sdk.ModelRuntime.create({
+        credentials: createCodexRuntimeCredentialStore(credentials),
+        modelsPath: null,
+        modelsStore: new CodexModelStore(),
+        allowModelNetwork: false,
+      })
+      return refreshCodexModels(modelRuntime)
+    },
+  )
+  return models
     .map((model) => ({ id: model.id, name: model.name }))
 }
 

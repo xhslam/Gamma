@@ -79,6 +79,7 @@ import {
 } from './pi-message-adapter'
 import { DEFAULT_CONTEXT_WINDOW, buildModel } from './pi-model-registry'
 import { PendingPromptSkillActivationTracker } from './pi-skill-activation-tracker'
+import { PromaTaskProgressController, type PromaTaskItem } from './pi-task-progress'
 import { normalizePiToolResultDetails, serializePiToolResultPayload } from './pi-tool-result-json'
 import { createPiRetryTerminalGate, mapPiNativeRetryEvent } from './pi-retry-control'
 import {
@@ -210,15 +211,6 @@ interface PendingInterruptPrompt {
   skillActivationId?: number
   resolveAccepted: () => void
   rejectAccepted: (error: unknown) => void
-}
-
-interface PromaTaskItem {
-  id: string
-  subject: string
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'cancelled' | 'error' | 'deleted'
-  description?: string
-  activeForm?: string
-  blocks?: string[]
 }
 
 interface AssistantMessageState {
@@ -930,8 +922,11 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return items.length > 0 ? items : undefined
 }
 
-function buildPromaProductToolDefinitions(sdk: PiSdk, canUseTool: PiAgentQueryOptions['canUseTool']): ToolDefinition[] {
-  const tasks = new Map<string, PromaTaskItem>()
+export function buildPromaProductToolDefinitions(
+  sdk: Pick<PiSdk, 'defineTool'>,
+  canUseTool: PiAgentQueryOptions['canUseTool'],
+  tasks: Map<string, PromaTaskItem>,
+): ToolDefinition[] {
 
   const definitions = [
     sdk.defineTool({
@@ -1070,7 +1065,7 @@ function buildPromaProductToolDefinitions(sdk: PiSdk, canUseTool: PiAgentQueryOp
     sdk.defineTool({
       name: 'TaskList',
       label: '任务列表',
-      description: '列出当前 turn 中已创建的可见进度任务。',
+      description: '列出当前会话分支中已创建的可见进度任务。',
       promptSnippet: '列出可见进度任务。',
       parameters: Type.Object({
         reason: Type.Optional(Type.String({ description: '读取任务列表的原因。' })),
@@ -1082,7 +1077,7 @@ function buildPromaProductToolDefinitions(sdk: PiSdk, canUseTool: PiAgentQueryOp
     sdk.defineTool({
       name: 'TodoRead',
       label: '读取待办',
-      description: '读取当前 turn 的任务列表。兼容 Claude SDK 的 TodoRead。',
+      description: '读取当前会话分支的任务列表。兼容旧 TodoRead 调用。',
       promptSnippet: '读取当前待办列表。',
       parameters: Type.Object({}),
       async execute() {
@@ -1431,6 +1426,10 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       const sessionManager = sessionFile
         ? sdk.SessionManager.open(sessionFile, input.piSessionDir, cwd)
         : sdk.SessionManager.create(cwd, input.piSessionDir)
+      // 分支外的任务及失败调用不能成为当前进度；压缩不删除分支中的原始工具结果。
+      const taskProgress = new PromaTaskProgressController(sessionManager.getBranch()
+        .filter((entry) => entry.type === 'message')
+        .map((entry) => entry.message))
       const { modelRuntime, model } = await buildModel(sdk, input)
       const autoCompactionReserveTokens = calculatePiAutoCompactionReserveTokens(
         model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
@@ -1453,7 +1452,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           input.canUseTool,
           input.runtimeEnv,
         ),
-        ...buildPromaProductToolDefinitions(sdk, input.canUseTool),
+        ...buildPromaProductToolDefinitions(sdk, input.canUseTool, taskProgress.tasks),
         ...wrapCustomToolDefinitions(input.customTools, input.canUseTool),
       ]
 
@@ -1494,6 +1493,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           })
         : undefined
       const extensionFactories = [
+        taskProgress.createExtension(),
         ...(projectInstructionScope ? [projectInstructionScope.createExtension()] : []),
         ...(openAIReasoningProfile
           ? [createOpenAIReasoningRequestExtension({

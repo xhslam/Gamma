@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils'
 import type { ToolActivity } from '@/atoms/agent-atoms'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { TaskProgressCard } from './TaskProgressCard'
-import { aggregateTaskItems, getTaskProgressCounts, isTerminalTaskStatus, type TaskItem } from './task-progress'
+import { aggregateTaskItems, getTaskProgressCounts, type TaskItem } from './task-progress'
+import { getTaskProgressDisplay, hasConfirmedTaskProgressSnapshot, isSameTaskProgressRun, resolveTaskProgressRunIdentity, selectTaskProgressActivities, type TaskProgressRunIdentity } from './task-progress-overlay-state'
 
 const FINISH_RETENTION_MS = 4_000
 const FADE_OUT_DURATION_MS = 200
@@ -15,11 +16,6 @@ function taskSignature(items: TaskItem[]): string {
   return items
     .map((item) => `${item.id}:${item.status}:${item.subject}:${item.activeForm ?? ''}`)
     .join('|')
-}
-
-function getCurrentTask(items: TaskItem[]): TaskItem | undefined {
-  return [...items].reverse().find((item) => item.status === 'in_progress')
-    ?? [...items].reverse().find((item) => !isTerminalTaskStatus(item.status))
 }
 
 export interface ContextCompactionProgress {
@@ -33,6 +29,8 @@ interface TaskProgressOverlayProps {
   /** 仅当前 live turn 的任务工具活动，不传历史 turn。 */
   activities: ToolActivity[]
   streaming: boolean
+  runGeneration?: number
+  startedAt?: number
   /** 与 Agent 任务并列的系统级短时操作；当前用于上下文压缩。 */
   contextCompaction?: ContextCompactionProgress
 }
@@ -93,7 +91,7 @@ function CompactionProgressDetails({ progress }: { progress: ContextCompactionPr
  * 取代单独的“回到最下方”按钮：任务进行时展示单行进度，点击展开完整任务卡；
  * 无任务时自动退化为原箭头按钮。
  */
-export function TaskProgressOverlay({ activities, streaming, contextCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
+export function TaskProgressOverlay({ activities, streaming, runGeneration, startedAt, contextCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext()
   const liveItems = React.useMemo(
     () => aggregateTaskItems(activities, false),
@@ -101,23 +99,43 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
   )
   const liveSignature = taskSignature(liveItems)
   const hasLiveTasks = liveItems.length > 0
+  const hasLiveTaskSnapshot = hasConfirmedTaskProgressSnapshot(activities)
   const [retainedActivities, setRetainedActivities] = React.useState<ToolActivity[]>([])
   const [retainedSignature, setRetainedSignature] = React.useState('')
+  const [retainedRunIdentity, setRetainedRunIdentity] = React.useState<TaskProgressRunIdentity>({})
   const [retainedCompaction, setRetainedCompaction] = React.useState<ContextCompactionProgress | undefined>()
   const [retainedCompactionSignature, setRetainedCompactionSignature] = React.useState('')
   const [dismissedCompactionSignature, setDismissedCompactionSignature] = React.useState('')
   const [visible, setVisible] = React.useState(false)
   const [fading, setFading] = React.useState(false)
   const [open, setOpen] = React.useState(false)
+  const sameRetainedRun = isSameTaskProgressRun(retainedRunIdentity, { runGeneration, startedAt })
+
+  // 新一轮开始时清除上一轮反馈；首帧的 display 也检查代际，避免 effect 执行前短暂显示旧阶段。
+  React.useEffect(() => {
+    if (!sameRetainedRun) {
+      setRetainedActivities([])
+      setRetainedSignature('')
+      setFading(false)
+      setVisible(false)
+      setOpen(false)
+    }
+    const nextIdentity = resolveTaskProgressRunIdentity(retainedRunIdentity, { runGeneration, startedAt })
+    if (
+      nextIdentity.runGeneration !== retainedRunIdentity.runGeneration
+      || nextIdentity.startedAt !== retainedRunIdentity.startedAt
+    ) setRetainedRunIdentity(nextIdentity)
+  }, [sameRetainedRun, runGeneration, startedAt, retainedRunIdentity])
 
   // liveMessages 在收尾时会被清空；保留最后一份任务快照，才能完成 4 秒反馈。
   React.useEffect(() => {
-    if (!hasLiveTasks || liveSignature === retainedSignature) return
+    if (!hasLiveTaskSnapshot || (sameRetainedRun && liveSignature === retainedSignature)) return
     setRetainedActivities(activities)
     setRetainedSignature(liveSignature)
+    setRetainedRunIdentity((retained) => resolveTaskProgressRunIdentity(retained, { runGeneration, startedAt }))
     setFading(false)
-    setVisible(true)
-  }, [activities, hasLiveTasks, liveSignature, retainedSignature])
+    setVisible(hasLiveTasks)
+  }, [activities, hasLiveTasks, hasLiveTaskSnapshot, liveSignature, retainedSignature, sameRetainedRun, runGeneration, startedAt])
 
   const liveCompactionSignature = contextCompaction ? compactionSignature(contextCompaction) : ''
   React.useEffect(() => {
@@ -143,11 +161,9 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
     setVisible(hasLiveTasks)
   }, [streaming, contextCompaction, retainedCompaction, hasLiveTasks])
 
-  const displayActivities = hasLiveTasks ? activities : retainedActivities
-  const displayItems = hasLiveTasks
-    ? aggregateTaskItems(activities, !streaming)
-    : aggregateTaskItems(retainedActivities, !streaming)
-  const displaySignature = hasLiveTasks ? liveSignature : retainedSignature
+  const displayActivities = selectTaskProgressActivities(activities, retainedActivities, sameRetainedRun)
+  const displayItems = aggregateTaskItems(displayActivities, !streaming)
+  const displaySignature = hasLiveTaskSnapshot ? liveSignature : sameRetainedRun ? retainedSignature : ''
   const displayCompaction = contextCompaction ?? retainedCompaction
   // 上游每次 liveMessages 更新都会重建 progress 对象；超时 effect 必须依赖稳定签名，不能依赖对象引用。
   const displayCompactionSignature = displayCompaction ? compactionSignature(displayCompaction) : ''
@@ -192,7 +208,7 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
   }, [hasDisplayTasks, displayCompactionSignature, hideKey])
 
   const { completed: completedCount } = getTaskProgressCounts(displayItems)
-  const currentTask = getCurrentTask(displayItems)
+  const taskDisplay = getTaskProgressDisplay(displayItems, streaming)
   const showTaskProgress = visible && (hasDisplayTasks || !!displayCompaction)
 
   if (!showTaskProgress && isAtBottom) return null
@@ -234,14 +250,14 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
               </>
             ) : (
               <>
-                {currentTask?.status === 'in_progress'
+                {taskDisplay.running
                   ? <Loader2 className="size-3.5 shrink-0 animate-spin text-blue-500" />
                   : <ListTodo className="size-3.5 shrink-0 text-muted-foreground" />}
                 <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
                   {completedCount}/{displayItems.length}
                 </span>
                 <span className="truncate text-[13px] text-foreground/90">
-                  {currentTask?.activeForm ?? currentTask?.subject ?? '任务已完成'}
+                  {taskDisplay.label}
                 </span>
               </>
             )}

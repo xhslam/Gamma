@@ -1211,11 +1211,11 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     const terminalId = crypto.randomUUID()
     setTerminalTabsMap((previous) => {
       const next = new Map(previous)
-      next.set(sessionId, [...(next.get(sessionId) ?? []), { terminalId, title, cwd }])
+      next.set(sessionId, [...(next.get(sessionId) ?? []), { terminalId, title, cwd: cwd ?? sessionPath ?? undefined }])
       return next
     })
     handleWorkspaceTabChange(getTerminalSidePanelTab(terminalId))
-  }, [handleWorkspaceTabChange, sessionId, setTerminalTabsMap])
+  }, [handleWorkspaceTabChange, sessionId, sessionPath, setTerminalTabsMap])
 
   const handleOpenWorktreeTerminal = React.useCallback((worktree: WorktreeInfo) => {
     handleOpenTerminal(worktree.path, `终端 · ${worktree.branch}`)

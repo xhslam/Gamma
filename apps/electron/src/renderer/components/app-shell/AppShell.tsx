@@ -21,6 +21,7 @@ import { activeViewAtom } from '@/atoms/active-view'
 import { productivityToolsAtom } from '@/atoms/ui-preferences'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { WorkspaceMemoryChangeObserver } from '@/components/agent-skills/WorkspaceMemoryChangeObserver'
+import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleObserver'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
@@ -406,6 +407,7 @@ export function AppShell(): React.ReactElement {
               </div>
             )}
         </div>
+        <TerminalLifecycleObserver />
         {currentWorkspace && <WorkspaceMemoryChangeObserver workspaceSlug={currentWorkspace.slug} />}
         {settingsOpen && (
           <div className="absolute inset-0 z-[60]">

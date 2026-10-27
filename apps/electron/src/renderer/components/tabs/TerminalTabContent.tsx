@@ -1,192 +1,542 @@
 import * as React from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
-import type { TerminalOutputEvent } from '@proma/shared'
 import '@xterm/xterm/css/xterm.css'
-import { detectIsWindows } from '@/lib/platform'
+import { detectIsMac, detectIsWindows } from '@/lib/platform'
 import { getWindowsPtyOptions } from '@/lib/terminal-windows-pty'
+import { TerminalOutputStream } from '@/lib/terminal-output-stream'
+import { TerminalViewRegistry } from '@/lib/terminal-view-registry'
+import { getTerminalAppearanceOptions, TERMINAL_BACKGROUND } from '@/lib/terminal-theme'
+import { copyTextToClipboard } from '@/lib/clipboard'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 
 // 保持系统等宽字体的字形度量；仅在 Powerline 私有区字符缺字时回退到 Nerd Font。
 const TERMINAL_FONT_FALLBACKS = [
-  'ui-monospace',
-  'SFMono-Regular',
-  'Menlo',
-  'Monaco',
-  'Consolas',
-  '"MesloLGS NF"',
-  '"JetBrainsMono Nerd Font"',
-  '"JetBrains Mono Nerd Font"',
-  '"FiraCode Nerd Font"',
-  '"Fira Code Nerd Font"',
-  'monospace',
+  'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas',
+  '"MesloLGS NF"', '"JetBrainsMono Nerd Font"', '"JetBrains Mono Nerd Font"',
+  '"FiraCode Nerd Font"', '"Fira Code Nerd Font"', 'monospace',
 ].join(', ')
 
 export interface TerminalTabContentProps {
   terminalId: string
   sessionId: string
   cwd?: string
-  /** 右侧工作区切换 Agent 时由所属 Tab 的关闭动作统一终止 PTY。 */
+  /** 右侧工作区统一关闭 Tab；普通卸载只分离 DOM，不关闭 PTY/解析器。 */
   terminateOnUnmount?: boolean
 }
 
-/**
- * 每个 Terminal Tab 保有自己的 xterm 实例和滚动缓冲。父层仅切换 CSS visibility，
- * 因此切 Tab 不会销毁 PTY 或终端屏幕。
- */
+interface TerminalView {
+  sessionId: string
+  attach(host: HTMLElement, onError: (message: string | null) => void): () => void
+  dispose(): void
+  hasSelection(): boolean
+  copySelection(): Promise<void>
+  paste(): Promise<void>
+  selectAll(): void
+  clear(): void
+  onSelectionChange(listener: (hasSelection: boolean) => void): () => void
+}
+
+const terminalViews = new TerminalViewRegistry<TerminalView>()
+
+/** 对非当前会话的终端也保留解析器，确保 TUI 的 DSR/DA 查询始终能获得回应。 */
+export function retainTerminalViews(tabs: ReadonlyMap<string, readonly { terminalId: string; cwd?: string }[]>): void {
+  const retainedIds = new Set<string>()
+  for (const [sessionId, terminals] of tabs) {
+    for (const tab of terminals) {
+      retainedIds.add(tab.terminalId)
+      ensureTerminalView({ ...tab, sessionId })
+    }
+  }
+  terminalViews.retainOnly(retainedIds)
+}
+
+function ensureTerminalView(input: Pick<TerminalTabContentProps, 'terminalId' | 'sessionId' | 'cwd'>, initialHost?: HTMLElement): TerminalView {
+  return terminalViews.acquire(input.terminalId, input.sessionId, () => createTerminalView(input, initialHost))
+}
+
+/** 格式化终端中粘贴或拖放的文件路径，若包含空格或特殊字符则转义包裹，并添加尾部空格。 */
+export function formatTerminalPath(filePath: string): string {
+  if (/[\s'"\\$`!*?()[\]{}|&;<>]/.test(filePath)) {
+    return `'${filePath.replace(/'/g, `'\\''`)}' `
+  }
+  return `${filePath} `
+}
+
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const res = reader.result
+      if (typeof res === 'string') resolve(res)
+      else reject(new Error('FileReader 读取未返回 string'))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function createTerminalView({ terminalId, sessionId, cwd }: Pick<TerminalTabContentProps, 'terminalId' | 'sessionId' | 'cwd'>, initialHost?: HTMLElement): TerminalView {
+  const element = document.createElement('div')
+  element.className = 'h-full min-h-0 w-full min-w-0'
+  initialHost?.appendChild(element)
+  const terminal = new Terminal({
+    cursorBlink: true,
+    disableStdin: true,
+    // PTY 的换行由 termios/CLI 控制；将 LF 强制变为 CRLF 会破坏 TUI 的相对光标重绘。
+    convertEol: false,
+    reflowCursorLine: false,
+    fontFamily: TERMINAL_FONT_FALLBACKS,
+    fontSize: 13,
+    lineHeight: 1.25,
+    scrollback: 5_000,
+    windowsPty: detectIsWindows() ? getWindowsPtyOptions() : undefined,
+    ...getTerminalAppearanceOptions(),
+  })
+  const fitAddon = new FitAddon()
+  terminal.loadAddon(fitAddon)
+  terminal.open(element)
+  let disposed = false
+  let ptyCreated = false
+  let exited = false
+  let restored = false
+  let pendingExitCode: number | undefined
+  let host: HTMLElement | undefined = initialHost
+  let errorMessage: string | null = null
+  let errorListener: ((message: string | null) => void) | undefined
+  let dimensions: { cols: number; rows: number } | undefined
+  let fitFrame = 0
+  let attachmentGeneration = 0
+  let pasteTail = Promise.resolve()
+  const selectionListeners = new Set<(hasSelection: boolean) => void>()
+
+  const reportError = (prefix: string, error: unknown): void => {
+    if (disposed) return
+    errorMessage = `${prefix}：${error instanceof Error ? error.message : String(error)}`
+    errorListener?.(errorMessage)
+  }
+  const fit = (): void => {
+    if (disposed || !host || host.clientWidth <= 0 || host.clientHeight <= 0 || host.offsetParent === null) return
+    try {
+      fitAddon.fit()
+      const { cols, rows } = terminal
+      if (ptyCreated && !exited && cols > 0 && rows > 0 && (dimensions?.cols !== cols || dimensions.rows !== rows)) {
+        dimensions = { cols, rows }
+        void window.electronAPI.resizeTerminal({ terminalId, cols, rows }).catch((error: unknown) => reportError('终端尺寸同步失败', error))
+      }
+    } catch {
+      // 字体尚未完成测量时等待下一次布局变化。
+    }
+  }
+  const resizeObserver = new ResizeObserver(fit)
+  const output = new TerminalOutputStream({
+    write: (data, callback) => terminal.write(data, callback),
+    onParsed: (sequence) => window.electronAPI.acknowledgeTerminalOutput({ terminalId, sequence }),
+    onError: (error) => {
+      terminal.options.disableStdin = true
+      reportError('终端渲染失败，请关闭此标签后新建终端', error)
+    },
+  })
+  const showExit = (exitCode: number): void => {
+    terminal.options.disableStdin = true
+    output.writeStatus(`\r\n\x1b[90m终端已退出（${exitCode}），请新建终端\x1b[0m\r\n`)
+  }
+  const finishRestore = (): void => {
+    if (disposed) return
+    restored = true
+    terminal.options.disableStdin = exited
+    if (pendingExitCode !== undefined) showExit(pendingExitCode)
+    // 异步恢复不能抢走用户在其他输入框或另一个 Pane 的焦点。
+  }
+  const disposeInput = terminal.onData((data) => {
+    if (disposed || exited) return
+    void window.electronAPI.writeTerminal({ terminalId, data }).catch((error: unknown) => reportError('终端输入失败', error))
+  })
+  const disposeOutput = window.electronAPI.onTerminalOutput((event) => {
+    if (event.terminalId === terminalId) output.push(event)
+  })
+  const disposeExit = window.electronAPI.onTerminalExit((event) => {
+    if (event.terminalId !== terminalId) return
+    exited = true
+    terminal.options.disableStdin = true
+    if (restored) showExit(event.exitCode)
+    else pendingExitCode = event.exitCode
+  })
+
+  // ===== 剪贴板统一处理（文字、图片、复制文件） =====
+
+  const readFilePaths = async (files: readonly File[]): Promise<string> => {
+    const paths: string[] = []
+    for (const file of files) {
+      let diskPath = ''
+      try {
+        diskPath = window.electronAPI.getPathForFile(file)
+      } catch {
+        // 剪贴板图片通常没有原始磁盘路径，继续暂存图片。
+      }
+      if (diskPath) paths.push(diskPath)
+      else if (file.type.startsWith('image/')) {
+        const data = await fileToBase64(file)
+        const result = await window.electronAPI.saveTerminalPastedImage({ data, mimeType: file.type })
+        if (result.filePath) paths.push(result.filePath)
+      }
+    }
+    return paths.map(formatTerminalPath).join('')
+  }
+
+  const readSystemClipboard = async (): Promise<string> => {
+    const content = await window.electronAPI.getTerminalClipboardContent()
+    if (content.type === 'image' && content.filePath) return formatTerminalPath(content.filePath)
+    if (content.type === 'files' && content.filePaths) return content.filePaths.map(formatTerminalPath).join('')
+    if (content.type === 'text' && content.text) return content.text
+    return ''
+  }
+
+  const enqueuePaste = (content: Promise<string>): Promise<void> => {
+    const generation = attachmentGeneration
+    // 立即读取本次剪贴板，但按触发顺序提交；不阻塞 onData 中的 DSR/DA 等协议回复。
+    const settled = content.then<PromiseSettledResult<string>, PromiseSettledResult<string>>(
+      (value) => ({ status: 'fulfilled', value }),
+      (reason: unknown) => ({ status: 'rejected', reason }),
+    )
+    terminal.focus()
+    pasteTail = pasteTail.then(async () => {
+      const result = await settled
+      if (disposed || exited || !host || generation !== attachmentGeneration) return
+      if (result.status === 'rejected') {
+        reportError('终端粘贴失败', result.reason)
+        return
+      }
+      // 光标由 CLI 处理 bracketed paste 后定位；异步完成不能抢走其他输入框的焦点。
+      if (result.value) {
+        terminal.paste(result.value)
+        if (errorMessage?.startsWith('终端粘贴失败：')) {
+          errorMessage = null
+          errorListener?.(null)
+        }
+      }
+    }).catch((error: unknown) => reportError('终端粘贴失败', error))
+    return pasteTail
+  }
+
+  const handleTerminalPaste = (event?: ClipboardEvent): Promise<void> => {
+    if (disposed || exited || !restored || !host) return Promise.resolve()
+    // 在事件有效期内拍下 files/text，不能等前一张图片保存完成后再读剪贴板。
+    const files = Array.from(event?.clipboardData?.files ?? [])
+    const plainText = event?.clipboardData?.getData('text/plain') ?? ''
+    const content = (async (): Promise<string> => {
+      if (files.length > 0) {
+        try {
+          const paths = await readFilePaths(files)
+          return paths || plainText
+        } catch (error) {
+          // 只能使用本次事件的文本兜底；此时系统剪贴板可能已经变成下一次复制的内容。
+          if (!plainText) throw error
+          return plainText
+        }
+      }
+      return plainText || readSystemClipboard()
+    })()
+    return enqueuePaste(content)
+  }
+
+  const handleCopySelection = async (): Promise<void> => {
+    if (disposed) return
+    const selection = terminal.getSelection()
+    terminal.focus()
+    if (selection) {
+      await copyTextToClipboard(selection)
+    }
+  }
+
+  // 监听选区变化通知 UI 更新复制按钮禁用态
+  const disposeSelection = terminal.onSelectionChange(() => {
+    const has = terminal.hasSelection()
+    for (const listener of selectionListeners) {
+      listener(has)
+    }
+  })
+
+  // 快捷键拦截：保证各平台的 Cmd+C / Cmd+V / Ctrl+Shift+C / Ctrl+Shift+V / Ctrl+V 正确生效
+  terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+    if (event.type !== 'keydown') return true
+
+    const isMacPlatform = detectIsMac()
+
+    // 复制快捷键
+    const isCopyShortcut =
+      (isMacPlatform && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && (event.key === 'c' || event.key === 'C')) ||
+      (!isMacPlatform && event.ctrlKey && event.shiftKey && (event.key === 'c' || event.key === 'C')) ||
+      (!isMacPlatform && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.key === 'c' || event.key === 'C') && terminal.hasSelection())
+
+    if (isCopyShortcut) {
+      if (terminal.hasSelection()) {
+        event.preventDefault()
+        event.stopPropagation()
+        void handleCopySelection()
+        return false
+      }
+      if (isMacPlatform) return false
+    }
+
+    // 粘贴快捷键：macOS 为 Cmd+V 与 Ctrl+Shift+V；Windows/Linux 为 Ctrl+V、Ctrl+Shift+V 与 Shift+Insert
+    const isPasteShortcut =
+      (isMacPlatform && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && (event.key === 'v' || event.key === 'V')) ||
+      (event.ctrlKey && event.shiftKey && (event.key === 'v' || event.key === 'V')) ||
+      (!isMacPlatform && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.key === 'v' || event.key === 'V')) ||
+      (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Insert')
+
+    if (isPasteShortcut) {
+      // return false 只取消 xterm 键处理，必须同时取消浏览器原生 paste。
+      event.preventDefault()
+      event.stopPropagation()
+      void handleTerminalPaste()
+      return false
+    }
+
+    // 全选快捷键
+    const isSelectAllShortcut =
+      (isMacPlatform && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && (event.key === 'a' || event.key === 'A')) ||
+      (!isMacPlatform && event.ctrlKey && event.shiftKey && (event.key === 'a' || event.key === 'A'))
+
+    if (isSelectAllShortcut) {
+      event.preventDefault()
+      event.stopPropagation()
+      terminal.selectAll()
+      return false
+    }
+
+    return true
+  })
+
+  // DOM 粘贴事件监听（响应原生应用菜单角色 paste 触发）
+  const handlePasteEvent = (e: ClipboardEvent): void => {
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    void handleTerminalPaste(e)
+  }
+  // 必须在捕获阶段接管，否则 textarea 内的 xterm 监听会先粘贴并停止冒泡。
+  element.addEventListener('paste', handlePasteEvent, true)
+
+  // 拖拽文件到终端自动贴入路径
+  const handleDragOver = (e: DragEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy'
+    }
+  }
+
+  const handleDrop = (e: DragEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (disposed || exited || !restored || !host) return
+
+    const files = Array.from(e.dataTransfer?.files || [])
+    if (files.length === 0) return
+
+    void enqueuePaste(readFilePaths(files))
+  }
+
+  element.addEventListener('dragover', handleDragOver)
+  element.addEventListener('drop', handleDrop)
+
+  // 首次可见挂载先测量真实行列，避免 ConPTY 从 80×24 重排交互光标。
+  fit()
+  dimensions = { cols: terminal.cols, rows: terminal.rows }
+  const creation = window.electronAPI.createTerminal({ terminalId, sessionId, cwd, cols: terminal.cols, rows: terminal.rows })
+  void (async () => {
+    try {
+      await creation
+      if (disposed) return
+      ptyCreated = true
+      fit()
+      try {
+        const snapshot = await window.electronAPI.getTerminalSnapshot(terminalId)
+        if (disposed) return
+        if (snapshot.exitCode !== undefined) {
+          exited = true
+          pendingExitCode = snapshot.exitCode
+        }
+        // 每个 PTY 只恢复一次。首次恢复时尚无解析器回应过查询，必须允许协议回应。
+        terminal.options.disableStdin = exited
+        output.restore(snapshot.output, snapshot.sequence, finishRestore)
+      } catch (error) {
+        if (disposed) return
+        reportError('终端历史恢复失败，已继续接收实时输出', error)
+        terminal.options.disableStdin = exited
+        output.restore('', 0, finishRestore)
+      }
+    } catch (error) {
+      if (disposed) return
+      reportError('无法启动终端，请关闭此标签后重试', error)
+      output.restore('', 0)
+    }
+  })()
+
+  return {
+    sessionId,
+    attach(nextHost, onError) {
+      attachmentGeneration++
+      pasteTail = Promise.resolve()
+      host = nextHost
+      errorListener = onError
+      onError(errorMessage)
+      nextHost.appendChild(element)
+      resizeObserver.disconnect()
+      resizeObserver.observe(nextHost)
+      fit()
+      fitFrame = requestAnimationFrame(fit)
+      // 鼠标进入空白区域也应将焦点交给当前终端。
+      const focus = (): void => terminal.focus()
+      nextHost.addEventListener('pointerdown', focus)
+      return () => {
+        nextHost.removeEventListener('pointerdown', focus)
+        if (host !== nextHost) return
+        attachmentGeneration++
+        pasteTail = Promise.resolve()
+        host = undefined
+        errorListener = undefined
+        resizeObserver.disconnect()
+        cancelAnimationFrame(fitFrame)
+        element.remove()
+        terminal.blur()
+      }
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      element.removeEventListener('paste', handlePasteEvent, true)
+      element.removeEventListener('dragover', handleDragOver)
+      element.removeEventListener('drop', handleDrop)
+      resizeObserver.disconnect()
+      cancelAnimationFrame(fitFrame)
+      output.dispose()
+      disposeInput.dispose()
+      disposeOutput()
+      disposeExit()
+      disposeSelection.dispose()
+      selectionListeners.clear()
+      terminal.dispose()
+      element.remove()
+      host = undefined
+      errorListener = undefined
+    },
+    hasSelection() {
+      return terminal.hasSelection()
+    },
+    copySelection() {
+      return handleCopySelection()
+    },
+    paste() {
+      return handleTerminalPaste()
+    },
+    selectAll() {
+      terminal.selectAll()
+      terminal.focus()
+    },
+    clear() {
+      terminal.clear()
+      terminal.focus()
+    },
+    onSelectionChange(listener) {
+      selectionListeners.add(listener)
+      return () => {
+        selectionListeners.delete(listener)
+      }
+    },
+  }
+}
+
+/** UI 卸载只分离 DOM；解析资源由全部终端 Tab 的生命周期统一回收。 */
 export function TerminalTabContent({ terminalId, sessionId, cwd, terminateOnUnmount = true }: TerminalTabContentProps): React.ReactElement {
   const hostRef = React.useRef<HTMLDivElement>(null)
-  const terminalRef = React.useRef<Terminal>()
-  const fitAddonRef = React.useRef<FitAddon>()
-  const lastPtyDimensionsRef = React.useRef<{ cols: number; rows: number }>()
-  // StrictMode 会模拟一次卸载再挂载；用单调 generation 区分真实关闭与这次重挂载。
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
+  const [hasSelection, setHasSelection] = React.useState(false)
   const lifecycleGenerationRef = React.useRef(0)
+  const activeViewRef = React.useRef<TerminalView | null>(null)
+  const isMac = detectIsMac()
 
   React.useEffect(() => {
     const host = hostRef.current
     if (!host) return
-    const lifecycleGeneration = ++lifecycleGenerationRef.current
-    const terminal = new Terminal({
-      cursorBlink: true,
-      convertEol: true,
-      // ConPTY 已经负责终端行布局；固定保守 build 让 xterm.js 使用 Windows 的
-      // 兼容路径，避免 resize 或输入回车时与 ConPTY 重复重排而导致光标上跳。
-      reflowCursorLine: false,
-      fontFamily: TERMINAL_FONT_FALLBACKS,
-      fontSize: 13,
-      lineHeight: 1.25,
-      scrollback: 5_000,
-      windowsPty: detectIsWindows() ? getWindowsPtyOptions() : undefined,
-      theme: {
-        background: '#111113',
-        foreground: '#e6e6e9',
-        cursor: '#e6e6e9',
-        selectionBackground: '#3f3f46',
-      },
-    })
-    const fitAddon = new FitAddon()
-    terminal.loadAddon(fitAddon)
-    terminal.open(host)
-    terminalRef.current = terminal
-    fitAddonRef.current = fitAddon
-    let ptyCreated = false
-    const fit = (): void => {
-      try {
-        // 不可见的 Tab 会得到 0×0；禁止把 PTY 缩成 FitAddon 的最小 2×1，
-        // 否则 Windows ConPTY 会重排屏幕并让交互光标跳动。
-        if (host.clientWidth <= 0 || host.clientHeight <= 0 || host.offsetParent === null) return
-
-        fitAddon.fit()
-        const { cols, rows } = terminal
-        const previous = lastPtyDimensionsRef.current
-        if (ptyCreated && cols > 0 && rows > 0 && (previous?.cols !== cols || previous.rows !== rows)) {
-          lastPtyDimensionsRef.current = { cols, rows }
-          void window.electronAPI.resizeTerminal({ terminalId, cols, rows }).catch(console.error)
-        }
-      } catch {
-        // 终端字体尚未完成测量时忽略；下一次布局变化会再次尝试。
-      }
-    }
-    const resizeObserver = new ResizeObserver(fit)
-    resizeObserver.observe(host)
-    // 同步完成首帧测量，创建 PTY 时直接使用真实行列，避免 Windows 首次 80×24 → 实际尺寸的重排。
-    fit()
-    requestAnimationFrame(fit)
-
-    let disposed = false
-    let restoring = true
-    let lastRenderedSequence = 0
-    const pendingOutput: TerminalOutputEvent[] = []
-    const acknowledge = (sequence: number): void => {
-      if (sequence > 0) window.electronAPI.acknowledgeTerminalOutput({ terminalId, sequence })
-    }
-    const renderOutput = (event: TerminalOutputEvent): void => {
-      if (event.sequence <= lastRenderedSequence) {
-        acknowledge(event.sequence)
-        return
-      }
-      terminal.write(event.data, () => {
-        if (disposed) return
-        lastRenderedSequence = event.sequence
-        acknowledge(event.sequence)
-      })
-    }
-    const flushPendingOutput = (): void => {
-      pendingOutput.sort((left, right) => left.sequence - right.sequence)
-      for (const event of pendingOutput.splice(0)) renderOutput(event)
-    }
-
-    const disposeInput = terminal.onData((data) => {
-      void window.electronAPI.writeTerminal({ terminalId, data }).catch(console.error)
-    })
-    const disposeOutput = window.electronAPI.onTerminalOutput((event) => {
-      if (event.terminalId !== terminalId) return
-      if (restoring) pendingOutput.push(event)
-      else renderOutput(event)
-    })
-    const disposeExit = window.electronAPI.onTerminalExit((event) => {
-      if (event.terminalId === terminalId) terminal.write(`\r\n\x1b[90m终端已退出（${event.exitCode}）\x1b[0m\r\n`)
-    })
-
-    let creation: Promise<unknown> | undefined
-    const create = async (): Promise<void> => {
-      try {
-        const initialCols = Math.max(terminal.cols, 1)
-        const initialRows = Math.max(terminal.rows, 1)
-        lastPtyDimensionsRef.current = { cols: initialCols, rows: initialRows }
-        creation = window.electronAPI.createTerminal({
-          terminalId,
-          sessionId,
-          cwd,
-          cols: initialCols,
-          rows: initialRows,
-        })
-        await creation
-        if (disposed) return
-        ptyCreated = true
-        fit()
-        const snapshot = await window.electronAPI.getTerminalSnapshot(terminalId)
-        terminal.write(snapshot.output, () => {
-          if (disposed) return
-          lastRenderedSequence = snapshot.sequence
-          acknowledge(snapshot.sequence)
-          restoring = false
-          flushPendingOutput()
-          terminal.focus()
-        })
-      } catch (error) {
-        if (disposed) return
-        restoring = false
-        terminal.write(`\r\n\x1b[31m无法启动终端：${error instanceof Error ? error.message : String(error)}\x1b[0m\r\n`)
-      }
-    }
-    void create()
+    const generation = ++lifecycleGenerationRef.current
+    const view = ensureTerminalView({ terminalId, sessionId, cwd }, host)
+    activeViewRef.current = view
+    const detach = view.attach(host, setErrorMessage)
+    const unsubSelection = view.onSelectionChange(setHasSelection)
+    setHasSelection(view.hasSelection())
 
     return () => {
-      disposed = true
-      resizeObserver.disconnect()
-      disposeInput.dispose()
-      disposeOutput()
-      disposeExit()
-      terminal.dispose()
-      terminalRef.current = undefined
-      fitAddonRef.current = undefined
-      if (terminateOnUnmount) {
-        const killIfStillUnmounted = (): void => {
-          if (lifecycleGenerationRef.current === lifecycleGeneration) {
-            void window.electronAPI.killTerminal(terminalId).catch(console.error)
-          }
-        }
-        // If creation is still pending, wait until it settles so the main process can
-        // cancel the newly created PTY instead of leaking it during a real unmount.
-        if (creation) void creation.then(killIfStillUnmounted, killIfStillUnmounted)
-        else killIfStillUnmounted()
-      }
+      unsubSelection()
+      detach()
+      activeViewRef.current = null
+      if (terminateOnUnmount) queueMicrotask(() => {
+        if (lifecycleGenerationRef.current !== generation) return
+        terminalViews.remove(terminalId)
+        void window.electronAPI.killTerminal(terminalId).catch(console.error)
+      })
     }
   }, [cwd, sessionId, terminalId, terminateOnUnmount])
 
+  const handleCopy = React.useCallback(async () => {
+    await activeViewRef.current?.copySelection()
+  }, [])
+
+  const handlePaste = React.useCallback(async () => {
+    await activeViewRef.current?.paste()
+  }, [])
+
+  const handleSelectAll = React.useCallback(() => {
+    activeViewRef.current?.selectAll()
+  }, [])
+
+  const handleClear = React.useCallback(() => {
+    activeViewRef.current?.clear()
+  }, [])
+
   return (
-    <div className="h-full w-full overflow-hidden bg-[#111113] p-2">
-      <div ref={hostRef} className="h-full min-h-0 w-full min-w-0" />
-    </div>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="flex h-full w-full flex-col overflow-hidden p-2 titlebar-no-drag" style={{ backgroundColor: TERMINAL_BACKGROUND, textShadow: 'none' }}>
+          {errorMessage && <div role="alert" className="mb-2 shrink-0 rounded-md bg-destructive/15 px-3 py-2 text-xs text-destructive">{errorMessage}</div>}
+          <div ref={hostRef} className="min-h-0 w-full min-w-0 flex-1" />
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44 min-w-0 p-1">
+        <ContextMenuItem
+          disabled={!hasSelection}
+          onSelect={handleCopy}
+        >
+          复制
+          <ContextMenuShortcut>{isMac ? '⌘C' : 'Ctrl+Shift+C'}</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem
+          onSelect={handlePaste}
+        >
+          粘贴
+          <ContextMenuShortcut>{isMac ? '⌘V' : 'Ctrl+V'}</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          onSelect={handleSelectAll}
+        >
+          全选
+          <ContextMenuShortcut>{isMac ? '⌘A' : 'Ctrl+Shift+A'}</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem
+          onSelect={handleClear}
+        >
+          清屏
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

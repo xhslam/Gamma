@@ -305,7 +305,7 @@ export function buildTaskProgressData(
     }
   }
 
-  const toolResultMap = new Map<string, string>()
+  const toolResultMap = new Map<string, { result?: string; isError: boolean }>()
   for (const msg of turnMessages) {
     if (msg.type !== 'user') continue
     const userMsg = msg as SDKUserMessage
@@ -315,7 +315,8 @@ export function buildTaskProgressData(
       if (b.type === 'tool_result') {
         const rb = b as SDKToolResultBlock
         const text = extractToolResultForTask(userMsg, rb)
-        if (text) toolResultMap.set(rb.tool_use_id, text)
+        // 空文本也是已结束的工具结果；错误结果不能被当成已确认的任务状态变更。
+        toolResultMap.set(rb.tool_use_id, { result: text, isError: rb.is_error ?? false })
       }
     }
   }
@@ -324,8 +325,9 @@ export function buildTaskProgressData(
     toolUseId: tb.id,
     toolName: tb.name,
     input: tb.input as Record<string, unknown>,
-    result: toolResultMap.get(tb.id),
-    done: true,
+    result: toolResultMap.get(tb.id)?.result,
+    isError: toolResultMap.get(tb.id)?.isError,
+    done: toolResultMap.has(tb.id),
   }))
 
   return { taskActivities, firstTaskIndex }
