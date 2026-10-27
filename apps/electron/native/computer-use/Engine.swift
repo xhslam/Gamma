@@ -353,7 +353,8 @@ final class Engine {
                         if ["type", "key"].contains(p.action.kind) {
                             let frontApp = NSWorkspace.shared.frontmostApplication
                             let actualFocus = try? ax.focusedElement()
-                            guard frontApp?.processIdentifier == app.pid, let expected = binding.element, let actual = actualFocus, CFEqual(actual, expected) else {
+                            let focusMatches = (binding.window == nil && frontApp?.processIdentifier == app.pid) || (binding.element != nil && actualFocus != nil && CFEqual(actualFocus!, binding.element!))
+                            guard frontApp?.processIdentifier == app.pid, focusMatches else {
                                 writeNativeComputerUseLog(
                                     location: "Engine.swift:perform:validate_focus",
                                     action: p.action.kind,

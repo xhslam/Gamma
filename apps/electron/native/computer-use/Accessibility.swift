@@ -37,13 +37,18 @@ final class AccessibilityWorker {
         var result: CFTypeRef?
         let error = AXUIElementCopyAttributeValue(element, name as CFString, &result)
         if error == .cannotComplete { throw NativeFailure("ax-timeout", "AX目标无响应") }
-        if error == .attributeUnsupported || error == .noValue { return nil }
-        guard error == .success else { throw NativeFailure("ax-read", "AX属性读取失败") }
-        return result
+        if error == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限未就绪或已被撤回", permission: "accessibility") }
+        if error == .success { return result }
+        return nil
     }
     private func string(_ element: AXUIElement, _ name: String) throws -> String? {
         guard let raw = try value(element, name) else { return nil }
-        return raw as? String
+        if let str = raw as? String { return str }
+        if CFGetTypeID(raw) == CFAttributedStringGetTypeID() {
+            let attr = unsafeBitCast(raw, to: CFAttributedString.self)
+            return (CFAttributedStringGetString(attr) as String)
+        }
+        return nil
     }
     private func rect(_ element: AXUIElement) throws -> CGRect? {
         guard let rawPosition = try value(element, kAXPositionAttribute), let rawSize = try value(element, kAXSizeAttribute),
@@ -62,18 +67,31 @@ final class AccessibilityWorker {
         if AXUIElementCopyAttributeValues(app, kAXWindowsAttribute as CFString, 0, 129, &raw) == .success, let windows = raw as? [AXUIElement], windows.count <= 128 {
             for window in windows {
                 var pid: pid_t = 0
-                guard AXUIElementGetPid(window, &pid) == .success, pid == target.pid,
-                      let frame = try rect(window), frame == target.bounds.cg else { continue }
-                matches.append(window)
+                guard AXUIElementGetPid(window, &pid) == .success, pid == target.pid else { continue }
+                var wid: CGWindowID = 0
+                if _AXUIElementGetWindow(window, &wid) == .success, wid != 0, wid == target.windowId {
+                    return window
+                }
+                if let frame = try? rect(window), frame == target.bounds.cg {
+                    matches.append(window)
+                }
             }
         }
         if matches.count == 1 { return matches[0] }
         if let focusedRaw = try? value(app, kAXFocusedWindowAttribute), CFGetTypeID(focusedRaw) == AXUIElementGetTypeID() {
             let focusedWin = unsafeBitCast(focusedRaw, to: AXUIElement.self)
             var pid: pid_t = 0
-            if AXUIElementGetPid(focusedWin, &pid) == .success, pid == target.pid,
-               let frame = try? rect(focusedWin), frame == target.bounds.cg {
-                return focusedWin
+            if AXUIElementGetPid(focusedWin, &pid) == .success, pid == target.pid {
+                var wid: CGWindowID = 0
+                if _AXUIElementGetWindow(focusedWin, &wid) == .success, wid != 0, wid == target.windowId {
+                    return focusedWin
+                }
+                if let frame = try? rect(focusedWin), frame == target.bounds.cg {
+                    return focusedWin
+                }
+                if matches.isEmpty, let frame = try? rect(focusedWin), frame.width > 1, frame.height > 1 {
+                    return focusedWin
+                }
             }
         }
         guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与目标窗口不是唯一PID、几何匹配") }
@@ -84,10 +102,12 @@ final class AccessibilityWorker {
         var raw: CFArray?
         let result = AXUIElementCopyActionNames(element, &raw)
         if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX动作枚举超时，不重试") }
-        if result == .actionUnsupported || result == .attributeUnsupported || result == .noValue { return [] }
-        guard result == .success, let names = raw as? [String], names.count <= 64,
-              names.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 }) else { throw NativeFailure("ax-actions", "AX动作枚举失败或超过预算") }
-        return names.sorted()
+        if result == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限未就绪或已被撤回", permission: "accessibility") }
+        if result == .success, let names = raw as? [String], names.count <= 64,
+           names.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 }) {
+            return names.sorted()
+        }
+        return []
     }
     func read(_ target: Target, allowSurfaces: Bool = false) throws -> AXTree {
         let root = try matchedWindow(target)
@@ -181,6 +201,7 @@ final class AccessibilityWorker {
             if let raw = try? value(app, kAXFocusedWindowAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() {
                 return unsafeBitCast(raw, to: AXUIElement.self)
             }
+            return app
         }
         writeNativeComputerUseLog(location: "Accessibility.swift:focusedElement:no_focused_element", rawError: "无法识别实际焦点控件", errorCode: "unsafe-focus")
         throw NativeFailure("unsafe-focus", "无法识别实际焦点控件")
@@ -246,9 +267,9 @@ final class AccessibilityWorker {
         var settable = DarwinBoolean(false)
         let result = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
         if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX可写检查超时，不重试") }
-        if result == .attributeUnsupported || result == .noValue { return false }
-        guard result == .success else { throw NativeFailure("ax-capability", "无法确认AX属性可写能力") }
-        return settable.boolValue
+        if result == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限未就绪或已被撤回", permission: "accessibility") }
+        if result == .success { return settable.boolValue }
+        return false
     }
     private func requireSettable(_ element: AXUIElement, _ attribute: String) throws {
         guard try attributeSettable(element, attribute) else { throw NativeFailure("unsupported-action", "控件不支持设置所需AX属性") }

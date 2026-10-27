@@ -556,7 +556,18 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
             )
             throw NativeFailure("unsafe-focus", "焦点不属于可授权的前台应用")
         }
-        window = try ax.windowForFocused(pid, windows: windows)
+        let focusedWin = try? ax.windowForFocused(pid, windows: windows)
+        if let focusedWin = focusedWin {
+            window = focusedWin
+        } else if action.kind == "key" {
+            // 当目标应用处于无窗口状态（如冷启动仅有菜单栏），允许向该前台应用直接发送快捷键（如 cmd+n 新建窗口）
+            try validateBundleConstraint(action.bundleId, actual: originalApp.bundleId)
+            let app = try appIdentity(originalApp.pid)
+            try validateBundleConstraint(action.bundleId, actual: app.bundleId)
+            return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: app.name, bundleId: app.bundleId, window: nil, element: element, context: ElementContext(role: "AXApplication", subrole: nil, title: app.name, description: nil, isSecure: false, isTrustedSearch: false), elementBounds: nil, layoutDigest: nil, insertionState: nil, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil, scrollPoint: nil)
+        } else {
+            window = try ax.windowForFocused(pid, windows: windows)
+        }
     } else {
         guard let x = action.startX ?? action.x, let y = action.startY ?? action.y else { throw NativeFailure("invalid-coordinate", "缺少动作坐标") }
         let point = try snapshot.point(x: x, y: y)
