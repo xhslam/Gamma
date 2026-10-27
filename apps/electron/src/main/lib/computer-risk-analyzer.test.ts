@@ -180,20 +180,21 @@ describe('Given AX 原生动作与工具动作的同等风险边界', () => {
     }
   })
 
-  test('When 未知、缺失或仅知道动作名称但无法确定副作用 Then 宽松模式仍确认且不回显参数', () => {
+  test('When 辅助动作含义未知 Then 宽松模式仍确认；常规动作仅因缺少控件角色不再重复确认', () => {
     for (const secondaryAction of [undefined, 'AXUnknownPrivateAction', 'AXConfirm', 'AXIncrement']) {
       const risk = evaluateComputerRisk({ action: 'perform_secondary_action', secondaryAction }, { role: 'AXButton', title: '更多' }, 'relaxed')
       expect(risk.requiresConfirmation).toBe(true)
       expect(risk.reason).toBe('无法识别辅助 AX 动作的实际副作用')
     }
     for (const action of ['click', 'axPress', 'axSetValue', 'set_value', 'axFocus', 'focus', 'axSelectText', 'select_text', 'paste']) {
-      expect(evaluateComputerRisk({ action, text: 'private' }, undefined, 'relaxed').requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk({ action, text: 'private' }, undefined, 'relaxed').requiresConfirmation).toBe(false)
     }
+    expect(evaluateComputerRisk({ action: 'click' }, undefined, 'standard').requiresConfirmation).toBe(true)
     expect(evaluateComputerRisk({ action: 'unknown_action' }, { role: 'AXButton' }, 'relaxed').requiresConfirmation).toBe(true)
   })
 
-  test('When AX 原生或工具动作操作受保护系统应用 Then 不绕过认证', () => {
-    for (const action of ['axPress', 'axSetValue', 'axFocus', 'axAction', 'axSelectText', 'set_value', 'focus', 'perform_secondary_action', 'select_text', 'paste', 'type_text', 'press_key']) {
+  test('When AX 原生或工具动作写入受保护系统应用 Then 不绕过确认', () => {
+    for (const action of ['axPress', 'axSetValue', 'axAction', 'set_value', 'perform_secondary_action', 'paste', 'type_text', 'press_key']) {
       const risk = evaluateComputerRisk({ action, text: '内容', secondaryAction: 'AXShowMenu' }, { bundleId: 'com.apple.Terminal', role: 'AXTextArea' }, 'relaxed')
       expect(risk.level).toBe('high')
       expect(risk.authMethod).toBe('touch-id')
@@ -231,28 +232,84 @@ describe('Given AX 原生动作与工具动作的同等风险边界', () => {
 })
 
 describe('Given 通讯应用中的粘贴与多行输入', () => {
-  test('When 所有粘贴格式包含多行 Then 宽松策略也保守确认', () => {
+  test('When AX 插入多行草稿 Then 宽松策略允许 text/md；标准和 HTML 仍确认', () => {
     const context = { bundleId: 'com.tencent.xinWeChat', role: 'AXTextArea' }
     for (const format of ['text', 'md', 'html'] as const) for (const text of ['第一行\n第二行', '第一行\r第二行', '第一行\u2028第二行']) {
       const risk = evaluateComputerRisk({ action: 'paste', format, text }, context, 'relaxed')
-      expect(risk.level).toBe('high')
-      expect(risk.requiresConfirmation).toBe(true)
+      expect(risk.requiresConfirmation).toBe(format === 'html')
+      expect(evaluateComputerRisk({ action: 'paste', format, text }, context, 'standard').requiresConfirmation).toBe(true)
       expect(risk.reason).not.toContain(text)
     }
   })
 
-  test('When HTML 标签或实体隐含换行 Then 不以源码单行作为安全依据', () => {
+  test('When Markdown 原文包含标签或实体 Then 宽松策略仍按草稿；HTML 保持确认', () => {
     for (const format of ['md', 'html'] as const) for (const text of ['<p>第一段</p><p>第二段</p>', '<div>第一段<div>第二段', '第一行<br>第二行', '第一行&#10;第二行', '第一行&#13;第二行', '第一行&#xD;第二行', '第一行&NewLine;第二行']) {
-      expect(evaluateComputerRisk({ action: 'paste', format, text }, { bundleId: 'com.apple.Mail', role: 'AXTextArea' }, 'relaxed').requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk({ action: 'paste', format, text }, { bundleId: 'com.apple.Mail', role: 'AXTextArea' }, 'relaxed').requiresConfirmation).toBe(format === 'html')
     }
   })
 
-  test('When 别名输入或设置值包含换行 Then 仍保留通讯发送风险；单行普通文本放行', () => {
+  test('When 设置值或 AX 草稿插入包含换行 Then 宽松放行；键盘输入和最终发送仍确认', () => {
     const context = { bundleId: 'com.apple.MobileSMS', role: 'AXTextArea' }
     for (const action of ['type', 'type_text', 'set_value', 'axSetValue', 'paste']) {
-      expect(evaluateComputerRisk({ action, text: '第一行\n第二行' }, context, 'relaxed').requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk({ action, text: '第一行\n第二行' }, context, 'relaxed').requiresConfirmation).toBe(['type', 'type_text'].includes(action))
       expect(evaluateComputerRisk({ action, text: '草稿' }, context).requiresConfirmation).toBe(false)
     }
     expect(evaluateComputerRisk({ action: 'press_key', key: 'Return' }, context, 'relaxed').requiresConfirmation).toBe(true)
+  })
+})
+
+describe('Given 日常操作的确认频率与危险边界', () => {
+  test('When 查看系统设置、聚焦或选择终端文字 Then 标准和宽松可继续，严格仍逐次确认', () => {
+    for (const bundleId of ['com.apple.systempreferences', 'com.apple.Terminal', 'com.apple.keychainaccess', 'com.apple.diskutility']) {
+      for (const action of ['scroll', 'focus', 'axFocus', 'select_text', 'axSelectText']) {
+        const context = { bundleId, role: 'AXTextArea' }
+        for (const policy of ['standard', 'relaxed'] as const) expect(evaluateComputerRisk({ action }, context, policy).requiresConfirmation).toBe(false)
+        expect(evaluateComputerRisk({ action }, context, 'strict').requiresConfirmation).toBe(true)
+      }
+    }
+    for (const policy of ['strict', 'standard', 'relaxed'] as const) {
+      expect(evaluateComputerRisk({ action: 'click' }, { bundleId: 'com.apple.systempreferences', role: 'AXCheckBox', title: '关闭防火墙' }, policy).requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk({ action: 'select_text' }, { bundleId: 'com.apple.keychainaccess', role: 'AXSecureTextField', isSecure: true }, policy).requiresConfirmation).toBe(true)
+    }
+  })
+
+  test('When 在 Auris 等第三方文本区换行 Then 宽松允许；浏览器、通讯、带修饰键和登录输入仍确认', () => {
+    const editor = { bundleId: 'com.auris.desktop', role: 'AXTextArea', title: '正文编辑器' }
+    expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, editor, 'relaxed').requiresConfirmation).toBe(false)
+    expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, editor, 'standard').requiresConfirmation).toBe(true)
+    expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, editor, 'strict').requiresConfirmation).toBe(true)
+    for (const bundleId of ['com.apple.Safari', 'com.google.Chrome', 'org.mozilla.firefox', 'com.apple.Mail', 'com.tencent.xinWeChat']) {
+      expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, { bundleId, role: 'AXTextArea' }, 'relaxed').requiresConfirmation).toBe(true)
+    }
+    expect(evaluateComputerRisk({ action: 'key', key: 'cmd+Return' }, editor, 'relaxed').requiresConfirmation).toBe(true)
+    expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, { bundleId: 'com.example.login', role: 'AXTextField' }, 'relaxed').requiresConfirmation).toBe(true)
+  })
+
+  test('When 点击删除线或浏览交易记录 Then 不误报删除和付款；组合标签里的真实危险动作仍确认', () => {
+    for (const title of ['删除线', '切换删除线', '购买记录', '查看支付历史', '打开付款明细', '发送记录']) {
+      const context = { bundleId: 'com.example.app', role: 'AXButton', title }
+      for (const policy of ['standard', 'relaxed'] as const) expect(evaluateComputerRisk({ action: 'click' }, context, policy).requiresConfirmation).toBe(false)
+      expect(evaluateComputerRisk({ action: 'click' }, context, 'strict').requiresConfirmation).toBe(true)
+    }
+    for (const title of ['删除线并永久删除文件', '购买记录并立即支付', '清空购买记录', '发送记录并发送消息', '确认订单', '永久删除']) {
+      for (const policy of ['strict', 'standard', 'relaxed'] as const) expect(evaluateComputerRisk({ action: 'click' }, { role: 'AXButton', title }, policy).requiresConfirmation).toBe(true)
+    }
+    expect(evaluateComputerRisk({ action: 'click' }, { role: 'AXButton', title: '立即支付', description: '查看购买记录' }, 'relaxed').requiresConfirmation).toBe(true)
+    expect(evaluateComputerRisk({ action: 'perform_secondary_action', secondaryAction: 'AXDelete' }, { role: 'AXButton', title: '删除线' }, 'relaxed').requiresConfirmation).toBe(true)
+  })
+
+  test('When 在名为发送消息的文本区写入草稿 Then 宽松允许 AX 编辑；最终发送和敏感凭据仍要求确认', () => {
+    const draft = { bundleId: 'com.apple.Mail', role: 'AXTextArea', title: '发送消息' }
+    for (const action of ['set_value', 'axSetValue', 'paste']) {
+      const params = { action, text: '第一段\n第二段' }
+      expect(evaluateComputerRisk(params, draft, 'relaxed').requiresConfirmation).toBe(false)
+      expect(evaluateComputerRisk(params, draft, 'standard').requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk(params, draft, 'strict').requiresConfirmation).toBe(true)
+    }
+    for (const policy of ['strict', 'standard', 'relaxed'] as const) {
+      expect(evaluateComputerRisk({ action: 'click' }, { ...draft, role: 'AXButton' }, policy).requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk({ action: 'key', key: 'Return' }, draft, policy).requiresConfirmation).toBe(true)
+      expect(evaluateComputerRisk({ action: 'set_value', text: 'secret' }, { role: 'AXSecureTextField', isSecure: true }, policy).requiresConfirmation).toBe(true)
+    }
   })
 })

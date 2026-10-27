@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,6 +43,9 @@ interface PanelMetrics {
   icons: number
 }
 
+// 原生 Chromium 冷启动可能超过 Bun 的 5 秒默认限时。
+setDefaultTimeout(30_000)
+
 interface FileMetrics {
   rowHeight: number
   totalHeight: number
@@ -67,7 +70,7 @@ interface FileMetrics {
 
 describe('Given 新版按需右侧组件与已完成六步视觉', () => {
   let harness: VisualRendererHarness
-  beforeAll(async () => { harness = await createVisualRendererHarness(rightPanelFixture) }, 40_000)
+  beforeAll(async () => { harness = await createVisualRendererHarness(rightPanelFixture) }, 300_000)
   afterAll(async () => { await harness?.dispose() })
 
   for (const theme of ['light', 'dark'] as const) {

@@ -33,7 +33,7 @@ export function restoreAgentOnlyTabState(state: unknown, agentSessionIds: Readon
   return { tabs: activeTab ? [activeTab] : [], activeTabId }
 }
 
-/** 旧问答页和非法侧栏值必须落到可见文件页，不能留空。 */
+/** 旧问答页和非法侧栏值保留兼容值；SidePanel 会恢复有效内容或收起空工作区。 */
 export function normalizeAgentSidePanelTab(tab: unknown): AgentSidePanelTab {
   if (typeof tab !== 'string') return 'files'
   // 项目组件使用同一份注册表：不能出现 Tab 可见但路由归一化又回退为 files 的断层。

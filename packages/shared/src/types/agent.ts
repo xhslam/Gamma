@@ -1,4 +1,4 @@
-import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily } from '../utils/model-family'
+import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily, isGpt61SolModel } from '../utils/model-family'
 import { inferBudgetContextWindow } from '../utils/context-window'
 import type { ProviderType } from './channel'
 
@@ -93,6 +93,10 @@ export const CODEX_FAST_MODE_MODEL_IDS = [
 
 /** 模型 ID 是否可通过 ChatGPT Codex OAuth 使用 Fast Mode。 */
 export function isCodexFastModeSupportedModel(modelId: string | undefined): boolean {
+  // Fast Mode 白名单保持已验证型号；新模型 gpt-6.1-sol 未经证据支持，不盲目扩展
+  if (isGpt61SolModel(modelId)) {
+    return false
+  }
   return isGpt6AstraFamily(modelId)
     || isGpt6SolFamily(modelId)
     || isGpt6LunaFamily(modelId)

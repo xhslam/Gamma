@@ -1,7 +1,7 @@
 /**
  * 右侧按需面板状态流转纯逻辑
  *
- * 管理 S0 (默认收起)、S1 (按需轻量浮层) 与 S2 (既有大面板) 三种互斥状态。
+ * 管理 S0 (默认收起)、S1 (按需轻量浮层) 与 S2 (既有大面板) 三种状态；按需浮层可与正在阅读的工作区并存。
  */
 
 export type OnDemandOverlayTab = 'files' | 'changes' | 'exploration'
@@ -37,14 +37,12 @@ export function transitionRightPanelState(
         return {
           ...state,
           activeOverlay: null,
-          isBigPanelOpen: false,
         }
       }
-      // 切换或打开浮层：S1 与 S2 严格互斥，大面板必关闭
+      // 浏览入口不改变已打开的工作区和活动文件。
       return {
         ...state,
         activeOverlay: action.tab,
-        isBigPanelOpen: false,
       }
     }
 

@@ -53,3 +53,11 @@ describe('Agent runtime protocol', () => {
     })
   })
 })
+
+test('Given 带业务 code/details 的 Error When 跨进程序列化 Then 保留 message 和业务详情', () => {
+  const original = Object.assign(new Error('本轮电脑操作已暂停'), { code: 'computer.run-paused', details: { stopReason: '用户接管' } })
+  const wire = serializeAgentRuntimeError(original)
+  expect(wire).not.toBeInstanceOf(Error)
+  expect(structuredClone(wire)).toEqual({ code: 'computer.run-paused', message: '本轮电脑操作已暂停', details: { stopReason: '用户接管' } })
+  expect(JSON.parse(JSON.stringify(wire))).toEqual(structuredClone(wire))
+})

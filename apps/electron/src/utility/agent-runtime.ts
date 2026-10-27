@@ -13,6 +13,7 @@ import {
 } from '@gamma/shared'
 import { PiAgentAdapter, type PiAgentQueryOptions } from '../main/lib/adapters/pi-agent-adapter'
 import { getParentRequestTimeoutMs } from './agent-runtime-request-timeout'
+import { logComputerUseEvent } from '../main/lib/computer-logger'
 
 type MessagePortLike = {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -49,6 +50,8 @@ const parentRequests = new Map<string, PendingParentRequest>()
 const capabilityAbortControllers = new Map<string, AbortController>()
 const piAdapter = new PiAgentAdapter()
 const parentPort = (process as typeof process & { parentPort?: ParentPortLike }).parentPort
+
+logComputerUseEvent({ time: new Date().toISOString(), event: 'logger-ready', process: 'utility', version: process.env.GAMMA_APP_VERSION ?? 'unknown', pid: process.pid })
 
 if (!parentPort) {
   console.error('[AgentRuntime] Electron parentPort is unavailable')

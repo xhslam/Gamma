@@ -121,6 +121,52 @@ describe('ChatGPT 订阅模型在线检测', () => {
     await expect(buildCodexModel(scopedSdk, { model: 'nonexistent-model', codexOAuthCredentials: credentials })).rejects.toThrow('未找到指定')
   })
 
+  test('Given GPT-6.1 Sol When 构建 Codex 模型 Then 上游 ID 原样保持为 gpt-6.1-sol', async () => {
+    const store = createStore()
+    const runtime = await createRuntime(store, () => catalogResponse())
+    await refreshCodexModels(runtime)
+    const scopedSdk = {
+      ...sdk,
+      ModelRuntime: {
+        ...sdk.ModelRuntime,
+        create: async (options: Parameters<typeof sdk.ModelRuntime.create>[0]) => {
+          return sdk.ModelRuntime.create({ ...options, modelsStore: store })
+        },
+      } as typeof sdk.ModelRuntime,
+    }
+    const { model } = await buildCodexModel(scopedSdk, { model: 'gpt-6.1-sol', codexOAuthCredentials: credentials })
+    expect(model.id).toBe('gpt-6.1-sol')
+    expect(model.name).toBe('GPT-6.1 Sol')
+    expect(model.contextWindow).toBe(500_000)
+
+    // 非法邻近 ID 抛出未找到错误，不被偷偷泛化
+    await expect(buildCodexModel(scopedSdk, { model: 'gpt-6.1-sol-terra', codexOAuthCredentials: credentials }))
+      .rejects.toThrow('未找到指定的 ChatGPT (Codex) 模型: gpt-6.1-sol-terra')
+  })
+
+  test('Given GPT-6.1 Terra When 构建 Codex 模型 Then 上游 ID 原样保持为 gpt-6.1-terra', async () => {
+    const store = createStore()
+    const runtime = await createRuntime(store, () => catalogResponse())
+    await refreshCodexModels(runtime)
+    const scopedSdk = {
+      ...sdk,
+      ModelRuntime: {
+        ...sdk.ModelRuntime,
+        create: async (options: Parameters<typeof sdk.ModelRuntime.create>[0]) => {
+          return sdk.ModelRuntime.create({ ...options, modelsStore: store })
+        },
+      } as typeof sdk.ModelRuntime,
+    }
+    const { model } = await buildCodexModel(scopedSdk, { model: 'gpt-6.1-terra', codexOAuthCredentials: credentials })
+    expect(model.id).toBe('gpt-6.1-terra')
+    expect(model.name).toBe('GPT-6.1 Terra')
+    expect(model.contextWindow).toBe(272_000)
+
+    // 非法邻近 ID 抛出未找到错误，不被偷偷泛化
+    await expect(buildCodexModel(scopedSdk, { model: 'gpt-6.1-terra-preview', codexOAuthCredentials: credentials }))
+      .rejects.toThrow('未找到指定的 ChatGPT (Codex) 模型: gpt-6.1-terra-preview')
+  })
+
   test('Given 其他 provider When 写入目录 Then 不污染 Codex 缓存', async () => {
     const store = createStore()
     await store.write('openai-codex', { models: [latestModel] })

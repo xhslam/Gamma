@@ -13,7 +13,13 @@ const SEND = ['发送', '群发', '发布', 'send', 'dispatch', 'publish', 'post
 const SUBMIT = ['提交', '确认订单', 'submit', 'place order']
 const SYSTEM = new Set(['com.apple.systempreferences', 'com.apple.terminal', 'com.apple.keychainaccess', 'com.apple.diskutility'])
 const COMMUNICATION = new Set(['com.tencent.xinwechat', 'com.larksuite.lark', 'com.apple.mobilesms', 'com.apple.mail', 'com.tinyspeck.slackmacgap', 'org.whispersystems.signal-desktop', 'com.hnc.discord'])
+const BROWSERS = new Set(['com.apple.safari', 'com.google.chrome', 'com.google.chrome.canary', 'org.mozilla.firefox', 'com.microsoft.edgemac', 'com.brave.browser', 'company.thebrowser.browser'])
+const TEXT_ROLES = new Set(['AXTextArea', 'AXTextField', 'AXSearchField', 'AXComboBox'])
 const KNOWN_SECONDARY_ACTIONS = new Set(['axpress', 'axshowmenu', 'axraise', 'axcancel'])
+/** 只消去明确的格式/历史入口词组；同一标签中其余真实动作仍参与风险检查。 */
+function actionLabel(label: string): string {
+  return label.replace(/删除线/g, '').replace(/(?:查看|显示|打开|管理)?(?:购买|支付|付款|充值|结算|发送|发布)(?:记录|历史|明细)/g, '')
+}
 function keyword(text: string, words: string[]): string | undefined {
   const lower = text.toLowerCase()
   return words.find(word => /[a-z]/i.test(word) ? new RegExp(`\\b${word}\\b`, 'i').test(lower) : lower.includes(word))
@@ -32,7 +38,7 @@ export function evaluateComputerRisk(params: ComputerExecuteParams, context: Com
   // 动作名只能增加风险，不能作为用户授权或代替 native 控件上下文。
   const secondaryName = secondary ? (params.secondaryAction ?? '').trim() : ''
   const secondaryLabel = secondaryName.replace(/^AX/, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ')
-  const label = `${context?.title ?? ''} ${context?.description ?? ''} ${secondaryLabel}`.trim()
+  const label = [context?.title ?? '', context?.description ?? '', secondaryLabel].map(actionLabel).join(' ').trim()
   const key = (params.key ?? params.text ?? '').toLowerCase().replace(/command|super/g, 'cmd').replace(/control/g, 'ctrl').replace(/option|opt/g, 'alt').replace(/-/g, '+').replace(/\s/g, '')
   const parts = key.split('+')
   const enter = parts.includes('enter') || parts.includes('return')
@@ -42,9 +48,16 @@ export function evaluateComputerRisk(params: ComputerExecuteParams, context: Com
   const readOnly = ['screenshot', 'get_app_state', 'list_apps', 'list_windows', 'wait', 'mouse_move', 'move'].includes(kind)
   if (readOnly) return result('low', '只读观察、指针移动或等待', false)
   if ((typing || kind === 'select_text') && (context?.isSecure || role === 'AXSecureTextField' || subrole.includes('secure') || subrole.includes('password'))) return result('high', '检测到安全凭据与密码输入控件', true, true)
-  if (SYSTEM.has(bundle) && (pointer || typing || targeting || kind === 'scroll')) return result('high', '受保护系统应用中的写操作或设置修改', true, true)
+  // 聚焦、选文和滚动不修改设置；不能仅因为接收应用是系统应用而逐次要求高风险确认。
+  if (targeting || kind === 'scroll') return policy === 'strict'
+    ? result('medium', '严格策略：所有非只读动作执行前确认', true)
+    : result('low', '界面聚焦、选文或滚动', false)
+  if (SYSTEM.has(bundle) && (pointer || typing)) return result('high', '受保护系统应用中的写操作或设置修改', true, true)
   if (kind === 'key' && parts.includes('cmd') && (parts.includes('delete') || parts.includes('backspace'))) return result('high', '检测到快捷键删除操作', true, true)
-  if (pointer || kind === 'set_value' || (kind === 'key' && (enter || key === 'space'))) {
+  // 编辑正文/搜索词不等于提交该字段的业务动作；非文本控件仍检查其危险标签。
+  const editsTextValue = kind === 'set_value' && TEXT_ROLES.has(role)
+  const activatesTextInput = kind === 'key' && TEXT_ROLES.has(role)
+  if (pointer || (kind === 'set_value' && !editsTextValue) || (kind === 'key' && !activatesTextInput && (enter || key === 'space'))) {
     const pay = keyword(label, PAYMENT)
     if (pay) return result('high', `涉及资金交易与支付的操作：${pay}`, true, true)
     const remove = keyword(label, DELETE)
@@ -58,7 +71,9 @@ export function evaluateComputerRisk(params: ComputerExecuteParams, context: Com
   // HTML 可以通过标签或实体产生换行；不将输入内容写进确认理由。
   const multiline = /[\r\n\u2028\u2029]/.test(params.text ?? '')
     || (kind === 'paste' && (params.format === 'html' || (params.format === 'md' && /<\/?(?:br|p|div|li|tr|h[1-6]|pre|blockquote|table|ul|ol)\b|&(?:#0*(?:10|13)|#x0*[ad]|NewLine);/i.test(params.text ?? ''))))
-  if (['type', 'set_value', 'paste'].includes(kind) && COMMUNICATION.has(bundle) && multiline) return result('high', '通讯应用中的多行或富文本输入可能触发发送', true)
+  const axDraftEdit = kind === 'set_value' || (kind === 'paste' && params.format !== 'html')
+  if (['type', 'set_value', 'paste'].includes(kind) && COMMUNICATION.has(bundle) && multiline
+    && !(policy === 'relaxed' && axDraftEdit && TEXT_ROLES.has(role))) return result('high', '通讯应用中的多行或富文本输入可能触发发送', true)
   if (kind === 'key' && COMMUNICATION.has(bundle) && (enter || (parts.includes('cmd') && parts.includes('shift') && parts.includes('d')))) return result('high', '通讯应用回车或发送快捷键可能发送消息/邮件', true)
   if (kind === 'key' && enter) {
     const hasModifier = parts.some(part => ['cmd', 'ctrl', 'alt'].includes(part))
@@ -66,10 +81,14 @@ export function evaluateComputerRisk(params: ComputerExecuteParams, context: Com
     // 不能以“当前是 Safari”推断所有文本框都是地址栏，登录/支付表单同样在浏览器内。
     const search = !hasModifier && context?.isTrustedSearch === true && (role === 'AXSearchField' || role === 'AXTextField')
     if (search) return result('low', '搜索框或地址栏回车导航', policy === 'strict')
+    // 宽松策略信任原生已验证的普通多行编辑区；浏览器和通讯应用仍可能用回车提交。
+    if (policy === 'relaxed' && !hasModifier && role === 'AXTextArea' && !BROWSERS.has(bundle) && !COMMUNICATION.has(bundle)) return result('low', '宽松策略：普通多行编辑区换行', false)
     return result('high', '回车可能提交表单或确认当前操作，无法判定为普通搜索/换行', true)
   }
   if (policy === 'strict') return result('medium', '严格策略：所有非只读动作执行前确认', true)
-  if ((pointer || typing || targeting) && (!role || role.toLowerCase() === 'unknown')) return result('medium', '无法识别实际控件副作用', true)
+  if ((pointer || typing || targeting) && (!role || role.toLowerCase() === 'unknown')) return policy === 'relaxed'
+    ? result('low', '宽松策略：允许已绑定应用中的常规操作', false)
+    : result('medium', '无法识别实际控件副作用', true)
   if (!pointer && !typing && !targeting && !['scroll', 'open_app', 'focus_window'].includes(kind)) return result('medium', '无法识别桌面动作的实际副作用', true)
   return result('low', '常规低风险桌面操作', false)
 }

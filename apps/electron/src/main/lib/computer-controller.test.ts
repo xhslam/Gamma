@@ -6,7 +6,7 @@ describe('Given 与其他工具平级的按需 Computer Use', () => {
   test('When 用户直接调用 screenshot Then 无模式授权/选窗，绑定真实运行并返回截图', async () => {
     const f = createComputerFixture()
     const result = await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
-    expect(result.image.width).toBe(1)
+    expect(result.image?.width).toBe(1)
     expect(f.controller.getState().sessionId).toBe(f.binding.sessionId)
     expect(f.controller.isDesktopRun(f.binding)).toBe(true)
     for (const name of ['Bash', 'read', 'mcp__service__read', 'computer']) expect(() => f.controller.assertTool(f.binding, name)).not.toThrow()
@@ -41,17 +41,17 @@ describe('Given 与其他工具平级的按需 Computer Use', () => {
     expect(f.calls.filter(call => call.method === 'perform')).toHaveLength(0)
     await f.controller.finishRun(next)
   })
-  test('When 短期租约自然到期 Then 透明重连，不要求点按钮', async () => {
+  test('When 短期租约自然到期 Then 暂停同轮，不透明续租', async () => {
     const f = createComputerFixture()
     await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
     f.advance(31 * 60_000)
-    await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
-    expect(f.calls.filter(call => call.method === 'select')).toHaveLength(2)
-    expect(f.controller.getState().resumeRequired).toBe(false)
+    await expect(f.controller.executeAutonomousAction(screenshot, undefined, f.binding)).rejects.toThrow('本轮电脑操作已暂停')
+    expect(f.calls.filter(call => call.method === 'select')).toHaveLength(1)
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
     await f.controller.finishRun(f.binding)
   })
-  test('When 后台来源、未知视觉或伪造绑定 Then 不启动 helper', async () => {
-    for (const options of [{ source: 'automation' }, { source: 'delegation' }, { vision: false }]) {
+  test('When 后台来源或伪造绑定 Then 不启动 helper', async () => {
+    for (const options of [{ source: 'automation' }, { source: 'delegation' }]) {
       const f = createComputerFixture(options)
       await expect(f.controller.executeAutonomousAction(screenshot, undefined, f.binding)).rejects.toThrow()
       expect(f.calls).toHaveLength(0)
@@ -64,7 +64,8 @@ describe('Given 与其他工具平级的按需 Computer Use', () => {
     const f = createComputerFixture({ consent: false })
     f.auth.setUiHandlers({ observationConsent: async () => false })
     await expect(f.controller.executeAutonomousAction({ action: 'open_app', app: 'Notes' }, undefined, f.binding)).rejects.toThrow('尚未同意')
-    expect(f.calls).toHaveLength(0)
+    expect(f.calls.filter(call => call.method !== 'terminate')).toHaveLength(0)
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
   })
   test('When 授权尚未结束又调用电脑工具 Then 不能并发启动动作', async () => {
     const f = createComputerFixture({ consent: false })
@@ -127,8 +128,10 @@ describe('Given 与其他工具平级的按需 Computer Use', () => {
     f.setContext({ role: 'AXButton', title: '删除' })
     f.auth.setUiHandlers({ riskConfirm: async () => false })
     const observed = await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
-    await expect(f.controller.executeAutonomousAction({ action: 'click', coordinate: [0, 0], observationId: observed.observationId }, undefined, f.binding)).rejects.toThrow('取消')
+    await expect(f.controller.executeAutonomousAction({ action: 'click', coordinate: [0, 0], observationId: observed.observationId }, undefined, f.binding)).rejects.toThrow('未获确认')
     expect(f.actions).toHaveLength(0)
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(false)
+    await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
     await f.controller.finishRun(f.binding)
   })
 })

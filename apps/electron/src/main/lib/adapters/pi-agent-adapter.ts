@@ -1,4 +1,7 @@
+import { getComputerPauseReason } from '../computer-pause'
 import { ReferenceTurnTracker, captureReferenceSnapshot } from '../conversation-reference/send-snapshot'
+import { logComputerUseEvent } from '../computer-logger'
+import { classifyComputerValidationFailure } from './pi-computer-validation-log'
 /**
  * Pi Agent SDK 适配器
  *
@@ -117,6 +120,7 @@ export function shouldMarkCompactionAfterCompletedTurn(
 
 /** Pi SDK 查询选项（扩展通用 AgentQueryInput） */
 export interface PiAgentQueryOptions extends AgentQueryInput {
+  runId?: string
   /** 由可信主进程决定，模型或query payload不能自行授予本地租约。 */
   desktopMode?: boolean
   /** 常规电脑工具的外发核验，不启用独占工具模式。 */
@@ -574,6 +578,26 @@ function createAbortError(): Error {
   const error = new Error('Agent 执行已停止')
   error.name = 'AbortError'
   return error
+}
+
+/** 仅在有电脑观察内容时调用；取消优先，其他核验失败记录并剥离观察。 */
+export async function validateOrStripComputerObservations(
+  messages: AgentMessage[],
+  options: { sessionId: string; runId?: string; signal?: AbortSignal; validate?: (signal?: AbortSignal) => Promise<void>; createAbortError: () => Error },
+): Promise<AgentMessage[]> {
+  try {
+    if (!options.validate) throw new Error('缺少电脑外发核验')
+    await options.validate(options.signal)
+    return messages
+  } catch (error) {
+    if (options.signal?.aborted) throw options.createAbortError()
+    const failure = classifyComputerValidationFailure(error)
+    logComputerUseEvent({
+      time: new Date().toISOString(), sessionId: options.sessionId, runId: options.runId ?? null,
+      event: 'validate-failed', outcome: 'stripped', ...failure,
+    })
+    return stripComputerObservationContent(messages, failure.reason, getComputerPauseReason(error))
+  }
 }
 
 function rejectPendingInterruptPrompts(active: ActivePiSession, error: unknown): void {
@@ -1715,13 +1739,10 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         const sanitized = sanitizePiMessageImageContent(transformed)
         let compacted = compactComputerScreenshots(sanitized, 2)
         if (input.computerToolsAvailable && hasComputerObservationContent(compacted)) {
-          try {
-            if (!input.validateComputerLease) throw new Error('缺少电脑外发核验')
-            await input.validateComputerLease(signal)
-          } catch {
-            if (signal?.aborted) throw createAbortError()
-            compacted = stripComputerObservationContent(compacted)
-          }
+          compacted = await validateOrStripComputerObservations(compacted, {
+            sessionId: input.sessionId, runId: input.runId, signal,
+            validate: input.validateComputerLease, createAbortError,
+          })
         }
         if (!input.desktopMode || !input.getComputerObservations) return compacted
         const observations = await input.getComputerObservations(signal)

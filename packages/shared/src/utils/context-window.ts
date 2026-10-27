@@ -8,7 +8,7 @@
  */
 
 import { getGeminiModelCapability } from './gemini-model-capabilities'
-import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily } from './model-family'
+import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily, isGpt61SolModel, isGpt61TerraModel } from './model-family'
 
 /** 默认上下文窗口（无法识别模型时使用） */
 export const DEFAULT_CONTEXT_WINDOW = 200_000
@@ -22,6 +22,8 @@ export const CODEX_GPT_54_MINI_CONTEXT_WINDOW = 400_000
 export const CODEX_GPT_56_CONTEXT_WINDOW = 372_000
 /** ChatGPT Codex 订阅中的 GPT-6 Astra、Sol 与 Luna 上下文窗口。 */
 export const CODEX_GPT_6_CONTEXT_WINDOW = 372_000
+/** GPT-6.1 Terra 保守兼容回退上下文窗口（参考 SDK 已验证的 Terra 272k 基线，避免冒称权威或冒进扩展 500k）。 */
+export const CODEX_GPT_61_TERRA_FALLBACK_CONTEXT_WINDOW = 272_000
 
 /**
  * 为 ChatGPT Codex 中的 GPT-5.x / GPT-6 模型返回统一上下文窗口。
@@ -30,6 +32,13 @@ export const CODEX_GPT_6_CONTEXT_WINDOW = 372_000
  * provider catalog 决定，避免把不同 SKU 误写成同一窗口。
  */
 export function inferCodexAlignedGPT5ContextWindow(modelId: string | undefined): number | undefined {
+  // 与当前 Pi SDK Codex 目录中的 GPT-6.1 Sol 元数据保持一致。
+  if (isGpt61SolModel(modelId)) return 500_000
+
+  // GPT-6.1 Terra 官方规格未定，保守回退采用已核实的 SDK Terra 基线 (272,000)，不盲目套用 Sol 的 500k。
+  // 若运行时实测或目录提供新值，真实值优先。
+  if (isGpt61TerraModel(modelId)) return CODEX_GPT_61_TERRA_FALLBACK_CONTEXT_WINDOW
+
   if (isGpt6AstraFamily(modelId) || isGpt6SolFamily(modelId) || isGpt6LunaFamily(modelId)) {
     return CODEX_GPT_6_CONTEXT_WINDOW
   }

@@ -16,8 +16,8 @@ describe('Given 可折叠的主导航动画外壳', () => {
     const html = renderSidebar(false)
     expect(html).not.toContain('width:257px')
     expect(html).toContain('width:256px')
-    expect(html).toContain('visibility:visible')
-    expect(html).not.toContain('aria-hidden="true"') // 间隙由布局承担，不再额外画分隔线
+    expect(html).toContain('data-collapsed="false"')
+    expect(html).not.toContain('aria-hidden="true"')
     expect(html).not.toContain('inert=""')
     expect(html).toContain('<button>导航内容</button>')
   })
@@ -27,22 +27,23 @@ describe('Given 可折叠的主导航动画外壳', () => {
     expect(html).toContain('width:0')
     expect(html).toContain('width:256px')
     expect(html).toContain('inert=""')
-    expect(html).toContain('visibility:hidden')
-    expect(html).toContain('220ms')
-    expect(html).toContain('opacity-0')
+    expect(html).toContain('data-collapsed="true"')
+    expect(html).toContain('data-sidebar-transition-content=""')
     expect(html).toContain('<button>导航内容</button>')
   })
 
-  test('When 系统减少动态效果 Then 外壳和内容均禁用过渡', () => {
-    const html = renderSidebar(true)
-    expect(html.match(/motion-reduce:transition-none/g)).toHaveLength(2)
+  test('When 拖动展示工作区 Then 保留内容并向动画外壳传递调宽状态', () => {
+    const html = renderToStaticMarkup(<SidebarTransition collapsed={false} width={400} resizing region="workspace"><button>工作区</button></SidebarTransition>)
+    expect(html).toContain('data-resizing="true"')
+    expect(html).toContain('data-sidebar-region="workspace"')
+    expect(html).toContain('width:400px')
   })
 
   test('When 展开收起反复切换 Then 样式直接由目标状态驱动且无需卸载内容', () => {
     for (const collapsed of [false, true, false, true, false]) {
       const html = renderSidebar(collapsed)
       expect(html.includes('inert=""')).toBe(collapsed)
-      expect(html).toContain(collapsed ? 'opacity-0' : 'opacity-100')
+      expect(html).toContain(`data-collapsed="${collapsed}"`)
       expect(html).toContain('overflow-hidden')
       expect(html).toContain('导航内容')
     }

@@ -5,6 +5,26 @@ function host(code: string, maxLineBytes?: number): ComputerNativeHost {
   return new ComputerNativeHost(() => ({ executable: process.execPath, args: ['-e', `const r=require('node:readline').createInterface({input:process.stdin});r.on('line',line=>{const q=JSON.parse(line);if(q.method==='stop'){process.exit(0)};${code}})`] }), { maxLineBytes })
 }
 describe('Given 私有原生 helper 通道（使用无桌面能力的 Bun fixture）', () => {
+  test('When 启动 helper Then 显式传递日志路径与应用版本', async () => {
+    const native = new ComputerNativeHost(() => ({ executable: process.execPath, args: ['-e', `
+      require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+        const q = JSON.parse(line); if (q.method === 'stop') process.exit(0);
+        process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{path:process.env.GAMMA_COMPUTER_LOG_PATH,version:process.env.GAMMA_APP_VERSION}})+'\\n');
+      });
+    `] }), { loggerEnvironment: () => ({ logPath: '/tmp/gamma-test.log', version: '1.2.3' }) })
+    try { await expect(native.call('status')).resolves.toEqual({ path: '/tmp/gamma-test.log', version: '1.2.3' }) }
+    finally { await native.terminate() }
+  })
+  test('When 读取日志配置失败 Then 仍可启动 helper', async () => {
+    const native = new ComputerNativeHost(() => ({ executable: process.execPath, args: ['-e', `
+      require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+        const q = JSON.parse(line); if (q.method === 'stop') process.exit(0);
+        process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{ready:true}})+'\\n');
+      });
+    `] }), { loggerEnvironment: () => { throw new Error('日志不可用') } })
+    try { await expect(native.call('status')).resolves.toEqual({ ready: true }) }
+    finally { await native.terminate() }
+  })
   test('When 请求成功 Then 保持UTF8并正确关联响应，停止等待进程退出', async () => {
     const native = host("process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{text:'中文🙂'}})+'\\n')")
     try { expect(await native.call('status')).toEqual({ text: '中文🙂' }) }

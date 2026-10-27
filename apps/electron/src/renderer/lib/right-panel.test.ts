@@ -17,7 +17,7 @@ import {
   RIGHT_PANEL_MIGRATION_KEY,
 } from './right-panel-migration'
 
-describe('右侧按需面板 - 三状态流转与互斥 (S0 / S1 / S2)', () => {
+describe('右侧按需面板 - 浮层与工作区状态协同 (S0 / S1 / S2)', () => {
   it('初始状态为 S0 (右侧收起，无浮层)', () => {
     const state: OnDemandState = {
       isBigPanelOpen: false,
@@ -100,15 +100,26 @@ describe('右侧按需面板 - 三状态流转与互斥 (S0 / S1 / S2)', () => {
     expect(s2.activeOverlay).toBe(null)
   })
 
-  it('S1 与 S2 严格互斥，若 S2 打开时触发 TOGGLE_OVERLAY，应关闭 S2 并仅开启 S1', () => {
+  it('Given 正在阅读文件的 S2 When 打开并切换浮层 Then 保留工作区与当前文件', () => {
     const s2: OnDemandState = {
       isBigPanelOpen: true,
       activeOverlay: null,
-      activeTab: 'files',
+      activeTab: 'preview:current-file',
     }
     const s1 = transitionRightPanelState(s2, { type: 'TOGGLE_OVERLAY', tab: 'files' })
-    expect(s1.isBigPanelOpen).toBe(false)
+    expect(s1.isBigPanelOpen).toBe(true)
     expect(s1.activeOverlay).toBe('files')
+    expect(s1.activeTab).toBe('preview:current-file')
+
+    const switched = transitionRightPanelState(s1, { type: 'TOGGLE_OVERLAY', tab: 'changes' })
+    expect(switched.isBigPanelOpen).toBe(true)
+    expect(switched.activeOverlay).toBe('changes')
+    expect(switched.activeTab).toBe('preview:current-file')
+
+    const closed = transitionRightPanelState(switched, { type: 'TOGGLE_OVERLAY', tab: 'changes' })
+    expect(closed.isBigPanelOpen).toBe(true)
+    expect(closed.activeOverlay).toBe(null)
+    expect(closed.activeTab).toBe('preview:current-file')
   })
 })
 

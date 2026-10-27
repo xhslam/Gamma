@@ -1,6 +1,7 @@
 /* 第4步几何；JS 布局常量由 panels.browser.test 与宽度/树布局测试核对。 */
 :root {
   --panel-gap: 8px;
+  --sidebar-transition-duration: 220ms;
   --panel-radius: 12px;
   --panel-border-width: 1px;
   --panel-padding: 16px;
@@ -12,11 +13,19 @@
   min-width: 0;
   min-height: 0;
   padding: var(--panel-gap);
-  column-gap: var(--panel-gap);
+  column-gap: 0;
   background-color: hsl(var(--background));
 }
-.gamma-workbench[data-sidebar-collapsed="true"] {
-  column-gap: 0;
+.gamma-workbench-frame {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--panel-radius);
+  /* 内收描边不额外占据宽度；相邻面板共用外框，避免接缝圆角露底。 */
+  outline: var(--panel-border-width) solid var(--color-border);
+  outline-offset: calc(-1 * var(--panel-border-width));
 }
 /* 保留既有 Windows 32px 标题栏，再留出外框8px，不遮住窗口按钮。 */
 .gamma-workbench.pt-8 {
@@ -32,10 +41,6 @@
   padding: var(--panel-padding);
   box-shadow: none;
 }
-.gamma-panel[data-panel][data-panel-open="false"] {
-  border-width: 0;
-  padding: 0;
-}
 :root.theme-terminal-dark .gamma-panel[data-panel] {
   border-radius: var(--panel-radius) !important;
 }
@@ -43,13 +48,61 @@
 .gamma-workspace-layout {
   column-gap: 0;
 }
-.gamma-workspace-layout[data-workspace-open="true"] {
-  column-gap: var(--panel-gap);
+.gamma-workbench .gamma-workbench-frame .gamma-panel[data-panel] {
+  border-width: 0;
+  border-radius: 0 !important;
 }
-[data-workspace-pane="workspace"][data-workspace-open="false"] {
-  width: 0;
-  max-width: 0;
-  overflow: hidden;
+.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel[data-panel] {
+  border-right-width: var(--panel-border-width);
+}
+.gamma-workbench-frame [data-workspace-side="right"] .gamma-panel[data-panel="workspace"],
+.gamma-workbench-frame [data-workspace-side="right"] [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
+  border-left-width: var(--panel-border-width);
+}
+.gamma-workbench-frame [data-workspace-side="left"] [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
+  border-right-width: var(--panel-border-width);
+}
+
+/* 持续保留过渡规则，异步输出与切换标签引起的渲染不会中断淡入淡出。 */
+.gamma-sidebar-transition {
+  visibility: visible;
+  transition: width var(--sidebar-transition-duration) ease-in-out,
+    visibility 0s linear;
+}
+.gamma-sidebar-transition[data-collapsed="true"] {
+  visibility: hidden;
+  transition-delay: 0s, var(--sidebar-transition-duration);
+}
+.gamma-sidebar-transition > [data-sidebar-transition-content] {
+  opacity: 1;
+  transition: opacity var(--sidebar-transition-duration) ease-in-out;
+}
+.gamma-sidebar-transition[data-collapsed="true"] > [data-sidebar-transition-content] {
+  opacity: 0;
+  pointer-events: none;
+}
+.gamma-sidebar-transition[data-resizing="true"] {
+  transition-property: visibility;
+}
+@starting-style {
+  /* 首次打开工作区时外壳刚挂载，也从透明状态进入。 */
+  .gamma-sidebar-transition[data-collapsed="false"] {
+    width: 0 !important;
+  }
+  .gamma-sidebar-transition[data-collapsed="false"] > [data-sidebar-transition-content] {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 减少大幅位移，仍保留短暂的渐隐渐现以传达展开/收起。 */
+  .gamma-sidebar-transition {
+    --sidebar-transition-duration: 120ms;
+    transition-duration: 0s, 0s;
+  }
+  .gamma-sidebar-transition[data-collapsed="true"] {
+    /* 先淡出再释放空间，避免零宽裁切吞掉收起动画。 */
+    transition-delay: var(--sidebar-transition-duration), var(--sidebar-transition-duration);
+  }
 }
 
 .gamma-settings-shell {

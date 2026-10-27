@@ -9,9 +9,10 @@ beforeAll(async () => {
     import React from 'react'
     import { createRoot } from 'react-dom/client'
     import { TerminalTabContent } from '@/components/tabs/TerminalTabContent'
+    import { SidebarTransition } from '@/components/app-shell/SidebarTransition'
     import '@/styles/globals.css'
 
-    document.head.insertAdjacentHTML('beforeend', '<style>html,body,#root{margin:0;width:100%;height:100%}#root>div{height:100%;display:flex;flex-direction:column;padding:8px;box-sizing:border-box}#root>div>div{flex:1;min-height:0}</style>')
+    document.head.insertAdjacentHTML('beforeend', '<style>html,body,#root{margin:0;width:100%;height:100%}#root>div{height:100%}#root>div:not([data-sidebar-transition]){display:flex;flex-direction:column;padding:8px;box-sizing:border-box}#root>div>div{flex:1;min-height:0}</style>')
     Object.defineProperty(navigator, 'platform', { value: 'MacIntel' })
     const delay = (milliseconds = 20) => new Promise(resolve => setTimeout(resolve, milliseconds))
     const until = async (condition, message) => {
@@ -26,12 +27,14 @@ beforeAll(async () => {
       async mount(options = {}) {
         const writes = []
         const savedImages = []
+        let terminalCreates = 0
+        let terminalKills = 0
         let outputListener
         let outputSequence = 1
         let acknowledgedSequence = 0
         let readClipboard = options.readClipboard || (() => Promise.resolve({ type: 'text', text: 'PASTED_TEXT' }))
         window.electronAPI = {
-          createTerminal: async () => {},
+          createTerminal: async () => { terminalCreates++ },
           getTerminalSnapshot: async () => ({ output: options.snapshotOutput ?? '\\x1b[?2004h', sequence: 1 }),
           resizeTerminal: async () => {},
           acknowledgeTerminalOutput: async ({ sequence }) => { acknowledgedSequence = sequence },
@@ -46,10 +49,13 @@ beforeAll(async () => {
           getTerminalClipboardContent: () => readClipboard(),
           saveTerminalPastedImage: async (input) => { savedImages.push(input); return options.saveImage ? options.saveImage(input) : { filePath: '/regression/pasted-image.png' } },
           getPathForFile: () => '',
-          killTerminal: async () => {},
+          killTerminal: async () => { terminalKills++ },
         }
         const root = createRoot(document.getElementById('root'))
-        const renderTerminal = () => root.render(React.createElement(TerminalTabContent, { terminalId: 'terminal-regression', sessionId: 'session-regression', terminateOnUnmount: options.terminateOnUnmount ?? true }))
+        const renderTerminal = (collapsed = false) => {
+          const content = React.createElement(TerminalTabContent, { terminalId: 'terminal-regression', sessionId: 'session-regression', terminateOnUnmount: options.terminateOnUnmount ?? true })
+          root.render(options.animateWorkspace ? React.createElement(SidebarTransition, { collapsed, width: 480, region: 'workspace' }, content) : content)
+        }
         renderTerminal()
         await until(() => document.querySelector('.xterm-helper-textarea') && acknowledgedSequence >= 1, '终端 DOM 或快照恢复未完成')
         const textarea = document.querySelector('.xterm-helper-textarea')
@@ -60,6 +66,15 @@ beforeAll(async () => {
           savedImages,
           textarea,
           root,
+          terminalCreates: () => terminalCreates,
+          terminalKills: () => terminalKills,
+          async setCollapsed(collapsed) {
+            renderTerminal(collapsed)
+            await until(() => {
+              const shell = document.querySelector('[data-sidebar-transition]')
+              return shell?.dataset.collapsed === String(collapsed) && getComputedStyle(shell.querySelector('[data-sidebar-transition-content]')).opacity === (collapsed ? '0' : '1') && shell.getBoundingClientRect().width === (collapsed ? 0 : 480)
+            }, '终端所在工作区的动画未完成')
+          },
           async hide() { root.render(React.createElement('div')); await until(() => !textarea.isConnected, '终端未分离 DOM') },
           async show() { renderTerminal(); await until(() => textarea.isConnected, '终端未重新挂载 DOM') },
           async emitOutput(data) {
@@ -316,10 +331,49 @@ describe('侧边栏终端的真实 Chromium 粘贴事件', () => {
     `)
     expect(results).toHaveLength(3)
     for (const result of results) {
-      expect(result.background).toBe(result.theme ? 'rgb(31, 30, 29)' : 'rgb(250, 249, 245)')
+      expect(result.background).toBe(result.theme ? 'rgb(38, 38, 36)' : 'rgb(255, 255, 255)')
       expect(result.outerBackground).toBe(result.background)
       expect(result.textShadow).toBe('none')
       expect(result.contrast).toBeGreaterThanOrEqual(7)
     }
+  }, 20_000)
+
+  test('Given 面板内已有终端 When 亮暗切换并收起再恢复 Then 三层背景一致且复用原终端与输出', async () => {
+    const result = await renderer.run<{ colorsMatch: boolean; retained: boolean; terminalCreates: number }>(`
+      const terminal = await window.terminalRegression.mount({ terminateOnUnmount: false, snapshotOutput: 'THEME_HISTORY' })
+      const screen = document.querySelector('.xterm-screen')
+      const referencePanel = document.createElement('section')
+      referencePanel.className = 'gamma-panel'
+      referencePanel.dataset.panel = 'workspace'
+      document.body.append(referencePanel)
+      let colorsMatch = true
+      for (const theme of ['', 'dark', 'dark theme-terminal-dark', '']) {
+        await terminal.hide()
+        document.documentElement.className = theme
+        await terminal.show()
+        await window.terminalRegression.delay(40)
+        const panelBackground = getComputedStyle(referencePanel).backgroundColor
+        const terminalBackground = getComputedStyle(document.querySelector('.xterm-screen').parentElement).backgroundColor
+        const shellBackground = getComputedStyle(document.getElementById('root').firstElementChild).backgroundColor
+        colorsMatch &&= panelBackground === terminalBackground && panelBackground === shellBackground
+      }
+      return { colorsMatch, retained: document.querySelector('.xterm-screen') === screen && document.querySelector('.xterm-rows').textContent.includes('THEME_HISTORY'), terminalCreates: terminal.terminalCreates() }
+    `)
+    expect(result).toEqual({ colorsMatch: true, retained: true, terminalCreates: 1 })
+  }, 20_000)
+
+  test('Given 动画工作区内已有终端 When 连续收放且收起期间继续输出 Then 原终端始终挂载、历史完整且不重建进程', async () => {
+    const result = await renderer.run(`
+      const terminal = await window.terminalRegression.mount({ animateWorkspace: true, terminateOnUnmount: false, snapshotOutput: 'KEEP_HISTORY\\r\\n' })
+      const screen = document.querySelector('.xterm-screen');let connected = true
+      for (let i = 0; i < 3; i++) {
+        await terminal.setCollapsed(true);connected &&= screen.isConnected
+        await terminal.emitOutput('HIDDEN_OUTPUT_' + i + '\\r\\n')
+        await terminal.setCollapsed(false);connected &&= screen === document.querySelector('.xterm-screen')
+      }
+      const text = document.querySelector('.xterm-rows').textContent
+      return { connected, history: ['KEEP_HISTORY','HIDDEN_OUTPUT_0','HIDDEN_OUTPUT_1','HIDDEN_OUTPUT_2'].every(value => text.includes(value)), creates: terminal.terminalCreates(), kills: terminal.terminalKills() }
+    `)
+    expect(result).toEqual({ connected: true, history: true, creates: 1, kills: 0 })
   }, 20_000)
 })

@@ -15,7 +15,7 @@ const darkColor: DesignColorReader = (role) => {
   return value.toLowerCase()
 }
 const getTerminalAppearanceOptions = () => readTerminalAppearanceOptions(darkColor)
-const TERMINAL_BACKGROUND = darkColor('background')
+const TERMINAL_BACKGROUND = darkColor('panel')
 
 interface RenderedSpan {
   className: string

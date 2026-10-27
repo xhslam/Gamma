@@ -4,8 +4,7 @@ import { beginPaneResize } from '@/lib/pane-resize-policy'
 /**
  * SidePanel — Agent 侧面板容器
  *
- * 直接展示文件浏览器，默认打开状态。
- * 切换按钮在面板关闭时显示活动指示点。
+ * 仅展示已打开的文件、改动预览与工具标签；文件树和改动列表由标题栏浮层提供。
  */
 
 import * as React from 'react'
@@ -28,6 +27,7 @@ import { productivityToolsAtom } from '@/atoms/ui-preferences'
 import { markdownToHtml } from '@/lib/markdown-rich-text'
 import { FileBrowser, FileDropZone, FileTypeIcon, FileSearchBar, computeRevealAncestors, isPathUnderRoot, computeTreeRowLayout, AncestorGuides, STICKY_ROW_BASE_CLASS, canBeSticky } from '@/components/file-browser'
 import { OnDemandRightPanelNav } from '@/components/agent/OnDemandRightPanelNav'
+import { useRightWorkspaceActions } from '@/hooks/useRightWorkspaceActions'
 import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components/diff/DiffPanelTabBar'
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { AgentView } from '@/components/agent/AgentView'
@@ -69,6 +69,7 @@ import {
   agentSessionDraftSyncVersionsAtom,
   agentSessionDraftHtmlAtom,
   agentTerminalTabsAtom,
+  agentWorkspaceTabIdsAtom,
   agentSidePanelSplitMapAtom,
   agentSidePanelSplitRatioMapAtom,
 } from '@/atoms/agent-atoms'
@@ -465,6 +466,9 @@ interface SidePanelProps {
 }
 
 export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, width = 460 }: SidePanelProps): React.ReactElement {
+  const workspaceActions = useRightWorkspaceActions(sessionId)
+  const [isOpen, setIsOpen] = useAtom(currentSessionSidePanelOpenAtom)
+
   // 按会话保存最近访问顺序。该历史仅存在于当前 renderer 进程，避免恢复失效的临时 Tab。
   const rightPanelTabHistoryRef = React.useRef(new Map<string, AgentSidePanelTab[]>())
   const workspaceTabsRef = React.useRef<WorkspacePanelTab[]>([])
@@ -479,10 +483,12 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     const availableTabs = new Set(workspaceTabsRef.current
       .map((tab) => tab.id)
       .filter((tab) => tab !== closingTab))
+    // 关闭最后一个真实内容标签就收起工作区，不重新创建文件浏览器。
+    if (availableTabs.size === 0) setIsOpen(false)
     const nextTab = getPreviousRightPanelTab(history, closingTab, availableTabs)
     rightPanelTabHistoryRef.current.set(sessionId, removeRightPanelTabFromHistory(history, closingTab))
     return nextTab
-  }, [sessionId])
+  }, [sessionId, setIsOpen])
 
   const returnToPreviousTabAfterClose = React.useCallback((closingTab: AgentSidePanelTab): AgentSidePanelTab => {
     const nextTab = getPreviousTabBeforeClose(closingTab)
@@ -490,8 +496,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     return nextTab
   }, [activeTab, getPreviousTabBeforeClose, onTabChange])
 
-  // 侧面板状态按 sessionId 持久化，切换会话不会互相覆盖。
-  const [isOpen, setIsOpen] = useAtom(currentSessionSidePanelOpenAtom)
   // Tab 系统
   const previewFileMap = useAtomValue(previewFileMapAtom)
   const setPreviewFileMap = useSetAtom(previewFileMapAtom)
@@ -538,15 +542,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       baseRef: selectedWorktreePath ? 'origin/main' : undefined,
     })
   }, [openPreview, sessionId, sessionPath, selectedWorktreePath])
-
-  // 动画标志：isOpen 变化时启用过渡动画，切换会话时即时显示
-  const prevIsOpenRef = React.useRef(isOpen)
-  const prevSessionIdRef = React.useRef(sessionId)
-  const shouldAnimate = prevSessionIdRef.current === sessionId && prevIsOpenRef.current !== isOpen
-  React.useEffect(() => {
-    prevIsOpenRef.current = isOpen
-    prevSessionIdRef.current = sessionId
-  })
 
   const filesVersion = useAtomValue(workspaceFilesVersionAtom)
   const autoReveal = useAtomValue(fileBrowserAutoRevealAtom)
@@ -1271,8 +1266,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
 
   const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const workspaceTabs = React.useMemo<WorkspacePanelTab[]>(() => [
-    { id: 'files', label: '文件', icon: <FolderOpen className="size-3.5" /> },
-    { id: 'changes', label: '改动', icon: <FileDiff className="size-3.5" /> },
     ...agyOpenIds.map(id => ({
       id: `agy:${id}` as const,
       label: agyViews.get(agyTaskKey(sessionId, id))?.task.title || 'agy 任务',
@@ -1328,6 +1321,30 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     })) ?? []),
   ], [activeTab, split, agyOpenIds, agyViews, sessionId, activeBrowserTabId, browserState, previewFiles, selectedDelegationSession, selectedDelegationStatus, sessions, showBrowserActivity, sideTemporaryAgents, terminalTabs, workspaceComponentTabs])
   workspaceTabsRef.current = workspaceTabs
+
+  const setWorkspaceTabIds = useSetAtom(agentWorkspaceTabIdsAtom)
+  React.useLayoutEffect(() => {
+    const ids = workspaceTabs.map(tab => tab.id)
+    setWorkspaceTabIds(previous => {
+      const current = previous.get(sessionId)
+      if (!current && ids.length === 0) return previous
+      if (current?.length === ids.length && current.every((id, index) => id === ids[index])) return previous
+      const next = new Map(previous)
+      if (ids.length > 0) next.set(sessionId, ids)
+      else next.delete(sessionId)
+      return next
+    })
+  }, [sessionId, setWorkspaceTabIds, workspaceTabs])
+
+  // 旧会话、失效的临时标签和外部关闭事件统一在这里修复。
+  // files/changes 仅作为兼容状态值保留，不再渲染为工作区内容。
+  React.useEffect(() => {
+    if (!isOpen || workspaceTabs.some(tab => tab.id === effectiveActiveTab)) return
+    const fallback = workspaceTabs[0]?.id
+    if (fallback) {
+      if (fallback !== activeTab) onTabChange(fallback)
+    } else if (isOpen) setIsOpen(false)
+  }, [activeTab, effectiveActiveTab, isOpen, onTabChange, setIsOpen, workspaceTabs])
 
   React.useEffect(() => {
     if (!split) return
@@ -1541,6 +1558,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   }
 
   const renderWorkspaceTabContent = (paneTab: AgentSidePanelTab, paneWidth: number): React.ReactNode => {
+    if (!workspaceTabs.some(tab => tab.id === paneTab)) return null
     const panePreviewId = getPreviewIdFromSidePanelTab(paneTab)
     const panePreviewFile = (panePreviewId ? previewFiles.find((file) => getPreviewFileId(file) === panePreviewId) : null)
       ?? previewFileMap.get(sessionId) ?? null
@@ -1777,23 +1795,13 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
 
   return (
     <div
-      className={cn(
-        'gamma-panel relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
-        shouldAnimate && 'transition-[width] duration-300 ease-in-out',
-        isOpen ? '' : '!w-0',
-      )}
+      className="gamma-panel relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area"
       data-panel="workspace"
       data-panel-open={isOpen}
-      style={isOpen ? { width } : undefined}
+      style={{ width }}
     >
       {/* 面板内容 */}
-      <div
-        className={cn(
-          'w-full h-full flex flex-col titlebar-no-drag',
-          shouldAnimate && 'transition-opacity duration-300',
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
-        )}
-        >
+      <div className="w-full h-full flex flex-col titlebar-no-drag">
           <OnDemandRightPanelNav
             presentation="tabs"
             sessionId={sessionId}
@@ -1804,7 +1812,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onCloseTab={handleCloseWorkspaceTab}
             onOpenBrowser={() => void handleOpenBrowserTab()}
             onAddTabMenuOpenChange={setIsAddTabMenuOpen}
-            onOpenFile={() => handleWorkspaceTabChange('files')}
+            onOpenFile={workspaceActions.onOpenFile}
             onOpenTerminal={handleOpenTerminal}
             onOpenAgyTasks={() => handleWorkspaceTabChange('agy-tasks')}
             onOpenWorkspaceComponent={(component) => {

@@ -10,6 +10,8 @@ interface PreviewView {
   expanded: boolean
   stopping: boolean
   error: string | null
+  requestingScreen: boolean
+  screenMessage: string | null
 }
 
 const actionNames: Record<string, string> = {
@@ -24,6 +26,7 @@ const actionNames: Record<string, string> = {
 
 /** 增量帧只复用同一运行、同一观察的图片；禁止跨会话沿用旧画面。 */
 export function mergeComputerPreview(previous: ComputerPreview | null, next: ComputerPreview): ComputerPreview {
+  if (next.mode === 'accessibility') return { ...next, frame: undefined }
   const sameFrame = previous?.sessionId === next.sessionId && previous.runId === next.runId
     && previous.frame?.frameId === next.frame?.frameId
   const dataUrl = next.frame?.dataUrl ?? (sameFrame ? previous?.frame?.dataUrl : undefined)
@@ -32,14 +35,17 @@ export function mergeComputerPreview(previous: ComputerPreview | null, next: Com
 
 /** 聊天内本地实时监控；不依赖工具截图，不进入消息历史或模型上下文。 */
 export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.ReactElement | null {
-  const viewAtom = React.useMemo(() => atom<PreviewView>({ preview: null, expanded: true, stopping: false, error: null }), [sessionId])
+  const viewAtom = React.useMemo(() => atom<PreviewView>({ preview: null, expanded: true, stopping: false, error: null, requestingScreen: false, screenMessage: null }), [sessionId])
   const [view, setView] = useAtom(viewAtom)
   const current = React.useRef(view)
   current.current = view
   const revision = React.useRef(0)
   const retry = React.useRef<() => void>(() => {})
+  const mounted = React.useRef(false)
+  const screenRequest = React.useRef(false)
 
   React.useEffect(() => {
+    mounted.current = true
     let disposed = false
     let inFlight = false
     let timer: ReturnType<typeof setTimeout>
@@ -49,7 +55,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
     }
     const clear = (): void => {
       revision.current += 1
-      current.current = { ...current.current, preview: null, error: null }
+      current.current = { ...current.current, preview: null, error: null, screenMessage: null }
       setView(current.current)
     }
     const read = async (): Promise<void> => {
@@ -62,8 +68,8 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
         const next = await window.electronAPI.getComputerPreview({ sessionId, frameId: previous?.frame?.frameId, live: current.current.expanded })
         if (disposed || generation !== revision.current) return
         const preview = next?.sessionId === sessionId ? mergeComputerPreview(previous, next) : null
-        delay = preview && current.current.expanded && preview.mode !== 'unavailable' ? 100 : 1000
-        setView(old => ({ ...old, preview, error: old.error?.startsWith('停止未确认') ? old.error : null }))
+        delay = preview && current.current.expanded && ['starting', 'live'].includes(preview.mode) ? 100 : 1000
+        setView(old => ({ ...old, preview, screenMessage: old.preview?.runId === preview?.runId ? old.screenMessage : null, error: old.error?.startsWith('停止未确认') ? old.error : null }))
       } catch {
         if (!disposed && generation === revision.current) {
           setView(old => ({ ...old, preview: old.preview ? { ...old.preview, frame: undefined } : null,
@@ -77,22 +83,48 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
     retry.current = () => { void read() }
     const unsubscribe = window.electronAPI.onComputerStateChanged(state => {
       if (state.sessionId !== sessionId || !['active', 'authorizing'].includes(state.phase)) clear()
-      else void read()
+      else {
+        if (state.permissions?.accessibility && state.permissions.screen === false && current.current.preview) {
+          revision.current += 1
+          current.current = { ...current.current, screenMessage: null, preview: { ...current.current.preview, permissions: state.permissions, mode: 'accessibility', frame: undefined } }
+          setView(current.current)
+        }
+        void read()
+      }
     })
     const visibility = (): void => { if (document.hidden) { pause(); clear() } else void read() }
     document.addEventListener('visibilitychange', visibility)
     void read()
-    return () => { disposed = true; pause(); revision.current += 1; clearTimeout(timer); unsubscribe(); document.removeEventListener('visibilitychange', visibility) }
+    return () => { disposed = true; mounted.current = false; pause(); revision.current += 1; clearTimeout(timer); unsubscribe(); document.removeEventListener('visibilitychange', visibility) }
   }, [sessionId, setView])
 
   const toggle = (): void => {
     revision.current += 1
     const old = current.current
     const expanded = !old.expanded
-    current.current = { ...old, expanded, preview: old.preview ? { ...old.preview, frame: undefined, mode: expanded ? 'starting' : 'paused' } : null }
+    current.current = { ...old, expanded, preview: old.preview ? { ...old.preview, frame: undefined, mode: old.preview.mode === 'accessibility' ? 'accessibility' : expanded ? 'starting' : 'paused' } : null }
     setView(current.current)
     if (!expanded && old.preview) void window.electronAPI.getComputerPreview({ sessionId, runId: old.preview.runId, live: false }).catch(() => {})
     else retry.current()
+  }
+
+  const requestScreen = async (): Promise<void> => {
+    const runId = current.current.preview?.runId
+    if (!runId || screenRequest.current) return
+    screenRequest.current = true
+    setView(old => ({ ...old, requestingScreen: true, screenMessage: null }))
+    try {
+      await window.electronAPI.requestComputerPermission('screen')
+      const state = await window.electronAPI.getComputerState(sessionId)
+      if (!mounted.current || current.current.preview?.runId !== runId) return
+      setView(old => ({ ...old, screenMessage: state.permissions?.screen ? null : '录屏尚未开启，辅助功能操作可继续。' }))
+      retry.current()
+    } catch {
+      if (mounted.current && current.current.preview?.runId === runId) setView(old => ({ ...old, screenMessage: '未能开启画面预览，辅助功能操作可继续。可稍后重试。' }))
+    } finally {
+      screenRequest.current = false
+      if (mounted.current) setView(old => ({ ...old, requestingScreen: false }))
+    }
   }
 
   const stop = async (): Promise<void> => {
@@ -114,6 +146,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
   if (!preview && !view.error) return null
   const latest = preview?.activities.at(-1)
   const running = latest?.status === 'running'
+  const accessibilityOnly = preview?.mode === 'accessibility'
   const label = latest ? actionNames[latest.action] ?? '执行电脑操作' : '等待下一步'
   return (
     <section aria-label="Computer Use 操作预览" className="my-4 w-full max-w-[560px] overflow-hidden rounded-2xl border border-border/60 bg-background shadow-sm">
@@ -131,11 +164,18 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
         </Button>
       </div>
       {view.expanded && <>
-        <div className="relative flex min-h-40 items-center justify-center border-y border-border/40 bg-muted/40">
+        {accessibilityOnly ? <div className="space-y-3 border-y border-border/40 bg-muted/20 px-4 py-4">
+          <div className="space-y-1"><p className="text-sm font-medium">辅助功能模式</p><p className="text-xs leading-relaxed text-muted-foreground">{preview.message || '正在通过界面文字操作控件，基础操作无需录屏。'}</p></div>
+          {preview.permissions?.screen !== true && <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" size="sm" disabled={view.requestingScreen} onClick={() => { void requestScreen() }} aria-label="开启可选画面预览">{view.requestingScreen ? '正在请求录屏…' : '开启画面预览'}</Button>
+            <span className="text-xs text-muted-foreground">可选；截图与实时画面需要录屏授权</span>
+          </div>}
+          {view.screenMessage && <p role="status" className="text-xs text-muted-foreground">{view.screenMessage}</p>}
+        </div> : <div className="relative flex min-h-40 items-center justify-center border-y border-border/40 bg-muted/40">
           {preview?.frame?.dataUrl ? <img src={preview.frame.dataUrl} alt={`${preview.appName || '电脑'}实时监控画面`} className="max-h-72 w-full object-contain" />
-            : <div className="flex h-48 items-center gap-2 text-xs text-muted-foreground"><Monitor className="size-4" />{view.error || preview?.mode === 'unavailable' ? '实时画面暂不可用，正在重新连接' : '正在连接实时画面…'}</div>}
-          {preview?.mode === 'live' && preview.frame && <span className="absolute bottom-2 left-2 flex items-center gap-2 rounded-full bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm"><span className="size-1.5 rounded-full bg-success" aria-hidden="true" />实时画面</span>}
-        </div>
+            : <div className="flex h-48 items-center gap-2 text-xs text-muted-foreground"><Monitor className="size-4" />{view.error || preview?.mode === 'unavailable' ? '画面预览暂不可用，辅助功能操作可继续' : preview?.mode === 'paused' ? '画面预览已暂停' : '正在连接实时画面…'}</div>}
+          {preview?.mode === 'live' && preview.frame?.dataUrl && <span className="absolute bottom-2 left-2 flex items-center gap-2 rounded-full bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm"><span className="size-1.5 rounded-full bg-success" aria-hidden="true" />实时画面</span>}
+        </div>}
         <div className="space-y-3 px-4 py-3">
           <div className="flex items-center gap-2 text-sm" role="status">
             {running && !view.error ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" /> : latest?.status === 'failed' ? <X className="size-3.5 text-warning" /> : <Circle className="size-3 shrink-0 text-muted-foreground" />}

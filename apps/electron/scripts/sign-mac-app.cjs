@@ -1,9 +1,10 @@
 const path = require('node:path')
 
-/** 保留Electron既有逐文件配置，只为独立桌面helper覆写最小entitlements。 */
+/** 保留Electron既有逐文件配置；桌面CLI使用最小entitlements，不继承主应用JIT等权限。 */
 function computerOptionsForFile(app, original, defaults = {}) {
   const application = path.resolve(app)
-  const helper = path.join(application, 'Contents', 'Helpers', 'Gamma Computer Use Helper.app')
+  const resourceDirectory = path.join(application, 'Contents', 'Resources', 'computer-use')
+  const helper = path.join(resourceDirectory, 'gamma-computer-use-helper')
   return file => {
     const normalized = path.resolve(file)
     // 新版osx-sign只读取逐文件权限，顶层旧entitlements字段不会自动继承。
@@ -13,10 +14,10 @@ function computerOptionsForFile(app, original, defaults = {}) {
       ...(entitlements !== undefined && { entitlements }),
       ...(defaults.hardenedRuntime !== undefined && { hardenedRuntime: defaults.hardenedRuntime }),
     }
-    if (normalized !== helper && !normalized.startsWith(helper + path.sep)) return existing
+    if (normalized !== helper) return existing
     return {
       ...existing,
-      entitlements: path.join(helper, 'Contents', 'Resources', 'entitlements.plist'),
+      entitlements: path.join(resourceDirectory, 'entitlements.plist'),
       hardenedRuntime: true,
     }
   }

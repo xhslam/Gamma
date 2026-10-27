@@ -69,8 +69,8 @@ final class Engine {
     private func status() -> Status {
         let permissions = Permissions(accessibility: AXIsProcessTrusted(), screen: CGPreflightScreenCaptureAccess(), listen: CGPreflightListenEventAccess(), post: CGPreflightPostEventAccess())
         let supported: Bool
-        if #available(macOS 14.2, *) { supported = true } else { supported = false }
-        return Status(supported: supported, permissions: permissions, message: "主显示器全屏观察，图像可能外发给当前模型；排除Gamma/helper窗口，不捕获音频。操作前绑定真实应用、控件与布局；人工输入暂停，确认期间仅允许Gamma授权界面交互。系统TCC权限可能分多次授予。事件标记不构成对同用户恶意AX程序的安全隔离。")
+        if #available(macOS 14.0, *) { supported = true } else { supported = false }
+        return Status(supported: supported, permissions: permissions, message: "基础桌面操作只需要系统辅助功能授权；屏幕录制可选，未开启时使用AX文字与控件。开启后可提供主屏截图和实时预览，图像可能发送给当前模型；排除Gamma窗口、不捕获音频。保留原生停止与人工接管。")
     }
     func handle(_ data: Data) {
         let envelope: Envelope
@@ -89,14 +89,18 @@ final class Engine {
             case "status": success(envelope.id, status())
             case "requestPermission":
                 let p = try JSONDecoder().decode(Request<PermissionParams>.self, from: data).params
-                guard ["accessibility", "screen", "listen", "post"].contains(p.permission), !gate.isActive else { throw NativeFailure("busy", "权限无效或控制仍在运行") }
+                guard ["accessibility", "screen"].contains(p.permission), !gate.isActive || p.permission == "screen" else { throw NativeFailure("busy", "只需辅助功能；屏幕录制可在运行中按需开启") }
                 DispatchQueue.main.async { [self] in
-                    guard !gate.isActive else { failure(envelope.id, NativeFailure("busy", "控制已经开始")); return }
+                    guard !gate.isActive || p.permission == "screen" else { failure(envelope.id, NativeFailure("busy", "控制已经开始")); return }
+                    if p.permission == "screen" {
+                        do { try gate.setScreenPermissionWaiting(true) }
+                        catch { failure(envelope.id, error); return }
+                        worker.async { [self] in prepared = nil }
+                    }
+                    defer { if p.permission == "screen" { _ = try? gate.setScreenPermissionWaiting(false) } }
                     switch p.permission {
                     case "accessibility": _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
                     case "screen": _ = CGRequestScreenCaptureAccess()
-                    case "listen": _ = CGRequestListenEventAccess()
-                    case "post": _ = CGRequestPostEventAccess()
                     default: break
                     }
                     success(envelope.id, status())
@@ -112,8 +116,8 @@ final class Engine {
                 let (_, token) = try gate.current(BoundParams(leaseId: p.leaseId, epoch: p.epoch))
                 success(envelope.id, try preview.read(p, token: token, gate: gate))
             case "observe", "screenshot":
-                let p = try JSONDecoder().decode(Request<BoundParams>.self, from: data).params
-                let (_, token) = try gate.current(p); try startWork(token); observe(envelope.id, p: p, token: token)
+                let p = try JSONDecoder().decode(Request<ObserveParams>.self, from: data).params
+                let (_, token) = try gate.current(BoundParams(leaseId: p.leaseId, epoch: p.epoch)); try startWork(token); observe(envelope.id, p: p, token: token)
             case "listWindows":
                 let p = try JSONDecoder().decode(Request<BoundParams>.self, from: data).params
                 try withWork(envelope.id, p) { [self] token in
@@ -124,10 +128,24 @@ final class Engine {
                 let p = try JSONDecoder().decode(Request<PerformParams>.self, from: data).params
                 try withWork(envelope.id, BoundParams(leaseId: p.leaseId, epoch: p.epoch)) { [self] token in
                     let snapshot = try gate.inspect(p)
-                    let binding = try prepareAction(p, snapshot, ax)
-                    try gate.checkDispatch(token); prepared = binding
-                    state("已准备 · \(binding.appName) · \(p.action.kind)")
-                    success(envelope.id, PreparationResult(preparationId: binding.id, appName: binding.appName, bundleId: binding.bundleId, context: binding.context))
+                    do {
+                        let binding = try prepareAction(p, snapshot, ax)
+                        try gate.checkDispatch(token); try gate.bindPreparation(binding.id, request: p, token: token); prepared = binding
+                        state("已准备 · \(binding.appName) · \(p.action.kind)")
+                        success(envelope.id, PreparationResult(preparationId: binding.id, appName: binding.appName, bundleId: binding.bundleId, context: binding.context))
+                    } catch {
+                        if p.action.kind == "key" {
+                            let actualFocus = try? ax.focusedElement()
+                            writeNativeComputerUseLog(
+                                location: "Engine.swift:case_prepare:key_failed",
+                                action: "key",
+                                rawError: (error as? NativeFailure)?.message ?? error.localizedDescription,
+                                errorCode: (error as? NativeFailure)?.code ?? "prepare-failed",
+                                focusedElement: describeAXElementInfo(actualFocus)
+                            )
+                        }
+                        throw error
+                    }
                 }
             case "confirmation":
                 let p = try JSONDecoder().decode(Request<ConfirmationParams>.self, from: data).params
@@ -135,7 +153,7 @@ final class Engine {
             case "perform":
                 let p = try JSONDecoder().decode(Request<PerformParams>.self, from: data).params
                 do { try withWork(envelope.id, BoundParams(leaseId: p.leaseId, epoch: p.epoch)) { [self] _ in perform(envelope.id, p) } }
-                catch { success(envelope.id, Receipt(actionId: p.actionId, outcome: "rejected", message: "原生授权、监听或执行状态已失效，未投递本次动作")) }
+                catch { success(envelope.id, Receipt(actionId: p.actionId, outcome: "not-dispatched", message: "原生授权、监听或执行状态已失效，未投递本次动作", errorCode: (error as? NativeFailure)?.code ?? "native-failure", permission: (error as? NativeFailure)?.permission)) }
             default: throw NativeFailure("unknown-method", "不支持的原生方法")
             }
         } catch { failure(envelope.id, error) }
@@ -149,9 +167,9 @@ final class Engine {
     }
     private func select(_ id: String, _ p: LeaseParams) throws {
         let current = status()
-        guard current.supported else { throw NativeFailure("unsupported-os", "需要macOS14.2+") }
+        guard current.supported else { throw NativeFailure("unsupported-os", "需要macOS14+") }
         let permissions = current.permissions
-        guard permissions.accessibility, permissions.screen, permissions.listen, permissions.post else { throw NativeFailure("permission-required", "请先完成系统权限引导") }
+        guard hasRequiredComputerPermissions(permissions) else { throw NativeFailure("permission-required", "请在系统辅助功能中允许Gamma控制电脑", permission: "accessibility") }
         let token = try gate.begin(p)
         do { try owner.acquire(); try startWork(token) } catch { stop("无法取得独占控制权"); throw error }
         worker.async { [self] in
@@ -163,11 +181,11 @@ final class Engine {
             } catch { stop("桌面初始化失败"); failure(id, error) }
         }
     }
-    private func observe(_ id: String, p: BoundParams, token: UInt64) {
+    private func observe(_ id: String, p: ObserveParams, token: UInt64) {
         worker.async { [self] in
             do {
                 try gate.checkDispatch(token); gate.invalidateObservation(); prepared = nil
-                state("正在操作 屏幕：截取屏幕")
+                state("正在读取前台应用与控件")
                 let before = try desktopDigest()
                 let observedApp = try currentApplication()
                 let observedWindow: Target?
@@ -176,7 +194,11 @@ final class Engine {
                 if !isGammaPID(observedApp.pid), let window = try? ax.windowForFocused(observedApp.pid, windows: desktopWindows()), let tree = try? ax.read(window, allowSurfaces: true) {
                     observedWindow = window; observedLayout = tree.digest; observedTree = tree
                 } else { observedWindow = nil; observedLayout = ""; observedTree = nil }
-                captureDisplay { [self] result in
+                let capture: (@escaping (Result<(Data, DisplayResult, Int, Int), Error>) -> Void) -> Void = { completion in
+                    if p.includeImage != false && CGPreflightScreenCaptureAccess() { captureDisplay(completion: completion) }
+                    else { completion(.failure(NativeFailure("visual-unavailable", "使用辅助功能观察"))) }
+                }
+                capture { [self] result in
                     worker.async { [self] in
                         defer {
                             endWork()
@@ -184,16 +206,22 @@ final class Engine {
                         }
                         do {
                             try gate.checkDispatch(token)
-                            let (png, display, width, height) = try result.get()
-                            guard before == (try desktopDigest()) else { throw NativeFailure("desktop-changed", "截图期间窗口布局改变，请重新观察") }
-                            let app = try currentApplication()
-                            guard app == observedApp else { throw NativeFailure("focus-changed", "截图期间前台应用改变") }
-                            if let window = observedWindow {
-                                guard try ax.read(window, allowSurfaces: true).digest == observedLayout else { throw NativeFailure("observation-layout-changed", "截图期间目标布局改变") }
+                            let display: DisplayResult, width: Int, height: Int, image: ImageResult?
+                            if case .success(let (png, capturedDisplay, capturedWidth, capturedHeight)) = result {
+                                display = capturedDisplay; width = capturedWidth; height = capturedHeight
+                                image = ImageResult(data: png.base64EncodedString(), width: width, height: height)
+                            } else {
+                                display = try accessibilityDisplay(); width = display.scaledWidth; height = display.scaledHeight; image = nil
                             }
-                            let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, desktopDigest: before, axRefs: observedTree?.refs ?? [:], axRoot: observedTree?.root)
+                            guard before == (try desktopDigest()) else { throw NativeFailure("desktop-changed", "观察期间窗口布局改变，请重新观察") }
+                            let app = try currentApplication()
+                            guard app == observedApp else { throw NativeFailure("focus-changed", "观察期间前台应用改变") }
+                            if let window = observedWindow {
+                                guard try ax.read(window, allowSurfaces: true).digest == observedLayout else { throw NativeFailure("observation-layout-changed", "观察期间目标布局改变") }
+                            }
+                            let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, desktopDigest: before, axRefs: observedTree?.refs ?? [:], axRoot: observedTree?.root, hasImage: image != nil)
                             try gate.save(snapshot); try gate.checkDispatch(token)
-                            success(id, ObservationResult(observationId: snapshot.id, epoch: p.epoch, image: ImageResult(data: png.base64EncodedString(), width: width, height: height), display: display, ax: observedTree?.text ?? "[当前前台窗口没有可安全读取的AX树；不可使用AX引用]", targetApp: app))
+                            success(id, ObservationResult(observationId: snapshot.id, epoch: p.epoch, image: image, width: width, height: height, display: display, ax: observedTree?.text ?? "[当前前台窗口没有可安全读取的AX树；不可使用AX引用]", targetApp: app))
                         } catch { gate.invalidateObservation(); failure(id, error) }
                     }
                 }
@@ -212,7 +240,6 @@ final class Engine {
             state("等待确认 · \(binding.appName) · 仅允许Gamma界面交互")
         } else {
             guard gate.isConfirming else { throw NativeFailure("revoked", "没有等待中的确认") }
-            defer { _ = try? gate.setConfirmation(binding.id, waiting: false, token: token) }
             do {
                 if let original = binding.returnApp {
                     guard try processIdentity(original.pid) == original.processIdentity else { throw NativeFailure("target-changed", "授权前应用已退出") }
@@ -229,12 +256,17 @@ final class Engine {
                     })
                 }
                 try verifyBinding(binding, ax: ax)
+                try gate.setConfirmation(binding.id, waiting: false, token: token)
                 state("确认完成 · \(binding.appName) · 执行前将再次核验")
-            } catch { prepared = nil; gate.invalidateObservation(); state("确认后上下文改变 · 请重新观察"); throw error }
+            } catch {
+                _ = try? gate.setConfirmation(binding.id, waiting: false, token: token)
+                prepared = nil; gate.invalidateObservation(); state("确认后上下文改变或等待超时 · 请重新观察"); throw error
+            }
         }
         success(id, ConfirmationResult(waiting: p.waiting))
     }
     private func perform(_ id: String, _ p: PerformParams) {
+        let bindingSnapshot = prepared
         var dispatched = false
         defer {
             prepared = nil
@@ -312,14 +344,27 @@ final class Engine {
                 try gate.claimAX(ticket); try gate.checkDispatch(snapshot.fence)
             } else {
                 var first = true
-                try dispatcher.post(p.action, snapshot: snapshot, expectedPID: binding.app?.pid, validate: { [self] in
+                try dispatcher.post(p.action, snapshot: snapshot, expectedPID: binding.app?.pid, scrollPoint: binding.scrollPoint, validate: { [self] in
                     if first { try verifyBinding(binding, ax: ax) }
                     try gate.checkDispatch(snapshot.fence); try validateDisplay(snapshot.display)
-                    guard !IsSecureEventInputEnabled(), CGPreflightPostEventAccess(), AXIsProcessTrusted() else { throw NativeFailure("secure-input", "权限撤销或系统安全输入已开启") }
+                    guard !IsSecureEventInputEnabled(), AXIsProcessTrusted() else { throw NativeFailure("secure-input", "辅助功能权限撤销或系统安全输入已开启") }
                     if let app = binding.app {
                         guard try processIdentity(app.pid) == app.processIdentity else { throw NativeFailure("target-changed", "目标进程已变化") }
                         if ["type", "key"].contains(p.action.kind) {
-                            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid, let expected = binding.element, CFEqual(try ax.focusedElement(), expected) else { throw NativeFailure("focus-changed", "输入期间焦点控件已改变") }
+                            let frontApp = NSWorkspace.shared.frontmostApplication
+                            let actualFocus = try? ax.focusedElement()
+                            guard frontApp?.processIdentifier == app.pid, let expected = binding.element, let actual = actualFocus, CFEqual(actual, expected) else {
+                                writeNativeComputerUseLog(
+                                    location: "Engine.swift:perform:validate_focus",
+                                    action: p.action.kind,
+                                    rawError: "输入期间焦点控件已改变",
+                                    errorCode: "focus-changed",
+                                    targetApp: ["pid": app.pid, "name": binding.appName, "bundleId": binding.bundleId],
+                                    frontmostApp: frontApp != nil ? ["pid": frontApp!.processIdentifier, "name": frontApp!.localizedName as Any, "bundleId": frontApp!.bundleIdentifier as Any] : nil,
+                                    focusedElement: describeAXElementInfo(actualFocus)
+                                )
+                                throw NativeFailure("focus-changed", "输入期间焦点控件已改变")
+                            }
                         }
                     }
                 }, commit: { [self] dispatch in
@@ -341,11 +386,23 @@ final class Engine {
                     throw NativeFailure("post-action-not-settled", "动作已投递，但800ms内桌面未稳定；已暂停，禁止重试")
                 }
             }
-            success(id, Receipt(actionId: p.actionId, outcome: "dispatched-unverified", message: "已投递，请用新的截图验证结果；不要自动重试"))
+            success(id, Receipt(actionId: p.actionId, outcome: "dispatched-unverified", message: "已投递，请用新的观察验证结果；不要自动重试"))
         } catch {
             gate.invalidateObservation()
             let detail = (error as? NativeFailure)?.message ?? "原生安全检查拒绝动作"
-            success(id, Receipt(actionId: p.actionId, outcome: dispatched ? "unknown" : "rejected", message: detail))
+            let errCode = (error as? NativeFailure)?.code ?? "native-failure"
+            if p.action.kind == "key" {
+                let actualFocus = try? ax.focusedElement()
+                writeNativeComputerUseLog(
+                    location: "Engine.swift:perform:key_failed",
+                    action: "key",
+                    rawError: detail,
+                    errorCode: errCode,
+                    targetApp: bindingSnapshot != nil ? ["name": bindingSnapshot!.appName, "bundleId": bindingSnapshot!.bundleId] : nil,
+                    focusedElement: describeAXElementInfo(actualFocus)
+                )
+            }
+            success(id, Receipt(actionId: p.actionId, outcome: dispatched ? "unknown" : "not-dispatched", message: detail, errorCode: errCode, permission: (error as? NativeFailure)?.permission))
             if dispatched { stop("动作可能部分执行，已暂停，禁止自动重试") }
         }
     }

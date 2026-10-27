@@ -291,6 +291,7 @@ export function AppShell(): React.ReactElement {
           data-sidebar-collapsed={sidebarCollapsed}
           className={cn('gamma-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
         >
+          <div className="gamma-workbench-frame">
             <SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
             </SidebarTransition>
@@ -301,6 +302,7 @@ export function AppShell(): React.ReactElement {
                 workspaceSide={workspaceSide}
                 workspaceOpen={isPanelOpen}
                 workspaceWidth={displayedRightPanelWidth}
+                resizing={draggedRightPanelWidth !== null}
                 minimumWidth={rightPanelMinimumWidth}
                 maximumWidth={rightPanelMaximumWidth}
                 onResizeStart={handleMouseDown}
@@ -319,6 +321,7 @@ export function AppShell(): React.ReactElement {
                 workspace={showRightPanel ? <RightSidePanel width={displayedRightPanelWidth} /> : null}
               />
             </div>
+          </div>
         </div>
         <ComputerModals />
         <TerminalLifecycleObserver />

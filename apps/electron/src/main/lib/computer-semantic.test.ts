@@ -42,13 +42,14 @@ describe('Given 接近 Sky 的应用定向与快照语义操作', () => {
     await f.controller.finishRun(f.binding)
   })
   test('When 缺少观察ID、引用伪造或索引与ref冲突 Then 不投递动作', async () => {
-    const f = semanticFixture()
-    const state = await f.execute({ action: 'get_app_state' })
-    await expect(f.execute({ action: 'set_value', element_index: 2, text: 'x' })).rejects.toThrow('observationId')
-    await expect(f.execute({ action: 'set_value', observationId: state.observationId, elementRef: 'forged', text: 'x' })).rejects.toThrow('不属于最新观察')
-    await expect(f.execute({ action: 'set_value', observationId: state.observationId, elementRef: 'forged', element_index: 2, text: 'x' })).rejects.toThrow('不一致')
-    expect(f.actions).toHaveLength(0)
-    await f.controller.finishRun(f.binding)
+    for (const variant of ['missing', 'forged', 'conflict']) {
+      const f = semanticFixture()
+      const state = await f.execute({ action: 'get_app_state' })
+      const params = variant === 'missing' ? { element_index: 2 } : variant === 'forged' ? { observationId: state.observationId, elementRef: 'forged' } : { observationId: state.observationId, elementRef: 'forged', element_index: 2 }
+      await expect(f.execute({ action: 'set_value', ...params, text: 'x' })).rejects.toThrow(variant === 'missing' ? 'observationId' : variant === 'forged' ? '不属于最新观察' : '不一致')
+      expect(f.actions).toHaveLength(0)
+      await f.controller.finishRun(f.binding)
+    }
   })
   test('When 引用超时 Then 不自动刷新观察后套用旧索引', async () => {
     const f = semanticFixture()
@@ -71,14 +72,18 @@ describe('Given 接近 Sky 的应用定向与快照语义操作', () => {
       await f.controller.finishRun(f.binding)
     }
   })
-  test('When 用户取消风险确认 Then 同轮后续观察、输入及旧引用均拒绝', async () => {
+  test('When 用户取消风险确认 Then 只取消当前动作，旧引用失效但可以继续观察', async () => {
     const f = semanticFixture()
     const observed = await f.execute({ action: 'get_app_state' })
     f.setContext({ role: 'AXButton', title: '删除' })
     f.auth.setUiHandlers({ riskConfirm: async () => false })
-    await expect(f.execute({ action: 'click', observationId: observed.observationId, element_index: 2 })).rejects.toThrow('取消')
-    expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
-    for (const params of [{ action: 'screenshot' }, { action: 'type', text: 'x' }, { action: 'click', observationId: observed.observationId, element_index: 2 }]) await expect(f.execute(params)).rejects.toThrow()
+    await expect(f.execute({ action: 'click', observationId: observed.observationId, element_index: 2 })).rejects.toThrow('未获确认')
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(false)
+    expect(f.controller.getState().phase).toBe('active')
+    expect(f.controller.getState().message).not.toContain('等待本地确认')
+    await expect(f.execute({ action: 'click', observationId: observed.observationId, element_index: 2 })).rejects.toThrow('观察')
+    const fresh = await f.execute({ action: 'screenshot' })
+    expect(fresh.observationId).not.toBe(observed.observationId)
     expect(f.actions).toHaveLength(0)
     await f.controller.finishRun(f.binding)
   })
@@ -131,7 +136,7 @@ describe('Given 接近 Sky 的应用定向与快照语义操作', () => {
   test('When 请求尚不支持的HTML富文本 Then 在读取桌面或修改应用前明确拒绝', async () => {
     const f = semanticFixture()
     await expect(f.execute({ action: 'paste', app: 'Notes', text: '<b>x</b>', format: 'html' })).rejects.toThrow('不支持 HTML 富文本')
-    expect(f.calls).toHaveLength(0)
+    expect(f.calls.filter(call => call.method !== 'terminate')).toHaveLength(0)
     expect(f.actions).toHaveLength(0)
     await f.controller.finishRun(f.binding)
   })
@@ -172,15 +177,15 @@ describe('Given 接近 Sky 的应用定向与快照语义操作', () => {
       observationId: `changing-${++generation}`, epoch: params.epoch, image: tinyComputerImage,
       ax: `ref=changing-${generation} 0 AXTextArea value=${generation}`, targetApp: { name: 'Notes', bundleId: 'com.apple.Notes' },
     } : undefined })
-    const result = await f.controller.executeAutonomousAction({ action: 'type_text', text: 'x' }, undefined, f.binding)
-    expect(result.observationStability).toBe('timeout')
-    expect(result.message).toContain('不要重放动作')
+    await expect(f.controller.executeAutonomousAction({ action: 'type_text', text: 'x' }, undefined, f.binding)).rejects.toThrow('本轮电脑操作已暂停')
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
+    expect(f.controller.getRunStopReason(f.binding.runId)).toContain('无法确认稳定')
     expect(f.actions).toHaveLength(1)
     await f.controller.finishRun(f.binding)
   })
   test('When 原生回执为 unknown Then 明确暂停且同轮不能恢复', async () => {
     const f = createComputerFixture({ call: async (method, params) => method === 'perform' ? { actionId: params.actionId, outcome: 'unknown', message: '可能部分执行' } : undefined })
-    await expect(f.controller.executeAutonomousAction({ action: 'type', text: 'x' }, undefined, f.binding)).rejects.toThrow('副作用未知')
+    await expect(f.controller.executeAutonomousAction({ action: 'type', text: 'x' }, undefined, f.binding)).rejects.toThrow('本轮电脑操作已暂停')
     expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
     await expect(f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)).rejects.toThrow()
     await f.controller.finishRun(f.binding)

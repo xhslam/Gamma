@@ -10,6 +10,7 @@ import {
   CODEX_GPT_54_MINI_CONTEXT_WINDOW,
   CODEX_GPT_56_CONTEXT_WINDOW,
   CODEX_GPT_6_CONTEXT_WINDOW,
+  CODEX_GPT_61_TERRA_FALLBACK_CONTEXT_WINDOW,
   extractZhipuCodingTeamApiToken,
   inferBudgetContextWindow,
   inferCodexAlignedGPT5ContextWindow,
@@ -17,6 +18,7 @@ import {
   isGpt6AstraFamily,
   isGpt6LunaFamily,
   isGpt6SolFamily,
+  isGpt61TerraModel,
   isMimoV26Model,
   resolveReasoningCapability,
   resolveReasoningProfile,
@@ -463,6 +465,31 @@ const CODEX_MODEL_PATCHES: PiCatalogModelPatch[] = [
     contextWindow: CODEX_GPT_56_CONTEXT_WINDOW,
     maxTokens: CODEX_MAX_TOKENS,
   },
+  {
+    id: 'gpt-6.1-terra',
+    name: 'GPT-6.1 Terra',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    // 兼容回退基于已有 SDK gpt-5.6-terra 基线，不套用 Sol 的 off 档位
+    thinkingLevelMap: {
+      minimal: 'low',
+      xhigh: 'xhigh',
+      max: 'max',
+    },
+    compat: {
+      supportsOpenAIGrammarTools: true,
+      supportsAdditionalTools: true,
+      supportsToolSearch: true,
+      supportsMidConvoSystemMessages: true,
+    },
+    input: ['text', 'image'],
+    // 费用与上下文均采用保守的旧 Terra SDK 基线，官方规格上线后真实目录自动优先
+    cost: { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5 },
+    contextWindow: CODEX_GPT_61_TERRA_FALLBACK_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
 ]
 
 let piAiCompatPromise: Promise<PiAiCompat> | undefined
@@ -723,7 +750,10 @@ async function resolvePiModelDefaults(input: Pick<PiAgentQueryOptions, 'provider
     input: catalogModel ? [...catalogModel.input] : ['text', 'image'],
     cost: catalogModel ? { ...catalogModel.cost } : { ...ZERO_MODEL_COST },
     // Codex 明确对齐策略优先，其余采用有效 catalog 值；未知模型统一保守兜底。
-    contextWindow: codexAlignedCapabilities?.contextWindow ?? modelContextWindow,
+    // 对 GPT-6.1 Terra，因无官方权威规格，真实目录/缓存值优先于保守回退基线。
+    contextWindow: (isGpt61TerraModel(input.model) && catalogModel?.contextWindow)
+      ? catalogModel.contextWindow
+      : (codexAlignedCapabilities?.contextWindow ?? modelContextWindow),
     // Pi catalog 缺少时，GLM-5.3 系列仍按官方 128K 输出上限注册。
     maxTokens: isVolcengineGlm5x
       ? VOLCENGINE_GLM_MAX_TOKENS
@@ -839,6 +869,10 @@ function mergeCodexModels(models: readonly PiCatalogModel[]): PiCatalogModel[] {
     const existingIndex = indexById.get(patch.id)
     const existing = existingIndex !== undefined ? merged[existingIndex] : undefined
     if (existingIndex !== undefined && existing) {
+      if (patch.id === 'gpt-6.1-terra') {
+        // 若现有 SDK 或缓存已提供新型号元数据，必须优先保留，不被旧兼容回退覆盖
+        continue
+      }
       merged[existingIndex] = { ...existing, ...patch }
     } else if (isCompleteCatalogModel(patch)) {
       indexById.set(patch.id, merged.length)

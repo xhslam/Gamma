@@ -1,4 +1,4 @@
-import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily } from '../utils/model-family'
+import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily, isGpt61TerraModel } from '../utils/model-family'
 import type { ProviderType } from './channel'
 import type { AgentThinkingLevel } from './agent'
 
@@ -364,6 +364,9 @@ export function resolveReasoningProfile(input: ResolveReasoningProfileInput): Re
   }
   if (isGpt6SolFamily(modelId) || isGpt6LunaFamily(modelId)) {
     return OPENAI_SOL_LUNA_PROFILE.encodings[input.transport] ? OPENAI_SOL_LUNA_PROFILE : undefined
+  }
+  if (isGpt61TerraModel(modelId)) {
+    return OPENAI_MAX_PROFILE.encodings[input.transport] ? OPENAI_MAX_PROFILE : undefined
   }
   const profile = /^deepseek-flash(?:-|$)/.test(modelId)
     ? DEEPSEEK_FLASH_PROFILE

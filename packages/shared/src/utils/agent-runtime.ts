@@ -50,7 +50,12 @@ export function createAgentRuntimeResponse<Payload>(
 }
 
 export function serializeAgentRuntimeError(error: unknown, fallbackCode = 'runtime.internal_error'): AgentRuntimeError {
-  if (isAgentRuntimeError(error)) return error
+  // Error 的 message 不可枚举，且结构化克隆不会保留自定义字段；显式生成传输对象。
+  if (isAgentRuntimeError(error)) return {
+    code: error.code,
+    message: error.message,
+    ...('details' in error ? { details: error.details } : {}),
+  }
   if (error instanceof Error) {
     return {
       code: fallbackCode,

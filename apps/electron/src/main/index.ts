@@ -1,4 +1,5 @@
 import { app, dialog, protocol, safeStorage } from 'electron'
+import * as electron from 'electron'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -12,6 +13,7 @@ import {
 import type { PreparedLegacyBrandMigration } from './lib/legacy-brand-migration'
 import { completeBrandMigration } from './lib/complete-brand-migration'
 import { importLegacyCookieProfiles, runLegacyCredentialHelper, startLegacyCredentialHelper } from './lib/legacy-credential-helper'
+import { runComputerUseDiagnostics } from './lib/computer-use-diagnostics'
 
 export { getMainWindow } from './lib/main-window-store'
 
@@ -22,8 +24,10 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EPIPE' || err.code === 'EIO') return
 })
 
-// helper 必须在业务模块、Gamma 身份与 Chromium profile 初始化前分流。
-if (!runLegacyCredentialHelper()) bootstrapGamma()
+// 只读诊断必须先于业务/旧profile迁移/单实例锁；普通启动仍保留legacy helper分流。
+if (!runComputerUseDiagnostics({ app, resourcesPath: process.resourcesPath, parentAccessibility: () => electron.systemPreferences.isTrustedAccessibilityClient(false) })) {
+  if (!runLegacyCredentialHelper()) bootstrapGamma()
+}
 
 
 function bootstrapGamma(): void {

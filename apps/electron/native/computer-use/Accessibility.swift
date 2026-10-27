@@ -59,11 +59,10 @@ final class AccessibilityWorker {
         for window in windows {
             var pid: pid_t = 0
             guard AXUIElementGetPid(window, &pid) == .success, pid == target.pid,
-                  try string(window, kAXTitleAttribute) == target.title,
                   let frame = try rect(window), frame == target.bounds.cg else { continue }
             matches.append(window)
         }
-        guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与CG窗口不是唯一PID、标题、几何匹配") }
+        guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与CG窗口不是唯一PID、几何匹配") }
         return matches[0]
     }
     private func actionNames(_ element: AXUIElement) throws -> [String] {
@@ -142,16 +141,25 @@ final class AccessibilityWorker {
     func focusedText(_ target: Target, root: AXUIElement) throws {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         let app = AXUIElementCreateApplication(target.pid)
-        guard let raw = try value(app, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else { throw NativeFailure("unsafe-focus", "无法确认输入焦点") }
+        guard let raw = try value(app, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else {
+            writeNativeComputerUseLog(location: "Accessibility.swift:focusedText:raw_not_ax_element", rawError: "无法确认输入焦点", errorCode: "unsafe-focus", targetApp: ["pid": target.pid, "bundleId": target.bundleId])
+            throw NativeFailure("unsafe-focus", "无法确认输入焦点")
+        }
         let element = unsafeBitCast(raw, to: AXUIElement.self)
         try validateElement(element, target: target, root: root)
         let role = try string(element, kAXRoleAttribute)
-        guard role == kAXTextFieldRole || role == kAXTextAreaRole else { throw NativeFailure("unsafe-focus", "仅允许明确的非安全文本控件输入") }
+        guard role == kAXTextFieldRole || role == kAXTextAreaRole else {
+            writeNativeComputerUseLog(location: "Accessibility.swift:focusedText:not_text_field", rawError: "仅允许明确的非安全文本控件输入", errorCode: "unsafe-focus", targetApp: ["pid": target.pid, "bundleId": target.bundleId], focusedElement: describeAXElementInfo(element))
+            throw NativeFailure("unsafe-focus", "仅允许明确的非安全文本控件输入")
+        }
     }
     func focusedElement() throws -> AXUIElement {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         let system = AXUIElementCreateSystemWide()
-        guard let raw = try value(system, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else { throw NativeFailure("unsafe-focus", "无法识别实际焦点控件") }
+        guard let raw = try value(system, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else {
+            writeNativeComputerUseLog(location: "Accessibility.swift:focusedElement:no_focused_element", rawError: "无法识别实际焦点控件", errorCode: "unsafe-focus")
+            throw NativeFailure("unsafe-focus", "无法识别实际焦点控件")
+        }
         return unsafeBitCast(raw, to: AXUIElement.self)
     }
     func hitElement(_ point: CGPoint) throws -> AXUIElement {
@@ -188,11 +196,16 @@ final class AccessibilityWorker {
     func windowForFocused(_ pid: pid_t, windows: [Target]) throws -> Target {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         let app = AXUIElementCreateApplication(pid)
-        guard let raw = try value(app, kAXFocusedWindowAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else { throw NativeFailure("unsafe-focus", "无法识别实际焦点窗口") }
+        guard let raw = try value(app, kAXFocusedWindowAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else {
+            writeNativeComputerUseLog(location: "Accessibility.swift:windowForFocused:no_focused_window", rawError: "无法识别实际焦点窗口", errorCode: "unsafe-focus", targetApp: ["pid": pid])
+            throw NativeFailure("unsafe-focus", "无法识别实际焦点窗口")
+        }
         let root = unsafeBitCast(raw, to: AXUIElement.self)
-        let title = try string(root, kAXTitleAttribute) ?? ""
-        guard let frame = try rect(root) else { throw NativeFailure("unsafe-focus", "无法读取焦点窗口几何") }
-        let matches = windows.filter { $0.pid == pid && $0.title == title && $0.bounds.cg == frame }
+        guard let frame = try rect(root) else {
+            writeNativeComputerUseLog(location: "Accessibility.swift:windowForFocused:no_window_frame", rawError: "无法读取焦点窗口几何", errorCode: "unsafe-focus", targetApp: ["pid": pid], focusedElement: describeAXElementInfo(root))
+            throw NativeFailure("unsafe-focus", "无法读取焦点窗口几何")
+        }
+        let matches = windows.filter { $0.pid == pid && $0.bounds.cg == frame }
         guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "焦点窗口无法唯一关联CG窗口") }
         return matches[0]
     }

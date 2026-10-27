@@ -2,6 +2,12 @@ import Foundation
 import AppKit
 import Darwin
 
+// 日志自检在初始化 AppKit、Engine 或任何权限检查之前完成并退出。
+if CommandLine.arguments == [CommandLine.arguments[0], "--logger-probe"] {
+    writeNativeLoggerReady()
+    exit(0)
+}
+
 // 必须在访问NSApplication/权限/窗口/监听API之前分流离线自测。
 if CommandLine.arguments == [CommandLine.arguments[0], "--self-test"] {
     do {
@@ -12,7 +18,8 @@ if CommandLine.arguments == [CommandLine.arguments[0], "--self-test"] {
         fputs("离线安全自测失败：\((error as? NativeFailure)?.message ?? "未知错误")\n", stderr); exit(1)
     }
 }
-guard CommandLine.arguments.count == 1 else { fputs("仅支持stdio协议或--self-test\n", stderr); exit(64) }
+guard CommandLine.arguments.count == 1 else { fputs("仅支持stdio协议、--self-test 或 --logger-probe\n", stderr); exit(64) }
+writeNativeLoggerReady()
 signal(SIGPIPE, SIG_IGN)
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)

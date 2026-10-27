@@ -1,11 +1,13 @@
 import { join } from 'node:path'
 import {
+  app,
   MessageChannelMain,
   utilityProcess,
   type MessagePortMain,
   type UtilityProcess,
 } from 'electron'
 import { startUtilityProcessWithRetry } from './utility-process-startup'
+import { getComputerLogPath } from './computer-logger'
 import {
   AGENT_RUNTIME_BOOTSTRAP_ID,
   AGENT_RUNTIME_METHODS,
@@ -192,10 +194,13 @@ export class AgentRuntimeClient {
       generation === this.generation
       && this.stopPromise === undefined
       && this.state.status === 'starting'
+    // 日志配置失败不能阻止正常会话启动。
+    let loggerEnv: NodeJS.ProcessEnv = {}
+    try { loggerEnv = { GAMMA_COMPUTER_LOG_PATH: getComputerLogPath(), GAMMA_APP_VERSION: app.getVersion() } } catch { /* 尽力传递 */ }
     const runtimeProcess = await startUtilityProcessWithRetry(
       () => utilityProcess.fork(this.entryPath, [], {
         serviceName: 'Gamma Runtime',
-        env: { ...process.env, ...this.env, GAMMA_AGENT_SESSION_ID: this.sessionId },
+        env: { ...process.env, ...this.env, GAMMA_AGENT_SESSION_ID: this.sessionId, ...loggerEnv },
       }),
       { shouldContinue: shouldContinueStartup },
     )

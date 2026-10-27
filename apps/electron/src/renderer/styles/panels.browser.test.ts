@@ -28,15 +28,16 @@ beforeAll(async () => {
       async mount(options={}){
         document.documentElement.className='gamma-main-window '+(options.theme??'');
         const collapsed=!!options.collapsed,width=options.width??1100,height=options.height??520;
-        const workspaceWidth=clampRightPanelWidth(280,width,240,collapsed?0:264,true);
+        const workspaceWidth=clampRightPanelWidth(280,width,240,collapsed?0:256,true);
         const content=name=>React.createElement(React.Fragment,null,
           React.createElement('header',{style:{height:40,flexShrink:0}},name),
           React.createElement('div',{'data-scroll':name,className:'min-h-0 flex-1 overflow-y-auto'},React.createElement('div',{style:{height:1800}},name==='agent'?React.createElement('p',{className:'reading-body'},'正文 ',React.createElement('code',null,'inline_code')):'长文件列表')),
           React.createElement(Draft,{name}));
         root.render(React.createElement('div',{className:'gamma-workbench flex h-full w-full '+(options.windows?'pt-8':''),'data-sidebar-collapsed':collapsed,style:{width,height}},
-          React.createElement(SidebarTransition,{collapsed,width:256},React.createElement(Panel,{variant:'shrink',width:256},React.createElement('span',{'data-sidebar-content':true},'导航'))),
-          React.createElement('main',{className:'flex min-h-0 min-w-0 flex-1 flex-col'},React.createElement(WorkspacePanels,{workspaceSide:options.side??'right',workspaceOpen:options.open!==false,workspaceWidth,minimumWidth:240,maximumWidth:600,onResizeStart:()=>{},onResizeKeyDown:()=>{},agent:React.createElement(Panel,null,content('agent')),workspace:React.createElement(Panel,{variant:'shrink',width:options.open===false?0:workspaceWidth},content('workspace'))}))));
-        await wait(80);await document.fonts.ready;
+          React.createElement('div',{className:'gamma-workbench-frame'},
+            React.createElement(SidebarTransition,{collapsed,width:256},React.createElement(Panel,{variant:'shrink',width:256},React.createElement('span',{'data-sidebar-content':true},'导航'))),
+            React.createElement('main',{className:'flex min-h-0 min-w-0 flex-1 flex-col'},React.createElement(WorkspacePanels,{workspaceSide:options.side??'right',workspaceOpen:options.open!==false,workspaceWidth,minimumWidth:240,maximumWidth:600,onResizeStart:()=>{},onResizeKeyDown:()=>{},agent:React.createElement(Panel,null,content('agent')),workspace:React.createElement(Panel,{variant:'shrink',width:workspaceWidth},content('workspace'))})))));
+        await wait(300);await document.fonts.ready;
       },
       async floating(kind,theme=''){
         document.documentElement.className=theme;
@@ -75,16 +76,22 @@ function expectPanel(style: PanelStyle, dark: boolean): void {
 }
 
 describe('Given 第4步面板与布局规范', () => {
-  test('When 三个主面板在亮暗及历史主题中显示 Then 背景分层且面板均为12/1/16、间隙8px，行内代码仍为6px', async () => {
+  test('When 三个主面板在亮暗及历史主题中显示 Then 共用圆角外框、接缝零间隙无圆角，行内代码仍为6px', async () => {
     for (const theme of ['', 'dark', 'dark theme-terminal-dark']) {
-      const result = await renderer.run<{ panels: PanelStyle[]; gaps: number[]; inset: number; codeRadius: string; background: string }>(`
+      const result = await renderer.run<{ panels: PanelStyle[]; frameRadius: string; gaps: number[]; inset: number; codeRadius: string; background: string }>(`
         const f=window.panelsFixture;await f.mount({theme:${JSON.stringify(theme)}});
         const outer=document.querySelector('.gamma-workbench'),panels=f.framePanels(),rects=panels.map(e=>e.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
-        return {panels:panels.map(f.metrics),gaps:rects.slice(1).map((r,i)=>r.left-rects[i].right),inset:rects[0].left-outer.getBoundingClientRect().left,codeRadius:getComputedStyle(document.querySelector('code')).borderRadius,background:getComputedStyle(outer).backgroundColor};
+        return {panels:panels.map(f.metrics),frameRadius:getComputedStyle(document.querySelector('.gamma-workbench-frame')).borderRadius,gaps:rects.slice(1).map((r,i)=>r.left-rects[i].right),inset:rects[0].left-outer.getBoundingClientRect().left,codeRadius:getComputedStyle(document.querySelector('code')).borderRadius,background:getComputedStyle(outer).backgroundColor};
       `)
       expect(result.panels).toHaveLength(3)
-      for (const panel of result.panels) expectPanel(panel, !!theme)
-      expect(result.gaps).toEqual([8, 8])
+      for (const panel of result.panels) {
+        expect(panel.radius).toBe('0px')
+        expect(panel.border).toBe('0px')
+        expect(panel.padding).toBe('16px')
+        expect(panel.background).toBe(theme ? 'rgb(38, 38, 36)' : 'rgb(255, 255, 255)')
+      }
+      expect(result.frameRadius).toBe('12px')
+      expect(result.gaps).toEqual([0, 0])
       expect(result.inset).toBe(8)
       expect(result.codeRadius).toBe('6px')
       expect(result.background).toBe(theme ? 'rgb(31, 30, 29)' : 'rgb(250, 249, 245)')
@@ -107,7 +114,7 @@ describe('Given 第4步面板与布局规范', () => {
       expect(sample.input).toBe(true)
       expect(sample.scroll).toBe(true)
       expect(sample.mainWidth).toBeGreaterThanOrEqual(320)
-      expect(sample.gap).toBe(8)
+      expect(sample.gap).toBe(0)
     }
   }, 30_000)
 

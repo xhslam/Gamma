@@ -15,7 +15,7 @@ beforeAll(async () => {
     import { BrowserSlot } from '@/components/browser/BrowserSlot'
     import { TooltipProvider } from '@/components/ui/tooltip'
     import { getWorkspaceResizeWidth, clampRightPanelWidth } from '@/components/app-shell/right-panel-layout'
-    import { currentAgentSessionIdAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelOpenAtomFamily } from '@/atoms/agent-atoms'
+    import { currentAgentSessionIdAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelOpenAtomFamily, agentWorkspaceTabIdsAtom } from '@/atoms/agent-atoms'
     import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
     import '@/styles/globals.css'
     document.head.insertAdjacentHTML('beforeend','<style>html,body,#root{height:100%;margin:0}#root{width:800px;height:500px;display:flex}</style>')
@@ -28,6 +28,7 @@ beforeAll(async () => {
         window.electronAPI={setAgentBrowserLayout:async input=>calls.push(input)};
         store.set(currentAgentSessionIdAtom,'A');
         store.set(agentSidePanelOpenAtomFamily('A'),true);
+        store.set(agentWorkspaceTabIdsAtom,new Map([['A',['terminal:layout']],['B',['terminal:layout']]]));
         store.set(agentSessionsAtom,[{id:'A',title:'会话A',updatedAt:2},{id:'B',title:'会话B',updatedAt:1}]);
         store.set(agentSidePanelLayoutMapAtom,layouts ?? {A:{width:300,hasOpenedWideWorkspace:false,widePanelWidthOverride:null}});
         const Draft=({name})=>{React.useEffect(()=>{mounts[name]++},[]);return React.createElement('input',{'aria-label':name+'草稿',defaultValue:name+'初稿'})};
@@ -39,11 +40,12 @@ beforeAll(async () => {
           const resizeKey=event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();setWidth(getWorkspaceResizeWidth(layout.width,0,event.key==='ArrowLeft'?-24:24,side))}};
           return React.createElement(WorkspacePanels,{workspaceSide:side,workspaceOpen:open,workspaceWidth:layout.width,minimumWidth:240,maximumWidth:480,onResizeStart:resizeStart,onResizeKeyDown:resizeKey,
             agent:React.createElement(React.Fragment,null,React.createElement(AgentHeader,{sessionId}),React.createElement(Draft,{name:'agent'})),
-            workspace:React.createElement('div',{style:{width:open?layout.width:0,height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},React.createElement(DiffPanelTabBar,{tabs:[{id:'files',label:'文件',icon:null}],activeTab:'files',onTabChange:()=>{},onCloseTab:()=>{},onOpenBrowser:()=>{},onOpenFile:()=>{},onClose:()=>store.set(agentSidePanelOpenAtomFamily(sessionId),false)}),React.createElement(Draft,{name:'workspace'}),React.createElement(BrowserSlot,{sessionId,tabId:'native-browser'}))
+            workspace:React.createElement('div',{style:{width:layout.width,height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},React.createElement(DiffPanelTabBar,{tabs:[{id:'terminal:layout',label:'终端',icon:null}],activeTab:'terminal:layout',onTabChange:()=>{},onCloseTab:()=>{},onOpenBrowser:()=>{},onOpenFile:()=>{},onClose:()=>store.set(agentSidePanelOpenAtomFamily(sessionId),false)}),React.createElement(Draft,{name:'workspace'}),React.createElement(BrowserSlot,{sessionId,tabId:'native-browser'}))
           });
         }
         const render=()=>root.render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement(Shell))));render();
-        await until(()=>document.querySelector('[aria-label="交换 Agent 与工作区位置"]'));await delay(80);
+        await until(()=>document.querySelector('[aria-label="交换 Agent 与工作区位置"]'));
+        await until(()=>document.querySelector('[data-sidebar-region="workspace"]').getBoundingClientRect().width===store.get(agentSidePanelLayoutAtomFamily('A')).width&&calls.at(-1)?.visible&&calls.at(-1).bounds.width===store.get(agentSidePanelLayoutAtomFamily('A')).width);
         return {root,store,calls,mounts,render,
           side:()=>store.get(agentSidePanelLayoutAtomFamily(store.get(currentAgentSessionIdAtom))).workspaceSide ?? 'right',
           width:()=>store.get(agentSidePanelLayoutAtomFamily(store.get(currentAgentSessionIdAtom))).width,
@@ -61,7 +63,7 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
-  test('When 收起侧栏并交换两侧工作区 Then 展开入口、唯一会话标题与文件标签在同一行且避开红绿灯', async () => {
+  test('When 收起侧栏并交换两侧工作区 Then 展开入口、唯一会话标题与工作区标签在同一行且避开红绿灯', async () => {
     const results = await renderer.run(`
       const api=window.workspaceLayoutRegression,fixture=await api.mount(),results=[];
       const draft=document.querySelector('[aria-label="agent草稿"]');draft.value='保留草稿';
