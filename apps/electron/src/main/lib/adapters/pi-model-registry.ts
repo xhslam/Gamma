@@ -1,0 +1,1091 @@
+/**
+ * Pi 模型注册与渠道兼容层。
+ *
+ * Pi SDK 需要把 Proma 渠道临时注册成 runtime provider；这里集中处理
+ * ProviderType 到 Pi API 协议、baseUrl、认证头和模型 catalog 默认值的映射。
+ */
+
+import {
+  CODEX_GPT_54_55_CONTEXT_WINDOW,
+  CODEX_GPT_54_MINI_CONTEXT_WINDOW,
+  CODEX_GPT_56_CONTEXT_WINDOW,
+  CODEX_GPT_6_CONTEXT_WINDOW,
+  extractZhipuCodingTeamApiToken,
+  inferContextWindow,
+  inferCodexAlignedGPT5ContextWindow,
+  getGeminiModelCapability,
+  isGpt6AstraFamily,
+  isGpt6LunaFamily,
+  isGpt6SolFamily,
+  isMimoV26Model,
+  resolveReasoningCapability,
+  resolveReasoningProfile,
+  type CodexOAuthCredentials,
+  type GithubCopilotOAuthCredentials,
+  type XaiOAuthCredentials,
+  type ReasoningCapability,
+  type ReasoningTransport,
+  type ProviderType,
+} from '@proma/shared'
+import {
+  getPromaUserAgent,
+  normalizeAnthropicBaseUrlForSdk,
+  normalizeOpenAIBaseUrlForSdk,
+  resolveAnthropicMessagesUrl,
+} from '@proma/core'
+import type { Api, KnownProvider, Model } from '@earendil-works/pi-ai/compat'
+import type { PiAgentQueryOptions } from './pi-agent-adapter'
+import { rememberXaiOAuthCredentials, refreshXaiOAuthCredentialsSerial } from '../xai-oauth-credentials'
+import { supportsPiDeveloperRole } from './pi-provider-compat'
+import { CodexModelStore } from './pi-codex-model-store'
+import {
+  createPiRequestProxyDispatcher,
+  installPiRequestProxyFetch,
+  runWithManagedPiRequestProxy,
+} from './pi-request-proxy'
+
+type PiSdk = typeof import('@earendil-works/pi-coding-agent')
+type PiAiCompat = typeof import('@earendil-works/pi-ai/compat')
+type PiCatalogModel = Model<Api>
+type PiModelCost = PiCatalogModel['cost']
+type PiRequestHeaders = Record<string, string>
+type PiCatalogModelPatch = Pick<PiCatalogModel, 'id'> & Partial<PiCatalogModel>
+
+export interface PiModelDefaults {
+  api: Api
+  reasoning: boolean
+  thinkingLevelMap?: PiCatalogModel['thinkingLevelMap']
+  compat?: PiCatalogModel['compat']
+  input: PiCatalogModel['input']
+  cost: PiModelCost
+  contextWindow: number
+  maxTokens: number
+}
+
+const ZERO_MODEL_COST: PiModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+export const DEFAULT_CONTEXT_WINDOW = 200_000
+const DEFAULT_MAX_TOKENS = 64_000
+const VOLCENGINE_GLM_MAX_TOKENS = 128_000
+/** GLM-5.3 系列均支持 128K 最大输出。 */
+const GLM_53_FAMILY_MAX_TOKENS = 131_072
+/** MiMo-V2.6 系列（pro / flash / pro-ultraspeed）官方最大输出均为 128K。 */
+const MIMO_V26_FAMILY_MAX_TOKENS = 128_000
+const CODEX_BASE_URL = 'https://chatgpt.com/backend-api'
+const CODEX_MAX_TOKENS = 128_000
+/** 已从 ChatGPT Codex 订阅下线、不得再展示或运行的模型。 */
+const UNSUPPORTED_CODEX_MODEL_IDS = new Set([
+  'gpt-5.3-codex-spark',
+])
+/** 已从 Codex 渠道移除的模型家族；覆盖其 Mini 等同系列 SKU。 */
+const UNSUPPORTED_CODEX_MODEL_PREFIXES = [
+  'gpt-5.4',
+  'gpt-5.5',
+] as const
+/**
+ * 将 Codex 已标记的 GPT-5.x 上下文窗口外推到同名第三方模型。
+ *
+ * reasoning 档位由 shared reasoning profile 管理；未被 Codex 标记的 Pro/Nano SKU
+ * 仍保留 catalog 的上下文窗口。
+ */
+export function getCodexAlignedGPT5Capabilities(modelId: string | undefined): Pick<PiModelDefaults, 'contextWindow'> | undefined {
+  const contextWindow = inferCodexAlignedGPT5ContextWindow(modelId)
+  if (contextWindow === undefined) return undefined
+  return { contextWindow }
+}
+
+function toReasoningTransport(api: Api): ReasoningTransport {
+  switch (api) {
+    case 'anthropic-messages':
+      return 'anthropic-messages'
+    case 'openai-completions':
+      return 'openai-completions'
+    case 'openai-responses':
+      return 'openai-responses'
+    default:
+      return 'other'
+  }
+}
+
+/** 将共享 reasoning profile 编译为 Pi SDK 的 model compatibility patch。 */
+function compilePiReasoningCapabilities(
+  api: Api,
+  modelId: string | undefined,
+): Pick<PiModelDefaults, 'compat' | 'thinkingLevelMap'> | undefined {
+  const transport = toReasoningTransport(api)
+  const profile = resolveReasoningProfile({ modelId, transport })
+  const encoding = profile?.encodings[transport]
+  if (!encoding) return undefined
+
+  const thinkingLevelMap = encoding.effortMap as PiCatalogModel['thinkingLevelMap']
+  switch (encoding.kind) {
+    case 'adaptive-effort':
+      return {
+        compat: { forceAdaptiveThinking: true },
+        thinkingLevelMap,
+      }
+    // DeepSeek V4's Anthropic-compatible protocol is not adaptive thinking.
+    // Pi's generic stream emits a legacy budget; the runtime request extension
+    // replaces it with `thinking: enabled` + `output_config.effort`.
+    case 'deepseek-output-effort':
+      return { thinkingLevelMap }
+    case 'openai-reasoning-effort':
+      return {
+        compat: { supportsReasoningEffort: true },
+        thinkingLevelMap,
+      }
+    case 'zai-thinking-effort':
+      return {
+        compat: {
+          supportsDeveloperRole: false,
+          supportsReasoningEffort: true,
+          thinkingFormat: 'zai',
+          zaiToolStream: true,
+        },
+        thinkingLevelMap,
+      }
+  }
+}
+
+/**
+ * Proma re-registers every non-OAuth channel as an ephemeral Pi provider. Preserve
+ * only this protocol-safe catalog flag: current Claude models require adaptive
+ * thinking, while copying the complete catalog compat object could leak unrelated
+ * tool/sampling behaviour across provider protocols.
+ *
+ * Fable 5.1 is newer than the bundled Pi catalog entry (`claude-fable-5`), so its
+ * exact ID lookup can legitimately miss. Its official Anthropic Messages endpoint
+ * nevertheless rejects legacy `thinking: { type: 'enabled' }`; recognize the whole
+ * Fable 5 family here to keep the request on Pi's adaptive + effort path.
+ */
+export function shouldForcePiAdaptiveThinking(
+  api: Api,
+  catalogModel: { api: Api, compat?: unknown } | undefined,
+  modelId?: string,
+): boolean {
+  if (api !== 'anthropic-messages') return false
+  if ((catalogModel?.compat as { forceAdaptiveThinking?: unknown } | undefined)?.forceAdaptiveThinking === true) {
+    return true
+  }
+  const claudeFamilyKey = modelId ? getClaudeFamilyKey(modelId, true) : undefined
+  return claudeFamilyKey === 'fable-5' || claudeFamilyKey?.startsWith('fable-5-') === true
+}
+
+const CODEX_56_THINKING_LEVEL_MAP = compilePiReasoningCapabilities('openai-responses', 'gpt-5.6')?.thinkingLevelMap
+
+type CodexRuntimeCredential = CodexOAuthCredentials & {
+  type: 'oauth'
+  [key: string]: unknown
+}
+
+/** Pi 内置 Codex provider 所需的最小模型与 OAuth 输入。 */
+export interface CodexModelInput {
+  model?: string
+  codexOAuthCredentials?: CodexOAuthCredentials
+  onCodexOAuthCredentialsRefreshed?: (credentials: CodexOAuthCredentials) => void | Promise<void>
+}
+
+/** Pi 内置 xAI provider 所需的最小模型与 OAuth 输入。 */
+export interface XaiModelInput {
+  channelId?: string
+  model?: string
+  xaiOAuthCredentials?: XaiOAuthCredentials
+  onXaiOAuthCredentialsRefreshed?: (credentials: XaiOAuthCredentials) => void | Promise<void>
+}
+
+/** Pi 内置 GitHub Copilot provider 所需的最小模型与 OAuth 输入。 */
+export interface GithubCopilotModelInput {
+  model?: string
+  githubCopilotOAuthCredentials?: GithubCopilotOAuthCredentials
+  onGithubCopilotOAuthCredentialsRefreshed?: (credentials: GithubCopilotOAuthCredentials) => void | Promise<void>
+}
+
+function createCodexRuntimeCredentialStore(
+  initial: CodexOAuthCredentials,
+  onRefreshed?: PiAgentQueryOptions['onCodexOAuthCredentialsRefreshed'],
+) {
+  let credential: CodexRuntimeCredential | undefined = { type: 'oauth', ...initial }
+
+  return {
+    async read(providerId: string): Promise<CodexRuntimeCredential | undefined> {
+      return providerId === 'openai-codex' ? credential : undefined
+    },
+    async list(): Promise<readonly { providerId: string; type: 'oauth' }[]> {
+      return credential ? [{ providerId: 'openai-codex', type: 'oauth' }] : []
+    },
+    async modify(
+      providerId: string,
+      fn: (current: CodexRuntimeCredential | undefined) => Promise<CodexRuntimeCredential | undefined>,
+    ): Promise<CodexRuntimeCredential | undefined> {
+      if (providerId !== 'openai-codex') return undefined
+      const previous = credential
+      credential = await fn(credential)
+
+      if (credential && (
+        previous?.access !== credential.access
+        || previous?.refresh !== credential.refresh
+        || previous?.expires !== credential.expires
+        || previous?.accountId !== credential.accountId
+      )) {
+        try {
+          await onRefreshed?.(credential)
+        } catch (error) {
+          console.warn('[Pi Codex OAuth] 刷新后的凭据回写失败，将在下次执行前重试:', error)
+        }
+      }
+      return credential
+    },
+    async delete(providerId: string): Promise<void> {
+      if (providerId === 'openai-codex') credential = undefined
+    },
+  }
+}
+
+type GithubCopilotRuntimeCredential = GithubCopilotOAuthCredentials & {
+  type: 'oauth'
+  [key: string]: unknown
+}
+
+function createGithubCopilotRuntimeCredentialStore(
+  initial: GithubCopilotOAuthCredentials,
+  onRefreshed?: PiAgentQueryOptions['onGithubCopilotOAuthCredentialsRefreshed'],
+) {
+  let credential: GithubCopilotRuntimeCredential | undefined = { type: 'oauth', ...initial }
+
+  return {
+    async read(providerId: string): Promise<GithubCopilotRuntimeCredential | undefined> {
+      return providerId === 'github-copilot' ? credential : undefined
+    },
+    async list(): Promise<readonly { providerId: string; type: 'oauth' }[]> {
+      return credential ? [{ providerId: 'github-copilot', type: 'oauth' }] : []
+    },
+    async modify(
+      providerId: string,
+      fn: (current: GithubCopilotRuntimeCredential | undefined) => Promise<GithubCopilotRuntimeCredential | undefined>,
+    ): Promise<GithubCopilotRuntimeCredential | undefined> {
+      if (providerId !== 'github-copilot') return undefined
+      const previous = credential
+      credential = await fn(credential)
+      if (credential && (
+        previous?.access !== credential.access
+        || previous?.refresh !== credential.refresh
+        || previous?.expires !== credential.expires
+        || previous?.enterpriseUrl !== credential.enterpriseUrl
+        || JSON.stringify(previous?.availableModelIds) !== JSON.stringify(credential.availableModelIds)
+      )) {
+        try {
+          await onRefreshed?.(credential)
+        } catch (error) {
+          console.warn('[Pi GitHub Copilot OAuth] 刷新后的凭据回写失败，将在下次执行前重试:', error)
+        }
+      }
+      return credential
+    },
+    async delete(providerId: string): Promise<void> {
+      if (providerId === 'github-copilot') credential = undefined
+    },
+  }
+}
+
+type XaiRuntimeCredential = XaiOAuthCredentials & {
+  type: 'oauth'
+  [key: string]: unknown
+}
+
+function createXaiRuntimeCredentialStore(
+  channelId: string,
+  initial: XaiOAuthCredentials,
+  onRefreshed?: PiAgentQueryOptions['onXaiOAuthCredentialsRefreshed'],
+) {
+  let credential: XaiRuntimeCredential | undefined = { type: 'oauth', ...rememberXaiOAuthCredentials(channelId, initial) }
+
+  return {
+    async read(providerId: string): Promise<XaiRuntimeCredential | undefined> {
+      return providerId === 'xai' ? credential : undefined
+    },
+    async list(): Promise<readonly { providerId: string; type: 'oauth' }[]> {
+      return credential ? [{ providerId: 'xai', type: 'oauth' }] : []
+    },
+    async modify(
+      providerId: string,
+      fn: (current: XaiRuntimeCredential | undefined) => Promise<XaiRuntimeCredential | undefined>,
+    ): Promise<XaiRuntimeCredential | undefined> {
+      if (providerId !== 'xai' || !credential) return undefined
+      const previous = credential
+      const refreshed = await refreshXaiOAuthCredentialsSerial(
+        channelId,
+        credential,
+        async (latest) => {
+          const next = await fn({ type: 'oauth', ...latest })
+          if (!next) throw new Error('Pi xAI OAuth 刷新未返回凭据')
+          return { access: next.access, refresh: next.refresh, expires: next.expires }
+        },
+      )
+      credential = { type: 'oauth', ...refreshed }
+      if (
+        previous.access !== credential.access
+        || previous.refresh !== credential.refresh
+        || previous.expires !== credential.expires
+      ) {
+        try {
+          await onRefreshed?.(credential)
+        } catch (error) {
+          console.warn('[Pi xAI OAuth] 刷新后的凭据回写失败，将在下次执行前重试:', error)
+        }
+      }
+      return credential
+    },
+    async delete(providerId: string): Promise<void> {
+      if (providerId === 'xai') credential = undefined
+    },
+  }
+}
+
+/**
+ * Pi 0.85.0 已在 catalog 中原生声明 experimental vision 变体。
+ * 常规 Flash 的视觉能力仍由 Proma 已验证的渠道契约兜底，不改变实际模型 ID、协议或推理参数。
+ */
+const DEEPSEEK_V4_FLASH_VISION_MODEL_IDS = new Set([
+  'deepseek-v4-flash',
+])
+
+/** 判断模型是否已确认支持原生图片输入。 */
+export function supportsPiNativeImageInput(modelId: string | undefined): boolean {
+  const normalized = stripLegacyAgentSdkContextSuffix(modelId)?.trim().toLowerCase()
+  return normalized !== undefined && DEEPSEEK_V4_FLASH_VISION_MODEL_IDS.has(normalized)
+}
+
+function applyPiModelCapabilityOverrides(model: PiCatalogModel | undefined): PiCatalogModel | undefined {
+  if (!model) return model
+
+  const normalizedId = model.id.trim().toLowerCase()
+  // Google 协议模型的 thinking 档位由 API 合约决定，而非目录供应商名。
+  const geminiCapability = model.api === 'google-generative-ai' ? getGeminiModelCapability(normalizedId) : undefined
+  const requiresMinimalThinkingExclusion = geminiCapability && !geminiCapability.thinkingLevels.includes('minimal')
+  const input: PiCatalogModel['input'] = supportsPiNativeImageInput(model.id) && !model.input.includes('image')
+    ? [...model.input, 'image']
+    : model.input
+  const thinkingLevelMap = requiresMinimalThinkingExclusion
+    ? { ...model.thinkingLevelMap, minimal: null }
+    : model.thinkingLevelMap
+
+  if (input === model.input && thinkingLevelMap === model.thinkingLevelMap) return model
+  return { ...model, input, ...(thinkingLevelMap ? { thinkingLevelMap } : {}) }
+}
+
+const CODEX_MODEL_PATCHES: PiCatalogModelPatch[] = [
+  {
+    id: 'gpt-6-astra',
+    name: 'GPT-6 Astra',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: compilePiReasoningCapabilities('openai-responses', 'gpt-6-astra')?.thinkingLevelMap,
+    input: ['text', 'image'],
+    cost: ZERO_MODEL_COST,
+    contextWindow: CODEX_GPT_6_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
+  {
+    id: 'gpt-6-sol',
+    name: 'GPT-6 Sol',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: compilePiReasoningCapabilities('openai-responses', 'gpt-6-sol')?.thinkingLevelMap,
+    input: ['text', 'image'],
+    cost: ZERO_MODEL_COST,
+    contextWindow: CODEX_GPT_6_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
+  {
+    id: 'gpt-6-luna',
+    name: 'GPT-6 Luna',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: compilePiReasoningCapabilities('openai-responses', 'gpt-6-luna')?.thinkingLevelMap,
+    input: ['text', 'image'],
+    cost: ZERO_MODEL_COST,
+    contextWindow: CODEX_GPT_6_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
+  {
+    id: 'gpt-5.4',
+    contextWindow: CODEX_GPT_54_55_CONTEXT_WINDOW,
+  },
+  {
+    id: 'gpt-5.4-mini',
+    contextWindow: CODEX_GPT_54_MINI_CONTEXT_WINDOW,
+  },
+  {
+    id: 'gpt-5.5',
+    contextWindow: CODEX_GPT_54_55_CONTEXT_WINDOW,
+  },
+  {
+    id: 'gpt-5.6-sol',
+    name: 'GPT-5.6 Sol',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: CODEX_56_THINKING_LEVEL_MAP,
+    input: ['text', 'image'],
+    cost: { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0 },
+    contextWindow: CODEX_GPT_56_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
+  {
+    id: 'gpt-5.6-terra',
+    name: 'GPT-5.6 Terra',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: CODEX_56_THINKING_LEVEL_MAP,
+    input: ['text', 'image'],
+    cost: { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 0 },
+    contextWindow: CODEX_GPT_56_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
+  {
+    id: 'gpt-5.6-luna',
+    name: 'GPT-5.6 Luna',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: CODEX_56_THINKING_LEVEL_MAP,
+    input: ['text', 'image'],
+    cost: { input: 1, output: 6, cacheRead: 0.1, cacheWrite: 0 },
+    contextWindow: CODEX_GPT_56_CONTEXT_WINDOW,
+    maxTokens: CODEX_MAX_TOKENS,
+  },
+]
+
+let piAiCompatPromise: Promise<PiAiCompat> | undefined
+
+function loadPiAiCompat(): Promise<PiAiCompat> {
+  piAiCompatPromise ??= import('@earendil-works/pi-ai/compat')
+  return piAiCompatPromise
+}
+
+function normalizePiApi(provider: ProviderType): Api {
+  switch (provider) {
+    case 'openai':
+    case 'xai':
+    case 'zhipu':
+    case 'doubao-api':
+    case 'qwen':
+    case 'custom':
+      return 'openai-completions'
+    case 'openai-responses':
+      return 'openai-responses'
+    case 'google':
+      return 'google-generative-ai'
+    default:
+      return 'anthropic-messages'
+  }
+}
+
+export function resolvePiApi(provider: ProviderType): Api {
+  return normalizePiApi(provider)
+}
+
+function candidatePiProviders(provider: ProviderType): KnownProvider[] {
+  switch (provider) {
+    case 'anthropic':
+      return ['anthropic']
+    case 'openai':
+    case 'openai-responses':
+      return ['openai']
+    case 'xai':
+      return ['xai']
+    case 'deepseek':
+      return ['deepseek']
+    case 'google':
+      return ['google']
+    case 'kimi-api':
+      return ['moonshotai-cn', 'moonshotai']
+    case 'kimi-coding':
+      return ['kimi-coding', 'moonshotai-cn', 'moonshotai']
+    case 'zhipu':
+      return ['zai']
+    case 'zhipu-coding':
+    case 'zhipu-coding-team':
+      return ['zai-coding-cn', 'zai']
+    case 'minimax':
+      return ['minimax', 'minimax-cn']
+    case 'xiaomi':
+      return ['xiaomi']
+    case 'xiaomi-token-plan':
+      return ['xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'xiaomi-token-plan-ams', 'xiaomi']
+    default:
+      return []
+  }
+}
+
+function findCatalogModelById(models: readonly PiCatalogModel[], modelId: string): PiCatalogModel | undefined {
+  const normalized = modelId.toLowerCase()
+  // ID 是渠道实际发送到上游的稳定标识；同名展示名称只能在没有 ID 命中时兜底。
+  return applyPiModelCapabilityOverrides(
+    models.find((model) => model.id.toLowerCase() === normalized)
+      ?? models.find((model) => model.name.toLowerCase() === normalized),
+  )
+}
+
+/**
+ * Extract an unambiguous Claude family/version key from common provider aliases.
+ *
+ * Catalogs vary between `claude-opus-4-6`, `Claude Opus 4.6`, and provider-scoped
+ * forms such as `anthropic.claude-opus-4-6-v1`. The fallback intentionally requires
+ * a family plus full major/minor version. Major-only matching is only allowed for
+ * Fable, catalog entries, or an explicit `-promo` alias.
+ */
+function getClaudeFamilyKey(modelRef: string, allowMajorOnly = false): string | undefined {
+  const normalized = modelRef.toLowerCase()
+  const familyFirst = normalized.match(/claude[\s._:/-]+(opus|sonnet|haiku|fable)[\s._:/-]+(\d+)(?:[\s._:/-]+(\d+))?/)
+  const versionFirst = normalized.match(/claude[\s._:/-]+(\d+)(?:[\s._:/-]+(\d+))?[\s._:/-]+(opus|sonnet|haiku)/)
+  const family = familyFirst?.[1] ?? versionFirst?.[3]
+  const major = familyFirst?.[2] ?? versionFirst?.[1]
+  const minor = familyFirst?.[3] ?? versionFirst?.[2]
+  const isPromoAlias = /[\s._:/-]promo$/.test(normalized)
+  if (!family || !major || (!minor && family !== 'fable' && !allowMajorOnly && !isPromoAlias)) return undefined
+  return `${family}-${major}${minor ? `-${minor}` : ''}`
+}
+
+function findClaudeCatalogModel(models: readonly PiCatalogModel[], modelId: string): PiCatalogModel | undefined {
+  const familyKey = getClaudeFamilyKey(modelId)
+  if (!familyKey) return undefined
+  const catalogModel = models.find((model) =>
+    getClaudeFamilyKey(model.id, true) === familyKey || getClaudeFamilyKey(model.name, true) === familyKey)
+  if (catalogModel) return catalogModel
+
+  // Fable 5.x models can precede the catalog's major-version entry. Reuse only
+  // the matching Fable major family; other Claude families require an exact
+  // major/minor match to avoid inheriting the wrong thinking or protocol flags.
+  const fableMajorKey = familyKey.match(/^fable-(\d+)-\d+$/)?.[0].replace(/-\d+$/, '')
+  if (!fableMajorKey) return undefined
+  return models.find((model) =>
+    getClaudeFamilyKey(model.id, true) === fableMajorKey || getClaudeFamilyKey(model.name, true) === fableMajorKey)
+}
+
+async function getCatalogModels(provider: KnownProvider): Promise<readonly PiCatalogModel[]> {
+  try {
+    const { getModels } = await loadPiAiCompat()
+    return getModels(provider as Parameters<typeof getModels>[0])
+  } catch {
+    return []
+  }
+}
+
+async function findPiCatalogModel(provider: ProviderType, modelId: string): Promise<PiCatalogModel | undefined> {
+  if (provider === 'openai-codex') {
+    return findCatalogModelById(await getCodexCatalogModels(), modelId)
+  }
+  if (provider === 'xai') {
+    return findCatalogModelById(await getXaiCatalogModels(), modelId)
+  }
+  if (provider === 'github-copilot') {
+    return findCatalogModelById(await getGithubCopilotCatalogModels(), modelId)
+  }
+
+  const preferredProviders = candidatePiProviders(provider)
+  const { getProviders } = await loadPiAiCompat()
+  const checked = new Set(preferredProviders)
+  const fallbackProviders = getProviders().filter((candidate) => !checked.has(candidate))
+
+  // The configured provider owns both exact and safe Claude-family matching.
+  for (const candidate of preferredProviders) {
+    const model = findCatalogModelById(await getCatalogModels(candidate), modelId)
+    if (model) return model
+  }
+
+  const claudeFamilyKey = getClaudeFamilyKey(modelId)
+  if (claudeFamilyKey) {
+    for (const candidate of preferredProviders) {
+      const model = findClaudeCatalogModel(await getCatalogModels(candidate), modelId)
+      if (model) return model
+    }
+  }
+
+  // Generic/custom channels can still match a provider-scoped catalog ID exactly.
+  for (const candidate of fallbackProviders) {
+    const model = findCatalogModelById(await getCatalogModels(candidate), modelId)
+    if (model) return model
+  }
+
+  // Only relax aliases after every exact lookup has failed.
+  if (claudeFamilyKey) {
+    for (const candidate of fallbackProviders) {
+      const model = findClaudeCatalogModel(await getCatalogModels(candidate), modelId)
+      if (model) return model
+    }
+  }
+  return undefined
+}
+
+/**
+ * 解析模型图片输入能力。未知模型保持 unknown，由调用方决定是否保守拒绝。
+ * 视觉助手等会产生数据外发的功能必须仅接受 confirmed supported。
+ */
+export async function resolvePiImageInputCapability(
+  provider: ProviderType,
+  modelId: string | undefined,
+): Promise<'supported' | 'unsupported' | 'unknown'> {
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(modelId)
+  if (provider === 'opencode-go-openai') return 'unsupported'
+  if (!resolvedModelId) return 'unknown'
+  // 实验变体尚未进入 Pi catalog，不能因目录缺失退回 unknown。
+  if (supportsPiNativeImageInput(resolvedModelId)) return 'supported'
+  const catalogModel = await findPiCatalogModel(provider, resolvedModelId)
+  if (!catalogModel) return 'unknown'
+  return catalogModel.input.includes('image') ? 'supported' : 'unsupported'
+}
+
+/** Vision Relay 的实际请求路由。 */
+export interface PiVisionRelayRoute {
+  adapterProvider: ProviderType
+  baseUrl?: string
+}
+
+export async function resolvePiVisionRelayRoute(
+  provider: ProviderType,
+  modelId: string | undefined,
+): Promise<PiVisionRelayRoute | undefined> {
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(modelId)
+  if (provider === 'opencode-go-openai' || !resolvedModelId) return undefined
+  // DeepSeek Flash 的实验视觉模型尚未进入 Pi catalog；其渠道协议无需 catalog 分流。
+  if (supportsPiNativeImageInput(resolvedModelId)) {
+    return { adapterProvider: provider }
+  }
+
+  const catalogModel = await findPiCatalogModel(provider, resolvedModelId)
+  if (!catalogModel?.input.includes('image')) return undefined
+
+  return { adapterProvider: provider }
+}
+
+/**
+ * 解析 Pi runtime 的会话级 reasoning capability。
+ *
+ * 专属 profile 先匹配，保证 K3 / GLM / GPT-o 的协议映射不被 catalog 覆盖；
+ * 其他模型直接采用 Pi catalog 声明的可用档位。
+ */
+export async function resolvePiReasoningCapability(
+  provider: ProviderType,
+  modelId: string | undefined,
+): Promise<ReasoningCapability | undefined> {
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(modelId)
+  const catalogModel = resolvedModelId
+    ? await findPiCatalogModel(provider, resolvedModelId)
+    : undefined
+  const profile = resolveReasoningProfile({
+    modelId: resolvedModelId,
+    transport: provider === 'openai-codex' || provider === 'xai'
+      ? 'openai-responses'
+      : toReasoningTransport(resolvePiApi(provider)),
+  })
+  return resolveReasoningCapability({
+    profile,
+    catalog: catalogModel && {
+      reasoning: catalogModel.reasoning,
+      thinkingLevelMap: catalogModel.thinkingLevelMap,
+    },
+  })
+}
+
+async function resolvePiModelDefaults(input: PiAgentQueryOptions): Promise<PiModelDefaults> {
+  const catalogModel = input.model ? await findPiCatalogModel(input.provider, input.model) : undefined
+  const codexAlignedCapabilities = getCodexAlignedGPT5Capabilities(input.model)
+  const api = resolvePiApi(input.provider)
+  const providerSpecificCapabilities = compilePiReasoningCapabilities(api, input.model)
+  const glmModelId = input.model?.toLowerCase()
+  const isVolcengineGlm5x = input.provider === 'doubao-api'
+    && (glmModelId === 'glm-5.2' || glmModelId === 'glm-5.3')
+  const isCatalogMissingGlm53Family = !catalogModel
+    && (glmModelId === 'glm-5.3' || glmModelId === 'glm-5.3-flash' || glmModelId === 'glm-5.3-flashx')
+  // MiMo-V2.6 刚发布，Pi catalog 未收录时仍按官方规格注册，避免回落到 64K 默认值。
+  // 家族判定复用 shared 的精确 ID 列表，避免 startsWith 宽匹配误伤未来 ID（如 mimo-v2.60）。
+  const isCatalogMissingMimoV26Family = !catalogModel && isMimoV26Model(glmModelId)
+  const catalogContextWindow = catalogModel?.contextWindow ?? DEFAULT_CONTEXT_WINDOW
+  const inferredContextWindow = inferContextWindow(input.model) ?? DEFAULT_CONTEXT_WINDOW
+  const shouldForceAdaptiveThinking = shouldForcePiAdaptiveThinking(api, catalogModel, input.model)
+  return {
+    api,
+    reasoning: catalogModel?.reasoning ?? true,
+    thinkingLevelMap: providerSpecificCapabilities?.thinkingLevelMap
+      ?? catalogModel?.thinkingLevelMap,
+    compat: shouldForceAdaptiveThinking
+      ? { ...providerSpecificCapabilities?.compat, forceAdaptiveThinking: true }
+      : providerSpecificCapabilities?.compat,
+    input: catalogModel ? [...catalogModel.input] : ['text', 'image'],
+    cost: catalogModel ? { ...catalogModel.cost } : { ...ZERO_MODEL_COST },
+    // Codex 对齐策略优先；其他模型仍保留 catalog 与 shared inference 中更大的已验证能力。
+    contextWindow: codexAlignedCapabilities?.contextWindow ?? Math.max(catalogContextWindow, inferredContextWindow),
+    // Pi catalog 缺少时，GLM-5.3 系列仍按官方 128K 输出上限注册。
+    maxTokens: isVolcengineGlm5x
+      ? VOLCENGINE_GLM_MAX_TOKENS
+      : (catalogModel?.maxTokens
+        ?? (isCatalogMissingGlm53Family
+          ? GLM_53_FAMILY_MAX_TOKENS
+          : isCatalogMissingMimoV26Family
+            ? MIMO_V26_FAMILY_MAX_TOKENS
+            : DEFAULT_MAX_TOKENS)),
+  }
+}
+
+export function normalizePiBaseUrl(baseUrl: string | undefined, provider: ProviderType, api = normalizePiApi(provider)): string | undefined {
+  if (!baseUrl) return undefined
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '')
+  if (api === 'anthropic-messages') {
+    return normalizeAnthropicBaseUrlForSdk(resolveAnthropicMessagesUrl(normalizedBaseUrl, provider))
+  }
+  if (api === 'openai-responses' || provider === 'custom') {
+    return normalizeOpenAIBaseUrlForSdk(normalizedBaseUrl)
+  }
+  // Pi 的 Google adapter 把 `model.baseUrl` 视为已包含 API 版本的完整根路径，
+  // 并明确禁用 Google SDK 自行追加 apiVersion。渠道配置仍以协议根
+  // `https://generativelanguage.googleapis.com` 保存；若这里直接传入，Agent 会请求
+  // `/models/...` 而不是 `/v1beta/models/...`，导致 404。Chat adapter 自己拼 v1beta，
+  // 因此只在 Pi runtime 注册时补齐，且保留用户已填写的 v1/v1beta（含代理路径）。
+  if (api === 'google-generative-ai' && !/\/v1(?:beta)?$/i.test(normalizedBaseUrl)) {
+    return `${normalizedBaseUrl}/v1beta`
+  }
+  return normalizedBaseUrl
+}
+
+export function requiresPromaUserAgent(provider: ProviderType): boolean {
+  return provider === 'kimi-coding'
+    || provider === 'xiaomi-token-plan'
+    || provider === 'qwen-token-plan'
+    || provider === 'zhipu-coding'
+    || provider === 'zhipu-coding-team'
+}
+
+function usesBearerOnlyAnthropicAuth(provider: ProviderType): boolean {
+  return requiresPromaUserAgent(provider) || provider === 'minimax' || provider === 'qwen-anthropic'
+}
+
+export function buildPiRequestHeaders(provider: ProviderType, apiKey: string): PiRequestHeaders | undefined {
+  if (normalizePiApi(provider) !== 'anthropic-messages') return undefined
+
+  const headers: PiRequestHeaders = {
+    Authorization: `Bearer ${apiKey}`,
+  }
+
+  if (requiresPromaUserAgent(provider)) {
+    headers['User-Agent'] = getPromaUserAgent()
+  }
+
+  return headers
+}
+
+function shouldUseRuntimeApiKey(provider: ProviderType): boolean {
+  return !usesBearerOnlyAnthropicAuth(provider)
+}
+
+/**
+ * 解析出用于 Pi runtime 认证的真实 API token。
+ *
+ * 智谱团队版（zhipu-coding-team）的凭据是复合串（形如
+ * `apiKey=xxx; bigmodel_organization=yyy; bigmodel_project=zzz`），
+ * 必须先提取其中的 apiKey，否则整串会被塞进 `Authorization: Bearer` 头导致 401。
+ * 与渠道认证解析保持一致。
+ */
+export function resolvePiApiKey(provider: ProviderType, apiKey: string): string {
+  return provider === 'zhipu-coding-team' ? extractZhipuCodingTeamApiToken(apiKey) : apiKey
+}
+
+/**
+ * 剥离模型 ID 上的 `[1m]` 扩展上下文后缀。
+ *
+ * `[1m]` 是 Claude Agent SDK 专用的扩展上下文变体，pi runtime 及其对接的
+ * 端点（智谱等）并不识别，带后缀会被判为「模型不存在」（智谱 1211）。
+ * pi 模式统一剥离该后缀，保证注册与请求使用干净的模型 ID。
+ */
+export function stripLegacyAgentSdkContextSuffix(modelId: string | undefined): string | undefined {
+  return modelId?.replace(/\[1m\]$/i, '')
+}
+
+/** Preserve validated ChatGPT Codex Astra SKU request IDs without accepting near matches. */
+function createCodexAstraFamilyModel(
+  models: readonly PiCatalogModel[],
+  modelId: string,
+): PiCatalogModel | undefined {
+  if (!isGpt6AstraFamily(modelId)) return undefined
+
+  const baseline = findCatalogModelById(models, 'gpt-6-astra')
+  if (!baseline) return undefined
+  if (baseline.id === modelId) return baseline
+
+  return {
+    ...baseline,
+    id: modelId,
+    name: `GPT-6 Astra (${modelId})`,
+  }
+}
+
+function mergeCodexModels(models: readonly PiCatalogModel[]): PiCatalogModel[] {
+  const merged = models.map((model) => ({ ...model }))
+  const indexById = new Map(merged.map((model, index) => [model.id, index]))
+  for (const patch of CODEX_MODEL_PATCHES) {
+    const existingIndex = indexById.get(patch.id)
+    const existing = existingIndex !== undefined ? merged[existingIndex] : undefined
+    if (existingIndex !== undefined && existing) {
+      merged[existingIndex] = { ...existing, ...patch }
+    } else if (isCompleteCatalogModel(patch)) {
+      indexById.set(patch.id, merged.length)
+      merged.push(patch)
+    }
+  }
+  return merged
+}
+
+function isCompleteCatalogModel(model: PiCatalogModelPatch): model is PiCatalogModel {
+  return Boolean(
+    model.name
+      && model.api
+      && model.provider
+      && model.baseUrl
+      && model.input
+      && model.cost
+      && model.contextWindow
+      && model.maxTokens,
+  )
+}
+
+function isSupportedCodexModel(model: Pick<PiCatalogModel, 'id'>): boolean {
+  const modelId = model.id.trim().toLowerCase()
+  return !UNSUPPORTED_CODEX_MODEL_IDS.has(modelId)
+    && !UNSUPPORTED_CODEX_MODEL_PREFIXES.some((prefix) => modelId === prefix || modelId.startsWith(`${prefix}-`))
+}
+
+/** 能力查询与会话恢复共用受管目录，避免在线新模型在 UI 中退回思考开关。 */
+export async function getCodexCatalogModels(): Promise<PiCatalogModel[]> {
+  const { getModels } = await loadPiAiCompat()
+  const cached = await new CodexModelStore().read('openai-codex')
+  const models = new Map<string, PiCatalogModel>(getModels('openai-codex').map((model) => [model.id, model]))
+  for (const model of cached?.models ?? []) models.set(model.id, model)
+  return mergeCodexModels([...models.values()]).filter(isSupportedCodexModel)
+}
+
+/**
+ * 为 ChatGPT (Codex) OAuth 渠道构建模型。
+ *
+ * openai-codex 是 Pi SDK 的内置 KnownProvider：模型目录、baseUrl 和
+ * `openai-codex-responses` 协议全部内置，无需（也不能）手工构造 models 或 baseUrl。
+ * Pi 0.80.10 将它声明为 OAuth-only provider；runtime API key 不会参与其认证解析。
+ * 因此将 Proma 已刷新过的完整凭据放入一次性内存 OAuth credential store，
+ * 按真实 expires 刷新并回写 Proma，避免读写全局 ~/.pi 认证文件。
+ */
+export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
+  if (!input.codexOAuthCredentials) {
+    throw new Error('ChatGPT (Codex) OAuth 凭据缺失，请重新登录')
+  }
+
+  const modelRuntime = await sdk.ModelRuntime.create({
+    credentials: createCodexRuntimeCredentialStore(
+      input.codexOAuthCredentials,
+      input.onCodexOAuthCredentialsRefreshed,
+    ),
+    modelsPath: null,
+    modelsStore: new CodexModelStore(),
+    allowModelNetwork: false,
+  })
+
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
+  const runtimeModels = mergeCodexModels(modelRuntime.getModels('openai-codex')).filter(isSupportedCodexModel)
+  // ModelRuntime 已通过同一 store 恢复目录，不再独立读取默认缓存或混入另一份目录。
+  const model = resolvedModelId
+    ? findCatalogModelById(runtimeModels, resolvedModelId)
+      ?? createCodexAstraFamilyModel(runtimeModels, resolvedModelId)
+    : runtimeModels[0]
+
+  if (!model) {
+    if (resolvedModelId) {
+      throw new Error(`未找到指定的 ChatGPT (Codex) 模型: ${resolvedModelId}`)
+    }
+    throw new Error('未找到可用的 ChatGPT (Codex) 模型，请确认已登录并升级 Pi 运行时')
+  }
+  return { modelRuntime, model }
+}
+
+/** 在线刷新仅针对 Codex；超时或失败时沿用 Pi 恢复的缓存和 Proma 补充目录。 */
+export async function refreshCodexModels(
+  modelRuntime: Pick<Awaited<ReturnType<PiSdk['ModelRuntime']['create']>>, 'refresh' | 'getAvailable'>,
+): Promise<PiCatalogModel[]> {
+  const result = await modelRuntime.refresh({
+    providers: ['openai-codex'],
+    allowNetwork: process.env.PI_OFFLINE === undefined,
+    force: true,
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (result.aborted || result.errors.has('openai-codex')) {
+    console.warn('[Codex 模型] 在线目录刷新失败，使用缓存或内置目录')
+  }
+  const available = await modelRuntime.getAvailable('openai-codex')
+  // 无可用认证时不能凭补充目录制造「可用模型」。
+  if (available.length === 0) return []
+  return mergeCodexModels(available).filter(isSupportedCodexModel)
+}
+
+/** 使用 Pi 在线目录检测模型，保持 OAuth 认证和请求代理的隔离边界。 */
+export async function listCodexModels(
+  credentials: CodexOAuthCredentials,
+  proxyUrl?: string,
+): Promise<{ id: string; name: string }[]> {
+  const sdk = await import('@earendil-works/pi-coding-agent')
+  installPiRequestProxyFetch()
+  const models = await runWithManagedPiRequestProxy(
+    createPiRequestProxyDispatcher({ proxyUrl }),
+    async () => {
+      const modelRuntime = await sdk.ModelRuntime.create({
+        credentials: createCodexRuntimeCredentialStore(credentials),
+        modelsPath: null,
+        modelsStore: new CodexModelStore(),
+        allowModelNetwork: false,
+      })
+      return refreshCodexModels(modelRuntime)
+    },
+  )
+  return models
+    .map((model) => ({ id: model.id, name: model.name }))
+}
+
+export async function getXaiCatalogModels(): Promise<PiCatalogModel[]> {
+  const { getModels } = await loadPiAiCompat()
+  return [...getModels('xai')]
+}
+
+/**
+ * 为 xAI（Grok/X 订阅）OAuth 渠道构建 Pi 内置模型。
+ *
+ * xAI 的 device-code token 不等同于 xAI API key，必须注入内存 CredentialStore
+ * 并使用内置 `xai` provider，不能退回 registerProvider() 的 API key 路径。
+ */
+export async function buildXaiModel(sdk: PiSdk, input: XaiModelInput) {
+  if (!input.xaiOAuthCredentials || !input.channelId) {
+    throw new Error('xAI OAuth 凭据或渠道标识缺失，请重新登录')
+  }
+  const modelRuntime = await sdk.ModelRuntime.create({
+    credentials: createXaiRuntimeCredentialStore(
+      input.channelId,
+      input.xaiOAuthCredentials,
+      input.onXaiOAuthCredentialsRefreshed,
+    ),
+    allowModelNetwork: false,
+  })
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
+  const xaiModels = await getXaiCatalogModels()
+  const model = (resolvedModelId ? modelRuntime.getModel('xai', resolvedModelId) : undefined)
+    ?? (resolvedModelId ? findCatalogModelById(xaiModels, resolvedModelId) : undefined)
+    ?? modelRuntime.getModels('xai')[0]
+  if (!model) {
+    throw new Error('未找到可用的 xAI（Grok）模型，请确认订阅已授权并升级 Pi 运行时')
+  }
+  return { modelRuntime, model }
+}
+
+/** 列出 Pi SDK 内置的 xAI（Grok）模型 ID，供订阅登录后拉取模型使用。 */
+export async function listXaiModels(): Promise<{ id: string; name: string }[]> {
+  return (await getXaiCatalogModels()).map((m) => ({ id: m.id, name: m.name }))
+}
+
+export async function getGithubCopilotCatalogModels(): Promise<PiCatalogModel[]> {
+  const { getModels } = await loadPiAiCompat()
+  return [...getModels('github-copilot')]
+}
+
+/**
+ * GitHub Copilot 的模型可见性由订阅套餐、组织策略和已启用模型决定。
+ * 因此必须用携带凭据的 ModelRuntime 读取过滤后的目录，不能退回全量 catalog。
+ */
+export async function buildGithubCopilotModel(sdk: PiSdk, input: GithubCopilotModelInput) {
+  if (!input.githubCopilotOAuthCredentials) {
+    throw new Error('GitHub Copilot 登录凭据无效或缺失，请重新登录')
+  }
+  const modelRuntime = await sdk.ModelRuntime.create({
+    credentials: createGithubCopilotRuntimeCredentialStore(
+      input.githubCopilotOAuthCredentials,
+      input.onGithubCopilotOAuthCredentialsRefreshed,
+    ),
+    allowModelNetwork: false,
+  })
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
+  const availableModels = await modelRuntime.getAvailable('github-copilot')
+  const model = resolvedModelId
+    ? availableModels.find((candidate) => candidate.id === resolvedModelId)
+    : availableModels[0]
+  if (!model) {
+    if (resolvedModelId) throw new Error(`GitHub Copilot 当前订阅不支持模型: ${resolvedModelId}`)
+    throw new Error('未找到可用的 GitHub Copilot 模型，请确认订阅已授权且至少启用一个模型')
+  }
+  return { modelRuntime, model }
+}
+
+/** 列出当前 GitHub Copilot 凭据实际允许使用的模型。 */
+export async function listGithubCopilotModels(credentials: GithubCopilotOAuthCredentials): Promise<{ id: string; name: string }[]> {
+  const sdk = await import('@earendil-works/pi-coding-agent')
+  const modelRuntime = await sdk.ModelRuntime.create({
+    credentials: createGithubCopilotRuntimeCredentialStore(credentials),
+    allowModelNetwork: false,
+  })
+  return (await modelRuntime.getAvailable('github-copilot')).map((model) => ({ id: model.id, name: model.name }))
+}
+
+export async function buildModel(sdk: PiSdk, input: PiAgentQueryOptions) {
+  if (input.provider === 'opencode-go-openai') {
+    throw new Error('OpenCode Go 渠道已停用，请选择其他渠道')
+  }
+  if (input.provider === 'openai-codex') {
+    return buildCodexModel(sdk, input)
+  }
+  if (input.provider === 'xai') {
+    return buildXaiModel(sdk, input)
+  }
+  if (input.provider === 'github-copilot') {
+    return buildGithubCopilotModel(sdk, input)
+  }
+  const providerName = `proma-${input.provider}-${input.sessionId}`
+  const resolvedApiKey = resolvePiApiKey(input.provider, input.apiKey)
+  // pi runtime 统一剥离历史 `[1m]` 后缀：无论上游从哪条路径传入，注册与查找都用干净 ID。
+  const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
+  const modelRuntime = await sdk.ModelRuntime.create({ allowModelNetwork: false })
+  const modelDefaults = await resolvePiModelDefaults({ ...input, model: resolvedModelId })
+  const api = modelDefaults.api
+  const baseUrl = normalizePiBaseUrl(input.baseUrl, input.provider, api)
+  if (!baseUrl) {
+    throw new Error(`渠道 ${input.channelName ?? input.provider} 缺少 Base URL`)
+  }
+  const headers = buildPiRequestHeaders(input.provider, resolvedApiKey)
+  const compat = {
+    ...modelDefaults.compat,
+    ...(supportsPiDeveloperRole(input.provider) ? {} : { supportsDeveloperRole: false }),
+  }
+  modelRuntime.registerProvider(providerName, {
+    name: input.channelName ?? providerName,
+    apiKey: resolvedApiKey,
+    ...(headers ? { headers } : {}),
+    api,
+    baseUrl,
+    models: [{
+      id: resolvedModelId ?? 'default',
+      name: resolvedModelId ?? 'Default',
+      api,
+      baseUrl,
+      reasoning: modelDefaults.reasoning,
+      ...(modelDefaults.thinkingLevelMap ? { thinkingLevelMap: modelDefaults.thinkingLevelMap } : {}),
+      ...(Object.keys(compat).length > 0 ? { compat } : {}),
+      input: modelDefaults.input,
+      cost: modelDefaults.cost,
+      contextWindow: modelDefaults.contextWindow,
+      maxTokens: modelDefaults.maxTokens,
+    }],
+  })
+  const model = modelRuntime.getModel(providerName, resolvedModelId ?? 'default')
+  if (!model) throw new Error(`Pi model registration failed: ${resolvedModelId ?? 'default'}`)
+  return { modelRuntime, model }
+}

@@ -1,0 +1,120 @@
+/** 文件路径 chip 的纯逻辑，与 React 解耦以便确定性测试。 */
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'])
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov'])
+/** 需与主进程 file-preview-service.ts 的代码及 Markdown 扩展名保持一致。 */
+const CODE_EXTS = new Set([
+  'md', 'markdown',
+  'json', 'jsonc', 'json5',
+  'xml', 'html', 'htm',
+  'txt', 'log', 'csv',
+  'yaml', 'yml', 'toml', 'ini', 'env', 'lock',
+  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
+  'py', 'go', 'rs', 'java', 'kt', 'swift',
+  'c', 'h', 'cpp', 'hpp', 'cs',
+  'sh', 'bash', 'zsh', 'fish',
+  'css', 'scss', 'less',
+  'sql', 'rb', 'php',
+  'diff', 'patch',
+])
+const DOC_EXTS = new Set(['pdf', 'docx'])
+const ALL_PREVIEWABLE_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...CODE_EXTS, ...DOC_EXTS])
+const EXTENSIONLESS_FILE_NAMES = new Set(['makefile', 'dockerfile', 'license', 'readme', 'agents'])
+const MAX_FILE_REFERENCE_LENGTH = 4096
+
+/** 路径分隔符正则（同时匹配 / 和 \\） */
+const PATH_SEP_RE = /[\\/]/
+const WIN_DRIVE_RE = /^[A-Za-z]:[\\/]/
+const UNC_PATH_RE = /^\\\\/
+const HOME_DIRECTORY_RE = /^~(?:[\\/]|$)/
+
+function getExtension(filename: string): string {
+  const dot = filename.lastIndexOf('.')
+  if (dot === -1) return ''
+  return filename.slice(dot + 1).toLowerCase()
+}
+
+export function getFileName(filePath: string): string {
+  const parts = filePath.split(PATH_SEP_RE)
+  return parts[parts.length - 1] || filePath
+}
+
+export function stripLineCol(filePath: string): { path: string; suffix: string } {
+  const match = filePath.match(/^(.+?)(:\d+(?::\d+)?)$/)
+  if (match && !match[1]!.endsWith(':')) {
+    return { path: match[1]!, suffix: match[2]! }
+  }
+  return { path: filePath, suffix: '' }
+}
+
+/** 与主进程 file-preview-service.ts 的绝对路径规则保持一致。 */
+export function isAbsolutePreviewPath(filePath: string): boolean {
+  return filePath.startsWith('/') || UNC_PATH_RE.test(filePath) || WIN_DRIVE_RE.test(filePath) || HOME_DIRECTORY_RE.test(filePath)
+}
+
+export function isImageFilePath(filePath: string): boolean {
+  return IMAGE_EXTS.has(getExtension(filePath.trim()))
+}
+
+export function isAbsoluteFilePath(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 2) return false
+
+  const { path: clean } = stripLineCol(trimmed)
+  if (clean.startsWith('/')) {
+    if (!/^\/[^\n]+\/[^\n]+$/.test(clean)) return false
+    if (clean.endsWith('/') && !clean.includes('.')) return false
+    return true
+  }
+  return isAbsolutePreviewPath(clean)
+}
+
+/**
+ * 判断未带根目录的文件引用。这里负责「像文件路径」而非「一定存在」：最终必须由主进程
+ * 根据可信候选根解析并校验。允许 Unicode、空格与括号，兼容模型常见的自然语言文件名。
+ */
+export function isRelativeFilePath(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 2 || trimmed.length > MAX_FILE_REFERENCE_LENGTH) return false
+  if(/[\u0000-\u001F\u007F]/.test(trimmed)) return false
+
+  const { path: clean } = stripLineCol(trimmed)
+  if (!clean || isAbsolutePreviewPath(clean)) return false
+  // 回复中的相对引用不得跨出候选根；需要父目录文件时模型应输出已授权的绝对路径。
+  if (clean.split(PATH_SEP_RE).includes('..')) return false
+  // 不将 URL、file URI 或普通锚点当作本地文件路径。
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(clean) || clean.startsWith('//')) return false
+  if (clean.endsWith('/') || clean.endsWith('\\')) return false
+
+  const filename = getFileName(clean)
+  const ext = getExtension(filename)
+  const hasExplicitRelativePrefix = clean.startsWith('./') || clean.startsWith('.\\')
+  // 裸文本必须是已知可预览文件类型或常见无扩展名文件；任意带点文本（如 v1.2）
+  // 不应触发 IPC。显式相对路径和含目录分隔符的路径则交由主进程最终校验。
+  return hasExplicitRelativePrefix
+    || PATH_SEP_RE.test(clean)
+    || ALL_PREVIEWABLE_EXTS.has(ext)
+    || EXTENSIONLESS_FILE_NAMES.has(filename.toLowerCase())
+}
+
+/** 可安全交给主进程解析的本地文件引用（绝对或相对）。 */
+export function isLocalFileReference(text: string): boolean {
+  return isAbsoluteFilePath(text) || isRelativeFilePath(text)
+}
+
+export interface FilePathDisplayInput {
+  originalPath: string
+  resolvedPath?: string | null
+  lineColSuffix?: string
+}
+
+/** 只使用主进程回传的实际路径；未解析时原样回退，不猜测 candidate base。 */
+export function getFilePathDisplayPath({ originalPath, resolvedPath, lineColSuffix = '' }: FilePathDisplayInput): string {
+  if (!resolvedPath) return originalPath
+  return `${resolvedPath}${lineColSuffix}`
+}
+
+/** Promise 回调只允许更新仍属于当前组件/请求代次的状态。 */
+export function isAsyncResultCurrent(requestGeneration: number, currentGeneration: number, mounted: boolean): boolean {
+  return mounted && requestGeneration === currentGeneration
+}

@@ -1,0 +1,5 @@
+{
+  "comment": "Proma 内置 MCP 能力目录。基础运行时工具（如自动化、协作）不在此展示，外部 MCP 由工作区配置管理。旧 Nano Banana 内置能力已移除。",
+  "version": 1,
+  "servers": []
+}
