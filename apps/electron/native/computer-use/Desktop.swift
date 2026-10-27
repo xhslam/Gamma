@@ -89,12 +89,19 @@ func resolveApplication(_ name: String) throws -> (URL, ResolvedApp) {
     }
     guard Set(urls.map { $0.resolvingSymlinksInPath().path }).count == 1, let url = urls.first?.resolvingSymlinksInPath(), let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier, !bundleId.isEmpty else { throw NativeFailure("application-not-found", "未找到唯一且具有Bundle ID的应用") }
     let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).filter { $0.bundleURL?.resolvingSymlinksInPath() == url }
-    guard running.count <= 1 else { throw NativeFailure("ambiguous-application", "存在多个目标应用进程") }
-    let pid = running.first?.processIdentifier
-    return (url, ResolvedApp(appName: bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent, bundleId: bundleId, pid: pid, processIdentity: try pid.map { try processIdentity($0) }))
+    let validRunning = running.filter { app in
+        guard !app.isTerminated else { return false }
+        return (try? processIdentity(app.processIdentifier)) != nil
+    }
+    guard validRunning.count <= 1 else { throw NativeFailure("ambiguous-application", "存在多个目标应用进程") }
+    let pid = validRunning.first?.processIdentifier
+    let processIdent = pid.flatMap { try? processIdentity($0) }
+    return (url, ResolvedApp(appName: bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent, bundleId: bundleId, pid: pid, processIdentity: processIdent))
 }
 func listApplications() -> AppListResult {
-    let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && !isGammaPID($0.processIdentifier) }
+    let apps = NSWorkspace.shared.runningApplications.filter {
+        $0.activationPolicy == .regular && !isGammaPID($0.processIdentifier) && !$0.isTerminated && (try? processIdentity($0.processIdentifier)) != nil
+    }
         .sorted { ($0.bundleIdentifier ?? "", $0.processIdentifier) < ($1.bundleIdentifier ?? "", $1.processIdentifier) }
         .prefix(256).compactMap { app -> ListedApp? in
             guard let bundle = app.bundleIdentifier, !bundle.isEmpty, bundle.utf8.count <= 512 else { return nil }
@@ -103,13 +110,84 @@ func listApplications() -> AppListResult {
     return AppListResult(apps: apps)
 }
 
+func axRect(_ element: AXUIElement) -> CGRect? {
+    var rawPosition: CFTypeRef?, rawSize: CFTypeRef?
+    AXUIElementSetMessagingTimeout(element, 0.08)
+    guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &rawPosition) == .success,
+          AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &rawSize) == .success,
+          let rawPosition, let rawSize,
+          CFGetTypeID(rawPosition) == AXValueGetTypeID(), CFGetTypeID(rawSize) == AXValueGetTypeID() else { return nil }
+    var point = CGPoint.zero, size = CGSize.zero
+    guard AXValueGetValue(unsafeBitCast(rawPosition, to: AXValue.self), .cgPoint, &point),
+          AXValueGetValue(unsafeBitCast(rawSize, to: AXValue.self), .cgSize, &size) else { return nil }
+    return CGRect(origin: point, size: size)
+}
+
+func accessibilityWindows() -> [Target] {
+    var results: [Target] = []
+    var seenPids = Set<pid_t>()
+    var apps: [NSRunningApplication] = []
+    if let front = NSWorkspace.shared.frontmostApplication, front.activationPolicy == .regular, !isGammaPID(front.processIdentifier) {
+        apps.append(front)
+        seenPids.insert(front.processIdentifier)
+    }
+    for app in NSWorkspace.shared.runningApplications {
+        guard app.activationPolicy == .regular, !isGammaPID(app.processIdentifier), !seenPids.contains(app.processIdentifier) else { continue }
+        apps.append(app)
+        seenPids.insert(app.processIdentifier)
+    }
+    for app in apps.prefix(32) {
+        let pid = app.processIdentifier
+        guard let bundle = app.bundleIdentifier, let ident = try? processIdentity(pid) else { continue }
+        let axApp = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(axApp, 0.08)
+        var rawWindows: CFTypeRef?
+        let copyRes = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &rawWindows)
+        let axWinList = (copyRes == .success ? rawWindows as? [AXUIElement] : nil) ?? []
+        var appTargets: [Target] = []
+        for axWin in axWinList.prefix(16) {
+            guard let frame = axRect(axWin), frame.width > 1, frame.height > 1, frame.width.isFinite, frame.height.isFinite else { continue }
+            var wid: CGWindowID = 0
+            _ = _AXUIElementGetWindow(axWin, &wid)
+            if wid == 0 { wid = UInt32(bitPattern: pid) }
+            var titleRef: CFTypeRef?
+            _ = AXUIElementCopyAttributeValue(axWin, kAXTitleAttribute as CFString, &titleRef)
+            let title = (titleRef as? String) ?? ""
+            appTargets.append(Target(windowId: wid, pid: pid, processIdentity: ident, bundleId: bundle, title: title, bounds: Rect(frame)))
+        }
+        if appTargets.isEmpty {
+            var focusedWinRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &focusedWinRef) == .success,
+               let focusedWin = focusedWinRef {
+                let axWin = unsafeBitCast(focusedWin, to: AXUIElement.self)
+                if let frame = axRect(axWin), frame.width > 1, frame.height > 1, frame.width.isFinite, frame.height.isFinite {
+                    var wid: CGWindowID = 0
+                    _ = _AXUIElementGetWindow(axWin, &wid)
+                    if wid == 0 { wid = UInt32(bitPattern: pid) }
+                    var titleRef: CFTypeRef?
+                    _ = AXUIElementCopyAttributeValue(axWin, kAXTitleAttribute as CFString, &titleRef)
+                    let title = (titleRef as? String) ?? ""
+                    appTargets.append(Target(windowId: wid, pid: pid, processIdentity: ident, bundleId: bundle, title: title, bounds: Rect(frame)))
+                }
+            }
+        }
+        results.append(contentsOf: appTargets)
+    }
+    return results
+}
+
 func desktopWindows() throws -> [Target] {
-    guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary], raw.count <= 2048 else { throw NativeFailure("window-metadata", "无法有界读取窗口列表") }
     var windows: [Target] = []
-    for item in raw {
-        guard let w = WindowMetadata(item) else { throw NativeFailure("window-metadata", "窗口元数据不完整") }
-        guard w.onScreen, w.alpha > 0, w.bounds.width > 1, w.bounds.height > 1, !isGammaPID(w.pid), let app = NSRunningApplication(processIdentifier: w.pid), app.activationPolicy == .regular, let bundle = app.bundleIdentifier else { continue }
-        windows.append(Target(windowId: w.id, pid: w.pid, processIdentity: try processIdentity(w.pid), bundleId: bundle, title: item[kCGWindowName] as? String ?? "", bounds: Rect(w.bounds)))
+    if let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary], raw.count <= 2048 {
+        for item in raw {
+            guard let w = WindowMetadata(item) else { continue }
+            guard w.onScreen, w.alpha > 0, w.bounds.width > 1, w.bounds.height > 1, !isGammaPID(w.pid), let app = NSRunningApplication(processIdentifier: w.pid), app.activationPolicy == .regular, let bundle = app.bundleIdentifier else { continue }
+            guard let ident = try? processIdentity(w.pid) else { continue }
+            windows.append(Target(windowId: w.id, pid: w.pid, processIdentity: ident, bundleId: bundle, title: item[kCGWindowName] as? String ?? "", bounds: Rect(w.bounds)))
+        }
+    }
+    if windows.isEmpty {
+        windows = accessibilityWindows()
     }
     return windows
 }
@@ -333,9 +411,10 @@ final class SafetyMonitor {
         if isKeyboard, let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier, isGammaPID(pid) { return }
         if !isKeyboard, gammaUIContains(event.location) { return }
 
-        // 过滤非接管被动事件：纯光标位移、按键松开、鼠标按键抬起、修饰键单独切换不构成外部桌面接管
+        // 过滤非接管被动事件：纯光标位移、按键松开、鼠标按键抬起、修饰键单独切换、动量滚动不构成外部桌面接管
         let passiveEvents: [CGEventType] = [.mouseMoved, .keyUp, .flagsChanged, .leftMouseUp, .rightMouseUp, .otherMouseUp]
         if passiveEvents.contains(type) { return }
+        if type == .scrollWheel && event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0 { return }
 
         onStop("检测到用户操作，桌面控制已暂停")
     }

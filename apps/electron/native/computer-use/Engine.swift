@@ -373,7 +373,7 @@ final class Engine {
                     dispatched = true
                 })
             }
-            if p.action.kind != "wait" {
+            if p.action.kind != "wait" && p.action.kind != "open_app" {
                 // 只读CG窗口元数据收敛，不重建AX refs，也不重发动作。
                 var previous = ""
                 do {
