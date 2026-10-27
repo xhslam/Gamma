@@ -74,7 +74,10 @@ export interface ComputerPreview {
   runId: string
   phase: ComputerPhase
   appName?: string
-  mode: 'starting' | 'live' | 'paused' | 'unavailable'
+  mode: 'starting' | 'live' | 'accessibility' | 'paused' | 'unavailable'
+  /** 辅助功能可独立操作；录屏仅用于可选画面。 */
+  permissions?: ComputerPermissions
+  message?: string
   /** 监控帧不能作为工具 observationId；只在本机显示，不送入模型。 */
   frame?: { frameId: string; capturedAt: number; width: number; height: number; dataUrl?: string }
   activities: { id: string; action: string; status: 'running' | 'returned' | 'failed'; startedAt: number }[]
@@ -146,7 +149,10 @@ export interface ComputerRiskConfirmRequest {
 export interface ComputerPrivateObservation {
   observationId: string
   epoch: number
-  image: { data: string; mimeType: 'image/png'; width: number; height: number }
+  /** 没有录屏权限时只提供 AX，不伪造截图或要求额外系统授权。 */
+  image?: { data: string; mimeType: 'image/png'; width: number; height: number }
+  width?: number
+  height?: number
   ax: string
 }
 

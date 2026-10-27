@@ -41,7 +41,9 @@ import { stopAllTerminals } from './lib/terminal-service'
 import { agyTaskService } from './lib/agy-task-controller'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
 import { browserController } from './lib/browser-controller'
-import { computerController } from './lib/computer-service'
+import { computerController, startNativeLoggerSelfCheck } from './lib/computer-service'
+import { configureComputerLogPath, logComputerUseEvent } from './lib/computer-logger'
+import { AgentRuntimeClient } from './lib/agent-runtime-client'
 import { markRunningDelegationsAsInterrupted } from './lib/agent-session-manager'
 import { configureUpdater, initAutoUpdater, cleanupUpdater } from './lib/updater/auto-updater'
 import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/workspace-watcher'
@@ -624,6 +626,12 @@ app.whenReady().then(bootstrap).catch(handleBootstrapFailure)
  * 单点失败不应阻止窗口和托盘的创建（用户至少要能看到界面）。
  */
 async function bootstrap(): Promise<void> {
+  try { configureComputerLogPath(join(app.getPath('logs'), 'computer-use.log')) } catch { /* 使用日志模块的备用路径 */ }
+  logComputerUseEvent({ time: new Date().toISOString(), event: 'logger-ready', process: 'main', version: app.getVersion(), pid: process.pid })
+  startNativeLoggerSelfCheck()
+  // 独立短生命周期进程验证 Utility 日志，无需创建会话或执行任务。
+  const loggerProbe = new AgentRuntimeClient({ sessionId: 'logger-self-check' })
+  void loggerProbe.start().catch(() => {}).finally(() => loggerProbe.stop().catch(() => {}))
   // 初始化 Gamma 版本号（供 User-Agent 等全局标识使用）
   setGammaVersion(app.getVersion())
 

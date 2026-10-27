@@ -1,9 +1,9 @@
 /**
  * RightSidePanel — 右侧边栏容器
  *
- * 在 Agent 模式下显示文件面板，样式与 LeftSidebar 一致。
+ * 在 Agent 模式下显示已打开的文件预览与工具标签。
  * 从全局 atom 读取当前会话 ID 和路径。
- * 管理「文件 / 代码改动」视图；文件中包含会话文件与项目文件。
+ * 文件与改动列表由标题栏按需浮层提供。
  */
 
 import * as React from 'react'

@@ -6,21 +6,19 @@ import { ComputerReobserveRequiredError } from './computer-controller'
 
 describe('Given 观察绑定与投递前拒绝', () => {
   test('When 坐标动作没有ID、ID过期或不匹配 Then 不刷新截图也不投递', async () => {
-    const f = createComputerFixture()
-    const initial = await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
     for (const action of ['click', 'double_click', 'triple_click', 'right_click', 'middle_click', 'mouse_move', 'scroll', 'drag']) {
-      for (const observationId of [undefined, 'wrong']) {
+      for (const observationId of [undefined, 'wrong', 'expired']) {
+        const f = createComputerFixture()
+        const initial = await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
+        if (observationId === 'expired') f.advance(31_000)
         const before = f.calls.length
-        await expect(f.controller.executeAutonomousAction({ action, coordinate: [0, 0], start_coordinate: [0, 0], observationId }, undefined, f.binding)).rejects.toBeInstanceOf(ComputerReobserveRequiredError)
+        await expect(f.controller.executeAutonomousAction({ action, coordinate: [0, 0], start_coordinate: [0, 0], observationId: observationId === 'expired' ? initial.observationId : observationId }, undefined, f.binding)).rejects.toBeInstanceOf(ComputerReobserveRequiredError)
         expect(f.calls.length).toBe(before)
+        expect(f.actions).toHaveLength(0)
+        expect(f.controller.isRunStopped(f.binding.runId)).toBe(false)
+        await f.controller.finishRun(f.binding)
       }
     }
-    f.advance(31_000)
-    const before = f.calls.length
-    await expect(f.controller.executeAutonomousAction({ action: 'click', coordinate: [0, 0], observationId: initial.observationId }, undefined, f.binding)).rejects.toBeInstanceOf(ComputerReobserveRequiredError)
-    expect(f.calls.length).toBe(before)
-    expect(f.actions).toHaveLength(0)
-    await f.controller.finishRun(f.binding)
   })
   for (const code of ['stale-element-ref', 'observation-layout-changed', 'ambiguous-selection']) {
     test(`When prepare 返回 ${code} Then 同轮可重新观察但不会自动重放`, async () => {
@@ -39,8 +37,8 @@ describe('Given 观察绑定与投递前拒绝', () => {
       await f.controller.finishRun(f.binding)
     })
   }
-  test('When 权限错误、AX超时或未知错误 Then 仍暂停本轮', async () => {
-    for (const code of ['permission-required', 'ax-timeout', 'revoked', 'unknown']) {
+  test('When 权限撤销或未知错误 Then 仍暂停本轮', async () => {
+    for (const code of ['revoked', 'unknown']) {
       const f = createComputerFixture({ call: async method => { if (method === 'prepare') throw new ComputerNativeHostError(code, '不能证明安全') } })
       const observation = await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
       await expect(f.controller.executeAutonomousAction({ action: 'click', coordinate: [0, 0], observationId: observation.observationId }, undefined, f.binding)).rejects.toThrow()

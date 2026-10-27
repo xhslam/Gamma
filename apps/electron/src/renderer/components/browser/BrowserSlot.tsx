@@ -18,18 +18,25 @@ export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: st
     const element = ref.current
     const setLayout = (window.electronAPI as Partial<typeof window.electronAPI>).setAgentBrowserLayout
     if (!element || typeof setLayout !== 'function') return
+    // DOM 工作区保持固定内容宽度；原生视图不会自动服从父层的 overflow/inert。
+    const transition = element.closest<HTMLElement>('[data-sidebar-transition]')
     let frame = 0
     const commitLayout = (visible: boolean, preserveSessionOnHide: boolean) => {
       const rect = element.getBoundingClientRect()
+      const clip = transition?.getBoundingClientRect()
+      const collapsed = transition?.dataset.collapsed === 'true'
+      const left = Math.max(rect.left, clip?.left ?? rect.left)
+      const right = Math.min(rect.right, clip?.right ?? rect.right)
+      const width = Math.max(0, right - left)
       void setLayout({
         sessionId,
         tabId,
         revision: nextBrowserLayoutRevision(),
-        visible: visible && !isPaneResizeProtected() && rect.width > 4 && rect.height > 4,
-        preserveSessionOnHide: preserveSessionOnHide || isPaneResizeProtected(),
+        visible: visible && !collapsed && !isPaneResizeProtected() && width > 4 && rect.height > 4,
+        preserveSessionOnHide: preserveSessionOnHide || !!collapsed || isPaneResizeProtected(),
         bounds: {
-          x: Math.round(rect.x), y: Math.round(rect.y),
-          width: Math.round(rect.width), height: Math.round(rect.height),
+          x: Math.round(left), y: Math.round(rect.y),
+          width: Math.round(width), height: Math.round(rect.height),
         },
       })
     }
@@ -54,12 +61,19 @@ export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: st
     }
     window.addEventListener(PANE_RESIZE_GUARD_EVENT, publishResizeGuard)
     observer.observe(element)
+    if (transition) observer.observe(transition)
+    // 左侧导航收放会移动左侧工作区，但浏览器自身尺寸可能保持不变。
+    const workspaceLayout = element.closest<HTMLElement>('.gamma-workspace-layout')
+    if (workspaceLayout) observer.observe(workspaceLayout)
+    const visibilityObserver = new MutationObserver(() => publishCurrentVisibility(true))
+    if (transition) visibilityObserver.observe(transition, { attributes: true, attributeFilter: ['data-collapsed'] })
     window.addEventListener('resize', publishBounded)
     // Tab 切换时先前 Slot 会立即发出 hide。新 Slot 不能再等一帧才 show，
     // 否则快速左右切换时原生视图会停留在隐藏状态，表现为页面内容消失。
     publishCurrentVisibility(true)
     return () => {
       observer.disconnect()
+      visibilityObserver.disconnect()
       window.removeEventListener('resize', publishBounded)
       window.removeEventListener(PANE_RESIZE_GUARD_EVENT, publishResizeGuard)
       if (frame) cancelAnimationFrame(frame)

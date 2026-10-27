@@ -41,7 +41,7 @@ function setup() {
   }, { AbortController })
   const adapter = new PiUtilityAdapter()
   function start(sessionId: string, getComputerObservations: () => Promise<ComputerPrivateObservation[]> = async () => [privateObservation], desktopMode = true) {
-    const iterator = adapter.query({ sessionId, desktopMode, getComputerObservations, validateComputerLease: async () => {} } as unknown as PiAgentQueryOptions)[Symbol.asyncIterator]()
+    const iterator = adapter.query({ sessionId, runId: 'run-1', desktopMode, getComputerObservations, validateComputerLease: async () => {} } as unknown as PiAgentQueryOptions)[Symbol.asyncIterator]()
     const first = iterator.next()
     // 立即绑定拒绝处理，防止dispose测试的队列拒绝成为unhandled rejection。
     const settled = first.then(value => ({ value }), error => ({ error: error as unknown }))
@@ -58,6 +58,7 @@ describe('Given main到utility的私有观察capability（无Electron、无网�
     expect(JSON.stringify(query.client.serialized)).not.toContain('PRIVATE_CANARY')
     expect(query.client.serialized).not.toHaveProperty('getComputerObservations')
     expect(query.client.serialized).not.toHaveProperty('validateComputerLease')
+    expect(query.client.serialized).toHaveProperty('runId', 'run-1')
     await expect(query.client.read(query.client.queryId, 's1', M.CAPABILITY_COMPUTER_VALIDATE)).resolves.toBeUndefined()
     await query.finish()
     await expect(query.client.read()).rejects.toThrow()

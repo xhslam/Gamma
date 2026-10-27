@@ -153,3 +153,76 @@ test('Given 监控已连接 When 窗口不可见 Then 清除画面、关闭采�
   `)
   expect(result).toEqual({ paused: true, reconnected: true })
 })
+
+test('Given 只有辅助功能授权 When 展示操作过程 Then 无录屏仍正常可用且不伪装实时画面', async () => {
+  const result = await renderer.run(`
+    await window.mount(undefined,{mode:'accessibility'})
+    const before=window.reads.length
+    await new Promise(r=>setTimeout(r,350))
+    return {text:document.body.textContent,images:document.querySelectorAll('img').length,errors:document.querySelectorAll('[role="alert"]').length,
+      stop:!!document.querySelector('[aria-label="停止当前电脑操作"]'),requests:window.permissionRequests,extraReads:window.reads.length-before}
+  `)
+  expect(result).toMatchObject({ images: 0, errors: 0, stop: true, requests: [], extraReads: 0 })
+  expect((result as { text: string }).text).toContain('辅助功能模式')
+  expect((result as { text: string }).text).toContain('基础操作无需录屏')
+  expect((result as { text: string }).text).toContain('近期步骤')
+  expect((result as { text: string }).text).not.toContain('实时画面…')
+  expect((result as { text: string }).text).not.toContain('重新连接')
+})
+
+test('Given 辅助功能模式 When 用户主动开启可选录屏 Then 通过现有权限桥刷新状态并显示真实画面', async () => {
+  const result = await renderer.run(`
+    await window.mount(undefined,{mode:'accessibility'})
+    document.querySelector('[aria-label="开启可选画面预览"]').click()
+    await window.until(()=>document.querySelector('img'))
+    return {requests:window.permissionRequests,live:document.body.textContent.includes('实时画面'),stops:window.stops}
+  `)
+  expect(result).toEqual({ requests: ['screen'], live: true, stops: [] })
+})
+
+test('Given 用户未开启可选录屏或请求失败 When 返回辅助功能模式 Then 不显示操作失败且仍可停止', async () => {
+  const result = await renderer.run(`
+    await window.mount(undefined,{mode:'accessibility'});window.grantPermission=false
+    document.querySelector('[aria-label="开启可选画面预览"]').click()
+    await window.until(()=>document.body.textContent.includes('录屏尚未开启'))
+    const declined=document.body.textContent
+    window.failPermission=true
+    document.querySelector('[aria-label="开启可选画面预览"]').click()
+    await window.until(()=>document.body.textContent.includes('未能开启画面预览'))
+    return {declined,text:document.body.textContent,images:document.querySelectorAll('img').length,errors:document.querySelectorAll('[role="alert"]').length,stop:!!document.querySelector('[aria-label="停止当前电脑操作"]')}
+  `)
+  expect(result).toMatchObject({ images: 0, errors: 0, stop: true })
+  expect((result as { declined: string }).declined).toContain('辅助功能操作可继续')
+  expect((result as { text: string }).text).not.toContain('操作状态待确认')
+})
+
+test('Given 已显示视频帧 When 降级为辅助功能模式 Then 清除旧画面且收起展开不恢复假图', async () => {
+  const result = await renderer.run(`
+    await window.mount()
+    const next={...window.preview,mode:'accessibility',permissions:{...window.preview.permissions,screen:false}}
+    const retained=!!window.mergePreview(window.preview,next).frame
+    window.preview=next;window.listeners.forEach(fn=>fn({sessionId:'s1',phase:'active'}))
+    await window.until(()=>!document.querySelector('img'))
+    document.querySelector('[aria-label="收起操作画面"]').click()
+    await window.until(()=>document.querySelector('[aria-label="展开操作画面"]'))
+    document.querySelector('[aria-label="展开操作画面"]').click()
+    await window.until(()=>document.body.textContent.includes('辅助功能模式'))
+    return {retained,images:document.querySelectorAll('img').length,text:document.body.textContent}
+  `)
+  expect(result).toMatchObject({ retained: false, images: 0 })
+  expect((result as { text: string }).text).not.toContain('正在连接')
+})
+
+test('Given 视频请求在途 When 收到录屏撤销状态 Then 立即切换辅助功能模式且旧响应不能恢复图片', async () => {
+  const result = await renderer.run(`
+    await window.mount();window.blockRead=true
+    window.listeners.forEach(fn=>fn({sessionId:'s1',phase:'active'}))
+    await window.until(()=>window.releaseRead)
+    window.listeners.forEach(fn=>fn({sessionId:'s1',phase:'active',permissions:{accessibility:true,screen:false,listen:false,post:true}}))
+    await window.until(()=>!document.querySelector('img'))
+    window.releaseRead();await new Promise(r=>setTimeout(r,100))
+    return {images:document.querySelectorAll('img').length,text:document.body.textContent}
+  `)
+  expect(result).toMatchObject({ images: 0 })
+  expect((result as { text: string }).text).toContain('辅助功能模式')
+})

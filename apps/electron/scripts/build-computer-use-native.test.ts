@@ -1,22 +1,23 @@
 import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { computerUseBuildPlan } from './build-computer-use-native'
+import { buildComputerUseNative, computerUseBuildPlan } from './build-computer-use-native'
 
 const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-describe('Given独立Computer Use构建计划', () => {
+describe('Given Gamma主应用内Computer Use CLI构建计划', () => {
   test('When非macOS Then不构建或运行helper', () => {
     expect(computerUseBuildPlan({ appDir, platform: 'linux', hostArch: 'x64' })).toBeNull()
   })
-  test('When指定host/交叉架构 Then使用macOS14 deployment target与独立bundle', () => {
+  test('When指定host/交叉架构 Then使用macOS14 deployment target与裸CLI，不生成独立应用', () => {
     const arm = computerUseBuildPlan({ appDir, platform: 'darwin', hostArch: 'arm64' })
     const intel = computerUseBuildPlan({ appDir, platform: 'darwin', hostArch: 'arm64', targetArch: 'x64' })
     expect(arm?.target).toBe('arm64-apple-macosx14.0')
     expect(intel?.target).toBe('x86_64-apple-macosx14.0')
-    expect(arm?.bundle).toEndWith('/resources/computer-use/Gamma Computer Use Helper.app')
+    expect(arm?.executable).toEndWith('/resources/computer-use/gamma-computer-use-helper')
+    expect(arm?.entitlements).toEndWith('/resources/computer-use/entitlements.plist')
     expect(() => computerUseBuildPlan({ appDir, platform: 'darwin', hostArch: 'riscv64' })).toThrow()
   })
   test('When检查构建脚本 Then无签名、启动、安装或外部下载命令', () => {
@@ -24,9 +25,39 @@ describe('Given独立Computer Use构建计划', () => {
     expect(source).not.toMatch(/execFileSync\(['"](?:codesign|open|curl|npx|npm|osascript)['"]/)
     expect(source).not.toContain('Electron.app')
     expect(source).toContain("'-warnings-as-errors'")
+    expect(source).not.toContain("copyFileSync(resolve(plan.sourceDir, 'Info.plist')")
+  })
+  test('When 检查打包契约 Then 裸CLI与最小权限进入主App Resources，不交付独立APPL bundle', () => {
+    const config = readFileSync(resolve(appDir, 'electron-builder.yml'), 'utf8')
+    expect(config).toContain('from: resources/computer-use\n      to: computer-use\n      filter:\n        - gamma-computer-use-helper\n        - entitlements.plist')
+    expect(config).toContain('- Contents/Resources/computer-use/gamma-computer-use-helper')
+    expect(config).not.toContain('Helpers/Gamma Computer Use Helper.app')
+    expect(config).not.toContain('from: resources/computer-use/Gamma Computer Use Helper.app')
   })
 })
 const macTest = process.platform === 'darwin' ? test : test.skip
+macTest('Given 含旧bundle与Info.plist的构建目录 When 编译新CLI Then 仅生成可执行文件和最小权限且不执行授权入口', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'gamma-computer-bare-build-'))
+  try {
+    const source = resolve(directory, 'native/computer-use')
+    const resources = resolve(directory, 'resources/computer-use')
+    const marker = resolve(directory, 'entry-was-started')
+    mkdirSync(source, { recursive: true })
+    mkdirSync(resolve(resources, 'Gamma Computer Use Helper.app/Contents'), { recursive: true })
+    writeFileSync(resolve(source, 'main.swift'), `import Foundation\n_ = FileManager.default.createFile(atPath: ${JSON.stringify(marker)}, contents: Data())\n`)
+    writeFileSync(resolve(source, 'Info.plist'), '<plist><dict><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
+    const minimumEntitlements = '<?xml version="1.0"?><plist version="1.0"><dict/></plist>'
+    writeFileSync(resolve(source, 'entitlements.plist'), minimumEntitlements)
+    const output = buildComputerUseNative({ appDir: directory, platform: 'darwin', hostArch: process.arch })!
+    expect(output).toBe(resolve(resources, 'gamma-computer-use-helper'))
+    expect(statSync(output).isFile()).toBe(true)
+    expect(statSync(output).mode & 0o777).toBe(0o755)
+    expect(readdirSync(resources).sort()).toEqual(['entitlements.plist', 'gamma-computer-use-helper'])
+    expect(readFileSync(resolve(resources, 'entitlements.plist'), 'utf8')).toBe(minimumEntitlements)
+    expect(existsSync(marker)).toBe(false)
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+}, 150_000)
+
 macTest('Given纯离线入口 When编译并运行--self-test Then安全锁存/重放/失效/坐标/UTF16/协议边界全部通过且不启动桌面', () => {
   const directory = mkdtempSync(resolve(tmpdir(), 'gamma-computer-use-offline-'))
   try {

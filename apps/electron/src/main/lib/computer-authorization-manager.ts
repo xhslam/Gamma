@@ -16,7 +16,7 @@ interface ConsentHandlers {
 }
 const normalizeKey = (value: string): string => value.trim().toLowerCase()
 const validDecision = (value: unknown): value is ComputerAppAuthDecision => ['once', 'always', 'denied', 'cancelled'].includes(String(value))
-const defaults = (): ComputerUsePreferences => ({ riskPolicy: 'standard', systemPermissionsDismissed: false, shareObservations: false, allowedApps: {} })
+const defaults = (): ComputerUsePreferences => ({ riskPolicy: 'relaxed', systemPermissionsDismissed: false, shareObservations: false, allowedApps: {} })
 
 /** 持久授权与单轮执行分开；无人响应、超时、UI 故障一律拒绝。 */
 export class ComputerAuthorizationManager {
@@ -140,6 +140,8 @@ export class ComputerAuthorizationManager {
     const keys = [bundleId, appName].filter((key): key is string => !!key).map(normalizeKey)
     if (keys.some(key => this.preferences.allowedApps[key] === 'denied')) return 'denied'
     if (keys.some(key => this.preferences.allowedApps[key] === 'always' || this.once.get(scope)?.has(key))) return 'allowed'
+    // 宽松策略按用户任务操作应用，不再逐应用重复确认；这是当前策略，不冒充持久 always 授权。
+    if (this.preferences.riskPolicy === 'relaxed') return 'allowed'
     return 'pending'
   }
   recordAppDecision(appName: string, decision: Exclude<ComputerAppAuthDecision, 'cancelled'>, bundleId?: string, scope = 'local'): void {
@@ -161,13 +163,13 @@ export class ComputerAuthorizationManager {
       if (this.handlers.observationConsent) allowed = await this.waitForDecision(signal => this.handlers.observationConsent!(signal), false)
       else {
         const response = await this.waitForDecision(signal => this.showLocalDialog({ type: 'question', title: '首次使用电脑操作',
-          message: '允许 Agent 按任务需要观察并操作电脑？',
-          detail: '桌面截图和界面文字会发送给您配置的 AI 模型，可能包含屏幕上其他应用和敏感信息。仅在任务需要时截屏，不持续监控。接下来 macOS 会请求辅助功能、录屏、输入监听和事件发布权限。应用控制另行授权；高风险动作执行前确认。此同意会保存，可在本地撤销。',
+          message: '允许 Agent 按任务需要读取界面并操作电脑？',
+          detail: '界面文字会发送给您配置的 AI 模型，可能包含敏感信息。基础操作只需 macOS 辅助功能授权；录屏是可选能力，开启后可按需发送截图并显示实时预览。宽松策略不逐应用重复询问，您明确拒绝的应用仍不能操作；高风险动作执行前确认。此同意会保存，可在本地撤销。',
           buttons: ['同意并继续', '取消'], defaultId: 1, cancelId: 1 }, signal), 1)
         allowed = response === 0
       }
     } catch { allowed = false }
-    if (!allowed || generation !== this.generation) throw new Error('尚未同意把桌面截图发送给模型')
+    if (!allowed || generation !== this.generation) throw new Error('尚未同意把界面观察发送给模型')
     this.updatePreferences({ shareObservations: true })
   }
   async ensureAppAuthorized(appName: string, bundleId?: string, scope = 'local'): Promise<boolean> {

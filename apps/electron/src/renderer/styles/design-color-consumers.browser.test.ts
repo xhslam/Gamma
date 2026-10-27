@@ -66,7 +66,7 @@ describe('Given 第三方渲染器消费全局设计令牌', () => {
       expect(result.text.length).toBeGreaterThan(8)
       for (const item of result.text) expect(allowedChannels.has(channels(item.color) ?? '')).toBe(true)
       expect(result.pierre).toBe(theme ? 'rgb(240, 238, 230)' : 'rgb(20, 20, 19)')
-      expect(result.terminal.background?.toLowerCase()).toBe(theme ? '#1f1e1d' : '#faf9f5')
+      expect(result.terminal.background?.toLowerCase()).toBe(theme ? '#262624' : '#ffffff')
       expect(result.diagrams).toHaveLength(2)
       for (const diagram of result.diagrams) {
         for (const color of [diagram.background, ...diagram.text, ...diagram.shapes]) {

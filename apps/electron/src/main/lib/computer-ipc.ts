@@ -23,7 +23,7 @@ export function registerComputerIpc(): void {
   ipcMain.handle(COMPUTER_IPC_CHANNELS.GET_STATE, (event, sessionId?: string) => {
     verify(event)
     if (sessionId !== undefined && (typeof sessionId !== 'string' || sessionId.length > 128)) throw new Error('无效会话')
-    return computerController.getState(sessionId)
+    return computerController.refreshState(sessionId)
   })
   const validId = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 128
   ipcMain.handle(COMPUTER_IPC_CHANNELS.GET_PREVIEW, (event, input: ComputerPreviewRequest) => {

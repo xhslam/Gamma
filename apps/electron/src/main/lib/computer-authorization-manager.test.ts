@@ -2,7 +2,14 @@ import { describe, expect, test, beforeEach } from 'bun:test'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { ComputerAuthorizationManager } from './computer-authorization-manager'
+
+function createStandardManager(path: string): ComputerAuthorizationManager {
+  const manager = new ComputerAuthorizationManager(path)
+  manager.updatePreferences({ riskPolicy: 'standard' })
+  return manager
+}
 
 describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
   let manager: ComputerAuthorizationManager
@@ -10,16 +17,17 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
 
   beforeEach(() => {
     tempConfigFile = join(tmpdir(), `gamma-test-auth-${randomUUID()}.json`)
-    manager = new ComputerAuthorizationManager(tempConfigFile)
+    manager = createStandardManager(tempConfigFile)
   })
 
-  test('Given 首次安装 When 读取偏好 Then 不默认信任任何应用，外发也未同意', () => {
+  test('Given 首次安装 When 读取偏好 Then 默认宽松但不伪造应用持久授权，外发仍未同意', () => {
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-first-auth-${randomUUID()}.json`))
     const prefs = manager.getPreferences()
-    expect(prefs.riskPolicy).toBe('standard')
+    expect(prefs.riskPolicy).toBe('relaxed')
     expect(prefs.allowedApps).toEqual({})
     expect(prefs.shareObservations).toBe(false)
-    expect(manager.checkAppAuthorization('Notes')).toBe('pending')
-    expect(manager.checkAppAuthorization('备忘录')).toBe('pending')
+    expect(manager.checkAppAuthorization('Notes')).toBe('allowed')
+    expect(manager.checkAppAuthorization('备忘录')).toBe('allowed')
   })
 
   test('未知应用首次检查返回 pending', () => {
@@ -101,7 +109,7 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
 })
 
 describe('Given 持久截图外发同意与失败关闭', () => {
-  const create = () => new ComputerAuthorizationManager(join(tmpdir(), `gamma-consent-${randomUUID()}.json`))
+  const create = () => createStandardManager(join(tmpdir(), `gamma-consent-${randomUUID()}.json`))
   test('When 首次同意 Then 仅询问一次且配置可重载；dismiss不等于同意', async () => {
     const path = join(tmpdir(), `gamma-consent-${randomUUID()}.json`)
     const manager = new ComputerAuthorizationManager(path)
@@ -159,7 +167,7 @@ describe('Given 持久截图外发同意与失败关闭', () => {
 })
 
 describe('Given 可恢复的本地应用授权', () => {
-  const create = () => new ComputerAuthorizationManager(join(tmpdir(), `gamma-app-consent-${randomUUID()}.json`))
+  const create = () => createStandardManager(join(tmpdir(), `gamma-app-consent-${randomUUID()}.json`))
   test('When 授权UI失败后重试 Then 不保存拒绝且能够再次询问', async () => {
     const manager = create()
     manager.setUiHandlers({ appAuth: async () => { throw new Error('不可用') } })
@@ -182,7 +190,7 @@ describe('Given 可恢复的本地应用授权', () => {
   })
   test('When 恢复单项询问 Then 重载后该项消失且其他决定保留', () => {
     const path = join(tmpdir(), `gamma-revoke-${randomUUID()}.json`)
-    const manager = new ComputerAuthorizationManager(path)
+    const manager = createStandardManager(path)
     manager.recordAppDecision('One', 'always', 'app.one')
     manager.recordAppDecision('Two', 'denied', 'app.two')
     manager.updatePreferences({ allowedApps: { 'app.two': 'denied' } })
@@ -197,7 +205,7 @@ describe('Given 可恢复的本地应用授权', () => {
 
 test('Given 关闭应用授权弹窗或监听器故障 When 请求结束 Then 只取消本次且不持久拒绝', async () => {
   for (const broken of [false, true]) {
-    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-dismiss-${randomUUID()}.json`))
+    const manager = createStandardManager(join(tmpdir(), `gamma-dismiss-${randomUUID()}.json`))
     manager.onAppAuthRequested(request => {
       if (broken) throw new Error('UI断开')
       manager.resolveAppAuth(request.requestId, 'cancelled')
@@ -205,4 +213,56 @@ test('Given 关闭应用授权弹窗或监听器故障 When 请求结束 Then �
     await expect(manager.ensureAppAuthorized('App', 'app.example')).rejects.toThrow('未完成')
     expect(manager.getPreferences().allowedApps).toEqual({})
   }
+})
+
+describe('Given 宽松策略的任务授权', () => {
+  test('When 跨运行操作新应用 Then 不弹应用确认，也不写入虚假的 always', async () => {
+    const path = join(tmpdir(), `gamma-relaxed-${randomUUID()}.json`)
+    const manager = new ComputerAuthorizationManager(path)
+    let requested = 0
+    manager.setUiHandlers({ appAuth: async () => { requested++; return 'always' } })
+    expect(await manager.ensureAppAuthorized('Auris', 'com.auris.desktop', 'run-one')).toBe(true)
+    manager.clearRun('run-one')
+    expect(await manager.ensureAppAuthorized('Auris', 'com.auris.desktop', 'run-two')).toBe(true)
+    expect(await manager.ensureAppAuthorized('Other App', 'app.other', 'run-two')).toBe(true)
+    expect(requested).toBe(0)
+    expect(manager.getPreferences().allowedApps).toEqual({})
+    expect(existsSync(path)).toBe(false)
+  })
+
+  test('When 应用或 bundle 已明确拒绝 Then 宽松与旧 always 都不能绕过', async () => {
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-relaxed-denied-${randomUUID()}.json`))
+    manager.recordAppDecision('Blocked', 'denied', 'app.blocked')
+    manager.recordAppDecision('Blocked', 'always')
+    expect(manager.checkAppAuthorization('Blocked', 'app.blocked')).toBe('denied')
+    await expect(manager.ensureAppAuthorized('Blocked', 'app.blocked', 'run-new')).rejects.toThrow('用户已明确拒绝')
+    const reloaded = new ComputerAuthorizationManager(join(tmpdir(), `gamma-relaxed-name-denied-${randomUUID()}.json`))
+    reloaded.recordAppDecision('Blocked', 'denied')
+    expect(reloaded.checkAppAuthorization('Blocked', 'app.blocked')).toBe('denied')
+  })
+
+  test('When 从宽松切回标准或严格 Then 恢复询问且保留真实 always', async () => {
+    const path = join(tmpdir(), `gamma-policy-switch-${randomUUID()}.json`)
+    const manager = new ComputerAuthorizationManager(path)
+    expect(await manager.ensureAppAuthorized('Unrecorded', 'app.unrecorded', 'run-one')).toBe(true)
+    manager.recordAppDecision('Trusted', 'always', 'app.trusted')
+    for (const policy of ['standard', 'strict'] as const) {
+      manager.updatePreferences({ riskPolicy: policy })
+      expect(manager.checkAppAuthorization('Unrecorded', 'app.unrecorded', 'run-one')).toBe('pending')
+      expect(manager.checkAppAuthorization('Trusted', 'app.trusted')).toBe('allowed')
+      const reloaded = new ComputerAuthorizationManager(path)
+      expect(reloaded.getPreferences().riskPolicy).toBe(policy)
+      expect(reloaded.checkAppAuthorization('Unrecorded', 'app.unrecorded')).toBe('pending')
+    }
+  })
+
+  test('When 宽松省略应用弹窗 Then 仍须首次观察外发同意，拒绝不记录同意', async () => {
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-relaxed-consent-${randomUUID()}.json`))
+    let requested = 0
+    manager.setUiHandlers({ observationConsent: async () => { requested++; return false } })
+    expect(await manager.ensureAppAuthorized('Auris', 'com.auris.desktop')).toBe(true)
+    await expect(manager.ensureObservationConsent()).rejects.toThrow('尚未同意把界面观察发送给模型')
+    expect(requested).toBe(1)
+    expect(manager.getPreferences().shareObservations).toBe(false)
+  })
 })

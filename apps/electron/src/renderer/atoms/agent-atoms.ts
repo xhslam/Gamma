@@ -817,6 +817,9 @@ export interface AgentTerminalTab {
 
 export const agentTerminalTabsAtom = atom<Map<string, AgentTerminalTab[]>>(new Map())
 
+/** SidePanel 发布实际存在的标签，供收起后的标题栏恢复入口使用。 */
+export const agentWorkspaceTabIdsAtom = atom<Map<string, readonly AgentSidePanelTab[]>>(new Map())
+
 export function getTerminalSidePanelTab(terminalId: string): AgentSidePanelTab {
   return `terminal:${terminalId}`
 }

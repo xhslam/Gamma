@@ -11,7 +11,7 @@ describe('Given Notes 验收的注册工具合成宿主回归（非真实桌面E
     for (const params of [{ action: 'open_app', app: 'Notes' }, { action: 'key', key: 'cmd+n' }, { action: 'type', text: '测试' }]) {
       const result = await f.execute(params)
       expect(result.content.some(block => block.type === 'image')).toBe(true)
-      expect(result.content.some(block => block.type === 'text' && block.text.includes('请根据新截图验证业务结果'))).toBe(true)
+      expect(result.content.some(block => block.type === 'text' && block.text.includes('请根据最新界面状态验证业务结果'))).toBe(true)
     }
     expect(f.actions.map(action => action.kind)).toEqual(['open_app', 'key', 'type'])
     expect(f.actions[0]?.bundleId).toBe('com.apple.Notes')

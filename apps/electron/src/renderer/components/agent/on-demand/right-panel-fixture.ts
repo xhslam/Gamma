@@ -1,11 +1,13 @@
-/** 新版按需入口与真实大面板的隔离渲染夹具；不访问用户文件或IPC。 */
+/** 真实工作区叠层、按需入口与大面板的隔离渲染夹具；不访问用户文件或IPC。 */
 export const rightPanelFixture = String.raw`
   import React from 'react'
   import { createRoot } from 'react-dom/client'
-  import { Provider, createStore } from 'jotai'
+  import { Provider, createStore, atom, useAtomValue } from 'jotai'
   import { TooltipProvider } from '@/components/ui/tooltip'
+  import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
   import { AgentHeader } from '@/components/agent/AgentHeader'
   import { RightSidePanel } from '@/components/app-shell/RightSidePanel'
+  import { WorkspacePanels } from '@/components/app-shell/WorkspacePanels'
   import {
     agentSessionsAtom,
     currentAgentSessionIdAtom,
@@ -19,6 +21,7 @@ export const rightPanelFixture = String.raw`
     currentSessionSidePanelOpenAtom,
     agentSideTemporaryAgentMapAtom,
     agentDiffPanelTabAtom,
+    agentTerminalTabsAtom,
     agentAttachedFilesMapAtom,
     agentAttachedDirectoriesMapAtom,
     agentSidePanelLayoutAtomFamily,
@@ -36,8 +39,8 @@ export const rightPanelFixture = String.raw`
 
   document.head.insertAdjacentHTML('beforeend', '<style>html,body,#root{height:100%;margin:0;overflow:hidden;}</style>')
   const errors = []
-  window.addEventListener('error', (event) => errors.push(event.message))
-  window.addEventListener('unhandledrejection', (event) => errors.push(String(event.reason)))
+  window.addEventListener('error', (event) => errors.push(event.error?.stack || event.message))
+  window.addEventListener('unhandledrejection', (event) => errors.push(event.reason?.stack || String(event.reason)))
   const delay = (ms = 25) => new Promise((resolve) => setTimeout(resolve, ms))
   const until = async (predicate) => {
     for (let i = 0; i < 200; i++) {
@@ -50,10 +53,13 @@ export const rightPanelFixture = String.raw`
 
   localStorage.clear()
   const store = createStore()
+  const modalOpenAtom = atom(false)
   const sessionId = 'session-test-1'
 
   // 初始化真实基础状态
   store.set(currentAgentSessionIdAtom, sessionId)
+  // Atom 在模块导入时可能已读取上个隔离窗口的存储值，显式重置初始状态。
+  store.set(agentSidePanelOpenAtomFamily(sessionId), false)
   store.set(currentAgentWorkspaceIdAtom, 'ws-1')
   store.set(agentWorkspacesAtom, [
     { id: 'ws-1', name: 'Gamma', slug: 'gamma', projectRootPath: '/workspace/gamma', createdAt: 1, updatedAt: 1 }
@@ -118,9 +124,12 @@ export const rightPanelFixture = String.raw`
   ]))
 
   const fileReads = []
+  const terminalCreates = []
   let diffFetchCount = 0
   // 模拟真实完整 electronAPI；未声明的能力返回空值，避免后台effect噪声。
   const defaultElectronAPI = {
+    createTerminal: async (input) => { terminalCreates.push(input.terminalId) },
+    getTerminalSnapshot: async () => ({ output: 'GAMMA_TERMINAL_HISTORY', sequence: 0 }),
     updateAgentSessionTitle: async (id, title) => ({ id, title, updatedAt: Date.now() }),
     listAgentSessions: async () => store.get(agentSessionsAtom),
     getWorkspaceDirectories: async () => [],
@@ -182,6 +191,52 @@ export const rightPanelFixture = String.raw`
     },
   })
 
+  function WorkbenchPanels() {
+    const workspaceOpen = useAtomValue(currentSessionSidePanelOpenAtom)
+    const modalOpen = useAtomValue(modalOpenAtom)
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(WorkspacePanels, {
+        workspaceSide: 'right',
+        workspaceOpen,
+        workspaceWidth: 460,
+        minimumWidth: 300,
+        maximumWidth: 600,
+        onResizeStart: () => {},
+        onResizeKeyDown: () => {},
+        agent: React.createElement(
+          'div',
+          { className: 'flex h-full min-h-0 flex-col bg-background' },
+          React.createElement(AgentHeader, { sessionId }),
+          React.createElement(
+            'main',
+            { className: 'flex-1 flex flex-col p-4 bg-background min-w-0', 'data-testid': 'chat-main-area' },
+            React.createElement('div', { className: 'text-sm font-medium text-foreground' }, '对话区域（自适应工作区宽度）'),
+            React.createElement('div', { className: 'mt-2 text-xs text-muted-foreground' }, 'S0/S1 状态下聊天占据全宽，S2 展开时让出右侧大面板空间。')
+          )
+        ),
+        workspace: React.createElement(RightSidePanel, { width: 460 }),
+      }),
+      React.createElement(
+        Dialog,
+        { open: modalOpen, onOpenChange: (open) => store.set(modalOpenAtom, open) },
+        React.createElement(
+          DialogContent,
+          {
+            'data-testid': 'on-demand-layering-modal',
+            'aria-describedby': undefined,
+            className: 'h-[80vh] w-[90vw] max-w-none',
+            hideClose: true,
+            // 保留已打开浮层，单独验证两者并存时主模态的遮挡与命中优先级。
+            onOpenAutoFocus: (event) => event.preventDefault(),
+          },
+          React.createElement(DialogTitle, null, '主模态层级回归')
+        )
+      )
+    )
+  }
+
   function AppContainer() {
     return React.createElement(
       Provider,
@@ -192,22 +247,7 @@ export const rightPanelFixture = String.raw`
         React.createElement(
           'div',
           { className: 'flex flex-col h-full w-full bg-background text-foreground' },
-          React.createElement(
-            'header',
-            { className: 'border-b border-border/40 bg-background/80 backdrop-blur-sm shrink-0' },
-            React.createElement(AgentHeader, { sessionId })
-          ),
-          React.createElement(
-            'main',
-            { className: 'flex min-h-0 flex-1 overflow-hidden relative' },
-            React.createElement(
-              'div',
-              { className: 'flex-1 flex flex-col p-4 bg-muted/10 min-w-0 transition-all duration-300', 'data-testid': 'chat-main-area' },
-              React.createElement('div', { className: 'text-sm font-medium text-foreground' }, '对话区域（自适应工作区宽度）'),
-              React.createElement('div', { className: 'mt-2 text-xs text-muted-foreground' }, 'S0/S1 状态下聊天占据全宽，S2 展开时让出右侧大面板空间。')
-            ),
-            React.createElement(RightSidePanel, { width: 460 })
-          )
+          React.createElement(WorkbenchPanels)
         )
       )
     )
@@ -222,16 +262,25 @@ export const rightPanelFixture = String.raw`
     delay,
     store,
     sessionId, fileReads,
+    clearExplorationTabs: () => store.set(agentSideTemporaryAgentMapAtom, new Map()),
+    getActiveTab: () => store.get(agentDiffPanelTabAtom).get(sessionId),
+    getTerminalTabs: () => store.get(agentTerminalTabsAtom).get(sessionId) ?? [],
+    terminalCreates,
+    setClosedActiveTab: (tab) => store.set(agentDiffPanelTabAtom, new Map([[sessionId, tab]])),
+    getPreviewFiles: () => store.get(previewFilesMapAtom).get(sessionId) ?? [],
+    setLegacyActiveTab: (tab) => { store.set(agentDiffPanelTabAtom, new Map([[sessionId, tab]])); store.set(currentSessionSidePanelOpenAtom, true) },
     diffFetchCount: () => diffFetchCount,
     getPreviewFile: () => store.get(previewFileMapAtom).get(sessionId),
     getActiveOverlay: () => store.get(activeOnDemandOverlayAtom),
     getIsBigPanelOpen: () => store.get(currentSessionSidePanelOpenAtom),
+    setModalOpen: (open) => store.set(modalOpenAtom, open),
     toggleOverlay: (tab) => store.set(toggleOnDemandOverlayAtom, tab),
     closeOverlay: () => store.set(closeOnDemandOverlayAtom),
     openInBigPanel: (tab, target) => store.set(openInBigPanelAtom, { tab, target }),
     collapseBigPanel: () => store.set(currentSessionSidePanelOpenAtom, false),
     resetState: () => {
       errors.length = 0
+      store.set(modalOpenAtom, false)
       store.set(activeOnDemandOverlayAtom, null)
       store.set(currentSessionSidePanelOpenAtom, false)
       store.set(currentAgentSessionIdAtom, sessionId)

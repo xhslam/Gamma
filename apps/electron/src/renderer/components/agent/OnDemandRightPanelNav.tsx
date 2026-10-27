@@ -1,8 +1,8 @@
 /**
  * OnDemandRightPanelNav — 标题栏右侧按需入口与工作区顶栏统一组件
  *
- * 承担两种呈现（单一入口组件，S0/S1 与 S2 不同时出现两套）：
- * - S0/S1 (presentation="icons" 或默认)：标题栏右侧紧凑图标组（文件/改动(+角标)/动态调研/展开）
+ * 承担两种呈现（浏览入口始终保留，工作区只承载已打开内容）：
+ * - S0/S1 (presentation="icons" 或默认)：标题栏紧凑图标组，末位按内容切换添加或展开/收起
  * - S2 (presentation="tabs")：右侧大面板顶栏，承载 DiffPanelTabBar 的全部功能（标签切换/拖拽/关闭/并排/收起）
  */
 
@@ -14,6 +14,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import {
   agentDiffDataAtom,
+  agentDiffPanelTabAtom,
+  agentWorkspaceTabIdsAtom,
+  agentSidePanelOpenAtomFamily,
   agentDiffRefreshVersionAtom,
   agentNonGitFileChangesAtom,
   agentSelectedWorktreeAtom,
@@ -23,7 +26,6 @@ import {
   agentSideTemporaryAgentMapAtom,
   currentAgentWorkspaceIdAtom,
   agentWorkspacesAtom,
-  currentSessionSidePanelOpenAtom,
   workspaceGitDiffRefreshVersionAtom,
   agentAttachedDirectoriesMapAtom,
   agentAttachedFilesMapAtom,
@@ -47,6 +49,8 @@ import {
 import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
 import type { DiffPanelTabBarProps } from '@/components/diff/DiffPanelTabBar'
 import { OnDemandOverlayPanel } from './on-demand/OnDemandOverlayPanel'
+import { RightWorkspaceAddMenu } from '@/components/diff/RightWorkspaceAddMenu'
+import { useRightWorkspaceActions } from '@/hooks/useRightWorkspaceActions'
 
 // 缺失的附加路径复用同一空数组，保持渲染间引用稳定。
 const EMPTY_PATHS: string[] = []
@@ -71,11 +75,17 @@ export function OnDemandRightPanelNav(props: OnDemandRightPanelNavProps): React.
 }
 
 function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactElement | null {
-  const isRightPanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
   const activeOverlay = useAtomValue(activeOnDemandOverlayAtom)
   const toggleOverlay = useSetAtom(toggleOnDemandOverlayAtom)
   const closeOverlay = useSetAtom(closeOnDemandOverlayAtom)
   const openInBigPanel = useSetAtom(openInBigPanelAtom)
+  const isWorkspaceOpen = useAtomValue(agentSidePanelOpenAtomFamily(sessionId))
+  const setWorkspaceOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId))
+  const workspaceTabIds = useAtomValue(agentWorkspaceTabIdsAtom).get(sessionId)
+  const activeWorkspaceTab = useAtomValue(agentDiffPanelTabAtom).get(sessionId)
+  const restoreWorkspaceTab = workspaceTabIds?.find(tab => tab === activeWorkspaceTab) ?? workspaceTabIds?.[0]
+  const workspaceActions = useRightWorkspaceActions(sessionId)
+  const handleAddMenuOpenChange = React.useCallback((open: boolean) => { if (open) closeOverlay() }, [closeOverlay])
 
   const navRef = React.useRef<HTMLDivElement>(null)
   const filesBtnRef = React.useRef<HTMLButtonElement>(null)
@@ -155,9 +165,9 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
   const diffResult = diffDataMap.get(diffCacheKey)
   const stats = React.useMemo(() => calculateDiffBadgeStats(diffResult, nonGitChanges), [diffResult, nonGitChanges])
 
-  // 取数仅在 S0/S1 执行；S2 展开后交给既有面板 DiffChangesList 负责
+  // 入口持续可见，改动角标与浮层共用同一真实缓存。
   React.useEffect(() => {
-    if (!sessionId || isRightPanelOpen) return
+    if (!sessionId) return
     let disposed = false
 
     const fetchDiff = async () => {
@@ -218,7 +228,6 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
     }
   }, [
     sessionId,
-    isRightPanelOpen,
     diffCacheKey,
     selectedWorktreePath,
     sessionPath,
@@ -231,12 +240,7 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
     setDiffStatusMap,
   ])
 
-  // S2 大面板展开时由 DiffPanelTabBar 呈现，标题栏图标组隐藏
-  if (isRightPanelOpen) {
-    return null
-  }
-
-  const isPopoverOpen = Boolean(activeOverlay) && !isRightPanelOpen
+  const isPopoverOpen = Boolean(activeOverlay)
 
   return (
     <Popover open={isPopoverOpen} onOpenChange={(open) => { if (!open) closeOverlay() }}>
@@ -346,30 +350,38 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
             </Tooltip>
           )}
 
-          {/* 4. 展开大面板按钮 (S2) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                data-icon-button="true"
-                type="button"
-                onClick={() => openInBigPanel({})}
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区`}
-                title={`展开${workspaceSide === 'left' ? '左侧' : '右侧'}工作区 (${bigPanelShortcut})`}
-                data-testid="expand-big-panel-button"
-              >
-                {workspaceSide === 'left' ? <PanelLeft className="size-4" /> : <PanelRight className="size-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              展开{workspaceSide === 'left' ? '左侧' : '右侧'}工作区 ({bigPanelShortcut})
-            </TooltipContent>
-          </Tooltip>
+          {restoreWorkspaceTab ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  data-testid="restore-workspace-button"
+                  data-icon-button="true"
+                  type="button"
+                  onClick={() => {
+                    if (isWorkspaceOpen) setWorkspaceOpen(false)
+                    else openInBigPanel({ tab: restoreWorkspaceTab })
+                  }}
+                  className="mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={`${isWorkspaceOpen ? '收起' : '展开'}${workspaceSide === 'left' ? '左' : '右'}侧工作区`}
+                  aria-expanded={isWorkspaceOpen}
+                >
+                  {workspaceSide === 'left' ? <PanelLeft className="size-4" /> : <PanelRight className="size-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{isWorkspaceOpen ? '收起' : '展开'}{workspaceSide === 'left' ? '左' : '右'}侧工作区 ({bigPanelShortcut})</TooltipContent>
+            </Tooltip>
+          ) : (
+            <RightWorkspaceAddMenu
+              {...workspaceActions}
+              workspaceSide={workspaceSide}
+              onOpenChange={handleAddMenuOpenChange}
+            />
+          )}
         </div>
       </PopoverAnchor>
 
       {/* S1 浮层容器 */}
-      <OnDemandOverlayPanel sessionId={sessionId} activeButtonRef={lastActiveButtonRef} />
+      <OnDemandOverlayPanel sessionId={sessionId} activeButtonRef={lastActiveButtonRef} navRef={navRef} />
     </Popover>
   )
 }

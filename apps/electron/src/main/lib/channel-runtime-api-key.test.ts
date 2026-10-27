@@ -148,4 +148,53 @@ describe('退役渠道迁移', () => {
       provider: 'doubao-api', name: '火山引擎 API', apiKey: 'preserved-api-key',
     })
   })
+
+  test('Given 存量 Codex 渠道缺少 GPT-6.1 Sol When 读取渠道 Then 自动补充 gpt-6.1-sol 候选', () => {
+    writeChannels([
+      {
+        id: 'codex-channel-existing',
+        name: 'ChatGPT',
+        provider: 'openai-codex',
+        baseUrl: '',
+        apiKey: 'dummy-key',
+        models: [
+          { id: 'gpt-6-sol', name: 'GPT-6 Sol', enabled: true },
+        ],
+        enabled: true,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ], 7)
+
+    const channel = channelManager.getChannelById('codex-channel-existing')
+    expect(channel).toBeDefined()
+    expect(channel?.models.some((model) => model.id === 'gpt-6.1-sol' && model.name === 'GPT-6.1 Sol' && model.enabled)).toBe(true)
+  })
+
+  test('Given 存量 Codex 渠道缺少 GPT-6.1 Terra When 读取渠道 Then 自动补充 gpt-6.1-terra 候选且不重复添加', () => {
+    writeChannels([
+      {
+        id: 'codex-channel-existing-terra',
+        name: 'ChatGPT',
+        provider: 'openai-codex',
+        baseUrl: '',
+        apiKey: 'dummy-key',
+        models: [
+          { id: 'gpt-6-sol', name: 'GPT-6 Sol', enabled: true },
+        ],
+        enabled: true,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ], 7)
+
+    const channel = channelManager.getChannelById('codex-channel-existing-terra')
+    expect(channel).toBeDefined()
+    expect(channel?.models.some((model) => model.id === 'gpt-6.1-terra' && model.name === 'GPT-6.1 Terra' && model.enabled)).toBe(true)
+
+    // 重复读取不会重复添加
+    const channelAgain = channelManager.getChannelById('codex-channel-existing-terra')
+    const terraCount = channelAgain?.models.filter((model) => model.id === 'gpt-6.1-terra').length
+    expect(terraCount).toBe(1)
+  })
 })

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import type { ComputerAXContext, ComputerBinding } from '@gamma/shared'
+import type { ComputerAXContext, ComputerBinding, ComputerRiskPolicy } from '@gamma/shared'
 import { ComputerController, type ComputerHost } from '../main/lib/computer-controller'
 import { ComputerAuthorizationManager } from '../main/lib/computer-authorization-manager'
 
@@ -13,11 +13,14 @@ export function createComputerFixture(options: {
   consent?: boolean
   source?: string
   vision?: boolean
+  policy?: ComputerRiskPolicy
   call?: (method: string, params: Record<string, unknown>) => Promise<unknown>
 } = {}) {
   const calls: ComputerFixtureCall[] = []
   const actions: Record<string, unknown>[] = []
   const auth = new ComputerAuthorizationManager(join(tmpdir(), `gamma-computer-${randomUUID()}.json`))
+  // 旧测试显式验证标准策略；默认产品策略与宽松路径另行覆盖。
+  auth.updatePreferences({ riskPolicy: options.policy ?? 'standard' })
   if (options.consent !== false) auth.updatePreferences({ shareObservations: true })
   if (options.trustedApps !== false) for (const [name, bundle] of [['Notes', 'com.apple.Notes'], ['Safari', 'com.apple.Safari']]) auth.recordAppDecision(name!, 'always', bundle!)
   let now = Date.now()

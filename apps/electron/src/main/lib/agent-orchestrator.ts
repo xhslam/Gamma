@@ -1010,7 +1010,11 @@ export class AgentOrchestrator {
     try {
       const vision = await resolvePiImageInputCapability(channel.provider, selectedModelId)
       desktopMode = computerController.beginRun(computerBinding, input.triggeredBy ?? 'user', vision === 'supported')
-      releaseComputerRevocation = computerController.onRevoked(computerBinding, () => { void this.adapter.abort(sessionId) })
+      releaseComputerRevocation = computerController.onRevoked(computerBinding, () => {
+        // 原生桌面控制撤回或暂停时，由 pi-computer-tools 捕获并在工具调用级别返回自然语言中断提示给 Agent，
+        // 严禁在此直接粗暴 abort(sessionId)，否则会抛出 Main runtime request aborted: agent.capability.customTool 击穿整个外层 query。
+        console.log(`[Agent 编排] 桌面控制已撤权/暂停: session=${sessionId}, runId=${computerBinding.runId}`)
+      })
       console.log(`[Agent 编排] 启动 Pi runtime — 模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`)
 
       // 确定 Agent 工作目录
@@ -1322,7 +1326,7 @@ export class AgentOrchestrator {
       const canUseTool = async (toolName: string, input: Record<string, unknown>, options: CanUseToolOptions): Promise<PermissionResult> => {
         // 硬门禁先于任何bypass/计划/普通审批；不能靠提示词或自定义工具回调放行。
         try { computerController.assertTool(computerBinding, toolName) }
-        catch { return { behavior: 'deny' as const, message: '桌面模式的独立执行门禁拒绝此工具；请先停止桌面控制。' } }
+        catch (error) { return { behavior: 'deny' as const, message: computerController.toolDenialMessage(computerBinding, error) } }
         if (options.signal.aborted) return { behavior: 'deny' as const, message: '操作已取消' }
         const currentMode = getPermissionMode()
 
@@ -1647,6 +1651,7 @@ export class AgentOrchestrator {
       const queryOptions: PiAgentQueryOptions = {
         contextRefs: referenceSnapshot,
         sessionId,
+        runId: computerBinding.runId,
         computerToolsAvailable: true,
         validateComputerLease: async () => { computerController.assertObservationSharing(computerBinding) },
         prompt: finalPrompt,

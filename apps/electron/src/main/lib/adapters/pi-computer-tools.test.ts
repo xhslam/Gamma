@@ -31,6 +31,51 @@ describe('Pi computer 工具中断结果与错误处理', () => {
     expect(JSON.stringify(output.details)).not.toContain('ref=fresh')
     expect(JSON.stringify(tool.parameters)).toContain('perform_secondary_action')
     expect(JSON.stringify(tool.parameters)).toContain('observationId')
+    expect(output.content.filter(block => block.type === 'image')).toHaveLength(1)
+    expect(text?.type === 'text' && text.text).toContain('screenshot-and-ax')
+  })
+
+  test('Given 仅辅助功能可用 When 返回无图 AX Then 不报错且引导元素引用或快捷键而非截图坐标', async () => {
+    const mockController = {
+      executeAutonomousAction: async () => ({ message: '界面可操作，录屏可选', observationId: 'ax-only-new', ax: '[1] ref=editable AXTextArea', state: { phase: 'active', supported: true } }),
+    } as unknown as ComputerController
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController).find(t => t.name === 'computer')!
+    const output = await tool.execute('ax-observe', { action: 'get_app_state', app: 'Auris' }, undefined, undefined, {} as never)
+    expect(output.content).toHaveLength(1)
+    const text = output.content[0]
+    expect(text?.type).toBe('text')
+    if (text?.type !== 'text') throw new Error('缺少 AX 文本结果')
+    const payload = JSON.parse(text.text) as { ax: string; observationId: string; observationMode: string; coordinateHint: string }
+    expect(payload.ax).toContain('ref=editable')
+    expect(payload.observationId).toBe('ax-only-new')
+    expect(payload.observationMode).toBe('ax-only')
+    expect(payload.coordinateHint).toContain('元素引用或快捷键')
+    expect(payload.coordinateHint).toContain('不可猜测截图坐标')
+    expect(JSON.stringify(output.details)).not.toContain('ref=editable')
+    expect(tool.description).toContain('录屏可选')
+  })
+
+  test('Given 原生权限状态有变化 When 查询 ComputerStatus Then 刷新真实状态而非返回旧缓存', async () => {
+    let requestedSession = ''
+    const mockController = {
+      getState: () => { throw new Error('不应读取旧权限缓存') },
+      refreshState: async (sessionId: string) => {
+        requestedSession = sessionId
+        return { phase: 'disabled', supported: true, permissions: { accessibility: true, screen: false, listen: false, post: false } }
+      },
+    } as unknown as ComputerController
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController).find(t => t.name === 'ComputerStatus')!
+    const output = await tool.execute('status-refresh', {}, undefined, undefined, {} as never)
+    expect(requestedSession).toBe(binding.sessionId)
+    const text = output.content[0]
+    if (text?.type !== 'text') throw new Error('缺少状态文本结果')
+    const payload = JSON.parse(text.text) as { permissions: { accessibility: boolean; screen: boolean } }
+    expect(payload.permissions.accessibility).toBe(true)
+    expect(payload.permissions.screen).toBe(false)
+  })
+
+  test('Given 自动化或协作运行 When 构建工具 Then 不获得用户桌面能力', () => {
+    for (const source of ['automation', 'collaboration', 'bridge']) expect(buildPiComputerTools(mockSdk, binding, source)).toEqual([])
   })
 
   test('Given 操作被用户接管或手动停止中断 When execute 执行 Then 将原因作为工具结果返回给 Agent 而不抛异常', async () => {

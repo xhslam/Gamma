@@ -14,6 +14,23 @@ function createFixture() {
 }
 
 describe('Given 实际 Jotai store 与既有预览入口，而非独立状态机演示', () => {
+  test('When 工作区已有文件并打开或切换浮层 Then 阅读中的工作区保持展开且活动文件不变', () => {
+    const store = createFixture()
+    const file: PreviewFile = { filePath: '/project/current.ts', previewOnly: true }
+    openPreviewInStore(store, 'acceptance-session', file)
+    const activeTab = store.get(agentDiffPanelTabAtom).get('acceptance-session')
+
+    store.set(toggleOnDemandOverlayAtom, 'files')
+    expect(store.get(currentSessionSidePanelOpenAtom)).toBe(true)
+    expect(store.get(activeOnDemandOverlayAtom)).toBe('files')
+    expect(store.get(agentDiffPanelTabAtom).get('acceptance-session')).toBe(activeTab)
+
+    store.set(toggleOnDemandOverlayAtom, 'changes')
+    expect(store.get(currentSessionSidePanelOpenAtom)).toBe(true)
+    expect(store.get(activeOnDemandOverlayAtom)).toBe('changes')
+    expect(store.get(agentDiffPanelTabAtom).get('acceptance-session')).toBe(activeTab)
+  })
+
   test('When 文件浮层选择具体文件 Then 真正创建文件预览并关闭浮层', () => {
     const store = createFixture()
     const file: PreviewFile = { filePath: '/project/src/index.ts', previewOnly: true, readOnly: true }

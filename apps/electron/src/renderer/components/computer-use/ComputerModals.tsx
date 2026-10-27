@@ -78,7 +78,7 @@ export function ComputerModals(): React.ReactElement {
               </div>
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              允许后 Agent 可以通过鼠标和键盘向该应用发送操作。您随时可以在桌面状态控件中停止，风险策略和已保存的应用授权可在通用设置中调整。
+              允许后 Agent 可以读取界面文字并操作该应用的控件。基础操作只需 Gamma 辅助功能授权；截图与实时画面使用可选录屏权限。您随时可以停止，应用限制可在通用设置中调整。
             </p>
           </div>
 

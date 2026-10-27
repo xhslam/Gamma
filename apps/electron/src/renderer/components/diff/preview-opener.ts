@@ -44,7 +44,7 @@ export interface OpenPreviewOptions {
  * 保证：
  * 1. 同一预览身份再次打开时保留 Tab 顺序，但采用最新权限、根目录与解析上下文。
  * 2. 激活并展开大面板 (S2)。
- * 3. 自动关闭 S1 浮层，保证 S1/S2 互斥且不留幽灵状态。
+ * 3. 选择具体文件后关闭浏览浮层，将焦点交给工作区内容。
  */
 export function applyOpenPreview(
   set: JotaiSetter,

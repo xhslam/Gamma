@@ -11,7 +11,8 @@ func isUnscopedAXSurface(role: String, subrole: String, depth: Int) -> Bool {
 struct NativeFailure: Error {
     let code: String
     let message: String
-    init(_ code: String, _ message: String) { self.code = code; self.message = message }
+    let permission: String?
+    init(_ code: String, _ message: String, permission: String? = nil) { self.code = code; self.message = message; self.permission = permission }
 }
 struct Rect: Codable, Equatable {
     let x: Double, y: Double, width: Double, height: Double
@@ -26,6 +27,7 @@ struct Target: Codable, Equatable {
 }
 struct LeaseParams: Codable { let leaseId: String; let epoch: Int; let deadline: Double }
 struct BoundParams: Codable { let leaseId: String; let epoch: Int }
+struct ObserveParams: Codable { let leaseId: String; let epoch: Int; let includeImage: Bool? }
 
 func parseKeyCombination(_ keyString: String) throws -> (CGKeyCode, CGEventFlags) {
     let normalized = keyString == "-" ? "minus" : keyString
@@ -98,7 +100,8 @@ struct Action: Codable, Equatable {
         case "drag", "left_click_drag":
             guard let x, let y, let startX, let startY, [x, y, startX, startY].allSatisfy(\.isFinite) else { throw NativeFailure("invalid-action", "拖拽必须包含有限的起终点坐标") }
         case "scroll":
-            guard let x, let y, let deltaY, x.isFinite, y.isFinite, deltaY.isFinite, deltaY != 0, abs(deltaY) >= 1, abs(deltaY) <= 1200 else { throw NativeFailure("invalid-action", "滚动参数无效") }
+            guard (x == nil && y == nil) || (x?.isFinite == true && y?.isFinite == true),
+                  let deltaY, deltaY.isFinite, deltaY != 0, abs(deltaY) >= 1, abs(deltaY) <= 1200 else { throw NativeFailure("invalid-action", "滚动参数无效") }
         case "type", "axSetValue", "paste":
             guard let text, (kind == "axSetValue" || !text.isEmpty), text.utf16.count <= (kind == "paste" ? 65_536 : 4096), !text.unicodeScalars.contains(where: { $0.value == 0 || ($0.value < 32 && $0.value != 10 && $0.value != 9 && $0.value != 13) }) else { throw NativeFailure("invalid-action", "文本参数无效") }
             if kind == "paste" { try validateInsertionFormat(format ?? "text") }
@@ -127,7 +130,11 @@ struct PerformParams: Codable {
         self.leaseId = leaseId; self.epoch = epoch; self.actionId = actionId; self.action = action; self.preparationId = preparationId
     }
 }
-struct Receipt: Encodable { let actionId: String, outcome: String, message: String }
+struct Receipt: Encodable {
+    let actionId: String, outcome: String, message: String
+    var errorCode: String? = nil
+    var permission: String? = nil
+}
 struct ExecutionPermit: Equatable { let nonce: UUID; let fence: UInt64; let until: TimeInterval }
 struct Snapshot {
     let id: String, epoch: Int, fence: UInt64, created: TimeInterval
@@ -136,11 +143,12 @@ struct Snapshot {
     let desktopDigest: String?
     let axRefs: [String: AXUIElement]
     let axRoot: AXUIElement?
+    let hasImage: Bool
 
-    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil, axRefs: [String: AXUIElement] = [:], axRoot: AXUIElement? = nil) {
+    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil, axRefs: [String: AXUIElement] = [:], axRoot: AXUIElement? = nil, hasImage: Bool = true) {
         self.id = id; self.epoch = epoch; self.fence = fence; self.created = created
         self.target = target; self.width = width; self.height = height; self.axDigest = axDigest
-        self.display = display; self.desktopDigest = desktopDigest; self.axRefs = axRefs; self.axRoot = axRoot
+        self.display = display; self.desktopDigest = desktopDigest; self.axRefs = axRefs; self.axRoot = axRoot; self.hasImage = hasImage
     }
 
     func point(x: Double, y: Double) throws -> CGPoint {
@@ -285,12 +293,17 @@ final class SafetyGate {
     private var busy = false
     private var listenerHealthy = false
     private var confirming: String?
+    private var confirmationStarted: TimeInterval?
+    private var confirmationPaused: TimeInterval = 0
+    private var confirmationPreparation: String?
+    private var confirmationRequest: PerformParams?
+    private var screenPermissionWaiting = false
     private let clock: () -> TimeInterval
     init(clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) { self.clock = clock }
     private func locked<T>(_ body: () throws -> T) rethrows -> T { lock.lock(); defer { lock.unlock() }; return try body() }
     func begin(_ p: LeaseParams, wallNow: Double = Date().timeIntervalSince1970 * 1000) throws -> UInt64 {
         try locked {
-            guard lease == nil, !busy, !p.leaseId.isEmpty, p.leaseId.utf8.count <= 128, p.epoch >= 0,
+            guard lease == nil, !busy, !screenPermissionWaiting, !p.leaseId.isEmpty, p.leaseId.utf8.count <= 128, p.epoch >= 0,
                   p.deadline.isFinite, p.deadline > wallNow, p.deadline - wallNow <= 1_800_000 else { throw NativeFailure("invalid-lease", "租约无效、已存在或超过30分钟") }
             fence &+= 1; lease = p; expiry = clock() + (p.deadline - wallNow) / 1000
             listenerHealthy = false; usedActions.removeAll(); return fence
@@ -307,45 +320,78 @@ final class SafetyGate {
         try locked {
             try valid()
             guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
-                  !needListener || listenerHealthy else { throw NativeFailure("revoked", "授权、目标或监听状态无效") }
+                  !screenPermissionWaiting, !needListener || listenerHealthy else { throw NativeFailure("revoked", "授权、目标或监听状态无效") }
             return (target, fence)
         }
     }
-    func startWork(_ token: UInt64) throws { try locked { try valid(token); guard !busy else { throw NativeFailure("busy", "已有原生操作进行中") }; busy = true } }
+    func startWork(_ token: UInt64) throws { try locked { try valid(token); guard !busy, !screenPermissionWaiting else { throw NativeFailure("busy", "已有原生操作或系统授权进行中") }; busy = true } }
     func endWork() { locked { busy = false } }
     func check(_ token: UInt64) throws { try locked { try valid(token) } }
     func setConfirmation(_ id: String, waiting: Bool, token: UInt64) throws {
         try locked {
             try valid(token)
-            guard !id.isEmpty, listenerHealthy else { throw NativeFailure("revoked", "确认上下文无效") }
+            guard !id.isEmpty, listenerHealthy, !screenPermissionWaiting else { throw NativeFailure("revoked", "确认上下文无效") }
             if waiting {
                 guard confirming == nil || confirming == id, permit == nil, pending == nil else { throw NativeFailure("busy", "已有确认或执行") }
-                confirming = id
+                guard let request = confirmationRequest, let snapshot = observation, snapshot.id == request.action.observationId,
+                      confirmationPreparation == id, confirming == id || clock() - snapshot.created - confirmationPaused <= 30 else { throw NativeFailure("preparation-required", "确认只能绑定当前有效的已准备动作") }
+                if confirming == nil { confirming = id; confirmationStarted = clock() }
             } else {
                 guard confirming == id else { throw NativeFailure("revoked", "确认标识已失效") }
-                confirming = nil
+                let elapsed = max(0, clock() - (confirmationStarted ?? clock()))
+                confirming = nil; confirmationStarted = nil
+                // 单一可信准备动作最多暂停120秒；不延长租约，也不改变观察内容。
+                guard confirmationPaused + elapsed <= 120 else { clearConfirmation(); throw NativeFailure("stale-observation", "确认等待超过120秒，请重新观察") }
+                confirmationPaused += elapsed
             }
         }
     }
     var isConfirming: Bool { locked { confirming != nil } }
+    var isScreenPermissionWaiting: Bool { locked { screenPermissionWaiting } }
+    func setScreenPermissionWaiting(_ waiting: Bool) throws {
+        try locked {
+            if waiting {
+                guard !busy, confirming == nil, pending == nil, permit == nil else { throw NativeFailure("busy", "请等待当前操作结束后启用屏幕录制") }
+                observation = nil; clearConfirmation()
+            }
+            screenPermissionWaiting = waiting
+        }
+    }
+    private func clearConfirmation() {
+        confirming = nil; confirmationStarted = nil; confirmationPaused = 0
+        confirmationPreparation = nil; confirmationRequest = nil
+    }
+    func bindPreparation(_ id: String, request: PerformParams, token: UInt64) throws {
+        try locked {
+            try valid(token)
+            guard !id.isEmpty, listenerHealthy, !screenPermissionWaiting, confirming == nil, pending == nil, permit == nil,
+                  let snapshot = observation, snapshot.id == request.action.observationId,
+                  clock() - snapshot.created <= 30 else { throw NativeFailure("stale-observation", "准备动作对应的观察已失效") }
+            clearConfirmation(); confirmationPreparation = id; confirmationRequest = request
+        }
+    }
+    private func observationPause(_ request: PerformParams) -> TimeInterval {
+        guard let prepared = confirmationRequest, samePreparedRequest(prepared, request) else { return 0 }
+        return confirmationPaused
+    }
     func inspect(_ p: PerformParams) throws -> Snapshot {
         try p.action.validate()
         return try locked {
             try valid()
-            guard listenerHealthy, confirming == nil, p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
+            guard listenerHealthy, confirming == nil, !screenPermissionWaiting, p.leaseId == lease?.leaseId, p.epoch == lease?.epoch,
                   !p.actionId.isEmpty, p.actionId.utf8.count <= 128, !usedActions.contains(p.actionId),
                   let s = observation, s.id == p.action.observationId, s.epoch == p.epoch, s.fence == fence,
-                  clock() - s.created <= 30 else { throw NativeFailure("stale-observation", "观察、动作或确认状态已失效") }
+                  clock() - s.created - observationPause(p) <= 30 else { throw NativeFailure("stale-observation", "观察、动作或确认状态已失效") }
             return s
         }
     }
     func checkDispatch(_ token: UInt64) throws {
-        try locked { try valid(token); guard listenerHealthy, confirming == nil else { throw NativeFailure("revoked", "监听失活或正在等待确认") } }
+        try locked { try valid(token); guard listenerHealthy, confirming == nil, !screenPermissionWaiting else { throw NativeFailure("revoked", "监听失活或正在等待确认/系统授权") } }
     }
     // 只允许包裹两个CGEvent.post等短同步投递；严禁AX/UI/捕获进入此锁。
     private func consume(_ ticket: ExecutionPermit) throws {
         try valid(ticket.fence)
-        guard listenerHealthy, confirming == nil, permit == ticket, clock() <= ticket.until else { throw NativeFailure("revoked", "单次批准已失效或已消费") }
+        guard listenerHealthy, confirming == nil, !screenPermissionWaiting, permit == ticket, clock() <= ticket.until else { throw NativeFailure("revoked", "单次批准已失效或已消费") }
         permit = nil
     }
     func claimAX(_ ticket: ExecutionPermit) throws { try locked { try consume(ticket) } }
@@ -353,36 +399,37 @@ final class SafetyGate {
         try locked { try consume(ticket); dispatch() }
     }
     func continueDispatch(_ token: UInt64, _ dispatch: () -> Void) throws {
-        try locked { try valid(token); guard listenerHealthy, confirming == nil else { throw NativeFailure("revoked", "执行已撤权") }; dispatch() }
+        try locked { try valid(token); guard listenerHealthy, confirming == nil, !screenPermissionWaiting else { throw NativeFailure("revoked", "执行已撤权") }; dispatch() }
     }
-    func save(_ s: Snapshot) throws { try locked { try valid(s.fence); guard pending == nil else { throw NativeFailure("busy", "等待本地确认") }; observation = s } }
+    func save(_ s: Snapshot) throws { try locked { try valid(s.fence); guard pending == nil, confirming == nil, !screenPermissionWaiting else { throw NativeFailure("busy", "等待本地确认或系统授权") }; clearConfirmation(); observation = s } }
     func prepare(_ p: PerformParams) throws -> Snapshot {
         try p.action.validate()
         return try locked {
             try valid()
-            guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch, listenerHealthy, confirming == nil,
+            guard p.leaseId == lease?.leaseId, p.epoch == lease?.epoch, listenerHealthy, confirming == nil, !screenPermissionWaiting,
                   !p.actionId.isEmpty, p.actionId.utf8.count <= 128, !usedActions.contains(p.actionId), usedActions.count < 1024,
                   pending == nil, let s = observation, s.id == p.action.observationId, s.epoch == p.epoch,
-                  s.fence == fence, clock() - s.created <= 30 else { throw NativeFailure("stale-observation", "观察过期、动作重放或安全门已撤权") }
+                  s.fence == fence, clock() - s.created - observationPause(p) <= 30 else { throw NativeFailure("stale-observation", "观察过期、动作重放或安全门已撤权") }
             usedActions.insert(p.actionId); pending = p; return s
         }
     }
     @discardableResult func approve(_ p: PerformParams, snapshot: Snapshot) throws -> ExecutionPermit {
         try locked {
             try valid(snapshot.fence)
-            guard listenerHealthy, confirming == nil, pending?.actionId == p.actionId, pending?.action == p.action,
+            guard listenerHealthy, confirming == nil, !screenPermissionWaiting, pending?.actionId == p.actionId, pending?.action == p.action,
                   pending?.epoch == p.epoch, pending?.leaseId == p.leaseId, observation?.id == snapshot.id,
-                  clock() - snapshot.created <= 30 else { throw NativeFailure("revoked", "迟到确认无效") }
+                  clock() - snapshot.created - observationPause(p) <= 30 else { throw NativeFailure("revoked", "迟到确认无效") }
             // 先消费再投递：即使系统调用失败也不能重放同一观察。
             pending = nil; observation = nil
-            let ticket = ExecutionPermit(nonce: UUID(), fence: snapshot.fence, until: min(expiry, snapshot.created + 30))
+            let ticket = ExecutionPermit(nonce: UUID(), fence: snapshot.fence, until: min(expiry, snapshot.created + 30 + observationPause(p)))
+            clearConfirmation()
             permit = ticket; return ticket
         }
     }
     @discardableResult func stop() -> Bool {
-        locked { let active = lease != nil; fence &+= 1; lease = nil; target = nil; observation = nil; pending = nil; permit = nil; listenerHealthy = false; confirming = nil; return active }
+        locked { let active = lease != nil; fence &+= 1; lease = nil; target = nil; observation = nil; pending = nil; permit = nil; listenerHealthy = false; screenPermissionWaiting = false; clearConfirmation(); return active }
     }
-    func invalidateObservation() { locked { observation = nil; pending = nil; permit = nil } }
+    func invalidateObservation() { locked { observation = nil; pending = nil; permit = nil; clearConfirmation() } }
     var expired: Bool { locked { lease != nil && clock() >= expiry } }
     var isActive: Bool { locked { lease != nil } }
     var monitorsInput: Bool { locked { lease != nil } }

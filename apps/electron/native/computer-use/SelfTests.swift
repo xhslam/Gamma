@@ -22,6 +22,9 @@ func runSelfTests() throws -> Int {
     try expect(portraitH == 1280 && abs(Double(portraitW) / Double(portraitH) - 1080.0 / 2560.0) < 0.001, "Given竖屏，Then等比缩放长边")
     let invalidSize = captureDimensions(width: .infinity, height: 0)
     try expect(invalidSize.0 == 2 && invalidSize.1 == 2, "Given无效几何，Then不产生溢出图像")
+    try expect(isGammaPID(getpid()), "Given当前进程PID，Then确认为Gamma相关PID")
+    try expect(isGammaPID(getppid()), "Given父进程PID，Then确认为Gamma相关PID")
+    try expect(!isGammaPID(999999), "Given虚构外部PID，Then拒绝确认为Gamma相关PID")
     var now: TimeInterval = 100
     let gate = SafetyGate(clock: { now })
     let lease = LeaseParams(leaseId: "lease-a", epoch: 7, deadline: 61_000)
@@ -82,7 +85,8 @@ func runSelfTests() throws -> Int {
     try rejects("Given文本超过4096UTF16单元，Then拒绝") { try Action(kind: "type", observationId: "obs", x: nil, y: nil, text: String(repeating: "🚀", count: 2049), key: nil, deltaY: nil, elementRef: nil).validate() }
     try rejects("Given文本含NUL，Then拒绝") { try Action(kind: "type", observationId: "obs", x: nil, y: nil, text: "x\0y", key: nil, deltaY: nil, elementRef: nil).validate() }
     try rejects("Given未列入白名单按键，Then拒绝") { try Action(kind: "key", observationId: "obs", x: nil, y: nil, text: nil, key: "InvalidUnknownKey", deltaY: nil, elementRef: nil).validate() }
-    try rejects("Givenscroll缺少坐标，Then拒绝") { try Action(kind: "scroll", observationId: "obs", x: nil, y: nil, text: nil, key: nil, deltaY: 100, elementRef: nil).validate() }
+    try Action(kind: "scroll", observationId: "obs", deltaY: 100).validate(); count += 1
+    try rejects("Givenscroll只有一个坐标，Then拒绝") { try Action(kind: "scroll", observationId: "obs", x: 1, deltaY: 100).validate() }
     try rejects("Givenscroll幅度过大，Then拒绝") { try Action(kind: "scroll", observationId: "obs", x: 1, y: 1, text: nil, key: nil, deltaY: 1201, elementRef: nil).validate() }
     try rejects("Givenparams为数组，Then协议拒绝") { _ = try JSONDecoder().decode(Envelope.self, from: Data("{\"id\":\"a\",\"method\":\"status\",\"params\":[]}".utf8)) }
     var posted = 0
@@ -222,6 +226,7 @@ func runSelfTests() throws -> Int {
     try desktopGate.save(desktopSnapshot)
     _ = try desktopGate.inspect(desktopRequest); _ = try desktopGate.inspect(desktopRequest)
     try expect(true, "Given只读prepare重复，Then不消费观察或actionId")
+    try desktopGate.bindPreparation("prepared", request: desktopRequest, token: desktopToken)
     try desktopGate.setConfirmation("prepared", waiting: true, token: desktopToken)
     try rejects("Given等待确认，Then拒绝准备新动作") { _ = try desktopGate.inspect(desktopRequest) }
     try rejects("Given等待确认，Then拒绝事件续发") { try desktopGate.continueDispatch(desktopToken) { posted += 1 } }
@@ -334,5 +339,86 @@ func runSelfTests() throws -> Int {
     try rejects("Given确认后选区长度变化，Then拒绝") { try validateInsertionState(boundInsertion, current: TextInsertionState(value: "abc", location: 1, length: 1)) }
     try rejects("Given确认后原文变化，Then拒绝") { try validateInsertionState(boundInsertion, current: TextInsertionState(value: "axc", location: 1, length: 0)) }
     try rejects("GivenUnicode规范等价但UTF16原文变化，Then仍拒绝") { try validateInsertionState(TextInsertionState(value: "éab", location: 0, length: 0), current: TextInsertionState(value: "e\u{301}ab", location: 0, length: 0)) }
+    // Given只授辅助功能，Then允许基础桌面能力，诊断状态不伪造为已授权。
+    let accessibilityOnly = Permissions(accessibility: true, screen: false, listen: false, post: false)
+    try expect(hasRequiredComputerPermissions(accessibilityOnly), "Given仅辅助功能，Then基础模式准入")
+    try expect(!hasRequiredComputerPermissions(Permissions(accessibility: false, screen: true, listen: true, post: true)), "Given缺辅助功能，Then其他权限不能代替")
+    let axSnapshot = Snapshot(id: "ax-only", epoch: 1, fence: 1, created: 0, target: target, width: 2560, height: 1600,
+                              axDigest: "ax-layout", display: DisplayResult(originX: 0, originY: 0, ptWidth: 2560, ptHeight: 1600, scaledWidth: 2560, scaledHeight: 1600), hasImage: false)
+    let axObservation = ObservationResult(observationId: axSnapshot.id, epoch: 1, image: nil, width: 2560, height: 1600, display: axSnapshot.display, ax: "role=AXWindow", targetApp: nil)
+    let axEncoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(axObservation)) as? [String: Any]
+    try expect(axEncoded?["image"] == nil && axEncoded?["mode"] as? String == "accessibility" && axEncoded?["width"] as? Int == 2560, "GivenAX-only，Then协议省略图像并保留逻辑尺寸")
+    let textOnlyParams = try JSONDecoder().decode(ObserveParams.self, from: Data("{\"leaseId\":\"a\",\"epoch\":1,\"includeImage\":false}".utf8))
+    let legacyParams = try JSONDecoder().decode(ObserveParams.self, from: Data("{\"leaseId\":\"a\",\"epoch\":1}".utf8))
+    try expect(textOnlyParams.includeImage == false && legacyParams.includeImage == nil, "Given非视觉模型或旧请求，Then可显式禁图并兼容旧协议")
+    try validateVisualAction(Action(kind: "axPress", observationId: "ax-only", elementRef: "ref"), snapshot: axSnapshot); count += 1
+    try validateVisualAction(Action(kind: "scroll", observationId: "ax-only", deltaY: 100), snapshot: axSnapshot); count += 1
+    for kind in ["click", "double_click", "right_click", "mouse_move", "drag", "scroll"] {
+        try rejects("GivenAX-only，Then拒绝显式像素\(kind)") { try validateVisualAction(Action(kind: kind, observationId: "ax-only", x: 1, y: 1), snapshot: axSnapshot) }
+    }
+    let visibleDisplay = DisplayResult(originX: -100, originY: 30, ptWidth: 1000, ptHeight: 500, scaledWidth: 1000, scaledHeight: 500)
+    let defaultPoint = try defaultScrollPoint(elementBounds: Rect(CGRect(x: -200, y: 100, width: 500, height: 200)), windowBounds: target.bounds, display: visibleDisplay)
+    try expect(defaultPoint == CGPoint(x: 100, y: 200), "Given焦点部分超出主屏，Then滚动位于可见交集中心")
+    let windowPoint = try defaultScrollPoint(elementBounds: nil, windowBounds: target.bounds, display: visibleDisplay)
+    try expect(windowPoint == CGPoint(x: 400, y: 280), "Given焦点无几何，Then只使用已验证窗口可见中心")
+    try rejects("Given焦点完全位于其他显示器，Then不猜主屏中心") { _ = try defaultScrollPoint(elementBounds: Rect(CGRect(x: 5000, y: 0, width: 10, height: 10)), windowBounds: target.bounds, display: visibleDisplay) }
+    let titleless = NSMutableDictionary(dictionary: targetWindow); titleless.removeObject(forKey: kCGWindowName)
+    try validateWindowStack([titleless], target: target, requireFrontmost: true); count += 1
+    try rejects("Given标题隐藏且同PID同几何窗口歧义，Then仍拒绝") { try validateWindowStack([titleless, window(6, title: "Other")], target: target, requireFrontmost: false) }
+
+    var confirmationNow: TimeInterval = 100
+    let confirmationGate = SafetyGate(clock: { confirmationNow })
+    let confirmationLease = LeaseParams(leaseId: "confirm", epoch: 1, deadline: 601_000)
+    let confirmationToken = try confirmationGate.begin(confirmationLease, wallNow: 1000)
+    confirmationGate.setListenerHealthy(true)
+    func confirmationSnapshot(_ id: String) -> Snapshot { Snapshot(id: id, epoch: 1, fence: confirmationToken, created: confirmationNow, target: target, width: 100, height: 50, axDigest: "a") }
+    let confirmSnapshot = confirmationSnapshot("confirm-obs")
+    let confirmRequest = PerformParams(leaseId: "confirm", epoch: 1, actionId: "confirm-action", action: Action(kind: "axPress", observationId: confirmSnapshot.id, elementRef: "ref"))
+    try confirmationGate.save(confirmSnapshot)
+    try rejects("Given未登记preparation，Then不能暂停观察年龄") { try confirmationGate.setConfirmation("unbound", waiting: true, token: confirmationToken) }
+    try confirmationGate.bindPreparation("confirm-prepared", request: confirmRequest, token: confirmationToken)
+    try confirmationGate.setConfirmation("confirm-prepared", waiting: true, token: confirmationToken)
+    confirmationNow += 31
+    try confirmationGate.setConfirmation("confirm-prepared", waiting: false, token: confirmationToken)
+    _ = try confirmationGate.inspect(confirmRequest); count += 1
+    let substituted = PerformParams(leaseId: "confirm", epoch: 1, actionId: "other-action", action: confirmRequest.action)
+    try rejects("Given替换actionId，Then不能继承确认暂停时间") { _ = try confirmationGate.inspect(substituted) }
+    _ = try confirmationGate.prepare(confirmRequest)
+    let confirmedPermit = try confirmationGate.approve(confirmRequest, snapshot: confirmSnapshot)
+    try confirmationGate.claimAX(confirmedPermit); count += 1
+    let excessiveSnapshot = confirmationSnapshot("excessive")
+    let excessiveRequest = PerformParams(leaseId: "confirm", epoch: 1, actionId: "excessive", action: Action(kind: "wait", observationId: excessiveSnapshot.id))
+    try confirmationGate.save(excessiveSnapshot); try confirmationGate.bindPreparation("excessive", request: excessiveRequest, token: confirmationToken)
+    try confirmationGate.setConfirmation("excessive", waiting: true, token: confirmationToken)
+    confirmationNow += 121
+    try rejects("Given确认超过120秒，Then清除暂停信用并要求重新观察") { try confirmationGate.setConfirmation("excessive", waiting: false, token: confirmationToken) }
+    try rejects("Given超时确认，Then原观察仍过期") { _ = try confirmationGate.inspect(excessiveRequest) }
+    let staleConfirmationSnapshot = confirmationSnapshot("before-confirm")
+    let staleConfirmationRequest = PerformParams(leaseId: "confirm", epoch: 1, actionId: "before-confirm", action: Action(kind: "wait", observationId: staleConfirmationSnapshot.id))
+    try confirmationGate.save(staleConfirmationSnapshot); try confirmationGate.bindPreparation("late", request: staleConfirmationRequest, token: confirmationToken)
+    confirmationNow += 31
+    try rejects("Given进入确认前已过期，Then不能通过确认复活观察") { try confirmationGate.setConfirmation("late", waiting: true, token: confirmationToken) }
+    let permissionSnapshot = confirmationSnapshot("permission")
+    let permissionRequest = PerformParams(leaseId: "confirm", epoch: 1, actionId: "permission", action: Action(kind: "wait", observationId: permissionSnapshot.id))
+    try confirmationGate.save(permissionSnapshot)
+    try confirmationGate.setScreenPermissionWaiting(true)
+    try expect(confirmationGate.isScreenPermissionWaiting && confirmationGate.isActive, "Given录屏弹窗，Then保留租约但暂停投递")
+    try rejects("Given系统录屏授权等待中，Then禁止动作投递") { try confirmationGate.continueDispatch(confirmationToken) {} }
+    try rejects("Given系统录屏授权等待中，Then禁止保存新观察") { try confirmationGate.save(permissionSnapshot) }
+    try confirmationGate.setScreenPermissionWaiting(false)
+    try rejects("Given录屏授权完成，Then不能重用授权前观察") { _ = try confirmationGate.inspect(permissionRequest) }
+    let cumulativeSnapshot = confirmationSnapshot("cumulative")
+    let cumulativeRequest = PerformParams(leaseId: "confirm", epoch: 1, actionId: "cumulative", action: Action(kind: "wait", observationId: cumulativeSnapshot.id))
+    try confirmationGate.save(cumulativeSnapshot); try confirmationGate.bindPreparation("cumulative", request: cumulativeRequest, token: confirmationToken)
+    try confirmationGate.setConfirmation("cumulative", waiting: true, token: confirmationToken)
+    confirmationNow += 61
+    try confirmationGate.setConfirmation("cumulative", waiting: false, token: confirmationToken)
+    try confirmationGate.setConfirmation("cumulative", waiting: true, token: confirmationToken)
+    confirmationNow += 60
+    try expect(!confirmationGate.expired, "Given累计确认上限测试，Then租约本身仍有效")
+    try rejects("Given多次确认累计超过120秒，Then不能反复暂停绕过上限") { try confirmationGate.setConfirmation("cumulative", waiting: false, token: confirmationToken) }
+    try confirmationGate.setScreenPermissionWaiting(true)
+    confirmationGate.stop()
+    try expect(!confirmationGate.isActive && !confirmationGate.isScreenPermissionWaiting, "Given系统录屏授权期间急停，Then立即撤销租约与暂停状态")
     return count
 }

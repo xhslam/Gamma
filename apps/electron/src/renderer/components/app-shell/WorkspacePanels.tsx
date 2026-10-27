@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import type { WorkspaceSide } from './right-panel-layout'
+import { SidebarTransition } from './SidebarTransition'
 
 interface WorkspacePanelsProps {
   agent: React.ReactNode
@@ -10,13 +11,14 @@ interface WorkspacePanelsProps {
   workspaceWidth: number
   minimumWidth: number
   maximumWidth: number
+  resizing?: boolean
   onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void
   onResizeReset?: () => void
   onResizeKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }
 
 /** 通过稳定的 key 移动面板，保留编辑草稿与浏览器实例；DOM 顺序同时跟随视觉顺序。 */
-export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, onResizeStart, onResizeKeyDown, onResizeReset }: WorkspacePanelsProps): React.ReactElement {
+export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, resizing = false, onResizeStart, onResizeKeyDown, onResizeReset }: WorkspacePanelsProps): React.ReactElement {
   const panes = [
     <div key="agent" data-workspace-pane="agent" className="relative z-[60] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{agent}</div>,
   ]
@@ -39,7 +41,9 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
             onKeyDown={onResizeKeyDown}
           />
         )}
-        {workspace}
+        <SidebarTransition collapsed={!workspaceOpen} width={workspaceWidth} resizing={resizing} region="workspace">
+          {workspace}
+        </SidebarTransition>
       </div>
     )
     if (workspaceSide === 'left') panes.unshift(workspacePane)

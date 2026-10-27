@@ -14,7 +14,7 @@ export function recordRightPanelTabVisit(
 }
 
 /**
- * 关闭当前 Tab 时，回到最近访问且仍可用的上一个 Tab；文件 Tab 是稳定兜底。
+ * 关闭当前 Tab 时，回到最近访问且仍可用的上一个 Tab；没有访问历史时使用仍可用的内容标签。
  */
 export function getPreviousRightPanelTab(
   history: AgentSidePanelTab[],
@@ -25,7 +25,8 @@ export function getPreviousRightPanelTab(
     const candidate = history[index]!
     if (candidate !== closingTab && availableTabs.has(candidate)) return candidate
   }
-  return 'files'
+  // 无内容时的兼容值由调用方收起工作区，不会渲染为文件标签。
+  return availableTabs.values().next().value ?? 'files'
 }
 
 /** 关闭后移除历史记录，防止已销毁的临时 Tab 成为后续回退目标。 */

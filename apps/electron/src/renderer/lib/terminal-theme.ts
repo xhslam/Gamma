@@ -2,12 +2,12 @@ import type { ITerminalOptions, ITheme } from '@xterm/xterm'
 import { readDesignColor } from './design-colors'
 import type { DesignColorReader } from './design-colors'
 
-/** 外壳可直接使用 CSS 变量；xterm 的具体色值由读取器解析。 */
-export const TERMINAL_BACKGROUND = 'var(--color-background)'
+/** 终端嵌在工作区面板内，与面板使用相同表面，避免出现独立色块。 */
+export const TERMINAL_BACKGROUND = 'var(--color-panel)'
 
 /** 不改写 PTY 输出；只统一终端默认表面、光标、选区和 ANSI 基色。 */
 export function getTerminalAppearanceOptions(readColor: DesignColorReader = readDesignColor): Pick<ITerminalOptions, 'theme' | 'minimumContrastRatio'> {
-  const background = readColor('background')
+  const background = readColor('panel')
   const text = readColor('text')
   const secondary = readColor('secondary')
   const accent = readColor('accent')

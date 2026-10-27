@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import type { Api, Model, ModelsStoreEntry } from '@earendil-works/pi-ai'
+import { getModels } from '@earendil-works/pi-ai/compat'
 import { CodexModelStore } from './pi-codex-model-store'
 import { getCodexCatalogModels, resolvePiReasoningCapability } from './pi-model-registry'
 import { resolvePiThinkingLevel } from '../agent-thinking-level'
@@ -57,6 +58,75 @@ describe('ChatGPT 订阅推理滑杆能力', () => {
     expect(models.find((model) => model.id === updated.id)?.headers).toEqual(updated.headers)
     expect(models.some((model) => model.id === 'gpt-6-sol')).toBe(true)
     expect(new Set(models.map((model) => model.id)).size).toBe(models.length)
+  })
+
+  test('Given GPT-6.1 Sol When 查询 Codex 目录与推理能力 Then 正确返回且沿用 Sol 基线', async () => {
+    cache(undefined)
+    const sol61 = (await getCodexCatalogModels()).find((model) => model.id === 'gpt-6.1-sol')
+    expect(sol61).toBeDefined()
+    expect(sol61?.id).toBe('gpt-6.1-sol')
+    expect(sol61?.name).toBe('GPT-6.1 Sol')
+    expect(sol61?.contextWindow).toBe(500_000)
+    // 不用旧 Sol 补丁覆盖 SDK 已提供的上下文、协议能力和费用元数据。
+    expect(sol61).toEqual(getModels('openai-codex').find((model) => model.id === 'gpt-6.1-sol'))
+
+    const capability = await resolvePiReasoningCapability('openai-codex', 'gpt-6.1-sol')
+    expect(capability).toEqual({
+      source: 'profile',
+      levels: ['off', 'low', 'medium', 'high', 'xhigh', 'max'],
+      defaultLevel: 'medium',
+    })
+
+    // 非法邻近 ID 不生成能力
+    expect(await resolvePiReasoningCapability('openai-codex', 'gpt-6.1-sol-terra')).toBeUndefined()
+    expect(await resolvePiReasoningCapability('openai-codex', 'gpt-6.1-sol-preview')).toBeUndefined()
+  })
+
+  test('Given GPT-6.1 Terra When 查询 Codex 目录与推理能力 Then 正确返回且沿用 Terra 基线', async () => {
+    cache(undefined)
+    const terra61 = (await getCodexCatalogModels()).find((model) => model.id === 'gpt-6.1-terra')
+    expect(terra61).toBeDefined()
+    expect(terra61?.id).toBe('gpt-6.1-terra')
+    expect(terra61?.name).toBe('GPT-6.1 Terra')
+    expect(terra61?.contextWindow).toBe(272_000)
+    expect(terra61?.maxTokens).toBe(128_000)
+
+    const capability = await resolvePiReasoningCapability('openai-codex', 'gpt-6.1-terra')
+    expect(capability).toEqual({
+      source: 'profile',
+      levels: ['off', 'low', 'medium', 'high', 'xhigh', 'max'],
+      defaultLevel: 'high',
+    })
+
+    // 非法邻近 ID 不生成能力
+    expect(await resolvePiReasoningCapability('openai-codex', 'gpt-6.1-terra-preview')).toBeUndefined()
+  })
+
+  test('Given 缓存或 SDK 包含更新的 GPT-6.1 Terra 元数据 When 查询 Codex 目录 Then 优先保留新元数据不被旧回退覆盖', async () => {
+    const updatedTerra: Model<Api> = {
+      id: 'gpt-6.1-terra',
+      name: 'GPT-6.1 Terra (Official Online)',
+      api: 'openai-codex-responses',
+      provider: 'openai-codex',
+      baseUrl: 'https://chatgpt.com/backend-api',
+      reasoning: true,
+      input: ['text', 'image'],
+      cost: { input: 3, output: 18, cacheRead: 0.3, cacheWrite: 3 },
+      contextWindow: 500_000,
+      maxTokens: 128_000,
+      thinkingLevelMap: {
+        xhigh: 'xhigh',
+        max: 'max',
+      },
+      type: 'chat',
+    }
+    cache([updatedTerra])
+    const catalog = await getCodexCatalogModels()
+    const terra = catalog.find((model) => model.id === 'gpt-6.1-terra')
+    expect(terra).toBeDefined()
+    expect(terra?.name).toBe('GPT-6.1 Terra (Official Online)')
+    expect(terra?.contextWindow).toBe(500_000)
+    expect(terra?.cost.input).toBe(3)
   })
 
   test('Given 无缓存或模型未声明推理 When 查询能力 Then 不制造可用档位', async () => {
