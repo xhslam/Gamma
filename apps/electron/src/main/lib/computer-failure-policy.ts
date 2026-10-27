@@ -19,6 +19,7 @@ export const REOBSERVE_CODES: ReadonlySet<string> = new Set([
   'unsupported-action', 'unsupported-format', 'cross-application-drag', 'secure-field', 'text-budget',
   'invalid-key', 'invalid-action', 'invalid-coordinate', 'application-not-found', 'ambiguous-application',
   'invalid-application', 'unknown-application', 'ambiguous-window', 'ambiguous-target', 'occluded', 'desktop-not-ready',
+  'ax-read', 'ax-actions', 'ax-capability',
 ])
 export const PAUSE_CODES: ReadonlySet<string> = new Set([
   'revoked', 'invalid-lease', 'input-held', 'secure-input', 'listen-disabled',
