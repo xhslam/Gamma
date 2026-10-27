@@ -126,6 +126,52 @@ describe('Given 只开启 Gamma 辅助功能的 Mac', () => {
       expect(f.calls.findIndex(call => call.method === 'requestPermission')).toBeGreaterThan(lastObservation)
     } finally { release?.(); await f.controller.finishRun(f.binding) }
   })
+  test('When 观察外部应用且无录屏时 Then 通过 open_app 切换目标并在辅助功能模式下成功返回 AX 树', async () => {
+    let currentFront = { name: 'Finder', bundleId: 'com.apple.finder' }
+    let generation = 0
+    const f = createComputerFixture({
+      policy: 'relaxed',
+      trustedApps: true,
+      call: async (method, params) => {
+        if (method === 'status') return { supported: true, permissions: axPermissions }
+        if (method === 'observe') {
+          generation++
+          return {
+            observationId: `obs-${generation}`,
+            epoch: params.epoch,
+            width: 1440,
+            height: 900,
+            ax: currentFront.bundleId === 'com.apple.TextEdit'
+              ? 'ref=text-1 role=AXTextArea title=未命名'
+              : 'ref=finder-1 role=AXOutline title=访达',
+            targetApp: currentFront,
+          }
+        }
+        if (method === 'resolveApp') {
+          const isTextEdit = String(params.appName).toLowerCase().includes('textedit')
+          return isTextEdit ? { appName: 'TextEdit', bundleId: 'com.apple.TextEdit' } : { appName: 'Notes', bundleId: 'com.apple.Notes' }
+        }
+        if (method === 'prepare') {
+          return { preparationId: String(params.actionId), appName: 'TextEdit', bundleId: 'com.apple.TextEdit', context: { role: 'AXApplication' } }
+        }
+        if (method === 'perform') {
+          const action = params.action as Record<string, unknown>
+          if (action.kind === 'open_app') {
+            currentFront = { name: 'TextEdit', bundleId: 'com.apple.TextEdit' }
+          }
+          return { actionId: params.actionId, outcome: 'dispatched-unverified', message: '已投递' }
+        }
+        return undefined
+      },
+    })
+    try {
+      const result = await f.controller.executeAutonomousAction({ action: 'get_app_state', app: 'TextEdit' }, undefined, f.binding)
+      expect(result.state?.targetApp?.bundleId).toBe('com.apple.TextEdit')
+      expect(result.ax).toContain('role=AXTextArea')
+      expect(result.image).toBeUndefined()
+      expect(f.calls.some(c => c.method === 'perform' && (c.params.action as Record<string, unknown>)?.kind === 'open_app')).toBe(true)
+    } finally { await f.controller.finishRun(f.binding) }
+  })
 })
 
 describe('Given 原生层尚未投递任何动作', () => {

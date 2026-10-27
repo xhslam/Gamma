@@ -1,6 +1,6 @@
 {
   "name": "@gamma/electron",
-  "version": "0.19.193",
+  "version": "0.19.194",
   "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {

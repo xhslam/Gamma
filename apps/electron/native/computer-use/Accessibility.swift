@@ -1,6 +1,10 @@
 import Foundation
+import AppKit
 import ApplicationServices
 import CryptoKit
+
+@_silgen_name("_AXUIElementGetWindow")
+func _AXUIElementGetWindow(_ element: AXUIElement, _ outIdentifier: UnsafeMutablePointer<CGWindowID>) -> AXError
 
 struct AXTree {
     let text: String, digest: String, root: AXUIElement
@@ -54,15 +58,25 @@ final class AccessibilityWorker {
         let app = AXUIElementCreateApplication(target.pid)
         AXUIElementSetMessagingTimeout(app, 0.08)
         var raw: CFArray?
-        guard AXUIElementCopyAttributeValues(app, kAXWindowsAttribute as CFString, 0, 129, &raw) == .success, let windows = raw as? [AXUIElement], windows.count <= 128 else { throw NativeFailure("ax-window", "无法有界映射AX窗口") }
         var matches: [AXUIElement] = []
-        for window in windows {
-            var pid: pid_t = 0
-            guard AXUIElementGetPid(window, &pid) == .success, pid == target.pid,
-                  let frame = try rect(window), frame == target.bounds.cg else { continue }
-            matches.append(window)
+        if AXUIElementCopyAttributeValues(app, kAXWindowsAttribute as CFString, 0, 129, &raw) == .success, let windows = raw as? [AXUIElement], windows.count <= 128 {
+            for window in windows {
+                var pid: pid_t = 0
+                guard AXUIElementGetPid(window, &pid) == .success, pid == target.pid,
+                      let frame = try rect(window), frame == target.bounds.cg else { continue }
+                matches.append(window)
+            }
         }
-        guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与CG窗口不是唯一PID、几何匹配") }
+        if matches.count == 1 { return matches[0] }
+        if let focusedRaw = try? value(app, kAXFocusedWindowAttribute), CFGetTypeID(focusedRaw) == AXUIElementGetTypeID() {
+            let focusedWin = unsafeBitCast(focusedRaw, to: AXUIElement.self)
+            var pid: pid_t = 0
+            if AXUIElementGetPid(focusedWin, &pid) == .success, pid == target.pid,
+               let frame = try? rect(focusedWin), frame == target.bounds.cg {
+                return focusedWin
+            }
+        }
+        guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与目标窗口不是唯一PID、几何匹配") }
         return matches[0]
     }
     private func actionNames(_ element: AXUIElement) throws -> [String] {
@@ -156,11 +170,20 @@ final class AccessibilityWorker {
     func focusedElement() throws -> AXUIElement {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         let system = AXUIElementCreateSystemWide()
-        guard let raw = try value(system, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() else {
-            writeNativeComputerUseLog(location: "Accessibility.swift:focusedElement:no_focused_element", rawError: "无法识别实际焦点控件", errorCode: "unsafe-focus")
-            throw NativeFailure("unsafe-focus", "无法识别实际焦点控件")
+        if let raw = try? value(system, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() {
+            return unsafeBitCast(raw, to: AXUIElement.self)
         }
-        return unsafeBitCast(raw, to: AXUIElement.self)
+        if let front = NSWorkspace.shared.frontmostApplication {
+            let app = AXUIElementCreateApplication(front.processIdentifier)
+            if let raw = try? value(app, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() {
+                return unsafeBitCast(raw, to: AXUIElement.self)
+            }
+            if let raw = try? value(app, kAXFocusedWindowAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() {
+                return unsafeBitCast(raw, to: AXUIElement.self)
+            }
+        }
+        writeNativeComputerUseLog(location: "Accessibility.swift:focusedElement:no_focused_element", rawError: "无法识别实际焦点控件", errorCode: "unsafe-focus")
+        throw NativeFailure("unsafe-focus", "无法识别实际焦点控件")
     }
     func hitElement(_ point: CGPoint) throws -> AXUIElement {
         let system = AXUIElementCreateSystemWide(); AXUIElementSetMessagingTimeout(system, 0.08)
@@ -206,8 +229,17 @@ final class AccessibilityWorker {
             throw NativeFailure("unsafe-focus", "无法读取焦点窗口几何")
         }
         let matches = windows.filter { $0.pid == pid && $0.bounds.cg == frame }
-        guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "焦点窗口无法唯一关联CG窗口") }
-        return matches[0]
+        if matches.count == 1 { return matches[0] }
+        guard let runningApp = NSRunningApplication(processIdentifier: pid),
+              let bundle = runningApp.bundleIdentifier,
+              let ident = try? processIdentity(pid) else {
+            throw NativeFailure("ambiguous-window", "焦点窗口所属应用无效")
+        }
+        var wid: CGWindowID = 0
+        _ = _AXUIElementGetWindow(root, &wid)
+        if wid == 0 { wid = UInt32(bitPattern: pid) }
+        let title = (try? string(root, kAXTitleAttribute)) ?? ""
+        return Target(windowId: wid, pid: pid, processIdentity: ident, bundleId: bundle, title: title, bounds: Rect(frame))
     }
     private func attributeSettable(_ element: AXUIElement, _ attribute: String) throws -> Bool {
         try budget()
