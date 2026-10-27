@@ -129,6 +129,8 @@ body {
     --accent-foreground: 30 8% 20%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+    --diff-addition: 142 71% 42%;
+    --diff-untracked: 38 92% 48%;
     --stop-hover-bg: hsla(0, 80%, 60%, 0.12);
     --card: 40 20% 99%;
     --card-foreground: var(--foreground);
@@ -175,6 +177,8 @@ body {
     --accent-foreground: var(--foreground);
     --destructive: 0 55% 45%;
     --destructive-foreground: 0 0% 98%;
+    --diff-addition: 142 65% 52%;
+    --diff-untracked: 48 96% 53%;
     --stop-hover-bg: hsl(0, 40%, 18%);
     --card: 30 6% 15%;                      /* 卡片：浮起于背景 */
     --card-foreground: var(--foreground);

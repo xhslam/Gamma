@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import type { WritableAtom } from 'jotai'
 import { useStore } from 'jotai'
 import {
   getPreviewFileId,
@@ -22,13 +23,64 @@ import {
   tabsAtom,
 } from '@/atoms/tab-atoms'
 import { agentDiffPanelTabAtom, agentSidePanelOpenAtomFamily, getPreviewSidePanelTab } from '@/atoms/agent-atoms'
+import { activeOnDemandOverlayAtom } from '@/atoms/on-demand-base-atoms'
 
 /** Jotai store 类型（从 useStore 推导，避免直接 import 内部 Store 类型） */
 type JotaiStore = ReturnType<typeof useStore>
 
+export type JotaiSetter = <Value, Args extends unknown[], Result>(
+  atom: WritableAtom<Value, Args, Result>,
+  ...args: Args
+) => Result
+
 /** 兼容旧调用方；右侧工作区方案下不再使用 mode。 */
 export interface OpenPreviewOptions {
   mode?: 'tab' | 'split'
+}
+
+/**
+ * 核心预览打开状态应用：供 store 与 atom write 统一调用。
+ *
+ * 保证：
+ * 1. 同一预览身份再次打开时保留 Tab 顺序，但采用最新权限、根目录与解析上下文。
+ * 2. 激活并展开大面板 (S2)。
+ * 3. 自动关闭 S1 浮层，保证 S1/S2 互斥且不留幽灵状态。
+ */
+export function applyOpenPreview(
+  set: JotaiSetter,
+  sessionId: string,
+  file: PreviewFile,
+): void {
+  const previewId = getPreviewFileId(file)
+  set(previewFilesMapAtom, (prev) => {
+    const next = new Map(prev)
+    const files = next.get(sessionId) ?? []
+    const existingIndex = files.findIndex((item) => getPreviewFileId(item) === previewId)
+    next.set(
+      sessionId,
+      existingIndex === -1
+        ? [...files, file]
+        : files.map((item, index) => (index === existingIndex ? file : item)),
+    )
+    return next
+  })
+  set(previewFileMapAtom, (prev) => {
+    const next = new Map(prev)
+    next.set(sessionId, file)
+    return next
+  })
+  set(previewPanelOpenMapAtom, (prev) => {
+    const next = new Map(prev)
+    next.set(sessionId, true)
+    return next
+  })
+  set(agentSidePanelOpenAtomFamily(sessionId), true)
+  set(agentDiffPanelTabAtom, (prev) => {
+    const next = new Map(prev)
+    next.set(sessionId, getPreviewSidePanelTab(previewId))
+    return next
+  })
+  set(activeOnDemandOverlayAtom, null)
 }
 
 /**
@@ -37,35 +89,7 @@ export interface OpenPreviewOptions {
  * 供 React Hook 和 IPC 事件处理器共同复用，保证计划审批等外部事件不会绕过预览 Tab 的状态约定。
  */
 export function openPreviewInStore(store: JotaiStore, sessionId: string, file: PreviewFile): void {
-  const previewId = getPreviewFileId(file)
-  store.set(previewFilesMapAtom, (prev) => {
-    const next = new Map(prev)
-    const files = next.get(sessionId) ?? []
-    // 同一预览身份再次打开时保留 Tab 顺序，但采用最新权限、根目录与解析上下文。
-    // 否则先以只读/Skill 上下文打开后会永久复用过期元数据。
-    const existingIndex = files.findIndex((item) => getPreviewFileId(item) === previewId)
-    next.set(sessionId, existingIndex === -1
-      ? [...files, file]
-      : files.map((item, index) => index === existingIndex ? file : item))
-    return next
-  })
-  store.set(previewFileMapAtom, (prev) => {
-    const next = new Map(prev)
-    next.set(sessionId, file)
-    return next
-  })
-  store.set(previewPanelOpenMapAtom, (prev) => {
-    const next = new Map(prev)
-    next.set(sessionId, true)
-    return next
-  })
-  // 所有入口都复用同一右侧工作区，并以会话为粒度隔离预览状态。
-  store.set(agentSidePanelOpenAtomFamily(sessionId), true)
-  store.set(agentDiffPanelTabAtom, (prev) => {
-    const next = new Map(prev)
-    next.set(sessionId, getPreviewSidePanelTab(previewId))
-    return next
-  })
+  applyOpenPreview(store.set.bind(store), sessionId, file)
 }
 
 export function useOpenPreview() {
@@ -117,4 +141,5 @@ export function tearOffPreviewToSplit(store: JotaiStore, tabId: string): void {
     next.set(sessionId, 'preview')
     return next
   })
+  store.set(activeOnDemandOverlayAtom, null)
 }

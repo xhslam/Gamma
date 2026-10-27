@@ -28,10 +28,18 @@ import { activeViewAtom } from '@/atoms/active-view'
 import { registerShortcut } from '@/lib/shortcut-registry'
 import {
   agentDiffPanelTabAtom,
+  agentSessionsAtom,
   agentSidePanelOpenAtomFamily,
+  agentSideTemporaryAgentMapAtom,
   currentSessionSidePanelOpenAtom,
   getBrowserSidePanelTab,
 } from '@/atoms/agent-atoms'
+import {
+  activeOnDemandOverlayAtom,
+  toggleOnDemandOverlayAtom,
+  closeOnDemandOverlayAtom,
+} from '@/atoms/on-demand-panel-atoms'
+import { deriveActiveExplorationBranches } from '@/lib/right-panel-exploration'
 import {
   browserPanelMinimizedMapAtom,
   browserPanelOpenMapAtom,
@@ -57,13 +65,48 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
   // Agent 会话从左侧历史列表切换，中心区不再重复展示同一组顶部 Tab。
   const showCenterTabBar = activeTab?.type !== 'agent'
   const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
+  const [activeOverlay, setActiveOverlay] = useAtom(activeOnDemandOverlayAtom)
+  const toggleOverlay = useSetAtom(toggleOnDemandOverlayAtom)
+  const closeOverlay = useSetAtom(closeOnDemandOverlayAtom)
+
   const toggleRightPanel = React.useCallback(() => {
     if (activeTab?.type !== 'agent') return
+    if (activeOverlay) {
+      closeOverlay()
+      setRightPanelOpen(true)
+      return
+    }
     setRightPanelOpen(!isRightPanelOpen)
-  }, [activeTab?.type, isRightPanelOpen, setRightPanelOpen])
+  }, [activeOverlay, activeTab?.type, closeOverlay, isRightPanelOpen, setRightPanelOpen])
 
-  // 不能依赖 TabBar 注册：Agent 会话已不渲染中心 TabBar，快捷键需要在常驻主内容区监听。
-  React.useEffect(() => registerShortcut('toggle-right-panel', toggleRightPanel), [toggleRightPanel])
+  // 统一注册按需右侧面板快捷键与大面板快捷键
+  React.useEffect(() => {
+    const unregisterBigPanel = registerShortcut('toggle-right-panel', toggleRightPanel)
+    const unregisterFiles = registerShortcut('toggle-right-panel-files', () => {
+      if (activeTab?.type !== 'agent') return
+      toggleOverlay('files')
+    })
+    const unregisterChanges = registerShortcut('toggle-right-panel-changes', () => {
+      if (activeTab?.type !== 'agent') return
+      toggleOverlay('changes')
+    })
+    const unregisterExploration = registerShortcut('toggle-right-panel-exploration', () => {
+      if (activeTab?.type !== 'agent') return
+      const currentSessionId = activeTab.sessionId
+      const sideTemporaryMap = store.get(agentSideTemporaryAgentMapAtom)
+      const allSessions = store.get(agentSessionsAtom)
+      const activeBranches = deriveActiveExplorationBranches(currentSessionId, sideTemporaryMap, allSessions)
+      if (activeBranches.length === 0) return
+      toggleOverlay('exploration')
+    })
+
+    return () => {
+      unregisterBigPanel()
+      unregisterFiles()
+      unregisterChanges()
+      unregisterExploration()
+    }
+  }, [activeTab?.type, toggleOverlay, toggleRightPanel])
 
   // 浏览器状态仍由主内容区常驻订阅，右侧工作区只读取 atom 渲染，避免侧栏收起时遗漏状态更新。
   const setBrowserOpenMap = useSetAtom(browserPanelOpenMapAtom)

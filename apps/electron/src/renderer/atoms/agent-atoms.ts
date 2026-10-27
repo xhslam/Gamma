@@ -7,7 +7,7 @@
 
 import { atom } from 'jotai'
 import type { Getter } from 'jotai'
-import { atomWithStorage, selectAtom } from 'jotai/utils'
+import { atomWithStorage, createJSONStorage, selectAtom } from 'jotai/utils'
 import { atomFamily } from 'jotai-family'
 import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, GammaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult } from '@gamma/shared'
 import { GAMMA_DEFAULT_PERMISSION_MODE } from '@gamma/shared'
@@ -15,6 +15,8 @@ import { calculateDockBadgeCount, countPendingRequests } from '@/lib/dock-badge-
 import type { AgentQueuedMessage } from '@/lib/agent-message-queue'
 import type { SessionFileChange } from '@/lib/session-file-changes'
 import type { RightWorkspaceSplitState } from '@/lib/right-workspace-split'
+import { migrateRightPanelOpenState } from '@/lib/right-panel-migration'
+import { activeOnDemandOverlayAtom } from './on-demand-base-atoms'
 
 /** 活动状态 */
 export type ActivityStatus = 'pending' | 'running' | 'completed' | 'error' | 'backgrounded'
@@ -278,7 +280,17 @@ export const agentModelIdAtom = atom<string | null>(null)
 export const agentSessionChannelMapAtom = atom<Map<string, string>>(new Map())
 /** Per-session 模型 ID Map — sessionId → modelId */
 export const agentSessionModelMapAtom = atom<Map<string, string>>(new Map())
-export const currentAgentSessionIdAtom = atom<string | null>(null)
+const baseCurrentAgentSessionIdAtom = atom<string | null>(null)
+export const currentAgentSessionIdAtom = atom(
+  (get) => get(baseCurrentAgentSessionIdAtom),
+  (get, set, nextSessionId: string | null) => {
+    const current = get(baseCurrentAgentSessionIdAtom)
+    if (current !== nextSessionId) {
+      set(activeOnDemandOverlayAtom, null)
+    }
+    set(baseCurrentAgentSessionIdAtom, nextSessionId)
+  },
+)
 
 /**
  * Agent 流式状态的 session 索引与实际存储。
@@ -498,19 +510,45 @@ export const workspaceGitDiffRefreshVersionAtom = atom(0)
 
 // ===== 侧面板 Atoms =====
 
+const baseSidePanelStorage = createJSONStorage<Record<string, boolean>>()
+
+const sidePanelOpenStorage = {
+  getItem(key: string, initialValue: Record<string, boolean>): Record<string, boolean> {
+    const raw = baseSidePanelStorage.getItem(key, initialValue)
+    const value: Record<string, boolean> = raw instanceof Promise ? initialValue : (raw ?? initialValue)
+    const { openMap, migrated } = migrateRightPanelOpenState(value)
+    if (migrated) {
+      baseSidePanelStorage.setItem(key, openMap)
+    }
+    return openMap
+  },
+  setItem(key: string, value: Record<string, boolean>): void {
+    baseSidePanelStorage.setItem(key, value)
+  },
+  removeItem(key: string): void {
+    baseSidePanelStorage.removeItem(key)
+  },
+  subscribe(key: string, callback: (value: Record<string, boolean>) => void, initialValue: Record<string, boolean>) {
+    return baseSidePanelStorage.subscribe?.(key, callback, initialValue) ?? (() => {})
+  },
+}
+
 /** 侧面板是否打开：按 Agent 会话持久化，未存储的会话默认收起，保持首次进入界面简洁。 */
 export const agentSidePanelOpenMapAtom = atomWithStorage<Record<string, boolean>>(
   'gamma-agent-sidepanel-open-by-session',
   {},
-  undefined,
+  sidePanelOpenStorage,
   { getOnInit: true },
 )
 
 /** 指定 Agent 会话的侧面板开关。 */
 export const agentSidePanelOpenAtomFamily = atomFamily((sessionId: string) => atom(
   (get) => get(agentSidePanelOpenMapAtom)[sessionId] ?? false,
-  (_get, set, isOpen: boolean) => {
+  (get, set, isOpen: boolean) => {
     set(agentSidePanelOpenMapAtom, (previous) => ({ ...previous, [sessionId]: isOpen }))
+    if (isOpen && get(currentAgentSessionIdAtom) === sessionId) {
+      set(activeOnDemandOverlayAtom, null)
+    }
   },
 ))
 
@@ -796,6 +834,9 @@ export const currentSessionSidePanelOpenAtom = atom(
   (get, set, isOpen: boolean) => {
     const currentId = get(currentAgentSessionIdAtom)
     if (currentId) set(agentSidePanelOpenAtomFamily(currentId), isOpen)
+    if (isOpen) {
+      set(activeOnDemandOverlayAtom, null)
+    }
   },
 )
 
@@ -852,6 +893,7 @@ export const openWorkspaceComponentAtom = atom(
   (get, set, component: WorkspaceComponentTab) => {
     const sessionId = get(currentAgentSessionIdAtom)
     if (!sessionId) return
+    set(activeOnDemandOverlayAtom, null)
     set(agentSessionComponentTabsAtomFamily(sessionId), (previous) => (
       previous.includes(component) ? previous : [...previous, component]
     ))
