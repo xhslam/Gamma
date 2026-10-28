@@ -255,16 +255,27 @@ final class Engine {
                 if let original = binding.returnApp {
                     guard try processIdentity(original.pid) == original.processIdentity else { throw NativeFailure("target-changed", "授权前应用已退出") }
                     let front = try currentApplication()
+                    var activationAccepted: Bool?
                     if front.pid != original.pid {
                         guard isGammaPID(front.pid) else { throw NativeFailure("focus-changed", "用户已切换到其他应用，不自动恢复") }
                         try gate.check(token)
                         DispatchQueue.main.sync {
-                            if (try? self.gate.check(token)) != nil { _ = NSRunningApplication(processIdentifier: original.pid)?.activate(options: []) }
+                            if (try? self.gate.check(token)) != nil { activationAccepted = NSRunningApplication(processIdentifier: original.pid)?.activate(options: []) }
                         }
                     }
-                    try waitForDesktopReadiness(checkFence: { try self.gate.check(token) }, checkDesktop: {
-                        guard try currentApplication() == original else { throw NativeFailure("not-frontmost", "等待原应用焦点恢复") }
-                    })
+                    var lastFront = front
+                    do {
+                        try waitForDesktopReadiness(checkFence: { try self.gate.check(token) }, checkDesktop: {
+                            lastFront = try currentApplication()
+                            guard lastFront == original else { throw NativeFailure("not-frontmost", "等待原应用焦点恢复") }
+                        })
+                    } catch {
+                        writeNativeComputerUseLog(location: "Engine.swift:confirmation:restore", action: binding.request.action.kind,
+                            rawError: "确认后原应用焦点恢复失败，动作未投递", errorCode: (error as? NativeFailure)?.code ?? "native-failure",
+                            targetApp: ["pid": original.pid, "bundleId": original.bundleId, "activationRequested": activationAccepted != nil, "activationAccepted": activationAccepted ?? false],
+                            frontmostApp: ["pid": lastFront.pid, "bundleId": lastFront.bundleId])
+                        throw error
+                    }
                 }
                 try verifyBinding(binding, ax: ax)
                 try gate.setConfirmation(binding.id, waiting: false, token: token)
@@ -340,6 +351,15 @@ final class Engine {
                 guard AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .success else { throw NativeFailure("focus-unknown", "提窗结果无法确认") }
                 try gate.checkDispatch(snapshot.fence)
                 DispatchQueue.main.sync { [self] in if (try? self.gate.checkDispatch(snapshot.fence)) != nil { _ = NSRunningApplication(processIdentifier: window.pid)?.activate(options: []) } }
+            } else if let scroll = binding.axScroll {
+                guard p.action.kind == "scroll", let window = binding.window, let root = snapshot.axRoot else { throw NativeFailure("stale-element-ref", "滚动引用已失效") }
+                let result = try ax.performScroll(scroll, target: window, root: root, beforeDispatch: { [self] in
+                    try verifyBinding(binding, ax: ax)
+                    try validateInputEnvironment(); try validateDisplay(snapshot.display)
+                    try gate.claimAX(ticket); try gate.checkDispatch(snapshot.fence)
+                    dispatched = true
+                })
+                guard result == .success else { throw NativeFailure(result == .cannotComplete ? "ax-timeout" : "ax-write-unknown", "AX滚动结果无法确认，已暂停且禁止重试") }
             } else if p.action.kind.hasPrefix("ax") || p.action.kind == "paste" {
                 guard let element = binding.element, let window = binding.window, let root = snapshot.axRoot else { throw NativeFailure("stale-element-ref", "AX引用或根窗口已失效") }
                 let result = try ax.performAX(p.action, element: element, target: window, root: root, expectedInsertion: binding.insertionState, beforeDispatch: { [self] in

@@ -37,6 +37,7 @@ describe('Given 非文本电脑动作的实际 JSONL 日志', () => {
           expect(errorIndex).toBeGreaterThanOrEqual(0)
           expect(stopIndex).toBeGreaterThan(errorIndex)
           expect(entries[errorIndex]).toMatchObject({ action: kind, rawError: '原生模拟错误原文', errorCode: 'permission-required', outcome: 'unknown', reason: '原生操作失败或授权失效' })
+          expect(entries[stopIndex]).toMatchObject({ action: kind, rawError: '原生模拟错误原文', errorCode: 'permission-required', outcome: 'unknown', reason: '原生操作失败或授权失效' })
         } finally { await fixture.controller.finishRun(fixture.binding) }
       }
       nativeCode = 'unsafe-focus'

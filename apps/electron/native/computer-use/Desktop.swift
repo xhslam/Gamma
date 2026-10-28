@@ -503,6 +503,7 @@ struct PreparedAction {
     let returnFocus: AXUIElement?
     let resolvedURL: URL?
     let scrollPoint: CGPoint?
+    var axScroll: AXScrollBinding? = nil
 }
 func samePreparedRequest(_ prepared: PerformParams, _ incoming: PerformParams) -> Bool {
     prepared.leaseId == incoming.leaseId && prepared.epoch == incoming.epoch && prepared.actionId == incoming.actionId && prepared.action == incoming.action
@@ -540,6 +541,7 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
     let windows = try desktopWindows()
     let window: Target, element: AXUIElement
     var scrollPoint: CGPoint?
+    var axScroll: AXScrollBinding?
     if action.kind.hasPrefix("ax") || (action.kind == "paste" && action.elementRef != nil) {
         guard let ref = action.elementRef, let stored = snapshot.axRefs[ref], let target = snapshot.target,
               snapshot.axRoot != nil else { throw NativeFailure("stale-element-ref", "elementRef不属于本次观察；请重新观察获取引用") }
@@ -571,10 +573,15 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
             )
             throw NativeFailure("unsafe-focus", "滚动焦点不属于前台应用")
         }
-        let (_, focusedBounds) = try ax.context(focused)
-        let point = try defaultScrollPoint(elementBounds: focusedBounds, windowBounds: window.bounds, display: snapshot.display)
-        guard try windowAt(point).windowId == window.windowId else { throw NativeFailure("occluded", "默认滚动位置被其他窗口遮挡") }
-        element = try ax.hitElement(point); scrollPoint = point
+        let root = try ax.matchedWindow(window)
+        if let semantic = try ax.prepareScroll(focused, target: window, root: root, delta: action.deltaY ?? -300) {
+            element = semantic.element; axScroll = semantic
+        } else {
+            let (_, focusedBounds) = try ax.context(focused)
+            let point = try defaultScrollPoint(elementBounds: focusedBounds, windowBounds: window.bounds, display: snapshot.display)
+            guard try windowAt(point).windowId == window.windowId else { throw NativeFailure("occluded", "默认滚动位置被其他窗口遮挡") }
+            element = try ax.hitElement(point); scrollPoint = point
+        }
     } else if ["key", "type", "paste"].contains(action.kind) {
         element = try ax.focusedElement()
         let pid = try ax.elementPID(element)
@@ -615,7 +622,7 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
     try validateBundleConstraint(action.bundleId, actual: window.bundleId)
     let tree = try ax.read(window, allowSurfaces: true)
     try ax.validateElement(element, target: window, root: tree.root)
-    if action.kind.hasPrefix("ax") {
+    if action.kind.hasPrefix("ax") || axScroll != nil {
         guard let oldRoot = snapshot.axRoot, CFEqual(oldRoot, tree.root), tree.refs.values.contains(where: { CFEqual($0, element) }) else { throw NativeFailure("stale-element-ref", "观察中的原AX元素已不在当前有界树中") }
     }
     try ax.validateAction(action, element: element, target: window, root: tree.root)
@@ -626,7 +633,7 @@ func bindAction(_ request: PerformParams, snapshot: Snapshot, ax: AccessibilityW
     }
     let app = try appIdentity(window.pid)
     try validateBundleConstraint(action.bundleId, actual: app.bundleId)
-    return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: app.name, bundleId: app.bundleId, window: window, element: element, context: context, elementBounds: bounds, layoutDigest: tree.digest, insertionState: insertionState, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil, scrollPoint: scrollPoint)
+    return PreparedAction(id: UUID().uuidString, request: request, snapshot: snapshot, app: app, appName: app.name, bundleId: app.bundleId, window: window, element: element, context: context, elementBounds: bounds, layoutDigest: tree.digest, insertionState: insertionState, returnApp: originalApp, returnFocus: originalFocus, resolvedURL: nil, scrollPoint: scrollPoint, axScroll: axScroll)
 }
 func verifyBinding(_ prepared: PreparedAction, ax: AccessibilityWorker) throws {
     let fresh = try bindAction(prepared.request, snapshot: prepared.snapshot, ax: ax)
@@ -636,4 +643,9 @@ func verifyBinding(_ prepared: PreparedAction, ax: AccessibilityWorker) throws {
     if let old = prepared.element, let new = fresh.element, !CFEqual(old, new) { throw NativeFailure("target-changed", "目标控件已替换") }
     if let old = prepared.returnFocus, let new = fresh.returnFocus, !CFEqual(old, new) { throw NativeFailure("focus-changed", "原焦点控件已改变") }
     if (prepared.returnFocus == nil) != (fresh.returnFocus == nil) { throw NativeFailure("focus-changed", "无法确认原焦点一致") }
+    if let old = prepared.axScroll, let new = fresh.axScroll {
+        guard old.matches(new) else { throw NativeFailure("target-changed", "滚动目标或范围已改变，未投递动作") }
+    } else if (prepared.axScroll == nil) != (fresh.axScroll == nil) {
+        throw NativeFailure("target-changed", "滚动能力已改变，未投递动作")
+    }
 }

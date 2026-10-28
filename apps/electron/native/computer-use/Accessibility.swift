@@ -10,6 +10,15 @@ struct AXTree {
     let text: String, digest: String, root: AXUIElement
     let refs: [String: AXUIElement]
 }
+struct AXScrollBinding {
+    let element: AXUIElement
+    let current: Double, minimum: Double, maximum: Double, destination: Double
+    let viewport: Double, content: Double
+    func matches(_ other: AXScrollBinding) -> Bool {
+        CFEqual(element, other.element) && current == other.current && minimum == other.minimum && maximum == other.maximum
+            && destination == other.destination && viewport == other.viewport && content == other.content
+    }
+}
 /// 与AX句柄无关的有界序列化器，离线测试可验证refs不会污染布局摘要。
 struct AXObservationBuffer {
     private var lines: [String] = [], canonical: [String] = []
@@ -138,6 +147,9 @@ final class AccessibilityWorker {
             if [kAXTextFieldRole, kAXTextAreaRole, kAXStaticTextRole, kAXComboBoxRole].contains(role) {
                 text = try string(element, kAXValueAttribute) ?? ""
                 guard text.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX文本值超过读取预算") }
+            } else if role == kAXScrollBarRole, let position = try value(element, kAXValueAttribute) as? NSNumber, position.doubleValue.isFinite {
+                // 位置随最新观察返回，使模型能独立核对滚动结果。
+                text = position.stringValue
             }
             let geometry = frame.map { "\($0.origin.x),\($0.origin.y),\($0.width),\($0.height)" } ?? "unknown"
             let entry = "\(depth) role=\(field(role)) subrole=\(field(subrole)) frame=\(geometry) title=\(field(title)) description=\(field(description, limit: 384)) value=\(field(text, limit: 768)) actions=\(field(names.joined(separator: ","), limit: 2048))"
@@ -171,6 +183,87 @@ final class AccessibilityWorker {
             node = unsafeBitCast(parent, to: AXUIElement.self)
         }
         throw NativeFailure("unsafe-element", "元素无法有界关联到当前窗口")
+    }
+    /// 仅沿当前焦点的祖先选择滚动区，不在整页中猜测某个滚动容器。
+    func prepareScroll(_ focused: AXUIElement, target: Target, root: AXUIElement, delta: Double) throws -> AXScrollBinding? {
+        try validateElement(focused, target: target, root: root)
+        func unavailable(_ reason: String) -> AXScrollBinding? {
+            writeNativeComputerUseLog(location: "Accessibility.swift:prepareScroll:unavailable", action: "scroll",
+                rawError: "AX滚动能力不足，尚未投递", errorCode: "unsupported-action",
+                targetApp: ["pid": target.pid, "bundleId": target.bundleId, "capability": reason])
+            return nil
+        }
+        var node = focused
+        for _ in 0..<16 {
+            if try string(node, kAXRoleAttribute) == kAXScrollAreaRole {
+                // WebKit有时不暴露AXContents/AXVerticalScrollBar；只接受该滚动区
+                // 真实直属子节点中唯一的垂直滚动条和WebArea，不搜索其他容器。
+                var rawChildren: CFArray?
+                try budget()
+                let childrenResult = AXUIElementCopyAttributeValues(node, kAXChildrenAttribute as CFString, 0, 65, &rawChildren)
+                if childrenResult == .cannotComplete { throw NativeFailure("ax-timeout", "AX滚动子节点读取超时") }
+                if childrenResult == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限已撤回", permission: "accessibility") }
+                guard childrenResult == .success, let children = rawChildren as? [AXUIElement], children.count <= 64 else { return unavailable("children-unavailable") }
+                let bar: AXUIElement
+                if let rawBar = try value(node, kAXVerticalScrollBarAttribute), CFGetTypeID(rawBar) == AXUIElementGetTypeID() {
+                    bar = unsafeBitCast(rawBar, to: AXUIElement.self)
+                } else {
+                    var bars: [AXUIElement] = []
+                    for child in children where try string(child, kAXRoleAttribute) == kAXScrollBarRole {
+                        if try string(child, kAXOrientationAttribute) == kAXVerticalOrientationValue { bars.append(child) }
+                    }
+                    guard bars.count == 1 else { return unavailable("vertical-scrollbar-not-unique") }
+                    bar = bars[0]
+                }
+                try validateElement(bar, target: target, root: node)
+                guard try string(bar, kAXRoleAttribute) == kAXScrollBarRole else { return unavailable("scrollbar-role") }
+                guard try string(bar, kAXOrientationAttribute) == kAXVerticalOrientationValue else { return unavailable("scrollbar-orientation") }
+                guard try attributeSettable(bar, kAXValueAttribute) else { return unavailable("scrollbar-read-only") }
+                guard let current = try value(bar, kAXValueAttribute) as? NSNumber else { return unavailable("scrollbar-value") }
+                guard let minimum = try value(bar, kAXMinValueAttribute) as? NSNumber else { return unavailable("scrollbar-minimum") }
+                guard let maximum = try value(bar, kAXMaxValueAttribute) as? NSNumber else { return unavailable("scrollbar-maximum") }
+                var contents = try value(node, kAXContentsAttribute) as? [AXUIElement] ?? []
+                if contents.isEmpty {
+                    for child in children where try string(child, kAXRoleAttribute) == "AXWebArea" { contents.append(child) }
+                }
+                guard contents.count == 1 else { return unavailable("contents-not-unique") }
+                try validateElement(contents[0], target: target, root: node)
+                guard let viewport = try rect(node), let content = try rect(contents[0]) else { return unavailable("scroll-geometry") }
+                // https://github.com/WebKit/WebKit/blob/main/Source/WebCore/accessibility/AccessibilityScrollbar.cpp
+                // 兼容只针对Safari原生滚动区的直属WebArea和滚动条，且AXValue必须与几何偏移一致。
+                let contentRole = try string(contents[0], kAXRoleAttribute)
+                let webKitScrollArea = target.bundleId == "com.apple.Safari"
+                    && children.contains(where: { CFEqual($0, bar) })
+                    && children.contains(where: { CFEqual($0, contents[0]) })
+                    && contentRole == "AXWebArea"
+                guard let range = validatedAXScrollRange(current: current.doubleValue, minimum: minimum.doubleValue, maximum: maximum.doubleValue,
+                    webKitScrollArea: webKitScrollArea, offset: viewport.minY - content.minY, extent: content.height - viewport.height) else { return unavailable("scroll-range") }
+                guard let destination = axScrollDestination(current: current.doubleValue, minimum: range.lowerBound, maximum: range.upperBound,
+                          delta: delta, viewport: viewport.height, content: content.height) else {
+                    writeNativeComputerUseLog(location: "Accessibility.swift:prepareScroll:metrics", action: "scroll",
+                        rawError: "AX滚动参数未通过校验，尚未投递", errorCode: "unsupported-action",
+                        targetApp: ["pid": target.pid, "bundleId": target.bundleId, "current": current.doubleValue,
+                            "minimum": minimum.doubleValue, "maximum": maximum.doubleValue, "delta": delta,
+                            "viewportHeight": viewport.height, "contentHeight": content.height])
+                    return unavailable("scroll-metrics")
+                }
+                return AXScrollBinding(element: bar, current: current.doubleValue, minimum: range.lowerBound, maximum: range.upperBound,
+                    destination: destination, viewport: viewport.height, content: content.height)
+            }
+            if CFEqual(node, root) { return unavailable("no-scroll-area-ancestor") }
+            guard let parent = try value(node, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { return unavailable("no-scroll-area-ancestor") }
+            node = unsafeBitCast(parent, to: AXUIElement.self)
+        }
+        return unavailable("scroll-area-depth")
+    }
+    func performScroll(_ binding: AXScrollBinding, target: Target, root: AXUIElement, beforeDispatch: () throws -> Void) throws -> AXError {
+        try validateElement(binding.element, target: target, root: root)
+        try requireSettable(binding.element, kAXValueAttribute)
+        guard let current = try value(binding.element, kAXValueAttribute) as? NSNumber, current.doubleValue == binding.current else {
+            throw NativeFailure("target-changed", "滚动位置已改变，未投递动作")
+        }
+        try beforeDispatch()
+        return AXUIElementSetAttributeValue(binding.element, kAXValueAttribute as CFString, NSNumber(value: binding.destination))
     }
     func focusedText(_ target: Target, root: AXUIElement) throws {
         ends = ProcessInfo.processInfo.systemUptime + 0.8

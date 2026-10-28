@@ -222,6 +222,27 @@ func validatedAXActionName(kind: String, secondaryAction: String?, supported: [S
     return name
 }
 
+/// AX滚动条使用归一化位置；只有明确的范围和内容几何才可换算像素滚动。
+/// WebKit原生滚动条以currentPos/maximum读写AXValue，但AXMin/Max可能均返回0。
+/// 只在已验证的Safari直属WebArea/滚动条结构及几何位置一致时采用该契约。
+func validatedAXScrollRange(current: Double, minimum: Double, maximum: Double, webKitScrollArea: Bool,
+                            offset: Double, extent: Double) -> ClosedRange<Double>? {
+    guard [current, minimum, maximum].allSatisfy(\.isFinite) else { return nil }
+    if maximum > minimum, (maximum - minimum).isFinite, current >= minimum, current <= maximum { return minimum...maximum }
+    guard webKitScrollArea, minimum == 0, maximum == 0, current >= 0, current <= 1,
+          offset.isFinite, extent.isFinite, extent > 0, offset >= 0, offset <= extent,
+          abs(offset / extent - current) <= 0.01 else { return nil }
+    return 0...1
+}
+
+func axScrollDestination(current: Double, minimum: Double, maximum: Double, delta: Double, viewport: Double, content: Double) -> Double? {
+    guard [current, minimum, maximum, delta, viewport, content].allSatisfy(\.isFinite),
+          maximum > minimum, (maximum - minimum).isFinite, current >= minimum, current <= maximum, viewport > 0, content > viewport,
+          abs(delta) >= 1, abs(delta) <= 1200 else { return nil }
+    // 工具约定delta<0向下，AX垂直滚动条位置向下递增。
+    return min(maximum, max(minimum, current - delta / (content - viewport) * (maximum - minimum)))
+}
+
 func validateInsertionFormat(_ format: String) throws {
     guard ["text", "md"].contains(format) else { throw NativeFailure("unsupported-format", "当前不支持可验证的HTML/富文本粘贴；仅支持text或原样Markdown文本，且不读取或修改剪贴板") }
 }
