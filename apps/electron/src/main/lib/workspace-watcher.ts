@@ -11,7 +11,7 @@
  * 所有事件均做 debounce 防抖，避免高频文件操作导致渲染进程风暴。
  */
 
-import { watch, existsSync, statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type { BrowserWindow } from 'electron'
@@ -20,6 +20,7 @@ import { getAgentWorkspacesDir } from './config-paths'
 import { listAgentSessions } from './agent-session-manager'
 import { invalidateGitDiffCache } from './git-diff-service'
 import { classifyWorkspaceWatchFilename, isHighNoisePath, normalizeWatchFilename, shouldNotifyForWatchFilename } from './workspace-watcher-utils'
+import { watchInBackground as watch } from './background-fs-watcher'
 
 /** debounce 延迟（ms） */
 const DEBOUNCE_MS = 300

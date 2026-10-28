@@ -115,7 +115,7 @@ export function buildPiComputerTools(sdk: PiSdk, binding: ComputerBinding, sourc
             details,
           }
         } catch (error) {
-          if (error instanceof ComputerReobserveRequiredError) return result({ interrupted: false, reobserveRequired: true, outcome: 'rejected', message: error.message })
+          if (error instanceof ComputerReobserveRequiredError) return { ...result({ interrupted: false, reobserveRequired: true, outcome: 'rejected', message: error.message }), isError: true }
           const isInterrupted = controller.isRunStopped(binding.runId)
             || signal?.aborted
             || (error instanceof Error && (
@@ -135,6 +135,8 @@ export function buildPiComputerTools(sdk: PiSdk, binding: ComputerBinding, sourc
               message: `桌面操作已中断：${reason}`,
             }
             return {
+              isError: true,
+              terminate: true,
               content: [
                 {
                   type: 'text' as const,

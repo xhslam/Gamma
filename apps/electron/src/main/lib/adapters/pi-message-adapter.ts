@@ -12,6 +12,20 @@ import type { SDKAssistantMessage, SDKMessage } from '@gamma/shared'
 import type { RuntimeGuardResultOverride } from '../agent-runtime-guards'
 import { isMalformedResponseError, isTransientNetworkError } from '../error-patterns'
 import { sanitizeToolResultImageContent } from '../image-content-validation'
+import { isComputerInterruptedResult } from './pi-computer-context'
+
+/** 安全暂停不再请求模型补写结论；持久化一条本地说明，避免界面只留下空白回复。 */
+export function convertComputerInterruptionNotice(messages: AgentMessage[], sessionId: string): SDKAssistantMessage | undefined {
+  const interrupted = [...messages].reverse().find(isComputerInterruptedResult)
+  if (!interrupted || interrupted.role !== 'toolResult') return undefined
+  const details: unknown = interrupted.details
+  const reason = details && typeof details === 'object' && 'reason' in details && typeof details.reason === 'string'
+    ? details.reason : '电脑安全门禁已触发'
+  return {
+    type: 'assistant', uuid: randomUUID(), session_id: sessionId, parent_tool_use_id: null,
+    message: { content: [{ type: 'text', text: `电脑操作已暂停（原因：${reason}）。本轮任务尚未确认完成，已停止后续操作，不会自动重放。` }] },
+  }
+}
 
 function getPiEditItems(input: Record<string, unknown>): Array<Record<string, unknown>> {
   return Array.isArray(input.edits)
@@ -327,14 +341,15 @@ export function convertResultMessage(
   )
   const lastAssistant = assistants[assistants.length - 1]
   const assistantError = lastAssistant?.stopReason === 'error' ? lastAssistant.errorMessage : undefined
-  const terminalReason = override?.terminalReason ?? (lastAssistant?.stopReason === 'length' ? 'max_tokens' : 'completed')
+  const computerInterrupted = messages.some(isComputerInterruptedResult)
+  const terminalReason = computerInterrupted ? 'computer_interrupted' : override?.terminalReason ?? (lastAssistant?.stopReason === 'length' ? 'max_tokens' : 'completed')
   return {
     type: 'result',
-    subtype: override?.subtype ?? (assistantError ? 'error_during_execution' : terminalReason === 'max_tokens' ? 'max_tokens' : 'success'),
+    subtype: computerInterrupted ? 'error_during_execution' : override?.subtype ?? (assistantError ? 'error_during_execution' : terminalReason === 'max_tokens' ? 'max_tokens' : 'success'),
     usage,
     total_cost_usd: costValues.length > 0 ? costValues.reduce((sum, cost) => sum + cost, 0) : undefined,
     terminal_reason: terminalReason,
-    errors: override?.errors ?? (assistantError ? [assistantError] : undefined),
+    errors: computerInterrupted ? ['本轮电脑操作已暂停，任务未确认完成；请查看工具错误并等待新的消息。'] : override?.errors ?? (assistantError ? [assistantError] : undefined),
     session_id: sessionId,
   } as unknown as SDKMessage
 }

@@ -1,5 +1,43 @@
-import type { AgentMessage, StreamFn } from '@earendil-works/pi-agent-core'
+import type { Agent, AgentMessage, AgentToolResult, StreamFn } from '@earendil-works/pi-agent-core'
 import type { ComputerPrivateObservation } from '@gamma/shared'
+import { getComputerPausedToolReason } from '../computer-pause'
+
+export function computerPermissionInterruption(toolName: string, message: string): AgentToolResult<unknown> | undefined {
+  const reason = getComputerPausedToolReason(message)
+  if (toolName !== 'computer' || !reason) return undefined
+  return { content: [{ type: 'text', text: message }], details: { interrupted: true, reason }, isError: true, terminate: true }
+}
+
+export function isComputerInterruptedResult(message: AgentMessage): boolean {
+  if (message.role !== 'toolResult' || message.toolName !== 'computer') return false
+  const details: unknown = message.details
+  return !!details && typeof details === 'object' && 'interrupted' in details && details.interrupted === true
+}
+
+/** 安全暂停后结束本批次，不能再让模型把未执行的动作补写成成功。 */
+export function installComputerInterruptionHooks(agent: Agent): void {
+  let interrupted = false
+  const previousBefore = agent.beforeToolCall
+  const previousAfter = agent.afterToolCall
+  const previousFinish = agent.finishTurn
+  agent.beforeToolCall = async (context, signal) => {
+    if (interrupted) return { block: true, terminate: true, reason: '本轮电脑操作已暂停；本批次后续工具未执行，请等待用户的新消息。' }
+    return previousBefore?.(context, signal)
+  }
+  agent.afterToolCall = async (context, signal) => {
+    const previous = await previousAfter?.(context, signal)
+    const details: unknown = previous?.details ?? context.result.details
+    if (context.toolCall.name === 'computer' && details && typeof details === 'object' && 'interrupted' in details && details.interrupted === true) {
+      interrupted = true
+      return { ...previous, isError: true, terminate: true }
+    }
+    return previous
+  }
+  agent.finishTurn = async (context, signal) => {
+    if (interrupted) return { action: 'end' }
+    return await previousFinish?.(context, signal) ?? undefined
+  }
+}
 
 /** 在stream入口和实际payload提交前重新校验租约；覆盖auth/扩展等待与provider重试。 */
 export function withComputerRequestFence(stream: StreamFn, validate: (signal?: AbortSignal) => Promise<void>): StreamFn {

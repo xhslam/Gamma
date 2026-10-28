@@ -1,5 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import { ComputerNativeHost } from './computer-native-host'
+import { ComputerNativeHost, createComputerNativeHostError, getComputerDiagnosticCode } from './computer-native-host'
+import { classifyComputerFailure } from './computer-failure-policy'
+
+test('Given 文本动作诊断 When 原生错误包含私密文本 Then 只允许固定枚举错误码', () => {
+  expect(getComputerDiagnosticCode(createComputerNativeHostError({ code: 'ax-timeout', message: 'PRIVATE_TEXT' }))).toBe('ax-timeout')
+  expect(getComputerDiagnosticCode(createComputerNativeHostError({ code: 'PRIVATE_TEXT', message: 'PRIVATE_TEXT' }))).toBeNull()
+  expect(getComputerDiagnosticCode(Object.assign(new Error('PRIVATE_TEXT'), { code: 'PRIVATE_TEXT' }))).toBeNull()
+})
+
+test('Given 原生身份与读取失败 When 经跨进程错误映射 Then 保留固定诊断码且仍保守暂停', () => {
+  for (const code of ['process-identity', 'window-metadata', 'ax-budget', 'capture-failed', 'capture-too-large', 'visual-unavailable', 'event-create', 'input-too-large', 'invalid-request', 'unknown-method', 'owner-busy', 'owner-lock']) {
+    const error = createComputerNativeHostError({ code, message: 'PRIVATE_TEXT' })
+    expect(getComputerDiagnosticCode(error)).toBe(code)
+    expect(error.message).not.toContain('PRIVATE_TEXT')
+    expect(classifyComputerFailure({ code: error.code, phase: 'prepare' })).toBe('pause')
+  }
+})
 
 function host(code: string, maxLineBytes?: number): ComputerNativeHost {
   return new ComputerNativeHost(() => ({ executable: process.execPath, args: ['-e', `const r=require('node:readline').createInterface({input:process.stdin});r.on('line',line=>{const q=JSON.parse(line);if(q.method==='stop'){process.exit(0)};${code}})`] }), { maxLineBytes })

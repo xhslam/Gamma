@@ -220,7 +220,8 @@ func writeNativeComputerUseLog(
     errorCode: String? = nil,
     targetApp: [String: Any]? = nil,
     frontmostApp: [String: Any]? = nil,
-    focusedElement: [String: Any]? = nil
+    focusedElement: [String: Any]? = nil,
+    inputState: [String: Bool]? = nil
 ) {
     nativeLogQueue.async {
         let permissions = currentPermissionsDict()
@@ -243,6 +244,7 @@ func writeNativeComputerUseLog(
         if let targetApp = targetApp { payload["targetApp"] = targetApp }
         if let frontApp = frontApp { payload["frontmostApp"] = frontApp }
         if let focus = focus { payload["focusedElement"] = focus }
+        if let inputState { payload["inputState"] = inputState }
 
         appendNativeLog(payload)
     }

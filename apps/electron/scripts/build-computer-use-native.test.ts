@@ -76,7 +76,7 @@ macTest('Given纯离线入口 When编译并运行--self-test Then安全锁存/�
   }
 }, 150_000)
 
-macTest('Given 生产Engine watchdog When 列窗及prepare超过100ms Then 不误停且停止入口丢失仍立即暂停', () => {
+macTest('Given 生产Engine watchdog When 连续请求之间等待 Then 停止条常驻且入口丢失仍立即暂停', () => {
   const directory = mkdtempSync(resolve(tmpdir(), 'gamma-computer-engine-'))
   try {
     const plan = computerUseBuildPlan({ appDir, platform: 'darwin', hostArch: process.arch })!
@@ -109,8 +109,17 @@ func scenario(_ method: String, disappear: Bool) throws {
   if disappear { engine.ui.hideStop() }
   pump(0.24)
   require(engine.gate.isActive != disappear)
-  require(!engine.ui.hasVisibleStop)
+  require(engine.ui.hasVisibleStop != disappear)
+  if !disappear {
+    // 已结束的只读请求或可恢复prepare错误均不能隐藏停止入口。
+    pump(0.15); require(engine.ui.hasVisibleStop)
+    var next = request; next["id"] = "next-" + method
+    engine.handle(try JSONSerialization.data(withJSONObject: next))
+    require(engine.ui.hasVisibleStop); pump(0.36)
+    require(engine.gate.isActive && engine.ui.hasVisibleStop)
+  }
   engine.stop("fixture结束"); pump(0.02)
+  require(!engine.ui.hasVisibleStop)
 }
 try scenario("listWindows", disappear: false)
 try scenario("prepare", disappear: false)

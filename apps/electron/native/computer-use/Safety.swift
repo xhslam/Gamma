@@ -1,4 +1,9 @@
 import Foundation
+
+// 工具请求之间仍属于同一次桌面控制；只有租约和工作都结束后才隐藏停止入口。
+func shouldHideStopPanel(leaseActive: Bool, workActive: Bool, confirming: Bool) -> Bool {
+    !leaseActive && !workActive && !confirming
+}
 import CoreGraphics
 import ApplicationServices
 import Darwin
