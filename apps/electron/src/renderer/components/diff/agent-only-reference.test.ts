@@ -26,7 +26,11 @@ describe('Agent-only 预览引用和右侧辅助区', () => {
   })
 
   it('Given 右侧新增页菜单 When 打开 Then 没有退役的 Chat 问答入口', () => {
-    const menu = source('./DiffPanelTabBar.tsx')
+    const tabBar = source('./DiffPanelTabBar.tsx')
+    const menu = source('./RightWorkspaceAddMenu.tsx')
+    expect(tabBar).toContain('<RightWorkspaceAddMenu')
+    expect(tabBar).not.toContain('onOpenChat')
+    expect(tabBar).not.toContain('打开问答')
     expect(menu).not.toContain('onOpenChat')
     expect(menu).not.toContain('打开问答')
     expect(menu).toContain('打开项目记忆')
