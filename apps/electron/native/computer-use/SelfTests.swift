@@ -128,6 +128,31 @@ func runSelfTests() throws -> Int {
     try huge.append([UInt8](repeating: 32, count: 1024 * 1024)[...]) { _ in }
     try rejects("Given单行超出1MiB，Then终止输入") { try huge.append([32][...]) { _ in } }
     try rejects("Given空type动作，Then拒绝伪成功") { try Action(kind: "type", observationId: "obs", x: nil, y: nil, text: "", key: nil, deltaY: nil, elementRef: nil).validate() }
+    try expect(validatedAXScrollRange(current: 1, minimum: 0, maximum: 0, webKitScrollArea: true, offset: 230, extent: 230) == 0...1, "GivenSafari原生滚动条在底部且Min/Max为0，Then按WebKit契约采用归一化范围")
+    try expect(validatedAXScrollRange(current: 0, minimum: 0, maximum: 0, webKitScrollArea: true, offset: 0, extent: 230) == 0...1, "GivenSafari顶部几何一致，Then归一化范围有效")
+    try expect(validatedAXScrollRange(current: 0.5, minimum: 0, maximum: 0, webKitScrollArea: true, offset: 115, extent: 230) == 0...1, "GivenSafari中间位置几何一致，Then归一化范围有效")
+    try expect(validatedAXScrollRange(current: 4, minimum: 0, maximum: 10, webKitScrollArea: false, offset: 0, extent: 0) == 0...10, "Given明确数值范围，Then保留原范围")
+    for (current, minimum, maximum, webKit, offset, extent) in [
+        (1.0, 0.0, 0.0, false, 230.0, 230.0), (1, 0, 0, true, 0, 230),
+        (2, 0, 0, true, 230, 230), (0, 0, 0, true, 0, 0),
+        (0, 0, 0, true, -1, 230), (1, 0, 0, true, 231, 230),
+        (0, 0, 0, true, Double.nan, 230), (0, 2, 1, true, 0, 230),
+        (Double.nan, 0, 0, true, 0, 230),
+    ] {
+        try expect(validatedAXScrollRange(current: current, minimum: minimum, maximum: maximum, webKitScrollArea: webKit, offset: offset, extent: extent) == nil, "Given身份、范围或几何无法证实归一化契约，Then拒绝猜测")
+    }
+    try expect(axScrollDestination(current: 0, minimum: 0, maximum: 1, delta: -115, viewport: 704, content: 934) == 0.5, "Given归一化滚动条，Then负delta向下且按可滚动高度换算")
+    try expect(axScrollDestination(current: 1, minimum: 0, maximum: 1, delta: 115, viewport: 704, content: 934) == 0.5, "Given页面底部，Then正delta向上")
+    try expect(axScrollDestination(current: 0.5, minimum: 0, maximum: 1, delta: -1200, viewport: 704, content: 934) == 1, "Given滚动超出底部，Then只到已验证的最大位置")
+    try expect(axScrollDestination(current: 0.5, minimum: 0, maximum: 1, delta: 1200, viewport: 704, content: 934) == 0, "Given滚动超出顶部，Then只到已验证的最小位置")
+    for (current, minimum, maximum, delta, viewport, content) in [
+        (Double.nan, 0.0, 1.0, -300.0, 704.0, 934.0), (0, 0, 1, -300, 0, 934),
+        (0, 0, 1, -300, 704, 704), (0, 0, 1, -300, 704, 100),
+        (0, 1, 1, -300, 704, 934), (2, 0, 1, -300, 704, 934),
+        (0, 0, 1, -1201, 704, 934), (0, 0, 1, 0, 704, 934)
+    ] {
+        try expect(axScrollDestination(current: current, minimum: minimum, maximum: maximum, delta: delta, viewport: viewport, content: content) == nil, "Given范围或几何无法验证，Then不猜滚动位置")
+    }
     // 全部使用合成窗口、假时钟及假暂停，不实例化认证UI或读取真实桌面。
     var readinessTime: TimeInterval = 0
     var readinessChecks = 0

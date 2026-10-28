@@ -18,6 +18,12 @@ export class ComputerReobserveRequiredError extends Error {
   readonly reobserveRequired = true
   constructor(message: string, readonly countFailure = true) { super(message); this.name = 'ComputerReobserveRequiredError' }
 }
+interface ComputerStopDiagnostic {
+  action?: string
+  rawError: string
+  errorCode: string | null
+  outcome: string
+}
 
 export interface ComputerHost {
   call(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<unknown>
@@ -779,7 +785,7 @@ export class ComputerController {
     const needsApp = this.authManager.checkAppAuthorization(prepared.appName, prepared.bundleId, binding.runId) !== 'allowed'
     if (needsApp || risk.requiresConfirmation) {
       const confirmation = { leaseId: lease.leaseId, epoch: lease.epoch, preparationId: prepared.preparationId }
-      await this.operation(signal, () => this.host.call('confirmation', { ...confirmation, waiting: true }))
+      await this.operation(signal, () => this.host.call('confirmation', { ...confirmation, waiting: true }), { phase: 'confirmation' })
       this.publish({ phase: 'authorizing', message: `等待本地确认：${risk.requiresConfirmation ? risk.reason : prepared.appName}` })
       try {
         if (needsApp) await this.authManager.ensureAppAuthorized(prepared.appName, prepared.bundleId, binding.runId)
@@ -793,7 +799,8 @@ export class ComputerController {
         }
         this.verify(lease); this.requireRun(binding)
       } finally {
-        if (this.lease === lease && !this.stopping) await this.operation(signal, () => this.host.call('confirmation', { ...confirmation, waiting: false }))
+        // 确认与焦点恢复都在perform之前；只对原生明确的准备失败开放重新观察。
+        if (this.lease === lease && !this.stopping) await this.operation(signal, () => this.host.call('confirmation', { ...confirmation, waiting: false }), { phase: 'confirmation' })
       }
     }
     this.verify(lease); this.assertObservationSharing(binding)
@@ -844,7 +851,7 @@ export class ComputerController {
       time: new Date().toISOString(), event: code === 'unsafe-focus' ? 'unsafe-focus' : 'native-error',
       runId: this.actionOwner?.runId ?? this.lease?.binding?.runId ?? null, action: action ?? null,
       ...(privacy ? { rawError: '文本动作失败，已隐藏异常详情', errorCode: getComputerDiagnosticCode(error) } : nonTextErrorDetails(error)),
-      ...privacy, phase, outcome: outcome ?? (phase === 'prepare' || phase === 'read' || phase === 'select' ? 'not-dispatched' : 'unknown'),
+      ...privacy, phase, outcome: outcome ?? (phase === 'prepare' || phase === 'confirmation' || phase === 'read' || phase === 'select' ? 'not-dispatched' : 'unknown'),
       reason: disposition === 'pause' ? '原生操作失败或授权失效' : '准备未完成，请重新观察',
     })
     if (disposition !== 'pause') {
@@ -855,7 +862,10 @@ export class ComputerController {
       throw new ComputerReobserveRequiredError(message)
     }
     const reason = outcome === 'unknown' || outcome === 'outcome-unknown' ? '原生动作副作用未知，禁止自动重试，电脑操作已暂停' : '原生操作失败或授权失效'
-    await this.stop(reason, 'paused')
+    await this.stop(reason, 'paused', true, {
+      action, ...(privacy ? { rawError: '文本动作失败，已隐藏异常详情', errorCode: getComputerDiagnosticCode(error) } : nonTextErrorDetails(error)),
+      outcome: outcome ?? (phase === 'perform' || phase === 'after-dispatch' ? 'unknown' : 'not-dispatched'),
+    })
     if (outcome === 'unknown' || outcome === 'outcome-unknown') throw new ComputerRunPausedError(reason)
     throw error
   }
@@ -948,14 +958,14 @@ export class ComputerController {
     })
     void this.stop(finalReason, 'paused')
   }
-  stop(reason = '本地用户停止', finalPhase: 'disabled' | 'paused' = 'disabled', blockCurrentRun = true): Promise<ComputerState> {
+  stop(reason = '本地用户停止', finalPhase: 'disabled' | 'paused' = 'disabled', blockCurrentRun = true, diagnostic?: ComputerStopDiagnostic): Promise<ComputerState> {
     const logReason = this.activeTextLogPrivacy ? '文本动作已停止，已隐藏停止详情' : reason
     logComputerUseEvent({
       time: new Date().toISOString(), event: 'stop-before',
       runId: this.actionOwner?.runId ?? this.lease?.binding?.runId ?? null,
-      action: this.previewActivity?.action ?? null,
-      rawError: logReason, ...this.activeTextLogPrivacy, errorCode: null,
-      outcome: finalPhase, reason: logReason,
+      action: diagnostic?.action ?? this.previewActivity?.action ?? null,
+      rawError: this.activeTextLogPrivacy ? logReason : diagnostic?.rawError ?? logReason, ...this.activeTextLogPrivacy, errorCode: diagnostic?.errorCode ?? null,
+      outcome: diagnostic?.outcome ?? finalPhase, reason: logReason,
     })
     if (this.lease?.context.binding.sessionId) this.lastStopReason.set(this.lease.context.binding.sessionId, reason)
     if (this.actionOwner?.sessionId) this.lastStopReason.set(this.actionOwner.sessionId, reason)

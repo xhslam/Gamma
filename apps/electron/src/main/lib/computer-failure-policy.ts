@@ -1,6 +1,6 @@
 import type { ComputerPermission } from '@gamma/shared'
 
-export type ComputerFailurePhase = 'prepare' | 'read' | 'select' | 'perform' | 'after-dispatch'
+export type ComputerFailurePhase = 'prepare' | 'confirmation' | 'read' | 'select' | 'perform' | 'after-dispatch'
 export interface ComputerFailureEvidence {
   code?: string
   outcome?: string
@@ -30,7 +30,7 @@ export function classifyComputerFailure(evidence: ComputerFailureEvidence): Comp
   if (evidence.phase === 'after-dispatch' || evidence.outcome === 'unknown' || evidence.outcome === 'outcome-unknown'
     || evidence.outcome === 'dispatched-unverified' || (evidence.code && PAUSE_CODES.has(evidence.code))) return 'pause'
   const beforeDispatch = evidence.outcome === 'not-dispatched' || evidence.outcome === 'rejected'
-    || evidence.phase === 'prepare' || evidence.phase === 'read' || evidence.phase === 'select'
+    || evidence.phase === 'prepare' || evidence.phase === 'confirmation' || evidence.phase === 'read' || evidence.phase === 'select'
   if (!beforeDispatch) return 'pause'
   if (evidence.code === 'permission-required' || evidence.code === 'screen-capture-required' || evidence.code === 'listen-denied') return 'permission'
   if (evidence.outcome === 'not-dispatched' || (evidence.code && REOBSERVE_CODES.has(evidence.code))) return 'reobserve'
