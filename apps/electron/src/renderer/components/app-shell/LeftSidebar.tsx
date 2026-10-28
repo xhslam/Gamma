@@ -2267,6 +2267,11 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     return rows
   }, [sidebarRowHeight, activeDelegationSessionId, activeSessionId, agentIndicatorMap, archivedAgentSessionProjectGroups, collapsedDelegationParentIds, currentWorkspaceId, expandedArchivedProjectIds, expandedDelegationParentIds, handleAgentRename, handleRequestDelete, handleRequestMove, handleSelectAgentSession, handleToggleArchiveAgent, handleToggleArchivedProject, handleToggleDelegationParent, handleTogglePinAgent, handleToggleStarAgent, relativeTimeNow, sessionHoverPreviewEnabled, workspaceNameMap])
 
+  const hasExpandedProject = React.useMemo(
+    () => displayProjectGroups.some((group) => !collapsedWorkspaceIds.has(group.workspace.id)),
+    [displayProjectGroups, collapsedWorkspaceIds]
+  )
+
   const agentActiveVirtualRows = React.useMemo<VirtualSidebarRow[]>(() => {
     if (viewMode !== 'active') return []
     const rows: VirtualSidebarRow[] = []
@@ -2374,90 +2379,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       }
     }
 
-    const hasExpandedProject = displayProjectGroups.some((group) => !collapsedWorkspaceIds.has(group.workspace.id))
 
-    rows.push({
-      id: 'agent-project-heading',
-      estimateSize: 40,
-      content: (
-        <div className="px-2 pt-2 pb-1 flex items-center justify-between">
-          <span className="px-2 text-xs font-medium leading-5 text-muted-foreground select-none">项目</span>
-          <div className="flex items-center gap-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button data-icon-button="true"
-                  type="button"
-                  disabled={!hasExpandedProject}
-                  onClick={() => {
-                    setCollapsedWorkspaceIds((prev) => {
-                      const next = new Set(prev)
-                      for (const group of displayProjectGroups) next.add(group.workspace.id)
-                      return next
-                    })
-                  }}
-                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag disabled:opacity-30 disabled:pointer-events-none"
-                  aria-label="折叠所有项目"
-                >
-                  <ChevronsDownUp size={15} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">折叠所有项目</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button data-icon-button="true"
-                  type="button"
-                  onClick={() => void handleCreateProjectFromFolder()}
-                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
-                  aria-label="从本地文件夹创建项目"
-                >
-                  <FolderInput size={15} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">从本地文件夹创建项目</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button data-icon-button="true"
-                  type="button"
-                  onClick={handleStartCreateProject}
-                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
-                  aria-label="新建空白项目"
-                >
-                  <Plus size={15} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">新建空白项目</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      ),
-    })
-
-    if (creatingProject) {
-      rows.push({
-        id: 'agent-project-create',
-        estimateSize: 36,
-        content: (
-          <div className="flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md bg-foreground/[0.04]">
-            <FolderOpen size={14} className="flex-shrink-0 text-foreground/40" />
-            <input
-              ref={newProjectInputRef}
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              onKeyDown={handleCreateProjectKeyDown}
-              onBlur={() => {
-                setCreatingProject(false)
-                setNewProjectName('')
-              }}
-              placeholder="项目名称..."
-              className="flex-1 min-w-0 bg-transparent text-[13px] text-foreground border-b border-primary/50 outline-none px-0.5"
-              maxLength={50}
-            />
-          </div>
-        ),
-      })
-    }
 
     for (const group of displayProjectGroups) {
       const isAuto = group.workspace.id === AUTOMATION_GROUP_ID
@@ -2714,6 +2636,82 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           />
         )}
       </nav>
+
+      {/* 活跃视图下固定在工作区导航下方的项目操作栏：不随下方列表滑动而改变 */}
+      {viewMode === 'active' && (
+        <div className="shrink-0 px-2 pt-2 pb-1 flex items-center justify-between">
+          <span className="px-2 text-xs font-medium leading-5 text-muted-foreground select-none">项目</span>
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button data-icon-button="true"
+                  type="button"
+                  disabled={!hasExpandedProject}
+                  onClick={() => {
+                    setCollapsedWorkspaceIds((prev) => {
+                      const next = new Set(prev)
+                      for (const group of displayProjectGroups) next.add(group.workspace.id)
+                      return next
+                    })
+                  }}
+                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag disabled:opacity-30 disabled:pointer-events-none"
+                  aria-label="折叠所有项目"
+                >
+                  <ChevronsDownUp size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">折叠所有项目</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button data-icon-button="true"
+                  type="button"
+                  onClick={() => void handleCreateProjectFromFolder()}
+                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
+                  aria-label="从本地文件夹创建项目"
+                >
+                  <FolderInput size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">从本地文件夹创建项目</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button data-icon-button="true"
+                  type="button"
+                  onClick={handleStartCreateProject}
+                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
+                  aria-label="新建空白项目"
+                >
+                  <Plus size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">新建空白项目</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'active' && creatingProject && (
+        <div className="shrink-0 px-2 pb-1">
+          <div className="flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md bg-foreground/[0.04]">
+            <FolderOpen size={14} className="flex-shrink-0 text-foreground/40" />
+            <input
+              ref={newProjectInputRef}
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              onKeyDown={handleCreateProjectKeyDown}
+              onBlur={() => {
+                setCreatingProject(false)
+                setNewProjectName('')
+              }}
+              placeholder="项目名称..."
+              className="flex-1 min-w-0 bg-transparent text-[13px] text-foreground border-b border-primary/50 outline-none px-0.5"
+              maxLength={50}
+            />
+          </div>
+        </div>
+      )}
 
 
       {/* 原生与虚拟列表共享顶部反馈，切换视图时不沿用上一列表的滚动状态。 */}

@@ -382,3 +382,27 @@ describe('Given Computer Use 已改为按需工具', () => {
     expect(results).toEqual(Array.from({ length: 2 }, () => ({ noMode: true, noResume: true, noCalls: true })))
   }, 30_000)
 })
+
+describe('Given 固定不随滚动改变的项目操作栏', () => {
+  test('When 侧栏列表向上滚动时 Then 项目操作栏与快捷入口位置保持固定且不位于滚动容器内', async () => {
+    const result = await renderer.run<{ outsideScroll: boolean; topBefore: number; topAfter: number; stable: boolean }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const fixture = await api.mount({ agents: Array.from({ length: 30 }, (_, i) => ({
+        id: 'scroll-test-' + i, title: '长列表会话 ' + i, workspaceId: 'project-a', createdAt: now, updatedAt: now - i,
+      })) });
+      const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+      const collapseBtn = fixture.button('折叠所有项目');
+      const outsideScroll = !scroll.contains(collapseBtn);
+      const topBefore = collapseBtn.getBoundingClientRect().top;
+      scroll.scrollTop = 200;
+      await api.delay(60);
+      const topAfter = collapseBtn.getBoundingClientRect().top;
+      const stable = topBefore === topAfter;
+      fixture.root.unmount();
+      return { outsideScroll, topBefore: Math.round(topBefore), topAfter: Math.round(topAfter), stable };
+    `)
+    expect(result.outsideScroll).toBe(true)
+    expect(result.stable).toBe(true)
+    expect(result.topAfter).toBe(result.topBefore)
+  }, 30_000)
+})

@@ -37,3 +37,15 @@ describe('Given 完全收起的左侧导航', () => {
     expect(shellSource).not.toContain('COLLAPSED_LEFT_SIDEBAR_WIDTH')
   })
 })
+
+describe('Given 侧边栏项目标题与操作栏', () => {
+  test('When 渲染活跃视图 Then 项目操作栏位于滚动容器之外作为固定头部，不随会话列表滚动改变', () => {
+    expect(sidebarSource).not.toContain("id: 'agent-project-heading'")
+    expect(sidebarSource).not.toContain("id: 'agent-project-create'")
+    expect(sidebarSource).toContain("viewMode === 'active' && (")
+    expect(sidebarSource).toContain('<span className="px-2 text-xs font-medium leading-5 text-muted-foreground select-none">项目</span>')
+    expect(sidebarSource).toContain('aria-label="折叠所有项目"')
+    expect(sidebarSource).toContain('aria-label="从本地文件夹创建项目"')
+    expect(sidebarSource).toContain('aria-label="新建空白项目"')
+  })
+})
