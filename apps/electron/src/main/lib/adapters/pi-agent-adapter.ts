@@ -11,7 +11,7 @@ import { classifyComputerValidationFailure } from './pi-computer-validation-log'
 
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence, hasComputerObservationContent, stripComputerObservationContent, withComputerSharingFence } from './pi-computer-context'
+import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence, hasComputerObservationContent, stripComputerObservationContent, withComputerSharingFence, installComputerInterruptionHooks, computerPermissionInterruption } from './pi-computer-context'
 import type { ComputerPrivateObservation } from '@gamma/shared'
 import { spawn } from 'node:child_process'
 import type { Dispatcher } from 'undici'
@@ -79,6 +79,7 @@ import { injectConversationReferencesContext } from '../conversation-reference/c
 import { sanitizePiMessageImageContent, sanitizeToolResultImageContent } from '../image-content-validation'
 import {
   convertPiMessage,
+  convertComputerInterruptionNotice,
   convertResultMessage,
   displayToolName,
   dropTrailingAbortedAssistant,
@@ -843,6 +844,8 @@ function wrapToolWithPermission<TParams extends TSchema, TDetails, TState>(
           description: definition.description,
         })
         if (permission.behavior === 'deny') {
+          const interruption = computerPermissionInterruption(definition.name, permission.message)
+          if (interruption) return interruption as AgentToolResult<TDetails>
           throw new Error(permission.message)
         }
         updatedParams = restorePiInput(definition.name, rawInput, permission.updatedInput)
@@ -1798,6 +1801,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       )
       installRuntimeGuardHooks(session, runtimeGuard)
       installCurrentSessionCompactionHooks(session)
+      installComputerInterruptionHooks(session.agent)
       active.session = session
       active.queuedMessageReceipts = new PiQueuedMessageReceiptTracker(session.agent, (error) => queue.fail(error))
       resolveActiveReady(active, session)
@@ -1960,6 +1964,8 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                 session.sessionId,
                 runtimeGuard.getResultOverride(event.messages),
               )
+              const computerNotice = convertComputerInterruptionNotice(event.messages, session.sessionId)
+              if (computerNotice) queue.push(computerNotice)
               pendingTerminalResult = terminalResult
               completedAgentTurnPendingCompaction = shouldMarkCompactionAfterCompletedTurn(
                 terminalResult,

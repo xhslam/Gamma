@@ -197,7 +197,15 @@ func windowAt(_ point: CGPoint) throws -> Target {
         guard let w = WindowMetadata(item) else { throw NativeFailure("window-metadata", "窗口元数据不完整") }
         guard w.onScreen, w.alpha > 0, w.bounds.contains(point) else { continue }
         // 不穿透Gamma/系统弹窗/透明遮挡去授权后面的应用。
-        guard !isGammaPID(w.pid), let app = NSRunningApplication(processIdentifier: w.pid), app.activationPolicy == .regular, let bundle = app.bundleIdentifier else { throw NativeFailure("untrusted-surface", "落点属于Gamma或无法授权的系统界面") }
+        let application = NSRunningApplication(processIdentifier: w.pid)
+        guard !isGammaPID(w.pid), let app = application, app.activationPolicy == .regular, let bundle = app.bundleIdentifier else {
+            writeNativeComputerUseLog(location: "Desktop.swift:windowAt:blocked", rawError: "落点属于Gamma或无法授权的系统界面", errorCode: "untrusted-surface", targetApp: [
+                "pid": w.pid, "bundleId": application?.bundleIdentifier ?? "", "windowId": w.id, "layer": w.layer,
+                "frame": ["x": w.bounds.minX, "y": w.bounds.minY, "width": w.bounds.width, "height": w.bounds.height],
+                "point": ["x": point.x, "y": point.y]
+            ])
+            throw NativeFailure("untrusted-surface", "落点属于Gamma或无法授权的系统界面")
+        }
         return Target(windowId: w.id, pid: w.pid, processIdentity: try processIdentity(w.pid), bundleId: bundle, title: item[kCGWindowName] as? String ?? "", bounds: Rect(w.bounds))
     }
     throw NativeFailure("unknown-target", "落点没有可验证的应用窗口")
@@ -283,9 +291,20 @@ func isOwnEvent(tag: Int64, sourcePID: Int64, expectedTag: Int64 = HELPER_EVENT_
 func validateInputEnvironment() throws {
     guard AXIsProcessTrusted() else { throw NativeFailure("permission-required", "请在系统辅助功能中允许Gamma控制电脑", permission: "accessibility") }
     guard !IsSecureEventInputEnabled() else { throw NativeFailure("secure-input", "系统安全输入禁止注入，未投递动作") }
-    guard CGEventSource.flagsState(.combinedSessionState).intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand]).isEmpty,
-          !(0..<128).contains(where: { CGEventSource.keyState(.combinedSessionState, key: CGKeyCode($0)) }),
-          ![CGMouseButton.left, .right, .center].contains(where: { CGEventSource.buttonState(.combinedSessionState, button: $0) }) else { throw NativeFailure("input-held", "存在按住的物理按键或鼠标按钮") }
+    let modifiers: CGEventFlags = [.maskShift, .maskControl, .maskAlternate, .maskCommand]
+    let sessionModifiers = !CGEventSource.flagsState(.combinedSessionState).intersection(modifiers).isEmpty
+    let sessionKeys = (0..<128).contains { CGEventSource.keyState(.combinedSessionState, key: CGKeyCode($0)) }
+    let sessionButtons = [CGMouseButton.left, .right, .center].contains { CGEventSource.buttonState(.combinedSessionState, button: $0) }
+    guard !sessionModifiers, !sessionKeys, !sessionButtons else {
+        // 只记录类别布尔值，绝不记录用户按下了哪个键或任何输入文本。
+        writeNativeComputerUseLog(location: "Desktop.swift:validateInputEnvironment:held", errorCode: "input-held", inputState: [
+            "sessionModifiers": sessionModifiers, "sessionKeys": sessionKeys, "sessionButtons": sessionButtons,
+            "hardwareModifiers": !CGEventSource.flagsState(.hidSystemState).intersection(modifiers).isEmpty,
+            "hardwareKeys": (0..<128).contains { CGEventSource.keyState(.hidSystemState, key: CGKeyCode($0)) },
+            "hardwareButtons": [CGMouseButton.left, .right, .center].contains { CGEventSource.buttonState(.hidSystemState, button: $0) }
+        ])
+        throw NativeFailure("input-held", "存在按住的按键或鼠标按钮（包括会话合成状态），未投递动作")
+    }
 }
 struct MouseStep { let type: CGEventType; let point: CGPoint; let button: CGMouseButton; let clickState: Int64 }
 func mouseSteps(_ action: Action, snapshot: Snapshot) throws -> [MouseStep] {
@@ -314,14 +333,20 @@ func unicodeEventChunks(_ text: String) -> [[UInt16]] {
     }
     if !chunk.isEmpty { result.append(chunk) }; return result
 }
+// 合并会话状态也包含本 helper 的合成事件；释放快捷键时必须移除自己引入的修饰键。
+// 真实硬件仍按住的修饰键保留，不能把用户的按键状态一并清空。
+func shortcutReleaseFlags(synthetic: CGEventFlags, session: CGEventFlags, hardware: CGEventFlags) -> CGEventFlags {
+    session.subtracting(synthetic.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])).union(hardware)
+}
 final class EventDispatcher {
     private let lock = NSLock()
     private var release: CGEvent?
+    private var releaseModifiers: CGEventFlags = []
     private func tag(_ event: CGEvent) { event.setIntegerValueField(.eventSourceUserData, value: HELPER_EVENT_TAG) }
-    private func post(_ event: CGEvent, release nextRelease: CGEvent?, validate: () throws -> Void, commit: (() -> Void) throws -> Void) throws {
+    private func post(_ event: CGEvent, release nextRelease: CGEvent?, modifiers: CGEventFlags = [], validate: () throws -> Void, commit: (() -> Void) throws -> Void) throws {
         try validate()
         lock.lock(); defer { lock.unlock() }
-        try commit { release = nextRelease; tag(event); event.post(tap: .cgSessionEventTap) }
+        try commit { release = nextRelease; releaseModifiers = modifiers; tag(event); event.post(tap: .cgSessionEventTap) }
     }
     func post(_ action: Action, snapshot: Snapshot, expectedPID: pid_t? = nil, scrollPoint: CGPoint? = nil, validate: () throws -> Void, commit: (() -> Void) throws -> Void) throws {
         let source = CGEventSource(stateID: .privateState); source?.localEventsSuppressionInterval = 0
@@ -381,12 +406,20 @@ final class EventDispatcher {
                     units.withUnsafeBufferPointer { ptr in down.keyboardSetUnicodeString(stringLength: units.count, unicodeString: ptr.baseAddress!); up.keyboardSetUnicodeString(stringLength: units.count, unicodeString: ptr.baseAddress!) }
                 }
                 tag(up)
-                try post(down, release: up, validate: validate, commit: commit)
+                try post(down, release: up, modifiers: flags, validate: validate, commit: commit)
+                up.flags = shortcutReleaseFlags(synthetic: flags, session: CGEventSource.flagsState(.combinedSessionState), hardware: CGEventSource.flagsState(.hidSystemState))
                 try post(up, release: nil, validate: validate, commit: commit)
             }
         }
     }
-    func releaseAll() { lock.lock(); defer { lock.unlock() }; release?.post(tap: .cgSessionEventTap); release = nil }
+    func releaseAll() {
+        lock.lock(); defer { lock.unlock() }
+        if let release {
+            release.flags = shortcutReleaseFlags(synthetic: releaseModifiers, session: CGEventSource.flagsState(.combinedSessionState), hardware: CGEventSource.flagsState(.hidSystemState))
+            release.post(tap: .cgSessionEventTap)
+        }
+        release = nil; releaseModifiers = []
+    }
 }
 
 final class SafetyMonitor {

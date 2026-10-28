@@ -42,8 +42,8 @@ final class Engine {
         mutex.lock(); if workCount == 0 { owner.release() }; mutex.unlock()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard !self.gate.isActive else { return }
             self.ui.cancelAll()
-            self.ui.hideStop()
         }
         worker.async { [weak self] in if self?.gate.isActive == false { self?.prepared = nil } }
         if active { writer.emit(StoppedEvent(reason: String(reason.prefix(200)))) }
@@ -59,13 +59,24 @@ final class Engine {
         if Thread.isMainThread { begin() } else { DispatchQueue.main.sync(execute: begin) }
     }
     private func hideStopIfIdle() {
-        DispatchQueue.main.async { [self] in if !isExecutingAction && !gate.isConfirming { ui.hideStop() } }
+        DispatchQueue.main.async { [self] in
+            if shouldHideStopPanel(leaseActive: gate.isActive, workActive: isExecutingAction, confirming: gate.isConfirming) {
+                ui.hideStop()
+            } else if gate.isActive && !isExecutingAction && !gate.isConfirming {
+                ui.setStatus("等待下一步 · 人工输入将暂停")
+            }
+        }
     }
     private func endWork() { gate.endWork(); mutex.lock(); workCount -= 1; if !gate.isActive && workCount == 0 { owner.release() }; mutex.unlock(); hideStopIfIdle() }
     private func done(_ id: String) { mutex.lock(); outstanding.remove(id); mutex.unlock() }
     private func failure(_ id: String, _ error: Error) { writer.failure(id, error); done(id) }
     private func success<T: Encodable>(_ id: String, _ value: T) { writer.success(id, value); done(id) }
-    private func state(_ text: String) { DispatchQueue.main.async { [weak self] in self?.ui.setStatus(text) } }
+    private func state(_ text: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.gate.isActive else { return }
+            self.ui.setStatus(text)
+        }
+    }
     private func status() -> Status {
         let permissions = Permissions(accessibility: AXIsProcessTrusted(), screen: CGPreflightScreenCaptureAccess(), listen: CGPreflightListenEventAccess(), post: CGPreflightPostEventAccess())
         let supported: Bool

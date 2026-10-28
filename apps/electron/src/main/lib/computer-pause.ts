@@ -20,3 +20,11 @@ export function getComputerPauseReason(error: unknown): string | undefined {
 export function computerPausedToolMessage(reason = '未提供停止原因'): string {
   return `本轮电脑操作已暂停（原因：${reason}）。不要再调用 computer 工具；请向用户说明情况并等待新的消息。`
 }
+
+/** 仅识别门禁生成的完整协议文案，不把任意工具拒绝当成电脑安全暂停。 */
+export function getComputerPausedToolReason(message: string): string | undefined {
+  const prefix = '本轮电脑操作已暂停（原因：'
+  const suffix = '）。不要再调用 computer 工具；请向用户说明情况并等待新的消息。'
+  return message.startsWith(prefix) && message.endsWith(suffix) && message.length > prefix.length + suffix.length
+    ? message.slice(prefix.length, -suffix.length) : undefined
+}

@@ -100,6 +100,7 @@ describe('Pi computer 工具中断结果与错误处理', () => {
     expect(result.details?.reason).toBe('检测到用户接管或原生安全门暂停')
     expect(result.content[0]?.text).toContain('桌面操作已中断')
     expect(result.content[0]?.text).toContain('不会自动重放旧动作')
+    expect(result).toMatchObject({ isError: true, terminate: true })
   })
 
   test('Given 操作被手动停止 When execute 执行 Then 返回手动停止原因', async () => {
@@ -122,5 +123,17 @@ describe('Pi computer 工具中断结果与错误处理', () => {
     expect(result.details?.interrupted).toBe(true)
     expect(result.details?.reason).toBe('用户点击独立原生停止按钮')
     expect(result.content[0]?.text).toContain('桌面操作已中断：用户点击独立原生停止按钮')
+    expect(result).toMatchObject({ isError: true, terminate: true })
+  })
+
+  test('Given 动作明确未投递 When 请求重新观察 Then 标记失败但允许模型继续观察', async () => {
+    const mockController = {
+      executeAutonomousAction: async () => { throw new ComputerReobserveRequiredError('元素已失效，动作未投递，请重新观察') },
+    } as unknown as ComputerController
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController).find(t => t.name === 'computer')!
+    const output = await tool.execute('recoverable', { action: 'click' }, undefined, undefined, {} as never)
+    expect(output.isError).toBe(true)
+    expect(output.terminate).not.toBe(true)
+    expect(output.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('reobserveRequired') })
   })
 })

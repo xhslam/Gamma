@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { ComputerNativeHostError, createComputerNativeHostError, getNativeErrorDetails } from './computer-native-host'
+import { ComputerNativeHostError, createComputerNativeHostError, getNativeErrorDetails, getComputerDiagnosticCode } from './computer-native-host'
 import { classifyComputerFailure, missingComputerPermissionMessage, type ComputerFailurePhase } from './computer-failure-policy'
 import { ComputerRunPausedError, computerPausedToolMessage } from './computer-pause'
 
@@ -843,8 +843,8 @@ export class ComputerController {
     logComputerUseEvent({
       time: new Date().toISOString(), event: code === 'unsafe-focus' ? 'unsafe-focus' : 'native-error',
       runId: this.actionOwner?.runId ?? this.lease?.binding?.runId ?? null, action: action ?? null,
-      ...(privacy ? { rawError: '文本动作失败，已隐藏异常详情', errorCode: null } : nonTextErrorDetails(error)),
-      ...privacy, outcome: outcome ?? (phase === 'prepare' || phase === 'read' || phase === 'select' ? 'not-dispatched' : 'unknown'),
+      ...(privacy ? { rawError: '文本动作失败，已隐藏异常详情', errorCode: getComputerDiagnosticCode(error) } : nonTextErrorDetails(error)),
+      ...privacy, phase, outcome: outcome ?? (phase === 'prepare' || phase === 'read' || phase === 'select' ? 'not-dispatched' : 'unknown'),
       reason: disposition === 'pause' ? '原生操作失败或授权失效' : '准备未完成，请重新观察',
     })
     if (disposition !== 'pause') {

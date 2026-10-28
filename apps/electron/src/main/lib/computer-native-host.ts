@@ -62,6 +62,18 @@ const NATIVE_REASONS: Readonly<Record<string, string>> = {
   'focus-unknown': '窗口聚焦结果无法确认，禁止自动重试',
   'ax-write-unknown': '辅助功能写操作结果无法确认，禁止自动重试',
   'post-action-not-settled': '动作已投递但桌面未稳定，禁止自动重试',
+  'process-identity': '无法验证目标进程身份或用户，电脑操作已暂停',
+  'window-metadata': '窗口元数据不完整或超过预算，无法核验目标',
+  'ax-budget': '辅助功能内容超过读取预算',
+  'capture-failed': '无法获取屏幕图像',
+  'capture-too-large': '屏幕图像超过读取预算',
+  'visual-unavailable': '当前没有可用屏幕图像，请使用辅助功能观察',
+  'event-create': '无法构造系统输入事件，不能确认操作结果',
+  'input-too-large': '原生请求超过输入预算',
+  'invalid-request': '原生请求格式无效',
+  'unknown-method': '不支持的原生请求方法',
+  'owner-busy': '其他原生实例正在占用桌面控制权',
+  'owner-lock': '无法验证桌面控制互斥锁',
 }
 const STOP_REASONS = new Set([
   '检测到用户操作，桌面控制已暂停', '紧急停止快捷键', '用户点击独立原生停止按钮',
@@ -80,6 +92,10 @@ export class ComputerNativeHostError extends Error {
 /** 原生原文仅供受隐私策略约束的内部日志使用，不暴露给用户或序列化错误。 */
 export function getNativeErrorDetails(error: ComputerNativeHostError): NativeErrorDetails | undefined {
   return nativeErrorDetails.get(error)
+}
+/** 文本动作也可记录固定错误码，但绝不记录原生原文或未知错误码。 */
+export function getComputerDiagnosticCode(error: unknown): string | null {
+  return error instanceof ComputerNativeHostError && Object.hasOwn(NATIVE_REASONS, error.code) ? error.code : null
 }
 /** 只接受已知错误码/权限；原生错误原文留在进程内诊断字段中。 */
 export function createComputerNativeHostError(detail: Record<string, unknown>, outcome?: string): ComputerNativeHostError {
