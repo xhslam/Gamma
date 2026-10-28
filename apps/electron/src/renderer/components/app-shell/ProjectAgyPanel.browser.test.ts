@@ -8,7 +8,7 @@ beforeAll(async () => {
     import {agentSidePanelSplitMapAtom as layoutSplitAtom,agentSidePanelSplitRatioMapAtom as layoutRatioAtom} from '@/atoms/agent-atoms';
     window.agyPanel.setSavedSplit=ratio=>{
       store.set(layoutRatioAtom,{'s-a':ratio});
-      store.set(layoutSplitAtom,new Map([['s-a',{leftTab:'files',rightTab:'agy-terminal',focusedPane:'right',ratio}]]));
+      store.set(layoutSplitAtom,new Map([['s-a',{leftTab:window.agyPanel.previewTab,rightTab:'agy-terminal',focusedPane:'right',ratio}]]));
     };
     window.agyPanel.savedSplitRatio=()=>store.get(layoutRatioAtom)['s-a'];
   `)
@@ -68,7 +68,7 @@ describe('真实项目 AGY 工作区集成', () => {
     const measured = await renderer.run<{ split: boolean; narrowCols: number; fullCols: number; launched: number; kills: number; errors: string[] }>(`
       const api=window.agyPanel;await api.boot();
       api.stage='initial-resize';await api.until(()=>api.resizes.length>0);const fullCols=api.resizes.at(-1).cols;
-      api.stage='select-files';api.tab('文件').click();await api.until(()=>api.selected()==='文件');
+      api.stage='open-file';await api.openFile();
       api.stage='drag';await api.dragToRight();
       try { await api.until(()=>document.querySelector('section[aria-label="右侧 Pane：agy-terminal"]') && document.querySelector('.xterm-helper-textarea')); }
       catch(error){throw new Error(String(error)+' DRAG='+JSON.stringify(api.dragDebug));}
@@ -83,10 +83,10 @@ describe('真实项目 AGY 工作区集成', () => {
 
   test('Given 720px外框与保存比例0.3/0.7 When 恢复分屏并用键盘调整 Then 按实际内宽保留320px且ARIA范围有效', async () => {
     const results = await renderer.run<Array<{ left: number; right: number; valid: boolean; stored: number; requested: number }>>(`
-      const api=window.agyPanel;await api.boot();const results=[];
+      const api=window.agyPanel;await api.boot();await api.openFile();const results=[];
       const measure=requested=>{
         const handle=document.querySelector('[role="separator"][aria-label^="调整并排宽度"]');
-        const left=document.querySelector('section[aria-label="左侧 Pane：files"]').getBoundingClientRect().width,right=document.querySelector('section[aria-label="右侧 Pane：agy-terminal"]').getBoundingClientRect().width;
+        const left=document.querySelector('section[aria-label^="左侧 Pane：preview:"]').getBoundingClientRect().width,right=document.querySelector('section[aria-label="右侧 Pane：agy-terminal"]').getBoundingClientRect().width;
         const min=Number(handle.getAttribute('aria-valuemin')),max=Number(handle.getAttribute('aria-valuemax')),now=Number(handle.getAttribute('aria-valuenow'));
         return {left,right,valid:now>=min&&now<=max,stored:api.savedSplitRatio(),requested};
       };

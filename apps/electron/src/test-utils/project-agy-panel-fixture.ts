@@ -15,6 +15,9 @@ import {
 import { activeViewAtom } from '@/atoms/active-view'
 import { tabsAtom, activeTabIdAtom } from '@/atoms/tab-atoms'
 import { projectAgyTerminalsAtom } from '@/atoms/project-agy-terminal-atoms'
+import { getPreviewFileId } from '@/atoms/preview-atoms'
+import { getPreviewSidePanelTab } from '@/atoms/agent-atoms'
+import { openPreviewInStore } from '@/components/diff/preview-opener'
 import '@/styles/globals.css'
 
 localStorage.clear()
@@ -42,6 +45,8 @@ store.set(currentAgentSessionIdAtom,'s-a');store.set(currentAgentWorkspaceIdAtom
 store.set(agentSessionPathMapAtom,new Map([['s-a','C:/session-a'],['s-b','C:/session-b']]))
 store.set(tabsAtom,[{id:'s-a',sessionId:'s-a',title:'会话A',type:'agent'}]);store.set(activeTabIdAtom,'s-a')
 store.set(agentSidePanelOpenAtomFamily('s-a'),true)
+const previewFile={filePath:'fixture.txt',dirPath:'C:/Project A',previewOnly:true,readOnly:true}
+const previewTab=getPreviewSidePanelTab(getPreviewFileId(previewFile))
 const opens=[],kills=[],writes=[],resizes=[],shellCreates=[]
 const states=new Map(),byProject=new Map(),outputs=new Set(),exits=new Set(),closes=new Set()
 let counter=0, exitBeforeOpenReturns=false
@@ -53,6 +58,8 @@ window.electronAPI={
   getWorkspaceDirectories:async()=>[],getWorkspaceAttachedFiles:async()=>[],
   getWorkspaceFilesPath:async slug=>workspaces.find(w=>w.slug===slug).projectRootPath,
   listDirectory:async()=>[],listAttachedDirectory:async()=>[],getAgentBrowserState:async()=>null,
+  resolveAndReadFile:async()=>({absolutePath:'C:/Project A/fixture.txt',content:'AGY 分屏文件预览',size:24}),
+  getDefaultAppForFile:async()=>null,
   onAttachedDirectoryChanged:()=>()=>{},onWorkspaceFilesChanged:()=>()=>{},
   onAgentTerminalOpen:()=>()=>{},onAgentTerminalClose:subscribe(closes),
   onTerminalOutput:subscribe(outputs),onTerminalExit:subscribe(exits),
@@ -91,14 +98,16 @@ window.agyPanel={
   click:label=>{const button=[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===label);if(!button)throw new Error('找不到按钮'+label);button.click()},
   selectProjectOnly:id=>store.set(currentAgentWorkspaceIdAtom,id),
   switchSession:id=>{store.set(currentAgentSessionIdAtom,id);store.set(agentSidePanelOpenAtomFamily(id),true);store.set(tabsAtom,[{id,sessionId:id,title:id,type:'agent'}]);store.set(activeTabIdAtom,id)},
-  setSplit:()=>store.set(agentSidePanelSplitMapAtom,new Map([['s-a',{leftTab:'files',rightTab:'agy-terminal',focusedPane:'right',ratio:0.5}]])),
+  previewTab,
+  openFile:async()=>{openPreviewInStore(store,'s-a',previewFile);await until(()=>window.agyPanel.tab('fixture.txt') && window.agyPanel.selected()==='fixture.txt')},
+  setSplit:()=>store.set(agentSidePanelSplitMapAtom,new Map([['s-a',{leftTab:previewTab,rightTab:'agy-terminal',focusedPane:'right',ratio:0.5}]])),
   collapseSplit:()=>store.set(agentSidePanelSplitMapAtom,new Map()),
   emitQuery:id=>{const snapshot=states.get(id);snapshot.sequence++;outputs.forEach(fn=>fn({terminalId:id,sequence:snapshot.sequence,data:'\x1b[6n'}))},
   closePanel:()=>store.set(agentSidePanelOpenAtomFamily(store.get(currentAgentSessionIdAtom)),false),
   openPanel:()=>store.set(agentSidePanelOpenAtomFamily(store.get(currentAgentSessionIdAtom)),true),
   size:width=>setPanelWidth(width),
   exit:id=>{const snapshot=states.get(id);snapshot.exitCode=0;exits.forEach(fn=>fn({terminalId:id,exitCode:0}))},
-  boot:async()=>{await until(()=>document.querySelector('nav[aria-label="工作区"] button[aria-label="AGY"]'));document.querySelector('nav[aria-label="工作区"] button[aria-label="AGY"]').click();await until(()=>document.querySelector('[role="alertdialog"]'));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='接受风险并启动').click();await until(()=>!document.querySelector('[role="alertdialog"]')&&document.querySelector('.xterm-helper-textarea'));await delay()},
+  boot:async()=>{await until(()=>document.querySelector('nav[aria-label="工作区"] button[aria-label="AGY"]'));document.querySelector('nav[aria-label="工作区"] button[aria-label="AGY"]').click();await until(()=>document.querySelector('[role="alertdialog"]'));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='接受风险并启动').click();await until(()=>!document.querySelector('[role="alertdialog"]')&&document.querySelector('.xterm-helper-textarea'));await until(()=>document.querySelector('.xterm')?.textContent.includes('AGY_READY'))},
   dragToRight:async()=>{
     const tab=[...document.querySelectorAll('[role="tab"]')].find(node=>node.textContent.trim()==='AGY');
     const content=document.querySelector('[data-testid="right-workspace-content"]') ?? document.querySelector('[role="tablist"]').closest('.titlebar-drag-region').lastElementChild;
