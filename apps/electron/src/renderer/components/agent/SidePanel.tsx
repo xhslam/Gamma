@@ -1512,12 +1512,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     })
   }, [persistSplitRatio, sessionId, setSplitMap, split])
 
-  const resetSplitRatio = React.useCallback(() => {
-    if (!split) return
-    updateSplit({ ...split, ratio: 0.5 })
-    persistSplitRatio(0.5)
-  }, [persistSplitRatio, split, updateSplit])
-
   const renderFileSourceContent = (scope: 'session' | 'project'): React.ReactElement => {
     const isSession = scope === 'session'
     const hasAttachedItems = isSession ? hasSessionAttachedItems : hasWorkspaceAttachedItems
@@ -1856,10 +1850,9 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
                     updateSplit({ ...split, ratio })
                     persistSplitRatio(ratio)
                   }}
-                  onDoubleClick={resetSplitRatio}
                   role="separator"
                   aria-orientation="vertical"
-                  aria-label="调整并排宽度；双击恢复均分"
+                  aria-label="调整并排宽度"
                 >
                   <span className="pointer-events-none absolute left-1/2 top-1/2 h-9 w-px -translate-x-1/2 -translate-y-1/2 bg-foreground/15 group-hover:bg-primary/50" />
                 </div>

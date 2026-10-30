@@ -329,8 +329,8 @@ describe('Given 计划清单加单行实时状态', () => {
 
 
 describe('Given 视频风格的自动执行轨迹', () => {
-  test('When 命令和搜索连续执行 Then 结果默认收起，点击后展开且流式更新保留选择', async () => {
-    const result = await renderer.run<{ open: string[]; clicked: string | null; updated: string | null; finished: string | null }>(`
+  test('When 命令和搜索连续执行 Then 当前结果自动展开，下一项出现时旧结果自动收起', async () => {
+    const result = await renderer.run<{ open: string[]; clicked: string | null; updated: string | null; newest: string | null; reopened: string | null; finished: string | null }>(`
       const blocks=[{type:'tool_use',id:'trace-1',name:'Bash',input:{command:'pwd'}},{type:'tool_use',id:'trace-2',name:'WebSearch',input:{query:'Gamma'}},{type:'tool_use',id:'trace-3',name:'Bash',input:{command:'ls'}}];
       await window.timeline.render({blocks,expand:false});
       const open=[...document.querySelectorAll('[data-process-action-row]')].map(e=>e.getAttribute('aria-expanded'));
@@ -338,12 +338,17 @@ describe('Given 视频风格的自动执行轨迹', () => {
       const clicked=document.querySelectorAll('[data-process-action-row]')[2].getAttribute('aria-expanded');
       await window.timeline.render({blocks:[...blocks,{type:'tool_use',id:'trace-4',name:'Bash',input:{command:'date'}}],expand:false});
       const updated=document.querySelectorAll('[data-process-action-row]')[2].getAttribute('aria-expanded');
+      const newest=document.querySelectorAll('[data-process-action-row]')[3].getAttribute('aria-expanded');
+      document.querySelectorAll('[data-process-action-row]')[2].click();await window.timeline.wait(360);
+      const reopened=document.querySelectorAll('[data-process-action-row]')[2].getAttribute('aria-expanded');
       await window.timeline.render({blocks,streaming:false,expand:false});
-      return {open,clicked,updated,finished:document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')};
+      return {open,clicked,updated,newest,reopened,finished:document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')};
     `)
-    expect(result.open).toEqual(['false', 'false', 'false'])
-    expect(result.clicked).toBe('true')
-    expect(result.updated).toBe('true')
+    expect(result.open).toEqual(['false', 'false', 'true'])
+    expect(result.clicked).toBe('false')
+    expect(result.updated).toBe('false')
+    expect(result.newest).toBe('true')
+    expect(result.reopened).toBe('true')
     expect(result.finished).toBe('false')
   }, 30_000)
 })
@@ -355,7 +360,7 @@ test('Given 亮暗主题 When 搜索和命令结果展开 Then 卡片跟随主�
     for (const theme of ['light','dark']) {
       document.documentElement.classList.toggle('dark',theme==='dark');
       await window.timeline.render({blocks,results:[{id:'a',text:'找到 Gamma 项目相关结果'},{id:'b',text:'All packages passed typecheck'}],expand:false});
-      document.querySelectorAll('[data-process-action-row]').forEach(button=>button.click());await window.timeline.wait(360);
+      document.querySelectorAll('[data-process-action-row]').forEach(button=>{if(button.getAttribute('aria-expanded')!=='true')button.click()});await window.timeline.wait(360);
       await window.traceCapture(theme);
       const cards=[...document.querySelectorAll('.process-timeline-details')];
       const button=document.querySelector('[data-process-action-row]');button.click();await window.timeline.wait(360);

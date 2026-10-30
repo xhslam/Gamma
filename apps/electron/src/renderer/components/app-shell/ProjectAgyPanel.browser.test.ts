@@ -81,6 +81,22 @@ describe('真实项目 AGY 工作区集成', () => {
     expect(measured).toMatchObject({ launched: 1, kills: 0, errors: [] })
   }, 30_000)
 
+  test('Given 并排比例为0.7 When 双击内部工作区分隔条 Then 不均分且保留保存比例', async () => {
+    const result = await renderer.run<{ before: string | null; after: string | null; stored: number }>(`
+      const api=window.agyPanel;await api.boot();await api.openFile();
+      api.size(1100);api.setSavedSplit(0.7);
+      await api.until(()=>document.querySelector('section[aria-label="右侧 Pane：agy-terminal"]'));
+      await api.delay(80);
+      const handle=document.querySelector('[role="separator"][aria-label="调整并排宽度"]');
+      const before=handle.getAttribute('aria-valuenow');
+      handle.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,detail:2}));
+      await api.delay(80);
+      return {before,after:handle.getAttribute('aria-valuenow'),stored:api.savedSplitRatio()};
+    `)
+    expect(result.after).toBe(result.before)
+    expect(result.stored).toBe(0.7)
+  }, 30_000)
+
   test('Given 720px外框与保存比例0.3/0.7 When 恢复分屏并用键盘调整 Then 按实际内宽保留320px且ARIA范围有效', async () => {
     const results = await renderer.run<Array<{ left: number; right: number; valid: boolean; stored: number; requested: number }>>(`
       const api=window.agyPanel;await api.boot();await api.openFile();const results=[];

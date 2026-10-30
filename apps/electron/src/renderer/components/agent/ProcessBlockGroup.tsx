@@ -5,6 +5,7 @@ import type { ToolActivity } from '@/atoms/agent-atoms'
 import { useMessageSessionId } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { ProcessTimelineStep } from './ProcessTimelineStep'
+import { ProcessCurrentToolContext } from './ProcessTimelineContent'
 import { isVisibleProcessBlock } from './process-block-visibility'
 import { ProcessLiveStatus } from './ProcessLiveStatus'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
@@ -295,6 +296,9 @@ export function ProcessBlockGroup({
       .filter((item): item is { child: React.ReactNode; block: SDKContentBlock } => !!item.block && isVisibleProcessBlock(item.block))
     const liveStart = Math.max(0, childArray.length - PROCESS_GROUP_LIVE_CHILD_WINDOW)
     const activeKeys = new Set<string>()
+    const currentToolId = isStreaming
+      ? childArray.flatMap(({ block }) => block.type === 'tool_use' && typeof block.id === 'string' ? [block.id] : []).at(-1) ?? null
+      : null
 
     const rendered = childArray.map(({ child, block }, i) => {
       const key = getProcessChildKey(child, i)
@@ -318,7 +322,9 @@ export function ProcessBlockGroup({
           isStreaming={isStreaming}
           isLast={isLast}
         >
-          <StableProcessChild child={stableChild} />
+          <ProcessCurrentToolContext.Provider value={currentToolId}>
+            <StableProcessChild child={stableChild} />
+          </ProcessCurrentToolContext.Provider>
         </ProcessTimelineStep>
       )
     })

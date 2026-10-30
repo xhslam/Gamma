@@ -314,12 +314,6 @@ export function AppShell(): React.ReactElement {
                 minimumWidth={rightPanelMinimumWidth}
                 maximumWidth={rightPanelMaximumWidth}
                 onResizeStart={handleMouseDown}
-                onResizeReset={() => {
-                  const width = clampRightPanelWidth((viewportWidth - leftSidebarOccupiedWidth) / 2, viewportWidth, rightPanelMinimumWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
-                  setRightPanelLayout(previous => usesWidePanelLayout || isExpandedRightWorkspace
-                    ? { ...previous, widePanelWidthOverride: width }
-                    : { ...previous, width })
-                }}
                 onResizeKeyDown={handleResizeKeyDown}
                 agent={<>
                   <MainArea />

@@ -21,6 +21,8 @@ interface ElectronRendererHarnessOptions {
   mainProcessReady?: string
   mainWindowSetup?: string
   timeoutMs?: number
+  /** 仅隔离与被测交互无关的重型子组件；key 为 renderer 内的相对模块路径。 */
+  moduleStubs?: Record<string, string>
 }
 
 /** 用应用真实的 Vite 构建与 Chromium DOM 检查 renderer，避免模拟 DOM 掩盖 xterm 原生事件顺序。 */
@@ -35,6 +37,19 @@ export async function createElectronRendererHarness(entrySource: string, options
       // Bun 从 monorepo 根执行时，也必须使用应用的 token、主题 safelist 与绝对扫描范围。
       css: { postcss: { plugins: [tailwindcss({ ...tailwindConfig, content: [resolve(import.meta.dir, '../renderer/**/*.{js,ts,jsx,tsx}')] })] } },
       plugins: [{
+        name: 'electron-renderer-regression-stubs',
+        enforce: 'pre',
+        async resolveId(id, importer) {
+          if (!options.moduleStubs || id === entry) return undefined
+          const resolved = await this.resolve(id, importer, { skipSelf: true })
+          if (!resolved) return undefined
+          const stub = Object.keys(options.moduleStubs).find(path => resolve(import.meta.dir, '../renderer', path) === resolved.id)
+          return stub ? `\0renderer-stub:${stub}` : undefined
+        },
+        load(id) {
+          return id.startsWith('\0renderer-stub:') ? options.moduleStubs?.[id.slice('\0renderer-stub:'.length)] : undefined
+        },
+      }, {
         name: 'electron-renderer-regression-entry',
         resolveId: (id) => id === entry ? `\0${entry}` : undefined,
         load: (id) => id === `\0${entry}` ? entrySource : undefined,
