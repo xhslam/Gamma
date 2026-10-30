@@ -36,6 +36,10 @@
 .reading-body :where(p, li, blockquote) {
   line-height: var(--body-line-height);
 }
+/* 消息输入区沿用正文字体，但可编辑宽度必须跟随输入框，不受阅读行宽限制。 */
+.rich-text-input .reading-body {
+  max-width: none;
+}
 .reading-body-collapsed {
   max-height: calc(var(--reading-font-size) * var(--body-line-height) * 4);
 }

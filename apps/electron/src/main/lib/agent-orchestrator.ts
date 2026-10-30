@@ -56,7 +56,7 @@ import pkg from '../../../package.json' with { type: 'json' }
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
 import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir, isAgentSessionDeleting } from './agent-session-manager'
-import { getAgentWorkspace, getProjectFilesPath, getWorkspaceMcpConfig, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles, getWorkspaceAgentsMdPath, readWorkspaceAgentsMd, getWorkspaceMemoryGuidance, isWorkspaceProjectKnowledgeMaintenanceApproved } from './agent-workspace-manager'
+import { getAgentWorkspace, getProjectFilesPath, getWorkspaceMcpConfig, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles, getWorkspaceAgentsMdPath, readWorkspaceAgentsMd, getWorkspaceMemoryGuidance, isWorkspaceProjectKnowledgeMaintenanceApproved, getWorkspaceAutoMemoryDir } from './agent-workspace-manager'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { getMcpApiKeyEnvironment, getMcpOAuthHeaders } from './mcp-oauth-service'
 import { getAgentWorkspacePath, getAgentSessionWorkspacePath, getSdkConfigDir, getWorkspaceSkillsDir, getMemoryDir } from './config-paths'
@@ -87,7 +87,7 @@ import { generateCodexTitle } from './adapters/pi-codex-title-generator'
 import { createFallbackTitle, sanitizeGeneratedTitle, TITLE_PROMPT } from './title-generation'
 import { claimWorkspaceMemoryRefreshOpportunity } from './agent-memory-refresh-service'
 import { browserController } from './browser-controller'
-import { enqueueAutomaticMemory, recallAutomaticMemory, getAutomaticMemoryRuntimeGuidance } from './automatic-memory-service'
+import { enqueueAutomaticMemory, getAutomaticMemoryRuntimeGuidance } from './automatic-memory-service'
 
 // ===== 类型定义 =====
 
@@ -1147,8 +1147,8 @@ export class AgentOrchestrator {
         console.log(`[Agent 编排] 注入 referenced_planning: ${mentionedTodoIds?.length ?? 0} todos, ${mentionedCalendarEventIds?.length ?? 0} calendar events`)
       }
 
-      const memoryContext = recallAutomaticMemory(workspaceSlug, rawUserMessage ?? userMessage)
-      const contextualMessage = [dynamicCtx, memoryContext, enrichedMessage].filter(Boolean).join('\n\n')
+      // 提取由 Pi 的双作用域文件目录驱动，不再按主题把自动记录正文塞进用户消息。
+      const contextualMessage = [dynamicCtx, enrichedMessage].filter(Boolean).join('\n\n')
       // 仅消费新落盘的前台用户输入；重试、压缩、自动化和外部触发均不重复生成画像。
       if (workspaceSlug && initialUserMessageUuid && userMessagePersisted && !automationContext && !input.triggeredBy && userMessage.trim() !== '/compact') {
         const memoryWorkspaceSlug = workspaceSlug
@@ -1683,7 +1683,11 @@ export class AgentOrchestrator {
         piAgentDir: getSdkConfigDir(),
         piSessionDir: join(getSdkConfigDir(), 'sessions'),
         memoryEnabled: (input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode,
-        ...(((input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode) ? { memoryRoot: getMemoryDir() } : {}),
+        ...(((input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode) ? {
+          memoryRoot: getMemoryDir(),
+          memoryUserMessage: rawUserMessage ?? userMessage,
+          ...(workspaceSlug ? { memoryWorkspaceRoot: getWorkspaceAutoMemoryDir(workspaceSlug), memoryWorkspaceSlug: workspaceSlug } : {}),
+        } : {}),
         ...(allAdditionalDirectories.length > 0 && { additionalDirectories: allAdditionalDirectories }),
         ...(workspaceSlug ? {
           additionalSkillPaths: [getWorkspaceSkillsDir(workspaceSlug)],
@@ -2523,8 +2527,7 @@ export class AgentOrchestrator {
       enrichedText = `${referencedPlanningBlock}\n\n${enrichedText}`
     }
 
-    const queueMemoryContext = recallAutomaticMemory(workspaceSlug, rawText ?? text)
-    if (queueMemoryContext) enrichedText = `${queueMemoryContext}\n\n${enrichedText}`
+    // 插队输入沿用当前 Pi 扩展，每轮刷新目录并按需读取，不注入粗粒度正文。
     const uuid = presetUuid || randomUUID()
 
     // 防重记录

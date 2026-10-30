@@ -25,6 +25,54 @@ func runSelfTests() throws -> Int {
     try expect(isGammaPID(getpid()), "Given当前进程PID，Then确认为Gamma相关PID")
     try expect(isGammaPID(getppid()), "Given父进程PID，Then确认为Gamma相关PID")
     try expect(!isGammaPID(999999), "Given虚构外部PID，Then拒绝确认为Gamma相关PID")
+    // 真实故障：Dock 的 layer20 全屏容器不是整屏输入遮挡；必须由 AX 点命中证明穿透。
+    let dockDisplay = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    try expect(isPassThroughDockWindow(bundleId: "com.apple.dock", layer: 20, bounds: dockDisplay, displayBounds: dockDisplay, windowPID: 504, hitPID: 470), "Given Dock 全屏容器且 AX 命中 Chrome，Then 不拦截输入框落点")
+    try expect(!isPassThroughDockWindow(bundleId: "com.apple.dock", layer: 20, bounds: dockDisplay, displayBounds: dockDisplay, windowPID: 504, hitPID: 504), "Given AX 实际命中 Dock 图标，Then 不穿透")
+    try expect(!isPassThroughDockWindow(bundleId: "com.apple.dock", layer: 20, bounds: dockDisplay, displayBounds: dockDisplay, windowPID: 504, hitPID: nil), "Given 无 AX 点命中证据，Then 不猜测穿透")
+    try expect(!isPassThroughDockWindow(bundleId: "com.apple.controlcenter", layer: 20, bounds: dockDisplay, displayBounds: dockDisplay, windowPID: 507, hitPID: 470), "Given 系统弹窗覆盖，Then 不按 Dock 例外穿透")
+    try expect(!isPassThroughDockWindow(bundleId: "com.gamma.app", layer: 20, bounds: dockDisplay, displayBounds: dockDisplay, windowPID: 99, hitPID: 470), "Given Gamma 遮挡，Then 不放宽")
+    try expect(!isPassThroughDockWindow(bundleId: "com.apple.dock", layer: 20, bounds: CGRect(x: 0, y: 800, width: 1440, height: 100), displayBounds: dockDisplay, windowPID: 504, hitPID: 470), "Given 真正 Dock 条窗口，Then 不穿透")
+    try expect(isAXFrameOutsideViewport(CGRect(x: 352, y: 151, width: 736, height: 1), viewport: dockDisplay), "Given Chrome 将旧消息压成1px，Then 不让不可见历史耗尽预算")
+    try expect(!isAXFrameOutsideViewport(CGRect(x: 380, y: 750, width: 680, height: 24), viewport: dockDisplay), "Given 当前可见编辑器，Then 保留")
+    try expect(!isAXFrameOutsideViewport(.zero, viewport: dockDisplay), "Given 零几何语义容器，Then 仍可读取其可见子元素")
+    let cursorLevel = Int(CGWindowLevelForKey(.cursorWindow))
+    try expect(isSystemCursorWindow(ownerName: "Window Server", layer: cursorLevel), "Given WindowServer 在 down/up 间显示软件光标，Then 不当作输入遮挡")
+    try expect(!isSystemCursorWindow(ownerName: "Chrome", layer: cursorLevel), "Given 普通应用同层窗口，Then 不以光标名义忽略")
+    try expect(!isSystemCursorWindow(ownerName: "Window Server", layer: 25), "Given 系统菜单或真实系统表面，Then 不按光标层穿透")
+    for role in ["AXButton", "AXTextArea", "AXTextField", "AXLink"] {
+        try expect(isStableAXHitControl(role), "Given 可交互祖先，Then 坐标命中绑定真实控件而非文字叶节点")
+    }
+    for role in ["AXStaticText", "AXGroup", "AXWebArea", "AXSecureTextField", "unknown"] {
+        try expect(!isStableAXHitControl(role), "Given 文字、页面容器或安全字段，Then 不当成可交互控件")
+    }
+    try expect(scrollWheelDelta(-300) == -300 && scrollWheelDelta(300) == 300, "Given 工具负数向下/正数向上，Then CG像素滚轮不反转方向")
+    var enabledAttributes: [String] = []
+    let manualEnabled = enableApplicationAccessibility { attribute in enabledAttributes.append(attribute); return .success }
+    try expect(manualEnabled && enabledAttributes == ["AXManualAccessibility"], "Given Chromium 现代 AX opt-in，Then 不启用旧屏幕阅读器模式")
+    enabledAttributes = []
+    let legacyEnabled = enableApplicationAccessibility { attribute in enabledAttributes.append(attribute); return attribute == "AXManualAccessibility" ? .attributeUnsupported : .success }
+    try expect(legacyEnabled && enabledAttributes == ["AXManualAccessibility", "AXEnhancedUserInterface"], "Given 旧 Electron 不支持现代属性，Then 使用兼容 opt-in")
+    enabledAttributes = []
+    let transientEnabled = enableApplicationAccessibility { attribute in enabledAttributes.append(attribute); return .cannotComplete }
+    try expect(!transientEnabled && enabledAttributes.count == 1, "Given AX 临时失败，Then 不声称已启用或尝试另一写路径")
+    try expect(AX_TREE_MAX_DEPTH >= 32 && AX_ANCESTOR_LIMIT > AX_TREE_MAX_DEPTH, "Given 深层 contenteditable，Then 遍历与祖先校验预算一致")
+    try expect(shouldProbeAXMaterialization(nil, now: 100), "Given新进程，Then允许首次物化探测")
+    let timedOutAX = AXMaterializationState(attempts: 1, lastAttempt: 100, ready: false)
+    try expect(!shouldProbeAXMaterialization(timedOutAX, now: 129) && shouldProbeAXMaterialization(timedOutAX, now: 130), "Given物化超时，Then30秒退避后才再次探测")
+    try expect(!shouldProbeAXMaterialization(AXMaterializationState(attempts: 3, lastAttempt: 0, ready: false), now: 999), "Given连续三次超时，Then不无限等待")
+    try expect(!shouldProbeAXMaterialization(AXMaterializationState(attempts: 1, lastAttempt: 0, ready: true), now: 999), "Given网页AX已物化，Then进程生存期内不重复冷启动等待")
+    try expect(!isPopulatedAXWebArea(role: "AXWebArea", childCount: 0) && !isPopulatedAXWebArea(role: "AXWindow", childCount: 1) && isPopulatedAXWebArea(role: "AXWebArea", childCount: 1), "Given空WebArea壳，Then不冒充真正网页内容")
+    var materializationTime: TimeInterval = 0, materializationProbes = 0, reassertions = 0
+    let materialized = try awaitAXMaterialization(probe: { _ in materializationProbes += 1; return materializationProbes == 3 },
+        reassert: { reassertions += 1 }, clock: { materializationTime }, pause: { materializationTime += $0 })
+    try expect(materialized && materializationProbes == 3 && reassertions == 1 && abs(materializationTime - 0.7) < 0.001, "Given延迟出现的网页内容，Then轮询确认后只做一次有限settle")
+    materializationTime = 0; materializationProbes = 0; reassertions = 0
+    let absentAX = try awaitAXMaterialization(probe: { deadline in materializationProbes += 1; materializationTime = min(deadline, materializationTime + 0.03); return false },
+        reassert: { reassertions += 1 }, clock: { materializationTime }, pause: { materializationTime += $0 })
+    try expect(!absentAX && materializationTime <= 4.001 && materializationTime >= 3.99 && materializationProbes <= 41 && reassertions == 1, "Given物化一直未出现，Then真实耗时计入4秒预算而非无界累加")
+    try expect(requiresInputFocusMatch(kind: "key", isRelease: false) && !requiresInputFocusMatch(kind: "key", isRelease: true), "Given导航快捷键改变焦点，Then按下前严查旧焦点，松开只释放而不误报新输入")
+    try expect(requiresInputFocusMatch(kind: "type", isRelease: false) && !requiresInputFocusMatch(kind: "type", isRelease: true), "Given多批Unicode，Then每批down重新核验焦点，up不被当作额外写入")
     var now: TimeInterval = 100
     let gate = SafetyGate(clock: { now })
     let lease = LeaseParams(leaseId: "lease-a", epoch: 7, deadline: 61_000)
@@ -286,12 +334,42 @@ func runSelfTests() throws -> Int {
     try expect(!samePreparedRequest(desktopRequest, changedRequest), "Given批准后替换动作，Then不可复用准备")
     try Action(kind: "open_app", observationId: "full", appName: "com.apple.Notes").validate()
     let observedLayoutSnapshot = Snapshot(id: "full", epoch: 1, fence: 1, created: 0, target: target, width: 1280, height: 800, axDigest: "captured-layout", display: fullDisplay)
-    try validateObservedLayout(observedLayoutSnapshot, window: target, digest: "captured-layout")
-    try expect(true, "Given截图与准备控件布局一致，Then允许继续安全检查")
-    try rejects("Given截图后应用内部布局变化，Then拒绝使用旧像素") { try validateObservedLayout(observedLayoutSnapshot, window: target, digest: "changed-layout") }
-    try rejects("Given截图没有可验证AX布局，Then不能盲打") { try validateObservedLayout(fullSnapshot, window: target, digest: "captured-layout") }
+    try validateObservedWindow(observedLayoutSnapshot, window: target)
+    let renamedWindow = Target(windowId: target.windowId, pid: target.pid, processIdentity: target.processIdentity, bundleId: target.bundleId, title: "动态页面标题", bounds: target.bounds)
+    try validateObservedWindow(observedLayoutSnapshot, window: renamedWindow)
+    try expect(sameTargetWindow(target, renamedWindow), "Given同一窗口标题更新，Then不把展示文本误当窗口身份")
+    try rejects("Given截图没有可验证AX窗口，Then不能盲打") { try validateObservedWindow(fullSnapshot, window: target) }
     let otherWindow = Target(windowId: 6, pid: target.pid, processIdentity: target.processIdentity, bundleId: target.bundleId, title: target.title, bounds: target.bounds)
-    try rejects("Given背景窗口未包含在本次前台布局，Then必须先聚焦并重新截图") { try validateObservedLayout(observedLayoutSnapshot, window: otherWindow, digest: "captured-layout") }
+    try rejects("Given同PID的另一个窗口，Then必须先聚焦并重新观察") { try validateObservedWindow(observedLayoutSnapshot, window: otherWindow) }
+    let movedWindow = Target(windowId: target.windowId, pid: target.pid, processIdentity: target.processIdentity, bundleId: target.bundleId, title: target.title, bounds: Rect(CGRect(x: 1, y: 1, width: 800, height: 600)))
+    try rejects("Given目标窗口移动缩放，Then旧观察不能授权写入") { try validateObservedWindow(observedLayoutSnapshot, window: movedWindow) }
+    let axCandidates = [AXWindowCandidate(pid: target.pid, windowId: 6), AXWindowCandidate(pid: target.pid, windowId: target.windowId)]
+    let exactWindowIndex = try matchingAXWindowIndex(target, candidates: axCandidates)
+    try expect(exactWindowIndex == 1, "Given同PID多窗口，Then只选精确ID")
+    try rejects("GivenAX只有同PID别窗，Then不回退到focused window") { _ = try matchingAXWindowIndex(target, candidates: [axCandidates[0]]) }
+    try rejects("GivenAX无法证明窗口ID，Then不按几何猜测") { _ = try matchingAXWindowIndex(target, candidates: [AXWindowCandidate(pid: target.pid, windowId: nil)]) }
+    try rejects("Given窗口ID相同但owner不同，Then拒绝") { _ = try matchingAXWindowIndex(target, candidates: [AXWindowCandidate(pid: target.pid + 1, windowId: target.windowId)]) }
+    let elementState = AXElementFingerprint(role: "AXButton", subrole: "", title: "保存", description: "", value: "", actions: ["AXPress"], bounds: target.bounds, enabled: true)
+    let unchangedElement = AXElementFingerprint(role: "AXButton", subrole: "", title: "保存", description: "", value: "", actions: ["AXPress"], bounds: target.bounds, enabled: true)
+    try validateObservedElementState(elementState, current: unchangedElement)
+    let changedElement = AXElementFingerprint(role: "AXButton", subrole: "", title: "删除", description: "", value: "", actions: ["AXPress"], bounds: target.bounds, enabled: true)
+    try rejects("Given目标按钮含义改变，Then旧引用仍然拒绝") { try validateObservedElementState(elementState, current: changedElement) }
+    let changedGeometry = AXElementFingerprint(role: "AXButton", subrole: "", title: "保存", description: "", value: "", actions: ["AXPress"], bounds: movedWindow.bounds, enabled: true)
+    try rejects("Given目标自身位置变化，Then旧像素不能继续使用") { try validateObservedElementState(elementState, current: changedGeometry) }
+    let observedHits = ["save": elementState]
+    try validateObservedPoint(observedHits, point: CGPoint(x: 400, y: 280), actualRef: "save")
+    try rejects("Given旧坐标原来覆盖按钮而按钮已移动，Then即使当前命中未变化的父容器也不能放行") { try validateObservedPoint(observedHits, point: CGPoint(x: 400, y: 280), actualRef: "root") }
+    let nestedControl = AXElementFingerprint(role: "AXTextField", subrole: "", title: "输入", description: "", value: "", actions: [], bounds: target.bounds, enabled: true, depth: 2)
+    try validateObservedPoint(["outer": elementState, "inner": nestedControl], point: CGPoint(x: 400, y: 280), actualRef: "inner")
+    try rejects("Given同面积同深度控件无法消歧，Then坐标动作要求改用语义引用") { try validateObservedPoint(["a": elementState, "b": unchangedElement], point: CGPoint(x: 400, y: 280), actualRef: "a") }
+    let longValue = String(repeating: "a", count: 1024)
+    let oldTextState = AXElementFingerprint(role: "AXTextArea", subrole: "", title: "", description: "", value: longValue, actions: [], bounds: target.bounds, enabled: true)
+    let newTextState = AXElementFingerprint(role: "AXTextArea", subrole: "", title: "", description: "", value: longValue + "b", actions: [], bounds: target.bounds, enabled: true)
+    try rejects("Given目标值在展示截断后改变，Then完整指纹仍能拒绝") { try validateObservedElementState(oldTextState, current: newTextState) }
+    let desktopChange = desktopChangeSummary(from: [target, otherWindow], to: [otherWindow, renamedWindow])
+    try expect(desktopChange.titlesChanged && desktopChange.orderChanged && !desktopChange.boundsChanged && !desktopChange.ownersChanged, "Given非几何的桌面变化，Then诊断明确区分标题和顺序")
+    let changeJSON = String(decoding: try JSONEncoder().encode(desktopChange), as: UTF8.self)
+    try expect(!changeJSON.contains("动态页面标题") && !changeJSON.contains(target.processIdentity), "Given桌面差异诊断，Then不传播标题或进程身份原文")
     // AX与文本替换路径：仅纯函数/编码，不实例化AX元素、剪贴板或桌面应用。
     for role in [nil, "unknown", "AXUnknown", "", "AXSecureTextField", "AXUnrecognizedCustomControl"] as [String?] {
         try expect(isHiddenAXControl(role: role, subrole: nil), "Given安全或未知role，Then不读取内容或创建引用")
@@ -308,9 +386,13 @@ func runSelfTests() throws -> Int {
     var nodeBudget = AXObservationBuffer()
     for _ in 0..<300 { _ = nodeBudget.append(entry: "role=AXButton") }
     try expect(nodeBudget.count == 256, "Given超过256节点，ThenAX序列化有界")
+    try expect(nodeBudget.truncated && nodeBudget.text.contains("AX观察已截断") && !axBuffer.truncated, "Given节点预算耗尽，Then明确提示而非冒充完整页面")
+    var depthBudget = AXObservationBuffer(); depthBudget.markTruncated()
+    try expect(depthBudget.text.contains("AX观察已截断") && !depthBudget.text.contains("ref="), "Given深度限制，Then提示不产生伪引用")
     var byteBudget = AXObservationBuffer()
     for _ in 0..<300 { _ = byteBudget.append(entry: String(repeating: "中文🚀", count: 100), ref: "uuid") }
     try expect(byteBudget.text.utf8.count <= 32_700 && byteBudget.count < 256, "Given多字节Unicode大树，Then按UTF8而非字符预算限制到32KiB以内")
+    try expect(byteBudget.truncated && byteBudget.text.contains("AX观察已截断"), "Given字节预算耗尽，Then预留截断提示仍在32KiB内")
     try Action(kind: "axSetValue", observationId: "full", text: "", elementRef: "ref").validate(); count += 1
     for kind in ["axPress", "axSetValue", "axFocus", "axAction", "axSelectText"] {
         try rejects("Given\(kind)缺少观察引用，Then拒绝") { try Action(kind: kind, observationId: "full", text: "text", secondaryAction: "AXPress", selectionText: "text").validate() }

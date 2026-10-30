@@ -14,7 +14,7 @@ export const REOBSERVE_CODES: ReadonlySet<string> = new Set([
   'stale-observation', 'stale-element', 'stale-element-ref', 'preparation-required',
   'display-changed', 'desktop-changed', 'observation-layout-changed',
   'target-changed', 'target-gone', 'focus-changed', 'not-frontmost', 'application-mismatch',
-  'unsafe-focus', 'unknown-target', 'unsafe-element', 'unscoped-surface',
+  'unsafe-focus', 'unknown-target', 'unsafe-element', 'unscoped-surface', 'untrusted-surface',
   'ambiguous-selection', 'selection-not-found', 'selection-changed', 'invalid-selection', 'selection-budget',
   'unsupported-action', 'unsupported-format', 'cross-application-drag', 'secure-field', 'text-budget',
   'invalid-key', 'invalid-action', 'invalid-coordinate', 'application-not-found', 'ambiguous-application',
@@ -27,8 +27,11 @@ export const PAUSE_CODES: ReadonlySet<string> = new Set([
   'ax-write-unknown', 'post-action-not-settled',
 ])
 export function classifyComputerFailure(evidence: ComputerFailureEvidence): ComputerFailureDisposition {
-  if (evidence.phase === 'after-dispatch' || evidence.outcome === 'unknown' || evidence.outcome === 'outcome-unknown'
+  if (evidence.outcome === 'unknown' || evidence.outcome === 'outcome-unknown'
     || evidence.outcome === 'dispatched-unverified' || (evidence.code && PAUSE_CODES.has(evidence.code))) return 'pause'
+  // 此阶段只读取新观察，输入已经有明确回执。目标暂变不是输入副作用未知；
+  // 撤权、监听失活、AX超时等仍在上面的安全拒绝中，不吞未知故障。
+  if (evidence.phase === 'after-dispatch') return evidence.code && REOBSERVE_CODES.has(evidence.code) ? 'reobserve' : 'pause'
   const beforeDispatch = evidence.outcome === 'not-dispatched' || evidence.outcome === 'rejected'
     || evidence.phase === 'prepare' || evidence.phase === 'confirmation' || evidence.phase === 'read' || evidence.phase === 'select'
   if (!beforeDispatch) return 'pause'

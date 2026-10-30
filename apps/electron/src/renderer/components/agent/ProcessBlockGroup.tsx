@@ -5,6 +5,7 @@ import type { ToolActivity } from '@/atoms/agent-atoms'
 import { useMessageSessionId } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { ProcessTimelineStep } from './ProcessTimelineStep'
+import { isVisibleProcessBlock } from './process-block-visibility'
 import { ProcessLiveStatus } from './ProcessLiveStatus'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 import { getProcessLiveStatus } from './process-live-status'
@@ -34,7 +35,7 @@ const EMPTY_MESSAGES: SDKMessage[] = []
 const EMPTY_ACTIVITIES: ToolActivity[] = []
 const PROCESS_GROUP_VIEWPORT_HEIGHT = 320
 const PROCESS_GROUP_LIVE_CHILD_WINDOW = 4
-const PROCESS_GROUP_COLLAPSE_DURATION_MS = 200
+const PROCESS_GROUP_COLLAPSE_DURATION_MS = 320
 const PROCESS_GROUP_FOLLOW_BOTTOM_THRESHOLD = 24
 const PROGRESS_SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '])
 
@@ -171,8 +172,9 @@ export function ProcessBlockGroup({
   taskActivities = EMPTY_ACTIVITIES, historicalTaskSubjects, startedAt, durationMs, renderChildren,
 }: ProcessBlockGroupProps): React.ReactElement {
   const contentId = React.useId()
-  // 日志始终由用户的小箭头控制；流式开始、结束和审批都不能自动展开或折叠。
-  const [isContentExpanded, setContentExpanded] = React.useState(false)
+  // 跟随执行状态自动展开与收拢；用户点击后优先保留其选择。
+  const [manualExpanded, setContentExpanded] = React.useState<boolean | null>(null)
+  const isContentExpanded = manualExpanded ?? isStreaming
   const [shouldRenderContent, setShouldRenderContent] = React.useState(false)
   const followLatestRef = React.useRef(true)
   const smoothScrollTargetRef = React.useRef<number | null>(null)
@@ -183,7 +185,7 @@ export function ProcessBlockGroup({
   const stableProcessBlocksRef = React.useRef(blocks)
   stableProcessBlocksRef.current = stabilizeProcessBlockReferences(stableProcessBlocksRef.current, blocks)
   const stableProcessBlocks = stableProcessBlocksRef.current
-  const keepProgressViewport = isStreaming && isContentExpanded
+  const keepProgressViewport = false
   const shouldShowContent = isContentExpanded || shouldRenderContent
   const visibleChildren = shouldShowContent ? renderChildren() : null
   const sessionId = useMessageSessionId()
@@ -289,10 +291,12 @@ export function ProcessBlockGroup({
   // 只让最近几项参与高频更新；旧项保留在 DOM 中供用户滚动查看，但冻结其 React 子树。
   const renderContentChildren = (): React.ReactNode => {
     const childArray = React.Children.toArray(visibleChildren)
+      .map<{ child: React.ReactNode; block: SDKContentBlock | undefined }>((child, index) => ({ child, block: blocks[index] }))
+      .filter((item): item is { child: React.ReactNode; block: SDKContentBlock } => !!item.block && isVisibleProcessBlock(item.block))
     const liveStart = Math.max(0, childArray.length - PROCESS_GROUP_LIVE_CHILD_WINDOW)
     const activeKeys = new Set<string>()
 
-    const rendered = childArray.map((child, i) => {
+    const rendered = childArray.map(({ child, block }, i) => {
       const key = getProcessChildKey(child, i)
       activeKeys.add(key)
       const cachedEntry = stableChildrenRef.current.get(key)
@@ -309,7 +313,7 @@ export function ProcessBlockGroup({
       return (
         <ProcessTimelineStep
           key={key}
-          block={blocks[i]!}
+          block={block}
           allMessages={allMessages}
           isStreaming={isStreaming}
           isLast={isLast}
@@ -333,7 +337,7 @@ export function ProcessBlockGroup({
         historicalTaskSubjects={historicalTaskSubjects}
         approvalPending={liveStatus.waiting}
       />
-      <ProcessLiveStatus status={liveStatus} streaming={isStreaming} startedAt={startedAt} durationMs={durationMs}>
+      <ProcessLiveStatus status={isStreaming ? liveStatus : { ...liveStatus, label: blocks.some((block) => block.type === 'tool_use') ? `已执行 ${blocks.filter((block) => block.type === 'tool_use').length} 项操作` : liveStatus.label }} streaming={isStreaming} startedAt={startedAt} durationMs={durationMs}>
         <button
           type="button"
           data-process-group-toggle=""
@@ -343,7 +347,7 @@ export function ProcessBlockGroup({
           aria-controls={contentId}
           className="process-timeline-toggle"
           aria-label={isContentExpanded ? '收起工具调用日志' : '展开工具调用日志'}
-          onClick={() => setContentExpanded((previous) => !previous)}
+          onClick={() => setContentExpanded(!isContentExpanded)}
         >
           <DisclosureChevron expanded={isContentExpanded} size={12} />
         </button>

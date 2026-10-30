@@ -73,6 +73,39 @@ describe('Given 正文衬线与 UI 无衬线的字体契约', () => {
     for (const snapshot of snapshots) { expect(snapshot.overflow).toBe(false); expect(snapshot.workspace.width).toBeLessThanOrEqual(680) }
   }, 30_000)
 
+  test('When 宽窄输入框包含占位符、中文或长连续文本 Then 编辑区域填满外框且不溢出', async () => {
+    const results = await renderer.run<Array<{ width: number; editorWidth: number; paragraphWidth: number; contentWidth: number; overflow: boolean; readingWidth: number }>>(`
+      const results=[];
+      for (const theme of ['', 'dark']) {
+        await window.typographyFixture.mount(theme);
+        const host=document.querySelector('#composer');
+        const editor=host.querySelector('.ProseMirror');
+        for (const width of [1200,380]) {
+          document.getElementById('fixture').style.width=width+'px';
+          document.getElementById('fixture').style.maxWidth='none';
+          for (const text of ['', '输入中文与 English 文本。'.repeat(60), 'abcdefghij'.repeat(100)]) {
+            editor.editor.commands.setContent(text ? '<p>'+text+'</p>' : '');
+            await new Promise(r=>requestAnimationFrame(r));
+            const style=getComputedStyle(editor);
+            results.push({width:host.clientWidth,editorWidth:editor.getBoundingClientRect().width,
+              paragraphWidth:editor.querySelector('p').getBoundingClientRect().width,
+              contentWidth:host.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),
+              overflow:editor.scrollWidth>editor.clientWidth || host.scrollWidth>host.clientWidth,
+              readingWidth:document.querySelector('#assistant>div').getBoundingClientRect().width});
+          }
+        }
+      }
+      return results;
+    `)
+    expect(results).toHaveLength(12)
+    for (const result of results) {
+      expect(result.editorWidth).toBeCloseTo(result.width, 0)
+      expect(result.paragraphWidth).toBeCloseTo(result.contentWidth, 0)
+      expect(result.overflow).toBe(false)
+      expect(result.readingWidth).toBeLessThanOrEqual(680)
+    }
+  }, 30_000)
+
   test('When 长用户消息在新行高下折叠并展开 Then 仍按四行截断且不改变正文字体', async () => {
     const result = await renderer.run<{ collapsed: number; expanded: number; lineHeight: number; family: string }>(`
       const f=window.typographyFixture;await f.mount();

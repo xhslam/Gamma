@@ -74,3 +74,28 @@
 @media (prefers-reduced-motion: reduce) {
   .process-timeline *, .process-plan-card * { animation: none !important; transition: none !important; }
 }
+
+/* 参考视频的轨迹：来源行、柔和结果卡与连续的高度收拢。 */
+.process-timeline { --process-main: hsl(var(--foreground) / .76); --process-secondary: hsl(var(--foreground) / .50); }
+.process-timeline-step { padding-left: 24px; }
+.process-timeline-node { width: 4px; height: 4px; top: 12px; left: 2px; }
+.process-timeline-node[data-status='success'] { color: var(--process-secondary); }
+.process-timeline-connector { left: 3.5px; top: 20px; bottom: -8px; }
+.process-timeline-row { gap: 8px; height: 32px; line-height: 32px; }
+.process-trace-icon { flex-shrink: 0; color: var(--process-secondary); }
+.process-trace-tool > .process-timeline-row { font-weight: 600; }
+.process-trace-tool > .process-timeline-row > svg:last-child { flex-shrink: 0; color: var(--process-secondary); }
+.process-trace-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 320ms cubic-bezier(.22,1,.36,1), opacity 200ms ease; }
+.process-trace-reveal[data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+.process-trace-clip { overflow: hidden; min-height: 0; }
+.process-trace-reveal .process-timeline-details { margin: 4px 0 16px 24px; padding: 12px; border-radius: 12px; background: hsl(var(--foreground) / .035); box-shadow: inset 0 0 0 1px hsl(var(--foreground) / .055), 0 2px 4px hsl(var(--foreground) / .025); color: var(--process-main); line-height: 1.6; max-height: 280px; overflow: auto; }
+.process-timeline-details pre { margin: 0; }
+.process-timeline-log { transition: opacity 240ms ease; }
+.process-live-action-text { animation: process-trace-label-in 240ms ease both; }
+@keyframes process-trace-label-in { from { opacity: 0; filter: blur(3px); transform: translateY(3px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .process-trace-reveal { transition: none; } }
+
+.process-timeline-text-row { line-height: 28px; height: auto; }
+.process-timeline-log { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms cubic-bezier(.22,1,.36,1), opacity 240ms ease; }
+.process-timeline-log[data-expanded='true'] { grid-template-rows: 1fr; }
+.process-timeline-log > div { min-height: 0; overflow: hidden; }

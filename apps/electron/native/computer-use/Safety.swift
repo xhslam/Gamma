@@ -147,13 +147,15 @@ struct Snapshot {
     let display: DisplayResult?
     let desktopDigest: String?
     let axRefs: [String: AXUIElement]
+    let axStates: [String: AXElementFingerprint]
+    let desktopTargets: [Target]
     let axRoot: AXUIElement?
     let hasImage: Bool
 
-    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil, axRefs: [String: AXUIElement] = [:], axRoot: AXUIElement? = nil, hasImage: Bool = true) {
+    init(id: String, epoch: Int, fence: UInt64, created: TimeInterval, target: Target? = nil, width: Int, height: Int, axDigest: String, display: DisplayResult? = nil, desktopDigest: String? = nil, axRefs: [String: AXUIElement] = [:], axStates: [String: AXElementFingerprint] = [:], desktopTargets: [Target] = [], axRoot: AXUIElement? = nil, hasImage: Bool = true) {
         self.id = id; self.epoch = epoch; self.fence = fence; self.created = created
         self.target = target; self.width = width; self.height = height; self.axDigest = axDigest
-        self.display = display; self.desktopDigest = desktopDigest; self.axRefs = axRefs; self.axRoot = axRoot; self.hasImage = hasImage
+        self.display = display; self.desktopDigest = desktopDigest; self.axRefs = axRefs; self.axStates = axStates; self.desktopTargets = desktopTargets; self.axRoot = axRoot; self.hasImage = hasImage
     }
 
     func point(x: Double, y: Double) throws -> CGPoint {

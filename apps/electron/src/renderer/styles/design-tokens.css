@@ -1,6 +1,6 @@
-/* 全局暖色调色板的唯一来源。通道别名兼容现有 hsl(var(--token)) 消费方。
- * 亮色强调色复用同一陶土色；亮色边框使用主文字的 8% 透明度。
- * 状态依靠图标和文案区分，不另引入红、绿、蓝调色板。
+/* 全局调色板的唯一来源。通道别名兼容现有 hsl(var(--token)) 消费方。
+ * 通用 UI 保持暖色，强调色复用同一陶土色；亮色边框使用主文字的 8% 透明度。
+ * 背景靠近水光与点击涟漪单独使用深蓝色，不改变通用强调色或状态色。
  */
 :root {
   --palette-dark-background: #1F1E1D;
@@ -17,6 +17,10 @@
   --palette-dark-tertiary-hsl: 48.00000000 3.93700787% 50.19607843%;
   --palette-accent: #D97757;
   --palette-accent-hsl: 14.76923077 63.10679612% 59.60784314%;
+  --palette-light-background-interaction: #1E3A8A;
+  --palette-light-background-interaction-hsl: 224.44444444 64.28571429% 32.94117647%;
+  --palette-dark-background-interaction: #3156A3;
+  --palette-dark-background-interaction-hsl: 220.52631579 53.77358491% 41.56862745%;
   --palette-light-background: #FAF9F5;
   --palette-light-background-hsl: 48.00000000 33.33333333% 97.05882353%;
   --palette-light-panel: #FFFFFF;
@@ -44,6 +48,7 @@
   --color-inverse-text: var(--palette-dark-text);
 
   --background: var(--palette-light-background-hsl);
+  --background-interaction: var(--palette-light-background-interaction-hsl);
   --foreground: var(--palette-light-text-hsl);
   --panel: var(--palette-light-panel-hsl);
   --inset: var(--palette-light-inset-hsl);
@@ -114,6 +119,7 @@
   --color-tertiary: var(--palette-dark-tertiary);
   --color-border: hsl(var(--palette-light-background-hsl) / 0.08);
   --background: var(--palette-dark-background-hsl);
+  --background-interaction: var(--palette-dark-background-interaction-hsl);
   --foreground: var(--palette-dark-text-hsl);
   --panel: var(--palette-dark-panel-hsl);
   --inset: var(--palette-dark-inset-hsl);

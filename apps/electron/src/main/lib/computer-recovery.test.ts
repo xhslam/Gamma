@@ -75,15 +75,18 @@ describe('Given 无法证明未投递 When 出错 Then 禁止同轮继续', () =
     expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
     await f.controller.finishRun(f.binding)
   })
-  test('动作已投递后的观察即使报告准备错误也暂停，不重放', async () => {
+  test('输入已有回执时，后置只读目标暂变不冒充未知投递；旧引用失效且不重放', async () => {
     let dispatched = false
     const f = createComputerFixture({ call: async method => {
       if (method === 'perform') dispatched = true
       if (method === 'observe' && dispatched) throw createComputerNativeHostError({ code: 'unsafe-focus' })
     } })
-    await expect(f.controller.executeAutonomousAction({ action: 'key', key: 'Tab' }, undefined, f.binding)).rejects.toThrow()
+    const result = await f.controller.executeAutonomousAction({ action: 'key', key: 'Tab' }, undefined, f.binding)
+    expect(result.observationStability).toBe('timeout')
+    expect(result.observationId).toBeUndefined()
+    expect(result.message).toContain('已投递')
     expect(f.actions).toHaveLength(1)
-    expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(false)
     await f.controller.finishRun(f.binding)
   })
   test('开始前已 abort 仍标记暂停', async () => {

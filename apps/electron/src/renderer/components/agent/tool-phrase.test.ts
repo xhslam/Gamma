@@ -2,13 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import { getToolPhrase, getToolResultSummary } from './tool-phrase'
 
 describe('长期记忆工具展示状态 (tool-phrase)', () => {
-  test('When 工具调用成功 Then 显示"已记住"', () => {
+  test('When 工具调用成功 Then 显示更新且运行中不声称已成功', () => {
     const phrase = getToolPhrase('memory_write', { path: 'profile.md' }, false)
-    expect(phrase.label).toBe('已记住')
-    expect(phrase.loadingLabel).toBe('正在记住...')
+    expect(phrase.label).toBe('已更新记忆')
+    expect(phrase.loadingLabel).toBe('正在更新记忆...')
+    expect(getToolResultSummary('memory_write', 'saved. [version: 123]', false)).toBe('已更新')
+  })
 
-    const summary = getToolResultSummary('memory_write', 'saved. [version: 123]', false)
-    expect(summary).toBe('已记住')
+  test('When 批量读取或检索删除 Then 区分动作并保留文件名', () => {
+    expect(getToolPhrase('memory_read', { path: ['global:/topics/a.md', 'workspace:/areas/b.md'] }).label).toBe('读取记忆 a.md、b.md')
+    expect(getToolPhrase('memory_search', { query: '秋考' }).loadingLabel).toBe('正在搜索记忆...')
+    expect(getToolPhrase('memory_delete', {}, true).label).toBe('删除记忆失败')
   })
 
   test('When 工具调用失败（如版本冲突） Then 界面显示失败状态，不显示"已记住"', () => {

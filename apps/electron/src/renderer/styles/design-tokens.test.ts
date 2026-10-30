@@ -4,9 +4,9 @@ import { resolve } from 'node:path'
 import postcss from 'postcss'
 
 const tokenPath = resolve(import.meta.dir, 'design-tokens.css')
-const palette = new Set(['#1f1e1d', '#262624', '#30302e', '#f0eee6', '#b0aea5', '#85837b', '#d97757', '#faf9f5', '#ffffff', '#141413', '#5e5d59', '#8a887f'])
+const palette = new Set(['#1f1e1d', '#262624', '#30302e', '#f0eee6', '#b0aea5', '#85837b', '#d97757', '#faf9f5', '#ffffff', '#141413', '#5e5d59', '#8a887f', '#1e3a8a', '#3156a3'])
 
-describe('Given 仅使用指定暖色板的全局设计令牌', () => {
+describe('Given 使用指定暖色板与深蓝背景交互色的全局设计令牌', () => {
   test('When 读取颜色单一源 Then 只包含指定色值且包含完整亮暗映射', () => {
     expect(existsSync(tokenPath)).toBe(true)
     const css = readFileSync(tokenPath, 'utf8')
@@ -22,6 +22,9 @@ describe('Given 仅使用指定暖色板的全局设计令牌', () => {
     expect(rules.get('.dark')?.get('--background')).toBe('var(--palette-dark-background-hsl)')
     expect(rules.get('.dark')?.get('--border')).toBe('var(--palette-light-background-hsl) / 0.08')
     expect(rules.get(':root')?.get('--border')).toBe('var(--palette-light-text-hsl) / 0.08')
+    expect(rules.get(':root')?.get('--background-interaction')).toBe('var(--palette-light-background-interaction-hsl)')
+    expect(rules.get('.dark')?.get('--background-interaction')).toBe('var(--palette-dark-background-interaction-hsl)')
+    expect(rules.get(':root')?.get('--primary')).toBe('var(--palette-accent-hsl)')
   })
 
   test('When 检查应用自有 UI 源码 Then 不保留硬编码色板或 Tailwind 内置颜色', () => {

@@ -9,6 +9,7 @@ func _AXUIElementGetWindow(_ element: AXUIElement, _ outIdentifier: UnsafeMutabl
 struct AXTree {
     let text: String, digest: String, root: AXUIElement
     let refs: [String: AXUIElement]
+    let states: [String: AXElementFingerprint]
 }
 struct AXScrollBinding {
     let element: AXUIElement
@@ -23,23 +24,126 @@ struct AXScrollBinding {
 struct AXObservationBuffer {
     private var lines: [String] = [], canonical: [String] = []
     private(set) var bytes = 0
+    private(set) var truncated = false
+    private static let truncationNote = "[AX观察已截断：节点、深度或读取预算已达上限；只使用本次实际返回的引用]"
     var count: Int { lines.count }
-    var text: String { lines.joined(separator: "\n") }
+    var text: String { (lines + (truncated ? [Self.truncationNote] : [])).joined(separator: "\n") }
+    mutating func markTruncated() { truncated = true }
     var digest: String { SHA256.hash(data: Data(canonical.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined() }
     mutating func append(entry: String, content: String = "", ref: String? = nil) -> Bool {
         let line = ref.map { "ref=\($0) \(entry)" } ?? entry
-        guard count < 256, bytes + line.utf8.count + 1 <= 32_700 else { return false }
+        guard count < 256, bytes + line.utf8.count + 1 <= 32_700 - Self.truncationNote.utf8.count - 1 else { truncated = true; return false }
         lines.append(line); bytes += line.utf8.count + 1
         canonical.append(entry + " content=" + SHA256.hash(data: Data(content.utf8)).map { String(format: "%02x", $0) }.joined())
         return true
     }
 }
 
+let AX_TREE_MAX_DEPTH = 48
+let AX_ANCESTOR_LIMIT = 64
+
+func isStableAXHitControl(_ role: String) -> Bool {
+    ["AXButton", "AXTextField", "AXTextArea", "AXComboBox", "AXLink", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXSlider", "AXMenuItem"].contains(role)
+}
+
+func isAXFrameOutsideViewport(_ frame: CGRect?, viewport: CGRect) -> Bool {
+    guard let frame, frame.width > 0, frame.height > 0 else { return false }
+    // Chromium 将滚出视口的旧消息压成边缘上的1px矩形，而不是提供负坐标。
+    let visible = frame.intersection(viewport)
+    return visible.isNull || visible.width <= 1 || visible.height <= 1
+}
+
+// Chromium 默认延迟创建网页 AX 树；优先现代 opt-in，仅在明确不支持时兼容旧 Electron。
+// 参考 cua PR #1756；这是请求应用提供辅助功能，不修改系统 TCC 权限。
+func enableApplicationAccessibility(setAttribute: (String) -> AXError) -> Bool {
+    let manual = setAttribute("AXManualAccessibility")
+    if manual == .success { return true }
+    guard manual == .attributeUnsupported else { return false }
+    return setAttribute("AXEnhancedUserInterface") == .success
+}
+
+// 对齐 Cua ax/enablement.rs：进程生存期缓存，空WebArea不算物化，超时有退避和次数上限。
+struct AXMaterializationState {
+    let attempts: Int
+    let lastAttempt: TimeInterval
+    let ready: Bool
+}
+func shouldProbeAXMaterialization(_ cached: AXMaterializationState?, now: TimeInterval) -> Bool {
+    guard let cached else { return true }
+    return !cached.ready && cached.attempts < 3 && now - cached.lastAttempt >= 30
+}
+func isPopulatedAXWebArea(role: String, childCount: Int) -> Bool { role == "AXWebArea" && childCount > 0 }
+func awaitAXMaterialization(probe: (TimeInterval) throws -> Bool, reassert: () -> Void,
+                            clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                            pause: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws -> Bool {
+    let started = clock(), deadline = started + 4
+    var reasserted = false
+    for _ in 0...40 {
+        guard clock() < deadline else { break }
+        if try probe(deadline) { reassert(); pause(0.5); return true }
+        let remaining = deadline - clock()
+        guard remaining > 0 else { break }
+        if !reasserted && clock() - started >= 2 { reassert(); reasserted = true }
+        pause(min(0.1, max(0, deadline - clock())))
+    }
+    return false
+}
+
 final class AccessibilityWorker {
     // 仅从串行worker调用；每次访问都有单元素超时、总节点/深度/时间预算。
+    private var enablement: [String: AXMaterializationState] = [:]
+    private func ensureApplicationAccessibility(_ target: Target) throws {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard shouldProbeAXMaterialization(enablement[target.processIdentity], now: now) else { return }
+        let app = AXUIElementCreateApplication(target.pid)
+        AXUIElementSetMessagingTimeout(app, 0.08)
+        let optIn = { enableApplicationAccessibility { AXUIElementSetAttributeValue(app, $0 as CFString, kCFBooleanTrue) } }
+        let enabled = optIn()
+        // 保留实测Chrome对setter返回notImplemented但读取已为true的兼容路径。
+        var enhanced: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(app, "AXEnhancedUserInterface" as CFString, &enhanced)
+        if result == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限已撤回", permission: "accessibility") }
+        let alreadyEnhanced = result == .success && (enhanced as? NSNumber)?.boolValue == true
+        guard enabled || alreadyEnhanced else { return }
+        let root = try matchedWindow(target)
+        let ready = try awaitAXMaterialization(probe: { deadline in
+            do { return try self.probeWebContent(root, deadline: deadline) }
+            catch let failure as NativeFailure where failure.code == "ax-materialization-budget" { return false }
+        }, reassert: { _ = optIn() })
+        enablement[target.processIdentity] = AXMaterializationState(attempts: (enablement[target.processIdentity]?.attempts ?? 0) + 1,
+            lastAttempt: now, ready: ready)
+    }
+    private func probeWebContent(_ root: AXUIElement, deadline: TimeInterval) throws -> Bool {
+        ends = deadline
+        let previousBudgetCode = budgetFailureCode; budgetFailureCode = "ax-materialization-budget"
+        defer { budgetFailureCode = previousBudgetCode }
+        var pending: [(AXUIElement, Int)] = [(root, 0)], seen: [AXUIElement] = []
+        while let (element, depth) = pending.popLast(), seen.count < 400, ProcessInfo.processInfo.systemUptime < deadline {
+            guard depth <= AX_TREE_MAX_DEPTH, !seen.contains(where: { CFEqual($0, element) }) else { continue }
+            seen.append(element)
+            let role = try string(element, kAXRoleAttribute) ?? "unknown"
+            if role == kAXMenuBarRole || role == kAXMenuRole { continue }
+            let subrole = try string(element, kAXSubroleAttribute)
+            guard !isHiddenAXControl(role: role, subrole: subrole) else { continue }
+            try budget()
+            var childCount: CFIndex = 0
+            let counted = AXUIElementGetAttributeValueCount(element, kAXChildrenAttribute as CFString, &childCount)
+            if counted == .cannotComplete { throw NativeFailure("ax-timeout", "AX物化探测无响应") }
+            if counted == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限已撤回", permission: "accessibility") }
+            if counted == .success, isPopulatedAXWebArea(role: role, childCount: childCount) { return true }
+            guard childCount > 0, depth < AX_TREE_MAX_DEPTH, ProcessInfo.processInfo.systemUptime < deadline else { continue }
+            var raw: CFArray?
+            let result = AXUIElementCopyAttributeValues(element, kAXChildrenAttribute as CFString, 0, min(childCount, 400 - seen.count), &raw)
+            if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX物化子树无响应") }
+            if result == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限已撤回", permission: "accessibility") }
+            if result == .success, let children = raw as? [AXUIElement] { pending.append(contentsOf: children.reversed().map { ($0, depth + 1) }) }
+        }
+        return false
+    }
     private var ends: TimeInterval = 0
+    private var budgetFailureCode = "ax-timeout"
     private func budget() throws {
-        guard ProcessInfo.processInfo.systemUptime < ends else { throw NativeFailure("ax-timeout", "AX读取超过预算") }
+        guard ProcessInfo.processInfo.systemUptime < ends else { throw NativeFailure(budgetFailureCode, "AX读取超过预算") }
     }
     private func value(_ element: AXUIElement, _ name: String) throws -> CFTypeRef? {
         try budget(); AXUIElementSetMessagingTimeout(element, 0.08)
@@ -72,39 +176,26 @@ final class AccessibilityWorker {
         let app = AXUIElementCreateApplication(target.pid)
         AXUIElementSetMessagingTimeout(app, 0.08)
         var raw: CFArray?
-        var matches: [AXUIElement] = []
-        if AXUIElementCopyAttributeValues(app, kAXWindowsAttribute as CFString, 0, 129, &raw) == .success, let windows = raw as? [AXUIElement], windows.count <= 128 {
-            for window in windows {
-                var pid: pid_t = 0
-                guard AXUIElementGetPid(window, &pid) == .success, pid == target.pid else { continue }
-                var wid: CGWindowID = 0
-                if _AXUIElementGetWindow(window, &wid) == .success, wid != 0, wid == target.windowId {
-                    return window
-                }
-                if let frame = try? rect(window), frame == target.bounds.cg {
-                    matches.append(window)
-                }
-            }
+        var windows: [AXUIElement] = []
+        let result = AXUIElementCopyAttributeValues(app, kAXWindowsAttribute as CFString, 0, 129, &raw)
+        if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX窗口枚举超时") }
+        if result == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限已撤回", permission: "accessibility") }
+        if result == .success, let values = raw as? [AXUIElement] {
+            guard values.count <= 128 else { throw NativeFailure("ambiguous-window", "AX窗口列表超过预算") }
+            for window in values where !windows.contains(where: { CFEqual($0, window) }) { windows.append(window) }
         }
-        if matches.count == 1 { return matches[0] }
-        if let focusedRaw = try? value(app, kAXFocusedWindowAttribute), CFGetTypeID(focusedRaw) == AXUIElementGetTypeID() {
-            let focusedWin = unsafeBitCast(focusedRaw, to: AXUIElement.self)
-            var pid: pid_t = 0
-            if AXUIElementGetPid(focusedWin, &pid) == .success, pid == target.pid {
-                var wid: CGWindowID = 0
-                if _AXUIElementGetWindow(focusedWin, &wid) == .success, wid != 0, wid == target.windowId {
-                    return focusedWin
-                }
-                if let frame = try? rect(focusedWin), frame == target.bounds.cg {
-                    return focusedWin
-                }
-                if matches.isEmpty, let frame = try? rect(focusedWin), frame.width > 1, frame.height > 1 {
-                    return focusedWin
-                }
-            }
+        // focused window可以补充AXWindows，但绝不能免除精确ID与owner证明。
+        if let focusedRaw = try value(app, kAXFocusedWindowAttribute), CFGetTypeID(focusedRaw) == AXUIElementGetTypeID() {
+            let focused = unsafeBitCast(focusedRaw, to: AXUIElement.self)
+            if !windows.contains(where: { CFEqual($0, focused) }) { windows.append(focused) }
         }
-        guard matches.count == 1 else { throw NativeFailure("ambiguous-window", "AX窗口与目标窗口不是唯一PID、几何匹配") }
-        return matches[0]
+        let candidates = windows.map { window -> AXWindowCandidate in
+            var pid: pid_t = 0, wid: CGWindowID = 0
+            let ownerKnown = AXUIElementGetPid(window, &pid) == .success
+            let idKnown = _AXUIElementGetWindow(window, &wid) == .success && wid != 0
+            return AXWindowCandidate(pid: ownerKnown ? pid : 0, windowId: idKnown ? wid : nil)
+        }
+        return windows[try matchingAXWindowIndex(target, candidates: candidates)]
     }
     private func actionNames(_ element: AXUIElement) throws -> [String] {
         try budget(); AXUIElementSetMessagingTimeout(element, 0.08)
@@ -118,15 +209,71 @@ final class AccessibilityWorker {
         }
         return []
     }
+    private func observedValue(_ element: AXUIElement, role: String) throws -> String {
+        let text: String
+        if [kAXTextFieldRole, kAXTextAreaRole, kAXStaticTextRole, kAXComboBoxRole].contains(role) {
+            text = try string(element, kAXValueAttribute) ?? ""
+        } else if [kAXScrollBarRole, kAXSliderRole, kAXCheckBoxRole, kAXRadioButtonRole].contains(role),
+                  let number = try value(element, kAXValueAttribute) as? NSNumber, number.doubleValue.isFinite {
+            text = number.stringValue
+        } else { text = "" }
+        guard text.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX文本值超过读取预算") }
+        return text
+    }
+    func fingerprint(_ element: AXUIElement) throws -> AXElementFingerprint {
+        ends = ProcessInfo.processInfo.systemUptime + 0.8
+        let role = try string(element, kAXRoleAttribute) ?? "unknown"
+        let subrole = try string(element, kAXSubroleAttribute) ?? ""
+        guard !isHiddenAXControl(role: role, subrole: subrole) else { throw NativeFailure("secure-field", "拒绝读取安全或未知目标") }
+        let title = try string(element, kAXTitleAttribute) ?? ""
+        let description = try string(element, kAXDescriptionAttribute) ?? ""
+        guard title.utf16.count <= 1_048_576, description.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX元数据超过读取预算") }
+        return AXElementFingerprint(role: role, subrole: subrole, title: title, description: description,
+            value: try observedValue(element, role: role), actions: try actionNames(element),
+            bounds: try rect(element).map(Rect.init), enabled: (try value(element, kAXEnabledAttribute) as? NSNumber)?.boolValue)
+    }
+    /// 旧句柄必须在原快照中，且目标自身的状态一致；不遍历无关整页来决定准入。
+    func validateObservationPoint(_ point: CGPoint, element: AXUIElement, snapshot: Snapshot) throws {
+        guard let entry = snapshot.axRefs.first(where: { CFEqual($0.value, element) }) else { throw NativeFailure("stale-element-ref", "像素命中不在本次观察中，请重新观察") }
+        try validateObservedPoint(snapshot.axStates, point: point, actualRef: entry.key)
+    }
+    func validateObservationElement(_ element: AXUIElement, snapshot: Snapshot) throws -> AXElementFingerprint {
+        guard let entry = snapshot.axRefs.first(where: { CFEqual($0.value, element) }),
+              let expected = snapshot.axStates[entry.key] else { throw NativeFailure("stale-element-ref", "目标不在本次观察的有效引用中，请重新观察") }
+        let current = try fingerprint(element)
+        try validateObservedElementState(expected, current: current)
+        return current
+    }
     func read(_ target: Target, allowSurfaces: Bool = false) throws -> AXTree {
+        try ensureApplicationAccessibility(target)
         let root = try matchedWindow(target)
         ends = ProcessInfo.processInfo.systemUptime + 2.0
+        let previousBudgetCode = budgetFailureCode; budgetFailureCode = "ax-read-budget"
+        defer { budgetFailureCode = previousBudgetCode }
         var output = AXObservationBuffer(), refs: [String: AXUIElement] = [:]
+        var states: [String: AXElementFingerprint] = [:]
         var seen: [AXUIElement] = []
+        // 优先遍历真实焦点祖先分支，避免长对话先耗尽256节点预算而遗漏底部编辑器。
+        var focusedPath: [AXUIElement] = []
+        let app = AXUIElementCreateApplication(target.pid)
+        do {
+            if let raw = try value(app, kAXFocusedUIElementAttribute), CFGetTypeID(raw) == AXUIElementGetTypeID() {
+                var node = unsafeBitCast(raw, to: AXUIElement.self)
+                for _ in 0..<AX_ANCESTOR_LIMIT {
+                    guard !focusedPath.contains(where: { CFEqual($0, node) }) else { break }
+                    focusedPath.append(node)
+                    if CFEqual(node, root) { break }
+                    guard let parent = try value(node, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+                    node = unsafeBitCast(parent, to: AXUIElement.self)
+                }
+                if focusedPath.last.map({ !CFEqual($0, root) }) ?? true { focusedPath = [] }
+            }
+        } catch let failure as NativeFailure where failure.code == "ax-read-budget" { output.markTruncated() }
         func field(_ text: String, limit: Int = 256) -> String { String(reflecting: String(text.prefix(limit))) }
         func visit(_ element: AXUIElement, depth: Int) throws {
             try budget()
-            guard depth <= 12, seen.count < 256, output.bytes < 32_700, !seen.contains(where: { CFEqual($0, element) }) else { return }
+            guard depth <= AX_TREE_MAX_DEPTH, seen.count < 256, output.bytes < 32_700 else { output.markTruncated(); return }
+            guard !seen.contains(where: { CFEqual($0, element) }) else { return }
             seen.append(element)
             let role = try string(element, kAXRoleAttribute) ?? "unknown"
             let subrole = try string(element, kAXSubroleAttribute) ?? ""
@@ -139,40 +286,48 @@ final class AccessibilityWorker {
                 return
             }
             let frame = try rect(element)
+            // 明确位于窗口外的滚动历史不占用输出预算；零几何容器与焦点路径仍保留。
+            if depth > 0, isAXFrameOutsideViewport(frame, viewport: target.bounds.cg),
+               !focusedPath.contains(where: { CFEqual($0, element) }) { return }
             let title = try string(element, kAXTitleAttribute) ?? ""
             let description = try string(element, kAXDescriptionAttribute) ?? ""
             guard title.utf16.count <= 1_048_576, description.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX元数据超过读取预算") }
             let names = try actionNames(element)
-            var text = ""
-            if [kAXTextFieldRole, kAXTextAreaRole, kAXStaticTextRole, kAXComboBoxRole].contains(role) {
-                text = try string(element, kAXValueAttribute) ?? ""
-                guard text.utf16.count <= 1_048_576 else { throw NativeFailure("ax-budget", "AX文本值超过读取预算") }
-            } else if role == kAXScrollBarRole, let position = try value(element, kAXValueAttribute) as? NSNumber, position.doubleValue.isFinite {
-                // 位置随最新观察返回，使模型能独立核对滚动结果。
-                text = position.stringValue
-            }
+            let text = try observedValue(element, role: role)
+            let enabled = (try value(element, kAXEnabledAttribute) as? NSNumber)?.boolValue
             let geometry = frame.map { "\($0.origin.x),\($0.origin.y),\($0.width),\($0.height)" } ?? "unknown"
-            let entry = "\(depth) role=\(field(role)) subrole=\(field(subrole)) frame=\(geometry) title=\(field(title)) description=\(field(description, limit: 384)) value=\(field(text, limit: 768)) actions=\(field(names.joined(separator: ","), limit: 2048))"
+            let focused = focusedPath.first.map { CFEqual($0, element) } ?? false
+            let entry = "\(depth) focused=\(focused) role=\(field(role)) subrole=\(field(subrole)) frame=\(geometry) title=\(field(title)) description=\(field(description, limit: 384)) value=\(field(text, limit: 768)) actions=\(field(names.joined(separator: ","), limit: 2048))"
             let ref = UUID().uuidString
             // 摘要不含随机ref，完整文本/动作的哈希也参与核验，避免截断文本变化被忽略。
             let content = String(decoding: try JSONEncoder().encode([title, description, text] + names), as: UTF8.self)
             guard output.append(entry: entry, content: content, ref: ref) else { return }
             refs[ref] = element
-            guard depth < 12, seen.count < 256 else { return }
+            states[ref] = AXElementFingerprint(role: role, subrole: subrole, title: title, description: description,
+                value: text, actions: names, bounds: frame.map(Rect.init), enabled: enabled, depth: depth)
+            guard depth < AX_TREE_MAX_DEPTH, seen.count < 256 else { output.markTruncated(); return }
             var children: CFArray?
+            var childCount: CFIndex = 0
+            let counted = AXUIElementGetAttributeValueCount(element, kAXChildrenAttribute as CFString, &childCount)
+            if counted == .cannotComplete { throw NativeFailure("ax-timeout", "AX子节点计数超时") }
+            if counted == .apiDisabled { throw NativeFailure("permission-required", "辅助功能权限已撤回", permission: "accessibility") }
+            if counted == .success && childCount > 256 - seen.count { output.markTruncated() }
             let result = AXUIElementCopyAttributeValues(element, kAXChildrenAttribute as CFString, 0, 256 - seen.count, &children)
             if result == .cannotComplete { throw NativeFailure("ax-timeout", "AX子树读取超时，不重试") }
             if result == .success, let items = children as? [AXUIElement] {
-                for child in items { try visit(child, depth: depth + 1) }
+                let focused = items.filter { child in focusedPath.contains(where: { CFEqual($0, child) }) }
+                let others = items.filter { child in !focusedPath.contains(where: { CFEqual($0, child) }) }
+                for child in focused + others { try visit(child, depth: depth + 1) }
             }
         }
-        try visit(root, depth: 0)
-        return AXTree(text: output.text, digest: output.digest, root: root, refs: refs)
+        do { try visit(root, depth: 0) }
+        catch let failure as NativeFailure where failure.code == "ax-read-budget" { output.markTruncated() }
+        return AXTree(text: output.text, digest: output.digest, root: root, refs: refs, states: states)
     }
     func validateElement(_ element: AXUIElement, target: Target, root: AXUIElement) throws {
         ends = ProcessInfo.processInfo.systemUptime + 0.8
         var node = element
-        for _ in 0..<16 {
+        for _ in 0..<AX_ANCESTOR_LIMIT {
             var pid: pid_t = 0
             guard AXUIElementGetPid(node, &pid) == .success, pid == target.pid,
                   let role = try string(node, kAXRoleAttribute) else { throw NativeFailure("unsafe-element", "AX元素身份不明") }
@@ -194,7 +349,7 @@ final class AccessibilityWorker {
             return nil
         }
         var node = focused
-        for _ in 0..<16 {
+        for _ in 0..<AX_ANCESTOR_LIMIT {
             if try string(node, kAXRoleAttribute) == kAXScrollAreaRole {
                 // WebKit有时不暴露AXContents/AXVerticalScrollBar；只接受该滚动区
                 // 真实直属子节点中唯一的垂直滚动条和WebArea，不搜索其他容器。
@@ -303,6 +458,21 @@ final class AccessibilityWorker {
         let system = AXUIElementCreateSystemWide(); AXUIElementSetMessagingTimeout(system, 0.08)
         var element: AXUIElement?
         guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &element) == .success, let element else { throw NativeFailure("unknown-target", "无法识别落点控件") }
+        // Chrome 的点命中可能在按钮/编辑框与其文字子节点之间变化。绑定到最近的实际交互控件，
+        // 避免相同落点、相同布局在 prepare/perform 之间仅因叶节点不同而误判目标变化。
+        ends = ProcessInfo.processInfo.systemUptime + 0.8
+        let pid = try elementPID(element)
+        var node = element
+        for _ in 0..<AX_ANCESTOR_LIMIT {
+            guard try elementPID(node) == pid else { break }
+            let role = try string(node, kAXRoleAttribute) ?? "unknown"
+            let subrole = try string(node, kAXSubroleAttribute) ?? ""
+            if isHiddenAXControl(role: role, subrole: subrole) { throw NativeFailure("secure-field", "坐标命中安全或未知控件，未投递") }
+            if isStableAXHitControl(role) { return node }
+            if ["AXWindow", "AXWebArea", "AXApplication"].contains(role) { break }
+            guard let parent = try value(node, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+            node = unsafeBitCast(parent, to: AXUIElement.self)
+        }
         return element
     }
     func elementPID(_ element: AXUIElement) throws -> pid_t {
@@ -323,7 +493,7 @@ final class AccessibilityWorker {
     /** 网页内容位于AXWebArea内；地址栏/浏览器chrome不在该子树中。 */
     private func hasWebAreaAncestor(_ element: AXUIElement) throws -> Bool {
         var node = element
-        for _ in 0..<16 {
+        for _ in 0..<AX_ANCESTOR_LIMIT {
             if (try string(node, kAXRoleAttribute)) == "AXWebArea" { return true }
             guard let parent = try value(node, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { return false }
             node = unsafeBitCast(parent, to: AXUIElement.self)
@@ -342,16 +512,19 @@ final class AccessibilityWorker {
             writeNativeComputerUseLog(location: "Accessibility.swift:windowForFocused:no_window_frame", rawError: "无法读取焦点窗口几何", errorCode: "unsafe-focus", targetApp: ["pid": pid], focusedElement: describeAXElementInfo(root))
             throw NativeFailure("unsafe-focus", "无法读取焦点窗口几何")
         }
-        let matches = windows.filter { $0.pid == pid && $0.bounds.cg == frame }
+        var owner: pid_t = 0, wid: CGWindowID = 0
+        guard AXUIElementGetPid(root, &owner) == .success, owner == pid,
+              _AXUIElementGetWindow(root, &wid) == .success, wid != 0 else {
+            throw NativeFailure("ambiguous-window", "无法证明焦点窗口的精确ID和owner")
+        }
+        let matches = windows.filter { $0.pid == pid && $0.windowId == wid }
         if matches.count == 1 { return matches[0] }
+        guard matches.isEmpty else { throw NativeFailure("ambiguous-window", "焦点窗口ID不唯一") }
         guard let runningApp = NSRunningApplication(processIdentifier: pid),
               let bundle = runningApp.bundleIdentifier,
               let ident = try? processIdentity(pid) else {
             throw NativeFailure("ambiguous-window", "焦点窗口所属应用无效")
         }
-        var wid: CGWindowID = 0
-        _ = _AXUIElementGetWindow(root, &wid)
-        if wid == 0 { wid = UInt32(bitPattern: pid) }
         let title = (try? string(root, kAXTitleAttribute)) ?? ""
         return Target(windowId: wid, pid: pid, processIdentity: ident, bundleId: bundle, title: title, bounds: Rect(frame))
     }

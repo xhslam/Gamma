@@ -186,11 +186,18 @@ export class AutomaticMemoryStore {
     this.save(slug, doc, raw)
     return [...changes.values()]
   }
-  buildRecall(slug: string, query: string): string {
+  /** 提取只读视图与旧召回共用同一可见性规则；不暴露内部删除索引或过滤前事实。 */
+  getRetrievalEntries(slug: string): AutomaticMemoryEntry[] {
     const { doc } = this.load(slug)
-    if (!doc.settings.enabled || !doc.entries.length) return ''
-    const visible = doc.entries.map(entry => ({ ...entry, content: entry.manuallyEdited ? entry.content : entry.facts.filter(fact => doc.settings.includeSensitive || !fact.sensitive).map(fact => fact.content).join('\n') }))
-      .filter(entry => entry.content && !hasSecret(entry.content) && (doc.settings.includeSensitive || !hasSensitive(entry.content)))
+    if (!doc.settings.enabled) return []
+    return doc.entries.map(entry => ({ ...entry,
+      facts: entry.facts.filter(fact => doc.settings.includeSensitive || !fact.sensitive),
+      content: entry.manuallyEdited ? entry.content : entry.facts.filter(fact => doc.settings.includeSensitive || !fact.sensitive).map(fact => fact.content).join('\n'),
+    })).filter(entry => entry.content && !hasSecret(entry.content) && (doc.settings.includeSensitive || !hasSensitive(entry.content)))
+  }
+  buildRecall(slug: string, query: string): string {
+    const visible = this.getRetrievalEntries(slug)
+    if (!visible.length) return ''
     const normalizedQuery = normalize(query.slice(0, 2000))
     const terms = new Set(normalizedQuery.match(/[a-z0-9_-]{2,}|[\p{Script=Han}]{2,}/gu) ?? [])
     // 中文问题通常没有空格，增加二字词匹配，避免整句只能做子串检索。

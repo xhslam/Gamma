@@ -1,6 +1,6 @@
 .code-field-background {
   --code-field-ink: hsl(var(--muted-foreground));
-  --code-field-glow: hsl(var(--primary));
+  --code-field-glow: hsl(var(--background-interaction));
   --code-field-base-opacity: 0.15;
   --code-field-glow-opacity: 0.64;
   position: absolute;
@@ -14,7 +14,6 @@
 }
 
 .dark .code-field-background {
-  --code-field-glow: hsl(var(--primary));
   --code-field-base-opacity: 0.1;
   --code-field-glow-opacity: 0.62;
 }

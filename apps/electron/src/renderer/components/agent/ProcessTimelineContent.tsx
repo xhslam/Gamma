@@ -1,5 +1,7 @@
 import * as React from 'react'
 import type { SDKToolUseBlock } from '@gamma/shared'
+import { FileText, Search, Terminal } from 'lucide-react'
+import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 import { cn } from '@/lib/utils'
 import { getProcessActionLabel } from './process-timeline-presentation'
 
@@ -12,24 +14,32 @@ export function ProcessTimelineTool({ block, children }: ProcessTimelineToolProp
   const [expanded, setExpanded] = React.useState(false)
   const contentId = React.useId()
   const label = getProcessActionLabel(block)
+  const name = block.name.toLowerCase()
+  const Icon = ['bash', 'terminalexecute'].includes(name) ? Terminal : /search|grep|glob|find/.test(name) ? Search : FileText
 
   return (
-    <div>
+    <div className="process-trace-tool">
       <button
         type="button"
         className="process-timeline-row"
         data-process-action-row=""
         aria-expanded={expanded}
         aria-controls={contentId}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={() => setExpanded(!expanded)}
       >
+        <Icon size={14} className="process-trace-icon" aria-hidden="true" />
         <span className="min-w-0 truncate" title={[label.action, label.object].filter(Boolean).join(' ')}>
           {label.action}
           {label.action && label.object ? ' ' : null}
           {label.object && <span className={cn(label.monospace && 'font-mono')}>{label.object.replace(/\s*\n\s*/g, ' ')}</span>}
         </span>
+        <DisclosureChevron expanded={expanded} size={12} />
       </button>
-      {expanded && <div id={contentId} className="process-timeline-details">{children}</div>}
+      <div className="process-trace-reveal" data-open={expanded} aria-hidden={!expanded} ref={(element) => { element?.toggleAttribute('inert', !expanded) }}>
+        <div className="process-trace-clip">
+          <div id={contentId} className="process-timeline-details">{children}</div>
+        </div>
+      </div>
     </div>
   )
 }

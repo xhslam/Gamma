@@ -10,11 +10,14 @@ describe('Given 原生投递证据 When 分类 Then 未知结果优先于准备�
   for (const code of PAUSE_CODES) test(`${code} 不因 not-dispatched 放宽`, () => {
     expect(classifyComputerFailure({ code, outcome: 'not-dispatched', phase: 'prepare' })).toBe('pause')
   })
-  test('明确未投递可恢复；旧 rejected 无错误码、未知异常、动作后观察错误均暂停', () => {
+  test('明确未投递可恢复；旧 rejected 与未知异常仍暂停，后置只读目标变化可重新观察', () => {
     expect(classifyComputerFailure({ outcome: 'not-dispatched', phase: 'perform' })).toBe('reobserve')
     expect(classifyComputerFailure({ outcome: 'rejected', phase: 'perform' })).toBe('pause')
     expect(classifyComputerFailure({ code: 'new-code', phase: 'prepare' })).toBe('pause')
-    expect(classifyComputerFailure({ code: 'unsafe-focus', outcome: 'not-dispatched', phase: 'after-dispatch' })).toBe('pause')
+    expect(classifyComputerFailure({ code: 'unsafe-focus', phase: 'after-dispatch' })).toBe('reobserve')
+    expect(classifyComputerFailure({ code: 'unsafe-focus', outcome: 'unknown', phase: 'after-dispatch' })).toBe('pause')
+    expect(classifyComputerFailure({ code: 'new-code', phase: 'after-dispatch' })).toBe('pause')
+    expect(classifyComputerFailure({ code: 'permission-required', phase: 'after-dispatch' })).toBe('pause')
   })
   for (const permission of ['accessibility', 'screen', 'listen', 'post'] as const) test(`缺少 ${permission} 明确告知权限及替代路径`, () => {
     expect(classifyComputerFailure({ code: 'permission-required', permission, phase: 'prepare' })).toBe('permission')

@@ -13,7 +13,7 @@ import { SidebarTransition } from './SidebarTransition'
 import { CollapsedSidebarHeader } from './CollapsedSidebarHeader'
 import { RightSidePanel } from './RightSidePanel'
 import { WorkspacePanels } from './WorkspacePanels'
-import { beginPaneResize } from '@/lib/pane-resize-policy'
+import { beginPaneResize, commitPaneResize } from '@/lib/pane-resize-policy'
 import { MainArea } from '@/components/tabs/MainArea'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { LEFT_SIDEBAR_WIDTH } from '@/atoms/sidebar-atoms'
@@ -251,16 +251,24 @@ export function AppShell(): React.ReactElement {
       },
       finish: commit => {
         rightPanelDragCleanup.current = null
-        setDraggedRightPanelWidth(null)
-        if (!commit) setSidebarCollapsed(sidebarCollapsed)
-        if (currentSessionIdRef.current !== dragSessionId) return
         if (!commit) {
-          setRightPanelLayout(snapshot)
-          setIsPanelOpen(isPanelOpen)
+          setDraggedRightPanelWidth(null)
+          setSidebarCollapsed(sidebarCollapsed)
+          if (currentSessionIdRef.current === dragSessionId) {
+            setRightPanelLayout(snapshot)
+            setIsPanelOpen(isPanelOpen)
+          }
+          return
         }
-        else setRightPanelLayout(previous => isWideWorkspace
-          ? { ...previous, widePanelWidthOverride: latestWidth }
-          : { ...previous, width: latestWidth })
+        // 拖动预览是 React 状态，持久布局是外部 Jotai 状态；在同一次提交中
+        // 切换，避免先显示旧宽度并触发宽度过渡，造成松手后回弹。
+        commitPaneResize(() => {
+          if (currentSessionIdRef.current === dragSessionId) {
+            setRightPanelLayout(previous => isWideWorkspace
+              ? { ...previous, widePanelWidthOverride: latestWidth }
+              : { ...previous, width: latestWidth })
+          }
+        }, () => setDraggedRightPanelWidth(null))
       },
     })
   }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, isPanelOpen, leftSidebarOccupiedWidth, rightPanelLayout, rightPanelMinimumWidth, setIsPanelOpen, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth, workspaceSide])
