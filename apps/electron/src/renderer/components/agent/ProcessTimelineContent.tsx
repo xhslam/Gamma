@@ -5,13 +5,20 @@ import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 import { cn } from '@/lib/utils'
 import { getProcessActionLabel } from './process-timeline-presentation'
 
+/** 当前操作变更时，历史卡片恢复自动收起；用户仍可重新展开查看。 */
+export const ProcessCurrentToolContext = React.createContext<string | null>(null)
+
 interface ProcessTimelineToolProps {
   block: SDKToolUseBlock
   children: React.ReactNode
 }
 
 export function ProcessTimelineTool({ block, children }: ProcessTimelineToolProps): React.ReactElement {
-  const [expanded, setExpanded] = React.useState(false)
+  const currentToolId = React.useContext(ProcessCurrentToolContext)
+  const [manualExpansion, setManualExpansion] = React.useState<{ toolId: string | null; expanded: boolean } | null>(null)
+  const expanded = manualExpansion?.toolId === currentToolId
+    ? manualExpansion.expanded
+    : currentToolId === block.id
   const contentId = React.useId()
   const label = getProcessActionLabel(block)
   const name = block.name.toLowerCase()
@@ -25,7 +32,7 @@ export function ProcessTimelineTool({ block, children }: ProcessTimelineToolProp
         data-process-action-row=""
         aria-expanded={expanded}
         aria-controls={contentId}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => setManualExpansion({ toolId: currentToolId, expanded: !expanded })}
       >
         <Icon size={14} className="process-trace-icon" aria-hidden="true" />
         <span className="min-w-0 truncate" title={[label.action, label.object].filter(Boolean).join(' ')}>

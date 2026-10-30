@@ -25,7 +25,7 @@ describe('Given 分栏死区和可行宽度', () => {
     expect(getWorkspaceResizeWidth(300, 100, 140, 'left')).toBe(340)
     expect(getWorkspaceResizeWidth(300, 100, 140, 'right')).toBe(260)
   })
-  test('When 双击重置均分 Then 在窄宽窗口均遵守可行比例', () => {
+  test('When 使用默认均分比例 Then 在窄宽窗口均遵守可行比例', () => {
     for (const width of [0, 200, 648, 1200]) expect(clampRightWorkspaceSplitRatioForWidth(0.5, width)).toBe(0.5)
   })
 })

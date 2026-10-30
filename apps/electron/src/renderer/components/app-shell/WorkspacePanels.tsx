@@ -13,18 +13,17 @@ interface WorkspacePanelsProps {
   maximumWidth: number
   resizing?: boolean
   onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void
-  onResizeReset?: () => void
   onResizeKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }
 
 /** 通过稳定的 key 移动面板，保留编辑草稿与浏览器实例；DOM 顺序同时跟随视觉顺序。 */
-export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, resizing = false, onResizeStart, onResizeKeyDown, onResizeReset }: WorkspacePanelsProps): React.ReactElement {
+export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen, workspaceWidth, minimumWidth, maximumWidth, resizing = false, onResizeStart, onResizeKeyDown }: WorkspacePanelsProps): React.ReactElement {
   const panes = [
     <div key="agent" data-workspace-pane="agent" className="relative z-[60] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{agent}</div>,
   ]
   if (workspace !== null) {
     const workspacePane = (
-      <div key="workspace" data-workspace-pane="workspace" data-workspace-open={workspaceOpen} data-workspace-side={workspaceSide} className="relative z-[60] flex min-h-0 flex-shrink-0 items-stretch crt-sidebar">
+      <div key="workspace" data-workspace-pane="workspace" data-workspace-open={workspaceOpen} data-workspace-side={workspaceSide} className="relative z-[61] flex min-h-0 flex-shrink-0 items-stretch crt-sidebar">
         {workspaceOpen && (
           <div
             role="separator"
@@ -37,7 +36,6 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
             tabIndex={0}
             className={cn('absolute top-0 bottom-0 w-2 touch-none cursor-col-resize active:bg-primary/50 transition-colors z-20 focus-visible:bg-primary/20 focus-visible:outline-none', workspaceSide === 'left' ? 'right-0 translate-x-full' : 'left-0 -translate-x-full')}
             onPointerDown={onResizeStart}
-            onDoubleClick={onResizeReset}
             onKeyDown={onResizeKeyDown}
           />
         )}
