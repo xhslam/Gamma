@@ -69,11 +69,13 @@ describe('Given 消息区域的真实记忆保存提示', () => {
 
   test('When 点击保存记录 Then 原有记忆详情仍可打开', async () => {
     const result = await renderer.run(`${helpers}
-      t.seed([t.change()]);await t.mount();notice().querySelector('[role="status"] button').click();
+      t.seed([t.change()]);await t.mount();
+      const collapsed=!notice().querySelector('details').open;notice().querySelector('summary').click();
+      notice().querySelector('[role="status"] button').click();
       await t.wait(()=>document.querySelector('[role="dialog"]')?.textContent.includes('回答简洁清晰'));
-      return {dialogOpen:true,deleteCalls:t.deleteCalls()};
+      return {collapsed,dialogOpen:true,deleteCalls:t.deleteCalls()};
     `)
-    expect(result).toEqual({ dialogOpen: true, deleteCalls: 0 })
+    expect(result).toEqual({ collapsed: true, dialogOpen: true, deleteCalls: 0 })
   }, 30_000)
 
   test('When 单条提示、窄屏长标题和深浅主题 Then 间距紧凑、关闭按钮可聚焦且内容不横向溢出', async () => {

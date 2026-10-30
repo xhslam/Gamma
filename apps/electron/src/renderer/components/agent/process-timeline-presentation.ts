@@ -36,7 +36,13 @@ export function getProcessActionLabel(block: SDKToolUseBlock): ProcessActionLabe
     case 'websearch': return { action: '搜索', object: firstString(input, 'query') ?? '网页' }
     case 'agent':
     case 'task': return { action: '委派', object: firstString(input, 'description', 'name', 'prompt') ?? '子任务' }
-    case 'memory_read': return { action: '查阅记忆', object: path, monospace: true }
+    case 'memory_read': {
+      const paths = Array.isArray(input.path) ? input.path.filter((value): value is string => typeof value === 'string') : path ? [path] : []
+      return { action: '读取记忆', object: paths.join('、') || '文件', monospace: true }
+    }
+    case 'memory_list': return { action: '列出记忆目录', object: firstString(input, 'path_prefix'), monospace: true }
+    case 'memory_search': return { action: '搜索记忆', object: firstString(input, 'query') }
+    case 'memory_delete': return { action: '删除记忆', object: path, monospace: true }
     case 'memory_write':
     case 'memory_append':
     case 'memory_str_replace': return { action: '更新记忆', object: path, monospace: true }

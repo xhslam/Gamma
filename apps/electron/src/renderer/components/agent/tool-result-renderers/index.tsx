@@ -18,6 +18,7 @@ import { TaskGetResultRenderer } from './task-get-result'
 import { TaskListResultRenderer } from './task-list-result'
 import { ComputerResultRenderer } from './computer-result'
 import { DefaultResultRenderer } from './default-result'
+import { MemoryResultRenderer } from './memory-result'
 
 export interface ToolResultRendererProps {
   toolName: string
@@ -29,6 +30,11 @@ export interface ToolResultRendererProps {
 
 export function ToolResultRenderer({ toolName, input, result, isError, basePath }: ToolResultRendererProps): React.ReactElement {
   switch (toolName) {
+    case 'memory_read':
+    case 'memory_write':
+    case 'memory_append':
+    case 'memory_str_replace':
+      return <MemoryResultRenderer toolName={toolName} result={result} isError={isError} />
     case 'computer':
       return <ComputerResultRenderer result={result} isError={isError} />
     case 'Bash':

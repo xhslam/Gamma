@@ -133,6 +133,32 @@ describe('Given 新会话的字符流场背景', () => {
       expect(result.focused).toBe(true)
     }, 30_000)
   }
+  for (const theme of ['', 'dark', 'theme-ocean-light', 'theme-forest-light', 'theme-slate-light', 'dark theme-ocean-dark', 'dark theme-forest-dark', 'dark theme-slate-dark', 'dark theme-terminal-dark']) {
+    test(`When 在 ${theme || '默认亮色'} 中靠近或点击 Then 交互高亮均为深蓝色且静止底色不变`, async () => {
+      const result = await renderer.run<{ ink: string; hover: string[]; click: string[] }>(`
+        window.mountField(${theme.startsWith('dark')});
+        document.documentElement.className=${JSON.stringify(theme)};
+        await new Promise(resolve => setTimeout(resolve, 160));
+        const context = document.querySelector('canvas').getContext('2d');
+        const ink = context.fillStyle;
+        const fillText = context.fillText.bind(context);
+        const colors = new Set();
+        context.fillText = (...args) => { colors.add(context.fillStyle); fillText(...args); };
+        window.moveField();
+        await new Promise(resolve => setTimeout(resolve, 160));
+        const hover = [...colors].filter(color => color !== ink);
+        colors.clear();
+        window.clickField();
+        await new Promise(resolve => setTimeout(resolve, 320));
+        return {ink,hover,click:[...colors].filter(color => color !== ink)};
+      `, { screenshot: artifacts ? join(artifacts, `code-field-blue-${theme.replaceAll(' ', '-') || 'light'}.png`) : undefined })
+      const dark = theme.startsWith('dark')
+      const expected = dark ? '#3156a3' : '#1e3a8a'
+      expect(result.ink).toBe(dark ? '#b0aea5' : '#5e5d59')
+      expect(result.hover).toEqual([expected])
+      expect(result.click).toEqual([expected])
+    }, 30_000)
+  }
   test('When 系统要求减少动态效果 Then 保留静态纹理且不再变换字符', async () => {
     const result = await renderer.run<{ before: Sample; after: Sample }>(`
       await new Promise(resolve => setTimeout(resolve, 160));

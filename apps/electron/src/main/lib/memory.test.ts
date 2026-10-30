@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as sdk from '@earendil-works/pi-coding-agent'
-import { createMemoryExtension } from './memory'
+import { createMemoryExtension, version } from './memory'
 import { getMemoryDir, setConfigHomeForTest } from './config-paths'
 import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 
@@ -122,7 +122,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
     }
   })
 
-  test('When 检查工具注册 Then 五个工具全部注册', () => {
+  test('When 检查工具注册 Then 七个工具含检索与删除全部注册', () => {
     const root = mkdtempSync(join(tmpdir(), 'gamma-memory-reg-'))
     try {
       const ext = createMemoryExtension({ root })
@@ -139,7 +139,9 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
       expect(registeredTools).toContain('memory_write')
       expect(registeredTools).toContain('memory_append')
       expect(registeredTools).toContain('memory_str_replace')
-      expect(registeredTools.length).toBe(5)
+      expect(registeredTools).toContain('memory_search')
+      expect(registeredTools).toContain('memory_delete')
+      expect(registeredTools.length).toBe(7)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -259,7 +261,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
     }
   })
 
-  test('When 并发同时向同一文件 append 两次 Then withFileMutationQueue 确保两行均成功写入无数据丢失', async () => {
+  test('When 同版本并发追加 Then 仅一笔成功，另一笔读取新版本后重试', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gamma-memory-concurrent-'))
     try {
       const ext = createMemoryExtension({ root })
@@ -278,17 +280,23 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
         if_version: 'new',
       })
 
-      // 真正同时发起两次 append（并发 Promise.all），两笔均不带 if_version 进行盲追加
+      // 同一个已读版本的并发更新必须冲突，而不是静默盲追加。
       const append1Promise = tools.memory_append.execute('id1', {
         path: 'profile.md',
         content: '- [stated] 条目1',
+        if_version: version(initialContent),
       })
       const append2Promise = tools.memory_append.execute('id2', {
         path: 'profile.md',
         content: '- [stated] 条目2',
+        if_version: version(initialContent),
       })
 
-      await Promise.all([append1Promise, append2Promise])
+      const results = await Promise.allSettled([append1Promise, append2Promise])
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+      expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+      const current = readFileSync(join(root, 'profile.md'), 'utf8')
+      await tools.memory_append.execute('retry', { path: 'profile.md', content: current.includes('条目1') ? '- [stated] 条目2' : '- [stated] 条目1', if_version: version(current) })
 
       const finalRead = await tools.memory_read.execute('id', { path: 'profile.md' })
       expect(finalRead.content[0].text).toContain('- [stated] 条目1')
@@ -298,55 +306,21 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
     }
   })
 
-  test('When 模拟压缩后 before_agent_start 再次返回记忆消息；未压缩时不重复返回', async () => {
+  test('When 每轮开始或压缩后 Then system始终包含稳定目录而不累加custom消息', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gamma-memory-compact-'))
     try {
+      const handlers = new Map<string, (event: unknown, ctx: unknown) => Promise<{ systemPrompt?: string }> | undefined>()
       const ext = createMemoryExtension({ root })
-      let beforeAgentStartHandler: any
-      let compactHandler: any
-      ext({
-        registerTool() {},
-        on(event: string, handler: any) {
-          if (event === 'before_agent_start') beforeAgentStartHandler = handler
-          if (event === 'session_compact') compactHandler = handler
-        },
-      } as any)
-
-      const activeEntries: any[] = []
-      const fakeCtx: any = {
-        sessionManager: {
-          buildContextEntries: () => activeEntries,
-        },
-      }
-
-      // 1. 首轮：未注入过，返回记忆消息（必须包含 customType === 'memory'）
-      const res1 = await beforeAgentStartHandler({ messageType: 'user' }, fakeCtx)
-      expect(res1).toBeDefined()
-      expect(res1.message.customType).toBe('memory')
-
-      // 模拟 Pi 会话将记忆消息加入上下文
-      activeEntries.push({
-        id: 'msg-memory-1',
-        type: 'custom_message',
-        customType: 'memory',
-        content: res1.message.content,
-      })
-
-      // 2. 第二轮（未压缩）：上下文里已有 customType === 'memory'，不重复注入
-      const res2 = await beforeAgentStartHandler({ messageType: 'user' }, fakeCtx)
-      expect(res2).toBeUndefined()
-
-      // 3. 模拟发生压缩：触发 session_compact，并且 buildContextEntries 丢弃了前面的旧记忆条目
-      compactHandler?.()
-      activeEntries.length = 0 // 压缩后活跃上下文丢失旧记忆
-
-      // 4. 压缩后的下一轮：检测到活跃上下文中无记忆，按 customType === 'memory' 检查未通过，再次返回记忆消息
-      const res3 = await beforeAgentStartHandler({ messageType: 'user' }, fakeCtx)
-      expect(res3).toBeDefined()
-      expect(res3.message.customType).toBe('memory')
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
+      ext({ registerTool() {}, appendEntry() {}, on(event: string, handler: unknown) { handlers.set(event, handler as (event: unknown, ctx: unknown) => Promise<{ systemPrompt?: string }>) } } as unknown as sdk.ExtensionAPI)
+      const fakeCtx = { sessionManager: { buildContextEntries: () => [], getEntries: () => [] } }
+      const before = handlers.get('before_agent_start')
+      if (!before) throw new Error('before_agent_start 未注册')
+      const first = await before({ messageType: 'user', prompt: '你好', systemPrompt: 'BASE' }, fakeCtx)
+      const second = await before({ messageType: 'user', prompt: '你好', systemPrompt: 'BASE' }, fakeCtx)
+      expect(first?.systemPrompt).toContain('<memory_listing>')
+      expect(first?.systemPrompt).toBe(second?.systemPrompt)
+      expect(first?.systemPrompt?.match(/<gamma_memory_context>/g)).toHaveLength(1)
+    } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
   test('When memoryEnabled 默认为关闭 Then 只有显式传 true 才挂载长期记忆扩展', async () => {

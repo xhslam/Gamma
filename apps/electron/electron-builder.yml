@@ -106,6 +106,7 @@ mac:
       filter:
         - gamma-computer-use-helper
         - entitlements.plist
+        - CUA-DRIVER-LICENSE.txt
   sign: scripts/sign-mac-app.cjs
   binaries:
     - Contents/Resources/agent-island/macos-agent-island-helper

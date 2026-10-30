@@ -8,7 +8,7 @@ beforeAll(async () => {
     import React from 'react'
     import { createRoot } from 'react-dom/client'
     import { Provider, createStore, useAtomValue } from 'jotai'
-    import { beginPaneResize, isPaneResizeProtected } from '@/lib/pane-resize-policy'
+    import { beginPaneResize, commitPaneResize, isPaneResizeProtected } from '@/lib/pane-resize-policy'
     import { WorkspacePanels } from '@/components/app-shell/WorkspacePanels'
     import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
     import { AgentHeader } from '@/components/agent/AgentHeader'
@@ -22,7 +22,24 @@ beforeAll(async () => {
     const delay = (ms = 25) => new Promise(resolve => setTimeout(resolve, ms))
     const until = async predicate => { for(let i=0;i<150;i++){if(predicate())return;await delay(10)}throw new Error('工作区布局未达到预期状态') }
     window.workspaceLayoutRegression = {
-      delay, until, beginPaneResize, isPaneResizeProtected,
+      delay, until, beginPaneResize, commitPaneResize, isPaneResizeProtected,
+      async commitFixture(side) {
+        const store=createStore(), widthAtom=(await import('jotai')).atom(300), root=createRoot(document.getElementById('root'));
+        let start, finish;
+        function Shell(){
+          const width=useAtomValue(widthAtom), [preview,setPreview]=React.useState(null);
+          start=value=>setPreview(value);
+          finish=value=>commitPaneResize(()=>store.set(widthAtom,value),()=>setPreview(null));
+          return React.createElement(WorkspacePanels,{workspaceSide:side,workspaceOpen:true,workspaceWidth:preview??width,minimumWidth:200,maximumWidth:600,resizing:preview!==null,onResizeStart:()=>{},onResizeKeyDown:()=>{},agent:React.createElement('div'),workspace:React.createElement('div')});
+        }
+        root.render(React.createElement(Provider,{store},React.createElement(Shell)));
+        await until(()=>document.querySelector('[data-sidebar-region="workspace"]'));
+        start(420);await until(()=>document.querySelector('[data-sidebar-region="workspace"]').style.width==='420px');
+        const pane=document.querySelector('[data-sidebar-region="workspace"]'), widths=[];
+        const observer=new MutationObserver(()=>widths.push(pane.style.width));observer.observe(pane,{attributes:true,attributeFilter:['style']});
+        finish(420);await delay(50);observer.disconnect();
+        const result={width:pane.style.width,stored:store.get(widthAtom),widths};root.unmount();return result;
+      },
       async mount(layouts) {
         const store=createStore(), root=createRoot(document.getElementById('root')), calls=[], mounts={agent:0,workspace:0};
         window.electronAPI={setAgentBrowserLayout:async input=>calls.push(input)};
@@ -130,6 +147,13 @@ describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
 
 
 describe('Given 共享真实 pointer 分栏事务与 BrowserSlot', () => {
+  test('When 两侧工作区松手提交预览宽度 Then 不出现旧宽度且保存最终值', async () => {
+    for (const side of ['left', 'right']) {
+      const result = await renderer.run(`return await window.workspaceLayoutRegression.commitFixture('${side}')`)
+      expect(result).toEqual({ width: '420px', stored: 420, widths: [] })
+    }
+  }, 30_000)
+
   test('When 死区内点击、Escape、pointercancel、失焦或 capture 丢失 Then 回滚快照并解除原生与iframe保护', async () => {
     const results = await renderer.run(`
       const api=window.workspaceLayoutRegression,fixture=await api.mount(),results=[];

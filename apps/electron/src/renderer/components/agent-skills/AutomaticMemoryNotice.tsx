@@ -43,7 +43,9 @@ export function AutomaticMemoryNotice({ kind, sessionId, workspaceSlug }: Automa
           <X className="size-3.5" aria-hidden="true" />
         </button>
       </div>
-      <div role="status">
+      <details>
+        <summary className="cursor-pointer py-0.5 text-xs leading-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">已更新 {visible.length} 条记忆</summary>
+        <div role="status">
         {visible.map((change) => (
           <button
             type="button"
@@ -59,7 +61,8 @@ export function AutomaticMemoryNotice({ kind, sessionId, workspaceSlug }: Automa
             <span className="text-muted-foreground">· {new Date(change.changedAt).toLocaleTimeString()} · 查看</span>
           </button>
         ))}
-      </div>
+        </div>
+      </details>
       <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null) }}>
         <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b border-border/40 px-5 py-4 text-left">

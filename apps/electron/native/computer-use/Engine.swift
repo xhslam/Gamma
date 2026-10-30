@@ -197,12 +197,12 @@ final class Engine {
             do {
                 try gate.checkDispatch(token); gate.invalidateObservation(); prepared = nil
                 state("正在读取前台应用与控件")
-                let before = try desktopDigest()
+                let observedWindows = try desktopWindows()
                 let observedApp = try currentApplication()
                 let observedWindow: Target?
                 let observedTree: AXTree?
                 let observedLayout: String
-                if !isGammaPID(observedApp.pid), let window = try? ax.windowForFocused(observedApp.pid, windows: desktopWindows()), let tree = try? ax.read(window, allowSurfaces: true) {
+                if !isGammaPID(observedApp.pid), let window = try? ax.windowForFocused(observedApp.pid, windows: observedWindows), let tree = try? ax.read(window, allowSurfaces: true) {
                     observedWindow = window; observedLayout = tree.digest; observedTree = tree
                 } else { observedWindow = nil; observedLayout = ""; observedTree = nil }
                 let capture: (@escaping (Result<(Data, DisplayResult, Int, Int), Error>) -> Void) -> Void = { completion in
@@ -224,13 +224,20 @@ final class Engine {
                             } else {
                                 display = try accessibilityDisplay(); width = display.scaledWidth; height = display.scaledHeight; image = nil
                             }
-                            guard before == (try desktopDigest()) else { throw NativeFailure("desktop-changed", "观察期间窗口布局改变，请重新观察") }
                             let app = try currentApplication()
                             guard app == observedApp else { throw NativeFailure("focus-changed", "观察期间前台应用改变") }
                             if let window = observedWindow {
-                                guard try ax.read(window, allowSurfaces: true).digest == observedLayout else { throw NativeFailure("observation-layout-changed", "观察期间目标布局改变") }
+                                let currentWindows = try desktopWindows()
+                                let fresh = try ax.windowForFocused(app.pid, windows: currentWindows)
+                                let root = try ax.matchedWindow(fresh)
+                                guard sameTargetWindow(window, fresh), let oldRoot = observedTree?.root, CFEqual(oldRoot, root) else {
+                                    writeNativeComputerUseLog(location: "Engine.swift:observe:target_changed", errorCode: "observation-layout-changed",
+                                        inputState: desktopChangeSummary(from: observedWindows, to: currentWindows).logFields)
+                                    throw NativeFailure("observation-layout-changed", "观察期间目标窗口身份、几何或AX根改变")
+                                }
                             }
-                            let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, desktopDigest: before, axRefs: observedTree?.refs ?? [:], axRoot: observedTree?.root, hasImage: image != nil)
+                            // AX与图像不是原子采集；只保证同一窗口/显示器，写前再核验目标本身。
+                            let snapshot = Snapshot(id: UUID().uuidString, epoch: p.epoch, fence: token, created: ProcessInfo.processInfo.systemUptime, target: observedWindow, width: width, height: height, axDigest: observedLayout, display: display, axRefs: observedTree?.refs ?? [:], axStates: observedTree?.states ?? [:], desktopTargets: observedWindows, axRoot: observedTree?.root, hasImage: image != nil)
                             try gate.save(snapshot); try gate.checkDispatch(token)
                             success(id, ObservationResult(observationId: snapshot.id, epoch: p.epoch, image: image, width: width, height: height, display: display, ax: observedTree?.text ?? "[当前前台窗口没有可安全读取的AX树；不可使用AX引用]", targetApp: app))
                         } catch { gate.invalidateObservation(); failure(id, error) }
@@ -375,13 +382,13 @@ final class Engine {
                 try gate.claimAX(ticket); try gate.checkDispatch(snapshot.fence)
             } else {
                 var first = true
-                try dispatcher.post(p.action, snapshot: snapshot, expectedPID: binding.app?.pid, scrollPoint: binding.scrollPoint, validate: { [self] in
+                try dispatcher.post(p.action, snapshot: snapshot, expectedPID: binding.app?.pid, scrollPoint: binding.scrollPoint, validate: { [self] isRelease in
                     if first { try verifyBinding(binding, ax: ax) }
                     try gate.checkDispatch(snapshot.fence); try validateDisplay(snapshot.display)
                     guard !IsSecureEventInputEnabled(), AXIsProcessTrusted() else { throw NativeFailure("secure-input", "辅助功能权限撤销或系统安全输入已开启") }
                     if let app = binding.app {
                         guard try processIdentity(app.pid) == app.processIdentity else { throw NativeFailure("target-changed", "目标进程已变化") }
-                        if ["type", "key"].contains(p.action.kind) {
+                        if requiresInputFocusMatch(kind: p.action.kind, isRelease: isRelease) {
                             let frontApp = NSWorkspace.shared.frontmostApplication
                             let actualFocus = try? ax.focusedElement()
                             let focusMatches = (binding.window == nil && frontApp?.processIdentifier == app.pid) || (binding.element != nil && actualFocus != nil && CFEqual(actualFocus!, binding.element!))
@@ -405,20 +412,17 @@ final class Engine {
                     dispatched = true
                 })
             }
-            if p.action.kind != "wait" && p.action.kind != "open_app" {
-                // 只读CG窗口元数据收敛，不重建AX refs，也不重发动作。
-                var previous = ""
-                do {
-                    try waitForDesktopReadiness(checkFence: { [self] in try gate.checkDispatch(snapshot.fence) }, checkDesktop: {
-                        let signature = try desktopDigest() + currentApplication().processIdentity
-                        defer { previous = signature }
-                        guard signature == previous else { throw NativeFailure("not-frontmost", "动作后的桌面仍在收敛") }
-                    })
-                } catch let failure as NativeFailure where failure.code == "desktop-not-ready" {
-                    throw NativeFailure("post-action-not-settled", "动作已投递，但800ms内桌面未稳定；已暂停，禁止重试")
+            // 动作导致新窗口、标题或焦点变化是后置观察事实，不是输入失败。
+            // 不再等待整桌面摘要静止；真实停止/撤权依然在fence处阻断。
+            try gate.checkDispatch(snapshot.fence)
+            if !snapshot.desktopTargets.isEmpty, let currentWindows = try? desktopWindows() {
+                let changes = desktopChangeSummary(from: snapshot.desktopTargets, to: currentWindows)
+                if changes.orderChanged || changes.titlesChanged || changes.boundsChanged || changes.ownersChanged || changes.processesChanged {
+                    writeNativeComputerUseLog(location: "Engine.swift:perform:window_change", action: p.action.kind, inputState: changes.logFields)
                 }
             }
-            success(id, Receipt(actionId: p.actionId, outcome: "dispatched-unverified", message: "已投递，请用新的观察验证结果；不要自动重试"))
+            try gate.checkDispatch(snapshot.fence)
+            success(id, Receipt(actionId: p.actionId, outcome: "dispatched-unverified", message: "已投递，请用新的观察验证结果；窗口变化不代表失败，不要自动重试"))
         } catch {
             gate.invalidateObservation()
             let detail = (error as? NativeFailure)?.message ?? "原生安全检查拒绝动作"

@@ -18,6 +18,8 @@ export class ComputerReobserveRequiredError extends Error {
   readonly reobserveRequired = true
   constructor(message: string, readonly countFailure = true) { super(message); this.name = 'ComputerReobserveRequiredError' }
 }
+/** 输入已有回执，只有后置只读观察不可用；绝不能表示输入未投递。 */
+class ComputerPostObservationUnavailableError extends Error {}
 interface ComputerStopDiagnostic {
   action?: string
   rawError: string
@@ -631,21 +633,25 @@ export class ComputerController {
     if (!isRecord(resolved) || !boundedText(resolved.appName, 256) || !boundedText(resolved.bundleId, 256)) throw new Error('无法解析应用身份')
     return { appName: resolved.appName, bundleId: resolved.bundleId }
   }
-  /** 动作后有界采样；连续两次 AX 内容/布局一致才报告稳定，不代表业务成功。 */
+  /** 稳定度仅描述观察，不改变已知投递事实；只有真实安全故障才暂停。 */
   private async settleObservation(binding: ComputerBinding, signal?: AbortSignal): Promise<{ image: ComputerExecuteResult['image']; stability: 'stable' | 'timeout' }> {
     let previous: string | undefined
     let image: ComputerExecuteResult['image'] | undefined
     const lease = this.lease!
     for (let sample = 0; sample < 4; sample++) {
       await this.operation(signal, async () => { await new Promise(resolve => setTimeout(resolve, sample === 0 ? 250 : 120)); this.verify(lease) })
-      image = await this.screenshot(signal, binding, true)
+      try { image = await this.screenshot(signal, binding, true) }
+      catch (error) {
+        if (!(error instanceof ComputerPostObservationUnavailableError)) throw error
+        // 原生观察失败已使旧 refs 失效；不返回上一张画面冒充新观察。
+        return { image: undefined, stability: 'timeout' }
+      }
       const stored = this.observation!
       const fingerprint = computerObservationFingerprint(stored.data.ax, image?.data ?? '', stored.bundleId)
       if (fingerprint === previous) return { image, stability: 'stable' }
       previous = fingerprint
     }
-    await this.stop('动作已投递但后续观察无法确认稳定，电脑操作已暂停', 'paused')
-    throw new ComputerRunPausedError('动作已投递但后续观察无法确认稳定，电脑操作已暂停')
+    return { image, stability: 'timeout' }
   }
   private async executeAction(params: ComputerExecuteParams, binding: ComputerBinding, signal?: AbortSignal): Promise<ComputerExecuteResult> {
     const aliases: Record<string, string> = { left_click: 'click', move: 'mouse_move', openapp: 'open_app', launch: 'open_app', sleep: 'wait', left_click_drag: 'drag', type_text: 'type', press_key: 'key', set_value: 'axSetValue', focus: 'axFocus', perform_secondary_action: 'axAction', select_text: 'axSelectText' }
@@ -817,8 +823,9 @@ export class ComputerController {
     })
     if (kind === 'wait') await this.operation(signal, async () => { await new Promise(resolve => setTimeout(resolve, duration * 1000)); this.verify(lease) })
     const observed = await this.settleObservation(binding, signal)
-    return { ...this.observationResult(observed.image, binding, params), observationStability: observed.stability,
-      message: `动作 ${kind} 已投递${app ? `：${app.appName}` : ''}；请根据最新界面状态验证业务结果，勿盲目重放。${observed.stability === 'stable' ? '连续两次观察一致，但不代表业务成功。' : '观察未在采样预算内稳定，请继续观察，不要重放动作。'}` }
+    const presentation = this.observation ? this.observationResult(observed.image, binding, params) : { state: this.getState() }
+    return { ...presentation, observationStability: observed.stability,
+      message: `动作 ${kind} 已投递${app ? `：${app.appName}` : ''}；业务结果尚未验证，勿盲目重放。${this.observation ? '请根据最新界面状态验证业务结果。' : ''}${observed.stability === 'stable' ? '连续两次观察一致，但不代表业务成功。' : this.observation ? '观察未在采样预算内稳定，请继续观察，不要重放动作。' : '后置观察暂不可用，旧引用已失效；请先重新 get_app_state，不要重放动作。'}` }
   }
 
   /** 同轮重新观察不清空失败链；只有一个实际动作成功或运行结束才重置。 */
@@ -851,11 +858,12 @@ export class ComputerController {
       time: new Date().toISOString(), event: code === 'unsafe-focus' ? 'unsafe-focus' : 'native-error',
       runId: this.actionOwner?.runId ?? this.lease?.binding?.runId ?? null, action: action ?? null,
       ...(privacy ? { rawError: '文本动作失败，已隐藏异常详情', errorCode: getComputerDiagnosticCode(error) } : nonTextErrorDetails(error)),
-      ...privacy, phase, outcome: outcome ?? (phase === 'prepare' || phase === 'confirmation' || phase === 'read' || phase === 'select' ? 'not-dispatched' : 'unknown'),
-      reason: disposition === 'pause' ? '原生操作失败或授权失效' : '准备未完成，请重新观察',
+      ...privacy, phase, outcome: outcome ?? (phase === 'after-dispatch' ? 'dispatched-unverified' : phase === 'prepare' || phase === 'confirmation' || phase === 'read' || phase === 'select' ? 'not-dispatched' : 'unknown'),
+      reason: disposition === 'pause' ? '原生操作失败或授权失效' : phase === 'after-dispatch' ? '输入已投递，后置观察暂不可用' : '准备未完成，请重新观察',
     })
     if (disposition !== 'pause') {
       this.observation = undefined
+      if (phase === 'after-dispatch') throw new ComputerPostObservationUnavailableError('输入已投递，后置观察暂不可用，不得重放')
       const permission = detail?.permission ?? (code === 'screen-capture-required' ? 'screen' : code === 'listen-denied' ? 'listen' : undefined)
       const message = disposition === 'permission' ? missingComputerPermissionMessage(permission)
         : `${error instanceof Error ? error.message : '原生动作未投递'}；动作未投递，请重新观察并调整方案，不得重放旧动作`

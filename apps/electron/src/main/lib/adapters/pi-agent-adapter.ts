@@ -73,6 +73,7 @@ import { createDeepSeekReasoningRequestExtension } from './pi-deepseek-reasoning
 import { createOpenAIReasoningRequestExtension } from './pi-openai-reasoning-request-settings'
 import { mergeRuntimeEnv, type AgentRuntimeEnv } from '../agent-runtime-env'
 import { createMemoryExtension } from '../memory'
+import { createAutomaticMemoryFileView } from '../automatic-memory-file-view'
 import { getMemoryDir } from '../config-paths'
 import { createConversationReferenceExtension } from '../conversation-reference/pi-tools'
 import { injectConversationReferencesContext } from '../conversation-reference/context-injector'
@@ -203,6 +204,11 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   openAIThinkingLevel?: AgentThinkingLevel
   /** 长期记忆根目录；未指定时默认指向 Gamma 数据目录下的 memory/（按用户隔离）。 */
   memoryRoot?: string
+  /** 仅当前已验证工作区的记忆根；独立于全局根，不发现相邻工作区。 */
+  memoryWorkspaceRoot?: string
+  memoryWorkspaceSlug?: string
+  /** 初始原始用户文本，避免用注入的上下文触发预检。 */
+  memoryUserMessage?: string
   /** 长期记忆用户标识，用于在 Gamma 数据目录下按用户隔离存储。 */
   memoryUserId?: string
   /** 是否挂载长期记忆扩展（子 Agent、后台任务、computer use 会话应设为 false）。 */
@@ -1662,12 +1668,36 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             initialSources: input.projectInstructionScope.initialSources,
           })
         : undefined
+      let memoryOutputHeld = false
+      let suppressMemoryAssistant = false
+      const memoryBufferedDeltas: SDKMessage[] = []
       const shouldMountMemory = input.memoryEnabled === true
       const memoryExtension = shouldMountMemory
         ? createMemoryExtension({
             root: input.memoryRoot ?? getMemoryDir(input.memoryUserId),
             userId: input.memoryUserId,
             readOnly: input.memoryReadOnly,
+            workspaceRoot: input.memoryWorkspaceRoot,
+            initialUserText: input.memoryUserMessage,
+            ...(input.memoryWorkspaceRoot && input.memoryWorkspaceSlug ? {
+              virtualFiles: createAutomaticMemoryFileView(input.memoryWorkspaceRoot, input.memoryWorkspaceSlug),
+            } : {}),
+            onOutputGate: decision => {
+              if (decision === 'hold') { memoryOutputHeld = true; suppressMemoryAssistant = false }
+              else if (decision === 'release') {
+                memoryOutputHeld = false
+                for (const delta of memoryBufferedDeltas.splice(0)) queue.push(delta)
+              } else {
+                memoryBufferedDeltas.length = 0; memoryOutputHeld = false; suppressMemoryAssistant = true
+              }
+            },
+            authorizeMutation: async (toolName, args, toolCallId, signal) => {
+              const permission = await input.canUseTool?.(toolName, args, {
+                signal: signal ?? new AbortController().signal, toolUseID: toolCallId,
+                displayName: toolName === 'memory_delete' ? '删除记忆' : '更新记忆',
+              })
+              if (permission?.behavior === 'deny') throw new Error(permission.message)
+            },
           })
         : undefined
       const extensionFactories = [
@@ -1730,6 +1760,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       const previousTransformContext = session.agent.transformContext
       session.agent.transformContext = async (messages, signal) => {
         let transformed = await previousTransformContext?.(messages, signal) ?? messages
+        if (memoryExtension) transformed = memoryExtension.transformContext(transformed)
         transformed = await injectConversationReferencesContext({
           sessionId: input.sessionId,
           contextRefs: active.referenceTurns?.get() ?? [],
@@ -1877,17 +1908,25 @@ export class PiAgentAdapter implements AgentProviderAdapter {
               const assistantUuid = assistantUuidFor()
               const delta = serializePiAssistantDelta(event.assistantMessageEvent)
               if (delta) {
-                queue.push({
+                const message = {
                   type: 'assistant_delta',
                   uuid: assistantUuid,
                   delta,
                   session_id: session.sessionId,
                   ...(input.model && { _channelModelId: input.model }),
-                } as unknown as SDKMessage)
+                } as unknown as SDKMessage
+                if (memoryOutputHeld) memoryBufferedDeltas.push(message)
+                else queue.push(message)
               }
               break
             }
             case 'message_end': {
+              if (suppressMemoryAssistant && isAssistantPiMessage(event.message)) {
+                suppressMemoryAssistant = false
+                runtimeGuard.recordMessage(event.message)
+                resetAssistantStream()
+                break
+              }
               if (active.interrupting && isAbortedAssistantMessage(event.message)) {
                 const converted = convertPiMessage(event.message, session.sessionId, input.model, {
                   uuid: assistantUuidFor(),

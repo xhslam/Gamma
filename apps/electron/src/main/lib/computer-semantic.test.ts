@@ -177,9 +177,11 @@ describe('Given 接近 Sky 的应用定向与快照语义操作', () => {
       observationId: `changing-${++generation}`, epoch: params.epoch, image: tinyComputerImage,
       ax: `ref=changing-${generation} 0 AXTextArea value=${generation}`, targetApp: { name: 'Notes', bundleId: 'com.apple.Notes' },
     } : undefined })
-    await expect(f.controller.executeAutonomousAction({ action: 'type_text', text: 'x' }, undefined, f.binding)).rejects.toThrow('本轮电脑操作已暂停')
-    expect(f.controller.isRunStopped(f.binding.runId)).toBe(true)
-    expect(f.controller.getRunStopReason(f.binding.runId)).toContain('无法确认稳定')
+    const result = await f.controller.executeAutonomousAction({ action: 'type_text', text: 'x' }, undefined, f.binding)
+    expect(result.observationStability).toBe('timeout')
+    expect(result.observationId).toBeDefined()
+    expect(result.ax).toContain(`value=${generation}`)
+    expect(f.controller.isRunStopped(f.binding.runId)).toBe(false)
     expect(f.actions).toHaveLength(1)
     await f.controller.finishRun(f.binding)
   })

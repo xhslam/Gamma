@@ -1,3 +1,5 @@
+import { flushSync } from 'react-dom'
+
 /** 分栏拖动只有超过死区后才提交；点击分隔条不会污染持久化布局。 */
 export const PANE_RESIZE_DEADZONE = 4
 export const PANE_RESIZE_GUARD_EVENT = 'gamma:pane-resize-guard'
@@ -80,4 +82,12 @@ export function beginPaneResize({ target, pointerId, startX, move, finish }: Pan
   // 合成事件没有活跃 pointer，真实原生输入才允许 capture。
   try { target.setPointerCapture(pointerId) } catch { /* 合成测试或指针已结束。 */ }
   return cancel
+}
+
+/** 将持久布局和拖动预览切换合并为一次渲染，避免松手时短暂回到旧尺寸。 */
+export function commitPaneResize(commitLayout: () => void, clearPreview: () => void): void {
+  flushSync(() => {
+    commitLayout()
+    clearPreview()
+  })
 }

@@ -23,6 +23,7 @@ import { TurnSkillUsageSummary } from './TurnSkillUsageSummary'
 import { ReferencedConversationsMessageCard } from './ReferencedConversationsMessageCard'
 import type { AgentContextRef } from '@gamma/shared'
 import { ProcessBlockGroup, buildAssistantTurnRenderItems } from './ProcessBlockGroup'
+import { isVisibleProcessBlock } from './process-block-visibility'
 import { extractToolResultText, TASK_TOOL_NAMES } from './task-progress'
 import { normalizeThinkTagsInContentBlocks } from './thinking-tag-parser'
 // 会话转录的纯逻辑(Turn 分组 / 快照去重 / 预览)已下沉到 @gamma/session-core 作为唯一真源。
@@ -586,10 +587,7 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
             }
 
             // 任务工具只进入计划清单；不支持的内容块不生成空时间线节点。
-            const visibleItems = item.items.filter(({ block }) =>
-              block.type === 'text' || block.type === 'thinking'
-              || (block.type === 'tool_use' && !TASK_TOOL_NAMES.has((block as SDKToolUseBlock).name)),
-            )
+            const visibleItems = item.items.filter(({ block }) => isVisibleProcessBlock(block))
             if (visibleItems.length === 0 && taskActivities.length === 0) return null
             const groupBlocks = visibleItems.map((groupItem) => groupItem.block)
             const firstIndex = item.items[0]?.index ?? 0

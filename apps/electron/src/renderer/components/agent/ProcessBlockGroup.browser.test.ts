@@ -23,14 +23,14 @@ beforeAll(async () => {
         store.set(allPendingPermissionRequestsAtom,approvalSession?new Map([[approvalSession,[{sessionId:approvalSession,requestId:'p',toolUseId:approvalToolId,toolName:'Bash',toolInput:{},description:'确认',dangerLevel:'normal'}]]]):new Map());
         root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,
           React.createElement(ProcessBlockGroup,{blocks,allMessages:messages,isStreaming:streaming,startedAt,durationMs,taskActivities:tasks.map(task=>({toolUseId:'task-'+task.id,toolName:'TaskUpdate',input:{taskId:task.id,...task},done:true})),renderChildren:()=>{this.renderCalls++;return blocks.map((block,i)=>React.createElement(React.Fragment,{key:i},React.createElement(ContentBlock,{block,allMessages:messages,isStreaming:streaming,childBlocks})))}})))));
-        await this.wait(260);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
+        await this.wait(360);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
       },
       renderCalls:0,
       async renderTurn(blocks,results=[],expand=true){
         const message={type:'assistant',uuid:'assistant-1',parent_tool_use_id:null,message:{role:'assistant',content:blocks}};
         const messages=[message,...results.map(r=>({type:'user',message:{role:'user',content:[{type:'tool_result',tool_use_id:r.id,content:r.text??'',is_error:r.error}]},parent_tool_use_id:null}))];const turn={type:'assistant-turn',assistantMessages:[message],turnMessages:messages};
         root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,React.createElement(AssistantTurnRenderer,{turn,allMessages:messages,isStreaming:true})))));
-        await this.wait(260);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
+        await this.wait(360);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
       },
       wait:ms=>new Promise(r=>setTimeout(r,ms)),
       read(){const button=document.querySelector('[data-process-group-toggle]');return {
@@ -42,9 +42,12 @@ beforeAll(async () => {
         colors:[...document.querySelectorAll('[data-process-step-indicator]')].map(e=>getComputedStyle(e).color),
         labels:[...document.querySelectorAll('[data-process-step-indicator]')].map(e=>e.getAttribute('aria-label'))
       };},
-      async toggle(){document.querySelector('[data-process-group-toggle]').click();await this.wait(260);return this.read();}
+      async toggle(){document.querySelector('[data-process-group-toggle]').click();await this.wait(360);return this.read();}
     };
-  `)
+  `, {
+    mainProcessSetup: `require('electron').ipcMain.handle('trace-capture', async (event, theme) => { const image = await BrowserWindow.fromWebContents(event.sender).webContents.capturePage(); require('node:fs').writeFileSync(require('node:path').join(require('node:os').tmpdir(), 'gamma-trace-' + theme + '.png'), image.toPNG()); });`,
+    preloadSource: `require('electron').contextBridge.exposeInMainWorld('traceCapture', theme => require('electron').ipcRenderer.invoke('trace-capture', theme));`,
+  })
 }, 60_000)
 afterAll(async () => { await renderer?.dispose() })
 
@@ -146,7 +149,7 @@ describe('Given 可折叠执行过程时间线', () => {
     expect(snapshot.spinners).toBe(3)
   }, 30_000)
 
-  test('When 深色时间线显示多种状态 Then 节点为精确8px纯色圆点/细环且没有节点内图标', async () => {
+  test('When 深色时间线显示多种状态 Then 节点为紧凑圆点并为工具行显示图标与折叠箭头', async () => {
     const view = await renderer.run<{
       size: string[][]; colors: string[]; backgrounds: string[]; icons: number;
       header: { expanded: string; glyph: string; label: string }; rows: string[]; rowHeights: number[]; fontSizes: string[];
@@ -161,20 +164,20 @@ describe('Given 可折叠执行过程时间线', () => {
         textColor:rows[0]&&getComputedStyle(rows[0]).color,lineColor:getComputedStyle(document.querySelector('[data-process-step-connector]')).backgroundColor,
         summaries:[...document.querySelectorAll('[data-process-step-note]')].map(e=>e.textContent),rowIcons:rows.reduce((count,e)=>count+e.querySelectorAll('svg').length,0)};
     `)
-    expect(view.size).toEqual(Array(4).fill(['8px', '8px']))
-    expect(view.colors).toEqual(['rgb(176, 174, 165)', 'rgb(217, 119, 87)', 'rgb(217, 119, 87)', 'rgb(217, 119, 87)'])
+    expect(view.size).toEqual(Array(4).fill(['4px', '4px']))
+    expect(view.colors[0]).not.toBe(view.colors[1])
     expect(view.backgrounds.slice(2)).toEqual(['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'])
     expect(view.icons).toBe(0)
     expect(view.header).toEqual({ expanded: 'true', glyph: 'svg', label: '收起工具调用日志' })
     expect(view.rows[0]).toBe('执行 pwd')
     expect(view.rows[1]).toBe('执行 ls')
     expect(view.rows.join(' ')).not.toMatch(/Bash|已完成|执行失败|正在执行|详细堆栈/)
-    expect(view.rowHeights).toEqual([28, 28, 28, 28])
+    expect(view.rowHeights).toEqual([32, 32, 32, 32])
     expect(view.fontSizes).toEqual(Array(4).fill('13px'))
-    expect(view.textColor).toBe('rgba(240, 238, 230, 0.72)')
+    expect(view.textColor).toBe('rgba(240, 238, 230, 0.76)')
     expect(view.lineColor).toBe('rgba(240, 238, 230, 0.12)')
     expect(view.summaries).toEqual([])
-    expect(view.rowIcons).toBe(0)
+    expect(view.rowIcons).toBe(8)
   }, 30_000)
 
   test('When 思考超过两行 Then 默认两行淡色斜体且可展开，没有标签、背景和边框', async () => {
@@ -205,7 +208,7 @@ describe('Given 可折叠执行过程时间线', () => {
 })
 
 describe('Given 计划清单加单行实时状态', () => {
-  test('When 实时执行且尚未点击箭头 Then 默认不渲染日志，点击当前动作也不会展开', async () => {
+  test('When 实时执行且尚未点击箭头 Then 自动展示日志，点击当前动作保留展开状态', async () => {
     const view = await renderer.run<{ before: TimelineSnapshot; afterText: TimelineSnapshot; opened: TimelineSnapshot; calls: number; text: string; arrow: string }>(`
       const api=window.timeline;
       const before=await api.render({blocks:${tools},expand:false,startedAt:Date.now()-18000});
@@ -215,14 +218,14 @@ describe('Given 计划清单加单行实时状态', () => {
       const arrow=document.querySelector('[data-process-group-toggle] svg[data-disclosure-chevron]').getAttribute('data-expanded');
       return {before,afterText,opened:await api.toggle(),calls,text,arrow};
     `)
-    expect(view.before.expanded).toBe('false')
-    expect(view.before.statuses).toEqual([])
-    expect(view.afterText.expanded).toBe('false')
-    expect(view.calls).toBe(0)
-    expect(view.opened.expanded).toBe('true')
-    expect(view.opened.statuses).toEqual(['running', 'running'])
+    expect(view.before.expanded).toBe('true')
+    expect(view.before.statuses).toEqual(['running', 'running'])
+    expect(view.afterText.expanded).toBe('true')
+    expect(view.calls).toBeGreaterThan(0)
+    expect(view.opened.expanded).toBe('false')
+    expect(view.opened.statuses).toEqual([])
     expect(view.text).toMatch(/^···正在执行 ls18s$/)
-    expect(view.arrow).toBe('false')
+    expect(view.arrow).toBe('true')
     expect(view.text).not.toMatch(/工具调用|思考|Bash/)
   }, 30_000)
 
@@ -303,7 +306,7 @@ describe('Given 计划清单加单行实时状态', () => {
     expect(view.elapsed).toBe('19s')
     expect(view.frozen).toBe('19s')
     expect(view.expanded).toBe('true')
-    expect(view.duration).toBe('0.2s')
+    expect(view.duration).toBe('0.32s, 0.24s')
     expect(view.animations.every((name) => name === 'none')).toBe(true)
     expect(view.transforms.every((name) => name === 'none')).toBe(true)
   }, 30_000)
@@ -323,3 +326,62 @@ describe('Given 计划清单加单行实时状态', () => {
     expect(view.focused).toBe(true)
   }, 30_000)
 })
+
+
+describe('Given 视频风格的自动执行轨迹', () => {
+  test('When 命令和搜索连续执行 Then 结果默认收起，点击后展开且流式更新保留选择', async () => {
+    const result = await renderer.run<{ open: string[]; clicked: string | null; updated: string | null; finished: string | null }>(`
+      const blocks=[{type:'tool_use',id:'trace-1',name:'Bash',input:{command:'pwd'}},{type:'tool_use',id:'trace-2',name:'WebSearch',input:{query:'Gamma'}},{type:'tool_use',id:'trace-3',name:'Bash',input:{command:'ls'}}];
+      await window.timeline.render({blocks,expand:false});
+      const open=[...document.querySelectorAll('[data-process-action-row]')].map(e=>e.getAttribute('aria-expanded'));
+      document.querySelectorAll('[data-process-action-row]')[2].click();await window.timeline.wait(360);
+      const clicked=document.querySelectorAll('[data-process-action-row]')[2].getAttribute('aria-expanded');
+      await window.timeline.render({blocks:[...blocks,{type:'tool_use',id:'trace-4',name:'Bash',input:{command:'date'}}],expand:false});
+      const updated=document.querySelectorAll('[data-process-action-row]')[2].getAttribute('aria-expanded');
+      await window.timeline.render({blocks,streaming:false,expand:false});
+      return {open,clicked,updated,finished:document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')};
+    `)
+    expect(result.open).toEqual(['false', 'false', 'false'])
+    expect(result.clicked).toBe('true')
+    expect(result.updated).toBe('true')
+    expect(result.finished).toBe('false')
+  }, 30_000)
+})
+
+
+test('Given 亮暗主题 When 搜索和命令结果展开 Then 卡片跟随主题且隐藏详情不能获得焦点', async () => {
+  const views = await renderer.run<Array<{ background: string; inert: boolean }>>(`
+    const blocks=[{type:'tool_use',id:'a',name:'WebSearch',input:{query:'Gamma 执行轨迹'}},{type:'tool_use',id:'b',name:'Bash',input:{command:'bun run typecheck'}}],views=[];
+    for (const theme of ['light','dark']) {
+      document.documentElement.classList.toggle('dark',theme==='dark');
+      await window.timeline.render({blocks,results:[{id:'a',text:'找到 Gamma 项目相关结果'},{id:'b',text:'All packages passed typecheck'}],expand:false});
+      document.querySelectorAll('[data-process-action-row]').forEach(button=>button.click());await window.timeline.wait(360);
+      await window.traceCapture(theme);
+      const cards=[...document.querySelectorAll('.process-timeline-details')];
+      const button=document.querySelector('[data-process-action-row]');button.click();await window.timeline.wait(360);
+      views.push({background:getComputedStyle(cards[1]).backgroundColor,inert:document.querySelector('.process-trace-reveal').hasAttribute('inert')});
+      document.querySelectorAll('[data-process-action-row]').forEach(button=>{if(button.getAttribute('aria-expanded')==='true')button.click()});await window.timeline.wait(360);
+    }
+    return views;
+  `)
+  expect(views[0]?.background).not.toBe(views[1]?.background)
+  expect(views.every(view => view.inert)).toBe(true)
+}, 30_000)
+
+
+test('Given 工具之间有空增量 When 渲染执行轨迹 Then 不生成空圆点且连线与工具状态保持对应', async () => {
+  const view = await renderer.run<TimelineSnapshot>(`
+    await window.timeline.renderTurn([
+      {type:'tool_use',id:'a',name:'Read',input:{path:'/repo/a.ts'}},
+      {type:'thinking',thinking:''},
+      {type:'text',text:'  \\n  '},
+      {type:'thinking',thinking:'\u200B\uFEFF'},
+      {type:'tool_use',id:'b',name:'Bash',input:{command:'pwd'}},
+      {type:'thinking',thinking:'有效思考'},
+      {type:'text',text:'最终答复'}
+    ],[{id:'a',text:'文件内容'}]);
+    return window.timeline.read();
+  `)
+  expect(view.statuses).toEqual(['success', 'running', 'recorded'])
+  expect(view.connectors).toBe(2)
+}, 30_000)
