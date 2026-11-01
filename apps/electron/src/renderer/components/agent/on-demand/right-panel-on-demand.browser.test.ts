@@ -71,7 +71,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
   })
 
   for (const [tab, label] of [['files', '文件'], ['changes', '改动'], ['exploration', '调研']] as const) {
-    test(`Given 真实工作区叠层 When 打开${label}浮层 Then 内容可命中且聊天宽度不变`, async () => {
+    test(`Given 真实工作区叠层 When 打开${label}侧栏 Then 内容可命中且聊天让出空间`, async () => {
       const result = await visualHarness.run<{
         activeOverlay: string | null
         contentReceivesPointer: boolean
@@ -101,7 +101,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
 
       expect(result.activeOverlay).toBe(tab)
       expect(result.contentReceivesPointer).toBe(true)
-      expect(result.chatWidthAfter).toBe(result.chatWidthBefore)
+      expect(result.chatWidthAfter).toBeLessThan(result.chatWidthBefore)
       expect(result.isBigPanelOpen).toBe(false)
     })
   }
@@ -132,7 +132,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
     expect(result.modalReceivesPointer).toBe(true)
   })
 
-  test('S1 状态交互：点击按钮展开浮层，搜索框自动聚焦，项目/会话分段切换，Esc与外部点击关闭回焦', async () => {
+  test('S1 状态交互：点击按钮展开侧栏，搜索框自动聚焦，项目/会话分段切换，Esc 关闭回焦', async () => {
     const result = await visualHarness.run<{
       overlayOpened: boolean
       isFocusedOnInput: boolean

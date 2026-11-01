@@ -93,12 +93,12 @@ describe('Given 生产按需面板与 Chromium 原生鼠标事件', () => {
     })
   }, 30_000)
 
-  test('When 点击外部或按 Escape Then 浮层关闭且焦点回到打开它的入口', async () => {
+  test('When 点击对话后按 Escape Then 侧栏保持展开、不抢对话焦点，Escape 关闭回焦', async () => {
     const result = await renderer.run<{ outsideClosed: boolean; outsideFocused: boolean; escapeClosed: boolean; escapeFocused: boolean }>(pointerScenario + String.raw`
       await nativeClick(files)
       await nativeClick(document.querySelector('[data-testid="contract-outside"]'))
       const outsideClosed = f.activeOverlay() === null && !document.querySelector('[data-testid="on-demand-overlay-panel"]')
-      const outsideFocused = document.activeElement === files
+      const outsideFocused = document.activeElement === document.querySelector('[data-testid="contract-outside"]')
       await nativeClick(changes)
       await window.rightPanelNativeInput({ type: 'escape' })
       await f.delay(180)
@@ -108,7 +108,7 @@ describe('Given 生产按需面板与 Chromium 原生鼠标事件', () => {
         escapeFocused: document.activeElement === changes,
       }
     `)
-    expect(result).toEqual({ outsideClosed: true, outsideFocused: true, escapeClosed: true, escapeFocused: true })
+    expect(result).toEqual({ outsideClosed: false, outsideFocused: true, escapeClosed: true, escapeFocused: true })
   }, 30_000)
 
   test('When 点击具体文件进入大面板 Then 关闭浮层且不把焦点抢回入口', async () => {

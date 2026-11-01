@@ -51,16 +51,19 @@ export function Conversation({ className, children, initial = 'instant', resize 
 
 export type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>
 
-export function ConversationContent({ className, ...props }: ConversationContentProps): React.ReactElement {
+export function ConversationContent({ className, scrollClassName, ...props }: ConversationContentProps): React.ReactElement {
   const { scrollRef } = useStickToBottomContext()
   useLayoutEffect(() => {
     const element = scrollRef.current
     if (!element) return
+    element.dataset.conversationScrollViewport = ''
     // 仅消息视口羽化，输入框、迷你地图和覆盖层保持清晰。
-    return attachScrollFade(element, { fadeSize: 24 })
+    const detachFade = attachScrollFade(element, { fadeSize: 24 })
+    return () => { detachFade(); delete element.dataset.conversationScrollViewport }
   }, [scrollRef])
   return (
     <StickToBottom.Content
+      scrollClassName={cn('scrollbar-none', scrollClassName)}
       className={cn('flex flex-col gap-1 py-4 px-4 md:px-6', className)}
       {...props}
     />
