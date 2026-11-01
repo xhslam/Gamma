@@ -17,6 +17,7 @@ const openChanges = `${boot}
 
 interface PanelMetrics {
   background: string
+  backgroundDelta: number
   radius: string
   border: string
   padding: string
@@ -97,7 +98,18 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
         scroll.scrollTop = scroll.scrollHeight;
         await window.onDemandTest.delay(50);
         return {
-          background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopWidth,
+          background: style.backgroundColor,
+          backgroundDelta: (() => {
+            const probe = document.createElement('div');
+            probe.style.backgroundColor = 'hsl(var(--content-area))';
+            panel.append(probe);
+            const base = getComputedStyle(probe).backgroundColor;
+            probe.remove();
+            const ctx = document.createElement('canvas').getContext('2d');
+            const rgb = color => { ctx.fillStyle = color; ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+            const a = rgb(style.backgroundColor), b = rgb(base);
+            return Math.max(...a.map((value, i) => Math.abs(value - b[i])));
+          })(), radius: style.borderRadius, border: style.borderTopWidth,
           padding: style.paddingTop, shadow: style.boxShadow, width: rect.width, height: rect.height,
           right: rect.right, left: rect.left, chatRight: chat.getBoundingClientRect().right, top: rect.top, anchorRight: anchor.right, anchorBottom: anchor.bottom,
           rowHeight: list.querySelector('button').getBoundingClientRect().height,
@@ -111,7 +123,8 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
           icons: nav.querySelectorAll('button[data-icon-button="true"]').length,
         };
       `, { screenshot: join(artifacts, `six-step-${theme}-changes.png`) })
-      expect(result.background).toBe(theme === 'dark' ? 'rgb(38, 38, 36)' : 'rgb(255, 255, 255)')
+      expect(result.backgroundDelta).toBeGreaterThanOrEqual(3)
+      expect(result.backgroundDelta).toBeLessThanOrEqual(12)
       expect(result.radius).toBe('12px')
       expect(result.border).toBe('1px')
       expect(result.padding).toBe('16px')
@@ -135,6 +148,22 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       expect(result.lastBottomFade).toBe('0px')
       expect(result.chatAfter).toBeLessThan(result.chatBefore)
       expect(result.icons).toBe(4)
+    })
+  }
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`When ${theme} 文件与改动面板依次打开 Then 共用有轻微色差的面板底色`, async () => {
+      const result = await harness.run<{ files: string; changes: string }>(`${boot}
+        window.onDemandTest.setTheme('${theme}');
+        window.onDemandTest.toggleOverlay('files');
+        await window.onDemandTest.until(() => document.querySelector('[data-active-overlay="files"]'));
+        const files = getComputedStyle(document.querySelector('[data-testid="on-demand-overlay-panel"]')).backgroundColor;
+        window.onDemandTest.toggleOverlay('changes');
+        await window.onDemandTest.until(() => document.querySelector('[data-active-overlay="changes"]'));
+        return {files, changes:getComputedStyle(document.querySelector('[data-testid="on-demand-overlay-panel"]')).backgroundColor};
+      `)
+      expect(result.files).toBe(result.changes)
+      expect(result.files).not.toBe('rgba(0, 0, 0, 0)')
     })
   }
 

@@ -41,6 +41,10 @@
   padding: var(--panel-padding);
   box-shadow: none;
 }
+/* 快捷侧栏与主对话区仅作轻微明度区分，随主题前景自动适配深浅色。 */
+.gamma-panel[data-panel="quick-sidebar"] {
+  background-color: color-mix(in srgb, hsl(var(--content-area)), hsl(var(--foreground)) 4%);
+}
 :root.theme-terminal-dark .gamma-panel[data-panel] {
   border-radius: var(--panel-radius) !important;
 }
