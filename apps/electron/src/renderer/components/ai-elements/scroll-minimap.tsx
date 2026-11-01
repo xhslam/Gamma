@@ -1,9 +1,8 @@
 /**
- * ScrollMinimap — 消息导航迷你地图 + 滚动进度条
+ * ScrollMinimap — 消息导航迷你地图
  *
- * 在消息区域右侧显示：
- * 1. 短横杠代表每条消息的位置（迷你地图），悬浮时弹出消息预览列表
- * 2. 可拖拽的滚动进度条，提供丝滑的滚动体验
+ * 在消息区域左侧垂直居中显示短横杠，代表每条消息的位置。
+ * 悬浮时向右弹出消息预览列表；主消息区不绘制滚动条。
  * 必须放在 StickToBottom（Conversation）内部使用。
  */
 
@@ -51,8 +50,6 @@ const MIN_ITEMS = 1
 const MAX_BARS = 20
 /** 迷你地图横杠垂直间距（px） */
 const MINIMAP_BAR_SPACING = 8
-/** 右侧滚动位置条宽度（px） */
-const SCROLL_PROGRESS_WIDTH = 8
 
 // ── Markdown 预览配置（轻量级，禁用重量级渲染） ──
 
@@ -95,18 +92,15 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
   /** 主区视口几何中心当前对应的消息 id —— 面板打开时作为列表居中锚点 */
   const [centerVisibleId, setCenterVisibleId] = React.useState<string | undefined>(undefined)
   const [canScroll, setCanScroll] = React.useState(false)
-  const [thumbHeightPct, setThumbHeightPct] = React.useState(100)
   const [searchQuery, setSearchQuery] = React.useState('')
   const [searchResults, setSearchResults] = React.useState<SessionMessageSearchResult[]>([])
   const [searchTruncated, setSearchTruncated] = React.useState(false)
   const [searchQueryTooLong, setSearchQueryTooLong] = React.useState(false)
   const [isSearching, setIsSearching] = React.useState(false)
-  const [isDragging, setIsDragging] = React.useState(false)
   const closeTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const fadeTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const openTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const searchInputRef = React.useRef<HTMLInputElement>(null)
-  const trackRef = React.useRef<HTMLDivElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
   const visibleIdsRef = React.useRef<Set<string>>(new Set())
   const visibleElementsRef = React.useRef<Map<string, HTMLElement>>(new Map())
@@ -114,8 +108,6 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
   hoveredRef.current = hovered
   const updateCenterVisibleRef = React.useRef<(() => void) | null>(null)
   const canScrollRef = React.useRef(false)
-  const thumbHeightPctRef = React.useRef(100)
-  const thumbRef = React.useRef<HTMLDivElement>(null)
   const searchRequestRef = React.useRef(0)
 
   // ── 组件卸载时清理计时器 ──
@@ -162,26 +154,12 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
       setCenterVisibleId((previous) => previous === closestId ? previous : closestId)
     }
 
-    const updateThumb = (): void => {
-      const { scrollTop, scrollHeight, clientHeight } = el
-      const scrollRange = scrollHeight - clientHeight
-      const nextCanScroll = scrollRange > 10
-      const nextThumbHeightPct = scrollHeight > 0
-        ? Math.max(10, Math.min((clientHeight / scrollHeight) * 100, 100))
-        : 100
-      const thumbTopPct = scrollRange > 0
-        ? (scrollTop / scrollRange) * (100 - nextThumbHeightPct)
-        : 0
-
+    const updateScrollable = (): void => {
+      const nextCanScroll = el.scrollHeight - el.clientHeight > 10
       if (nextCanScroll !== canScrollRef.current) {
         canScrollRef.current = nextCanScroll
         setCanScroll(nextCanScroll)
       }
-      if (Math.abs(thumbHeightPctRef.current - nextThumbHeightPct) >= 0.01) {
-        thumbHeightPctRef.current = nextThumbHeightPct
-        setThumbHeightPct(nextThumbHeightPct)
-      }
-      if (thumbRef.current) thumbRef.current.style.top = `${thumbTopPct}%`
     }
 
     const visible = new Set<string>()
@@ -237,14 +215,14 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
       if (changed) updateVisibleIds(new Set(visible))
     })
     mutationObserver.observe(el, { childList: true, subtree: true })
-    updateThumb()
+    updateScrollable()
 
     const onScroll = (): void => {
-      updateThumb()
+      updateScrollable()
       if (hoveredRef.current) updateCenterVisible()
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    const resizeObserver = new ResizeObserver(updateThumb)
+    const resizeObserver = new ResizeObserver(updateScrollable)
     resizeObserver.observe(el)
     const content = el.firstElementChild
     if (content) resizeObserver.observe(content)
@@ -263,19 +241,6 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
   React.useEffect(() => {
     if (hovered) updateCenterVisibleRef.current?.()
   }, [hovered])
-
-  // 进度条首次从不可滚动状态挂载时，上一段 effect 中尚无 thumb DOM；
-  // 此处在绘制前补齐当前位置，保证恢复历史滚动位置后滑块也正确定位。
-  React.useLayoutEffect(() => {
-    const el = scrollRef.current
-    const thumb = thumbRef.current
-    if (!el || !thumb || !canScroll) return
-    const scrollRange = el.scrollHeight - el.clientHeight
-    const thumbTopPct = scrollRange > 0
-      ? (el.scrollTop / scrollRange) * (100 - thumbHeightPct)
-      : 0
-    thumb.style.top = `${thumbTopPct}%`
-  }, [canScroll, scrollRef, thumbHeightPct])
 
   // ── 面板打开时自动聚焦搜索框 ──
 
@@ -477,74 +442,6 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
     return filteredItems.find((item) => visibleIds.has(item.id))?.id
   }, [centerVisibleId, filteredItems, visibleIds])
 
-  // ── 滚动条滑块拖拽 ──
-
-  const handleThumbMouseDown = React.useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const el = scrollRef.current
-    const track = trackRef.current
-    if (!el || !track) return
-
-    // 停止 StickToBottom 自动滚动
-    stopScroll()
-    stickyState.animation = undefined
-    stickyState.velocity = 0
-    stickyState.accumulated = 0
-
-    setIsDragging(true)
-    const startY = e.clientY
-    const startScrollTop = el.scrollTop
-    const trackHeight = track.clientHeight
-    const { scrollHeight, clientHeight } = el
-    const scrollRange = scrollHeight - clientHeight
-    const thumbHeight = Math.max(trackHeight * 0.1, (clientHeight / scrollHeight) * trackHeight)
-    const scrollableTrack = trackHeight - thumbHeight
-
-    const onMouseMove = (ev: MouseEvent): void => {
-      ev.preventDefault()
-      const delta = ev.clientY - startY
-      const scrollDelta = scrollableTrack > 0 ? (delta / scrollableTrack) * scrollRange : 0
-      el.scrollTop = Math.max(0, Math.min(scrollRange, startScrollTop + scrollDelta))
-    }
-
-    const onMouseUp = (): void => {
-      setIsDragging(false)
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'grabbing'
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [scrollRef, stopScroll, stickyState])
-
-  // ── 轨道点击跳转 ──
-
-  const handleTrackMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // 只响应直接点击轨道背景，忽略点击滑块
-    if (e.target !== e.currentTarget) return
-
-    const track = trackRef.current
-    const el = scrollRef.current
-    if (!track || !el) return
-
-    stopScroll()
-    stickyState.animation = undefined
-    stickyState.velocity = 0
-    stickyState.accumulated = 0
-
-    const rect = track.getBoundingClientRect()
-    const clickRatio = (e.clientY - rect.top) / rect.height
-    const { scrollHeight, clientHeight } = el
-    const targetTop = clickRatio * (scrollHeight - clientHeight)
-    el.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
-  }, [scrollRef, stopScroll, stickyState])
-
   if (items.length < MIN_ITEMS) return null
 
   // ── 迷你地图条纹 ──
@@ -552,19 +449,20 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
   const barCount = Math.min(items.length, MAX_BARS)
 
   return (
-    <div className="absolute right-1 top-0 bottom-0 z-30 flex pointer-events-none">
+    <div data-conversation-minimap="" className="absolute left-1 top-1/2 -translate-y-1/2 z-30 flex pointer-events-none">
       {/* ── 迷你地图悬停区域（面板 + 横杠） ── */}
-      <div className="flex items-start h-full">
+      <div className="relative flex items-center">
         {/* 展开面板 */}
         {hovered && (
           <div
+            data-minimap-preview=""
             className={cn(
-              'mr-1 w-[280px] rounded-lg border bg-popover shadow-xl origin-top-right flex flex-col overflow-hidden pointer-events-auto',
+              'absolute left-full ml-1 top-1/2 -translate-y-1/2 w-[280px] max-w-[calc(100vw-4rem)] rounded-lg border bg-popover shadow-xl origin-left flex flex-col overflow-hidden pointer-events-auto',
               isLeaving
                 ? 'animate-out fade-out-0 zoom-out-95 duration-75'
                 : 'animate-in fade-in-0 zoom-in-95 duration-150'
             )}
-            style={{ maxHeight: 'min(420px, 60vh)', marginTop: 12 }}
+            style={{ maxHeight: 'min(420px, 60vh)' }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
@@ -648,7 +546,8 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
 
         {/* ── 迷你地图横杠 —— 只有这里触发面板展开 ── */}
         {canScroll && <div
-          className="relative mt-3 flex-shrink-0 pointer-events-auto"
+          data-minimap-trigger=""
+          className="relative flex-shrink-0 pointer-events-auto"
           style={{ width: 24, height: barCount * MINIMAP_BAR_SPACING }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -677,30 +576,6 @@ export function ScrollMinimap({ items, searchMessages, onRevealSearchResult }: S
           })}
         </div>}
       </div>
-
-      {/* ── 滚动进度条 ── */}
-      {canScroll && <div className="relative ml-[4px] py-4 flex-shrink-0 pointer-events-auto" style={{ width: SCROLL_PROGRESS_WIDTH }}>
-        <div
-          ref={trackRef}
-          className="relative h-full rounded-full cursor-pointer scroll-progress-track"
-          onMouseDown={handleTrackMouseDown}
-        >
-          <div
-            ref={thumbRef}
-            className={cn(
-              'absolute left-0 right-0 rounded-full transition-colors duration-100 scroll-progress-thumb',
-              isDragging
-                ? 'scroll-progress-thumb-active cursor-grabbing'
-                : 'cursor-grab'
-            )}
-            style={{
-              height: `${thumbHeightPct}%`,
-              top: '0%',
-            }}
-            onMouseDown={handleThumbMouseDown}
-          />
-        </div>
-      </div>}
     </div>
   )
 }

@@ -52,13 +52,11 @@ import {
   UserMessageContent,
   TurnFileMapProvider,
 } from '@/components/ai-elements/message'
-import { UserAvatar } from '@/components/session/UserAvatar'
 import { CopyButton } from '@/components/session/CopyButton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatMessageTime } from '@/lib/message-time'
 import { getModelLogo, resolveModelDisplayName, resolveModelProvider } from '@/lib/model-logo'
-import { userProfileAtom } from '@/atoms/user-profile'
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/channel-atoms'
 import { agentSessionPendingFilesAtom, agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
 import { activeSessionIdAtom } from '@/atoms/tab-atoms'
@@ -977,7 +975,6 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
   message: SDKUserMessage
   onAgentHistoryQuoteClick?: (quote: QuotedSelection) => void
 }): React.ReactElement {
-  const userProfile = useAtomValue(userProfileAtom)
   const rawText = extractUserText(message) ?? ''
   const isScheduledRun = isScheduledRunText(rawText)
   const { files: attachedFiles, quotes, text } = parseAttachedFiles(
@@ -988,7 +985,6 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
   const activeSessionId = useAtomValue(activeSessionIdAtom)
   const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
   const nonImageFiles = attachedFiles.filter((f) => !isImageFile(f.filename))
-  const meta = extractMeta(message as unknown as SDKMessage)
   const contextRefs = (message as unknown as { contextRefs?: AgentContextRef[] }).contextRefs
 
   const handleImageEditComplete = React.useCallback((editedDataUrl: string): void => {
@@ -1045,22 +1041,7 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
 
   return (
     <Message from="user">
-      <div className="flex max-w-full flex-row-reverse items-start gap-2.5 mb-2.5">
-        <UserAvatar avatar={userProfile.avatar} size={35} />
-        <div className="flex flex-col justify-between h-[35px]">
-          <span className="text-sm font-semibold text-foreground/60 leading-none">{userProfile.userName}</span>
-          {(meta.createdAt || isScheduledRun) && (
-            <span className="flex items-center gap-2 leading-none">
-              {meta.createdAt && (
-                <span className="message-time text-[10px] text-foreground/[0.38]">{formatMessageTime(meta.createdAt)}</span>
-              )}
-              {isScheduledRun && (
-                <ScheduledRunBadge />
-              )}
-            </span>
-          )}
-        </div>
-      </div>
+      {isScheduledRun && <ScheduledRunBadge />}
       <MessageContent>
         {/* 引用会话小卡片 */}
         {contextRefs && contextRefs.length > 0 && (
