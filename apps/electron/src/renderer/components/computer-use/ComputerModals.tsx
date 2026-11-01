@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ComputerUseStatus } from './ComputerUseStatus'
 
 export function ComputerModals(): React.ReactElement {
   const [appAuthReq, setAppAuthReq] = React.useState<ComputerAppAuthRequest | null>(null)
@@ -169,6 +170,9 @@ export function ComputerModals(): React.ReactElement {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 桌面运行状态条 */}
+      <ComputerUseStatus />
     </>
   )
 }

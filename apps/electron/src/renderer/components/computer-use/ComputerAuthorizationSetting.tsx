@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { ComputerPermission, ComputerPermissions, ComputerUsePreferences } from '@gamma/shared'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { SettingsRow } from '@/components/settings/primitives/SettingsRow'
 
 /** 授权决定可以在本地撤销；读取失败时绝不覆盖既有偏好。 */
@@ -9,6 +10,7 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [permissions, setPermissions] = React.useState<ComputerPermissions | undefined>()
+  const [backendVersion, setBackendVersion] = React.useState<string | undefined>()
   const [permissionBusy, setPermissionBusy] = React.useState<ComputerPermission | null>(null)
   const [permissionMessage, setPermissionMessage] = React.useState<string | null>(null)
   const mounted = React.useRef(false)
@@ -24,7 +26,9 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
   React.useEffect(() => {
     mounted.current = true
     void load()
-    void window.electronAPI.getComputerState().then(state => { if (mounted.current) setPermissions(state.permissions) }).catch(() => {})
+    void window.electronAPI.getComputerState().then(state => {
+      if (mounted.current) { setPermissions(state.permissions); setBackendVersion(state.backendVersion) }
+    }).catch(() => {})
     return () => { mounted.current = false }
   }, [load])
   const revoke = async (app?: string): Promise<void> => {
@@ -38,6 +42,15 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
       const next = await window.electronAPI.updateComputerPreferences(app ? { allowedApps } : { shareObservations: false })
       if (mounted.current) setPreferences(next)
     } catch { if (mounted.current) setError('授权撤销失败，已保留原设置，请重试。') }
+    finally { inFlight.current = false; if (mounted.current) setBusy(false) }
+  }
+  const setHeaded = async (allowed: boolean): Promise<void> => {
+    if (inFlight.current) return
+    inFlight.current = true; setBusy(true); setError(null)
+    try {
+      const next = await window.electronAPI.updateComputerPreferences({ headedAllowed: allowed })
+      if (mounted.current) setPreferences(next)
+    } catch { if (mounted.current) setError('物理输入许可保存失败，已保留原设置。') }
     finally { inFlight.current = false; if (mounted.current) setBusy(false) }
   }
   const requestPermission = async (permission: 'accessibility' | 'screen'): Promise<void> => {
@@ -58,19 +71,27 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
       if (mounted.current) setPermissionBusy(null)
     }
   }
-  return <SettingsRow label="桌面操作授权" description="基础操作只需授权 Gamma 辅助功能；截图与实时画面使用可选的录屏权限。无需单独寻找其他应用。">
+  return <SettingsRow label="桌面操作授权" description="使用 agent-desktop 原生引擎，默认通过辅助功能语义操作；物理键鼠输入需单独允许，截图需要可选的录屏权限。">
     <div className="w-full max-w-md space-y-3" aria-busy={busy}>
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       {!preferences ? <>
         <p role="status" className="text-xs text-muted-foreground">{error ? '授权尚未读取' : '正在读取授权…'}</p>
         {error && <Button size="sm" variant="ghost" onClick={() => { void load() }}>重试读取</Button>}
       </> : <>
+        <p className="text-xs text-muted-foreground">原生引擎：agent-desktop{backendVersion ? ` ${backendVersion}` : ''}</p>
         <div className="space-y-2 border-b border-border/50 pb-3">
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy || permissionBusy !== null || permissions?.accessibility === true} onClick={() => { void requestPermission('accessibility') }}>{permissionBusy === 'accessibility' ? '正在请求辅助功能…' : permissions?.accessibility ? '辅助功能已授权' : '授权 Gamma 辅助功能'}</Button>
             <Button size="sm" variant="ghost" disabled={busy || permissionBusy !== null || permissions?.screen === true} onClick={() => { void requestPermission('screen') }}>{permissionBusy === 'screen' ? '正在请求录屏…' : permissions?.screen ? '画面预览已启用' : '开启可选画面预览'}</Button>
           </div>
           {permissionMessage && <p role="status" className="text-xs leading-relaxed text-muted-foreground">{permissionMessage}</p>}
+        </div>
+        <div className="space-y-2 border-b border-border/50 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="computer-headed" className="cursor-pointer text-xs">允许物理键鼠输入（headed）</label>
+            <Switch id="computer-headed" checked={preferences.headedAllowed === true} disabled={busy} onCheckedChange={allowed => { void setHeaded(allowed) }} />
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">开启后 Agent 可按任务切换窗口、移动指针和发送按键，可能打断当前操作。关闭时只允许 headless 语义操作；失败不会自动切换模式。</p>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-muted-foreground">{preferences.shareObservations ? '已同意按需发送界面文字和可用截图给模型' : '尚未同意桌面观察外发'}</span>
@@ -84,7 +105,7 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
           </li>)}
         </ul>}
       </>}
-      {busy && <p role="status" className="text-xs text-muted-foreground">正在撤销授权…</p>}
+      {busy && <p role="status" className="text-xs text-muted-foreground">正在保存授权设置…</p>}
     </div>
   </SettingsRow>
 }

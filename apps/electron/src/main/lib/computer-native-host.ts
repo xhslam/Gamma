@@ -107,7 +107,7 @@ export function createComputerNativeHostError(detail: Record<string, unknown>, o
   })
 }
 /** 私有 stdio 通道：不暴露任意可执行路径给 renderer/模型，不记录观察 payload。 */
-export class ComputerNativeHost implements ComputerHost {
+export class ComputerNativeHost {
   private child?: ChildProcessWithoutNullStreams
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>

@@ -77,7 +77,7 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
     expect(report.inheritanceVerified).toBe(true)
     expect(report.readOnly).toBe(true)
     expect(report.errors).toEqual([])
-    expect(report.helperExecutable).toBe('/Applications/Gamma.app/Contents/Resources/computer-use/gamma-computer-use-helper')
+    expect(report.helperExecutable).toBe('/Applications/Gamma.app/Contents/Resources/agent-desktop/agent-desktop')
     expect(readFileSync(reportPath, 'utf8')).not.toContain('SECRET_AX_CANARY')
     expect(statSync(reportPath).mode & 0o777).toBe(0o600)
     expect(metadata).toEqual({ diagnosticsReportPath: reportPath, reportWritten: true })
@@ -123,6 +123,6 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
     const { options } = fixture()
     options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Gamma/apps/electron' }
     const { report } = await collect(options)
-    expect(report.helperExecutable).toBe('/workspace/Gamma/apps/electron/resources/computer-use/gamma-computer-use-helper')
+    expect(report.helperExecutable).toBe('/workspace/Gamma/apps/electron/resources/agent-desktop/agent-desktop')
   })
 })

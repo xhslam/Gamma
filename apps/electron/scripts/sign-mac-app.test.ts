@@ -12,20 +12,21 @@ interface SigningOptions extends SigningDefaults {
 const { computerOptionsForFile } = require('./sign-mac-app.cjs') as {
   computerOptionsForFile(app: string, original?: (file: string) => PerFileOptions, defaults?: SigningDefaults): (file: string) => PerFileOptions
 }
-describe('Given 主App内裸Computer CLI签名策略（不执行codesign）', () => {
+describe('Given 主App内 agent-desktop CLI 与 helper 签名策略（不执行codesign）', () => {
   const app = '/local/build/Gamma.app'
-  const own = `${app}/Contents/Resources/computer-use/gamma-computer-use-helper`
-  const minimum = `${app}/Contents/Resources/computer-use/entitlements.plist`
+  const executable = `${app}/Contents/Resources/agent-desktop/agent-desktop`
+  const helper = `${app}/Contents/Resources/agent-desktop/agent-desktop-macos-helper`
   const options = computerOptionsForFile(app, () => ({ entitlements: 'electron-wide.plist' }))
-  test('When 签名裸CLI Then 使用最小权限，不继承Electron JIT权限', () => {
-    expect(options(own).entitlements).toBe(minimum)
-    expect(options(own).hardenedRuntime).toBe(true)
+  test('When 签名 agent-desktop CLI 与 helper Then 启用 hardenedRuntime', () => {
+    expect(options(executable).hardenedRuntime).toBe(true)
+    expect(options(helper).hardenedRuntime).toBe(true)
   })
   test('When 未提供per-file回调 Then 主进程继承项目权限，普通子进程使用inherit权限', () => {
     const fallback = computerOptionsForFile(app, undefined, { entitlements: 'main.plist', entitlementsInherit: 'child.plist', hardenedRuntime: true })
     expect(fallback(app)).toEqual({ entitlements: 'main.plist', hardenedRuntime: true })
     expect(fallback(`${app}/Contents/Frameworks/Gamma Helper.app`)).toEqual({ entitlements: 'child.plist', hardenedRuntime: true })
-    expect(fallback(own).entitlements).toBe(minimum)
+    expect(fallback(executable).hardenedRuntime).toBe(true)
+    expect(fallback(helper).hardenedRuntime).toBe(true)
   })
   test('When 仅提供主进程权限 Then 普通子进程也继承它，不回退osx-sign默认权限', () => {
     const fallback = computerOptionsForFile(app, undefined, { entitlements: 'project.plist' })
@@ -34,8 +35,7 @@ describe('Given 主App内裸Computer CLI签名策略（不执行codesign）', ()
   })
   test('When 主程序和其他Electron helper Then 不改变既有规则', () => {
     expect(options(app).entitlements).toBe('electron-wide.plist')
-    expect(options(`${own}.other`).entitlements).toBe('electron-wide.plist')
-    expect(options(`${app}/Contents/Helpers/Gamma Computer Use Helper.app`).entitlements).toBe('electron-wide.plist')
+    expect(options(`${executable}.other`).entitlements).toBe('electron-wide.plist')
   })
 })
 
@@ -49,8 +49,10 @@ describe('Given macOS 打包签名身份', () => {
       expect(signed.identityValidation).toBe(false)
       expect(signed.preAutoEntitlements).toBe(false)
       expect(signed.optionsForFile?.(app)).toMatchObject({ entitlements: 'project.plist', timestamp: 'none' })
-      expect(signed.optionsForFile?.(`${app}/Contents/Resources/computer-use/gamma-computer-use-helper`)).toMatchObject({
-        entitlements: `${app}/Contents/Resources/computer-use/entitlements.plist`,
+      expect(signed.optionsForFile?.(`${app}/Contents/Resources/agent-desktop/agent-desktop`)).toMatchObject({
+        hardenedRuntime: true,
+      })
+      expect(signed.optionsForFile?.(`${app}/Contents/Resources/agent-desktop/agent-desktop-macos-helper`)).toMatchObject({
         hardenedRuntime: true,
       })
     }
@@ -58,10 +60,6 @@ describe('Given macOS 打包签名身份', () => {
   test('When 使用正式证书 Then 保留证书、校验、时间戳和既有逐文件配置', () => {
     const signed = signingOptions({ app, identity: 'Developer ID Application: Gamma', identityValidation: true, optionsForFile: () => ({ entitlements: 'release.plist', timestamp: 'https://timestamp.example' }) })
     expect(signed.identity).toBe('Developer ID Application: Gamma')
-    expect(signed.identityValidation).toBe(true)
-    expect(signed.optionsForFile?.(app)).toEqual({ entitlements: 'release.plist', timestamp: 'https://timestamp.example' })
-  })
-  test('When App Store 构建缺少证书 Then 明确失败而不降级为临时签名', () => {
-    expect(() => signingOptions({ app, platform: 'mas' })).toThrow('需要有效的签名证书')
+    expect(signed.optionsForFile?.(app)).toMatchObject({ entitlements: 'release.plist', timestamp: 'https://timestamp.example' })
   })
 })

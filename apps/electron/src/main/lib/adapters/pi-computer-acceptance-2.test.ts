@@ -6,11 +6,17 @@ describe('Given Safari 天气搜索的注册工具合成宿主回归（非真实
     const f = createComputerToolsFixture()
     let confirmations = 0
     f.auth.setUiHandlers({ appAuth: async () => { confirmations++; return 'always' }, riskConfirm: async () => { confirmations++; return false } })
-    for (const params of [{ action: 'open_app', app: 'Safari' }, { action: 'key', key: 'cmd+l' }, { action: 'type', text: '今天的天气' }, { action: 'key', key: 'Return' }, { action: 'screenshot' }]) {
-      const result = await f.execute(params)
-      expect(result.content.some(block => block.type === 'image')).toBe(true)
+    for (const params of [
+      { command: 'launch', app: 'Safari' },
+      { command: 'press', combo: 'cmd+l', app: 'Safari' },
+      { command: 'type', ref: '@s1:e1', text: '今天的天气', app: 'Safari' },
+      { command: 'press', combo: 'Return', app: 'Safari' },
+      { command: 'screenshot', app: 'Safari' },
+    ]) {
+      const result = await f.execute(params as any)
+      expect(result.content.some(block => block.type === 'text')).toBe(true)
     }
-    expect(f.actions.map(action => action.kind)).toEqual(['open_app', 'key', 'type', 'key'])
+    expect(f.actions.map(action => action.kind)).toEqual(['launch', 'key', 'type', 'key'])
     expect(f.actions[0]?.bundleId).toBe('com.apple.Safari')
     expect(confirmations).toBe(0)
     await f.controller.finishRun(f.binding)
@@ -19,9 +25,9 @@ describe('Given Safari 天气搜索的注册工具合成宿主回归（非真实
     const f = createComputerToolsFixture({ trustedApps: false })
     let prompts = 0
     f.auth.setUiHandlers({ appAuth: async () => { prompts++; return 'always' } })
-    await f.execute({ action: 'open_app', app: 'Safari' })
-    await f.execute({ action: 'type', text: '今天的天气' })
-    await f.execute({ action: 'key', key: 'Return' })
+    await f.execute({ command: 'launch', app: 'Safari' } as any)
+    await f.execute({ command: 'type', ref: '@s1:e1', text: '今天的天气', app: 'Safari' } as any)
+    await f.execute({ command: 'press', combo: 'Return', app: 'Safari' } as any)
     expect(prompts).toBe(1)
     expect(f.auth.checkAppAuthorization('Safari', 'com.apple.Safari')).toBe('allowed')
     await f.controller.finishRun(f.binding)

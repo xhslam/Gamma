@@ -90,14 +90,28 @@ async function settle(): Promise<void> {
 }
 
 describe('自主桌面工具运行时状态控件', () => {
-  test('Given 任何桌面状态 When ComputerUseStatus 渲染 Then 始终返回空（不在应用内放悬浮卡片）', () => {
+  test('Given 桌面处于待命或空状态 When ComputerUseStatus 渲染 Then 返回空', () => {
     expect(renderStatus()).toBe('')
-    expect(renderStatus({ state: { supported: true, phase: 'active', sessionId: 's2', targetApp: { bundleId: 'app.notes', name: '备忘录' }, message: '正在观察桌面' } })).toBe('')
-    expect(renderStatus({ state: { supported: true, phase: 'paused' } })).toBe('')
-    expect(renderStatus({ pending: 'stop' })).toBe('')
   })
 
-  test('Given AppShell 存活 Then 应用内无悬浮状态卡片，仅挂载 ComputerModals 且无常驻面板', () => {
+  test('Given 桌面处于运行或暂停状态 When ComputerUseStatus 渲染 Then 显示应用内可见状态与停止入口', () => {
+    const activeHtml = renderStatus({
+      state: { supported: true, phase: 'active', sessionId: 's2', targetApp: { bundleId: 'app.notes', name: '备忘录' }, message: '正在观察桌面' },
+    })
+    expect(activeHtml).toContain('电脑桌面操作运行状态')
+    expect(activeHtml).toContain('备忘录')
+    expect(activeHtml).toContain('正在观察桌面')
+    expect(activeHtml).toContain('停止')
+
+    const pausedHtml = renderStatus({
+      state: { supported: true, phase: 'paused', sessionId: 's2', targetApp: { bundleId: 'app.notes', name: '备忘录' } },
+    })
+    expect(pausedHtml).toContain('电脑桌面操作运行状态')
+    expect(pausedHtml).toContain('继续')
+    expect(pausedHtml).toContain('停止')
+  })
+
+  test('Given AppShell 存活 Then 挂载 ComputerModals（由其统一管理状态悬浮条与授权弹窗）', () => {
     const shell = readFileSync(`${import.meta.dir}/../app-shell/AppShell.tsx`, 'utf8')
     const sidebar = readFileSync(`${import.meta.dir}/../app-shell/LeftSidebar.tsx`, 'utf8')
     const modals = readFileSync(`${import.meta.dir}/ComputerModals.tsx`, 'utf8')
@@ -105,6 +119,7 @@ describe('自主桌面工具运行时状态控件', () => {
     expect(shell).toContain('<ComputerModals />')
     expect(sidebar).not.toContain('ComputerUsePanel')
     expect(sidebar).not.toContain('onComputerStateChanged')
+    expect(modals).toContain('<ComputerUseStatus />')
     expect(modals).toContain('onComputerAppAuthRequested')
     expect(modals).toContain('onComputerRiskConfirmRequested')
     expect(modals).not.toContain('getComputerPreferences')

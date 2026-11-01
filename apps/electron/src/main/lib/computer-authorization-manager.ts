@@ -16,7 +16,7 @@ interface ConsentHandlers {
 }
 const normalizeKey = (value: string): string => value.trim().toLowerCase()
 const validDecision = (value: unknown): value is ComputerAppAuthDecision => ['once', 'always', 'denied', 'cancelled'].includes(String(value))
-const defaults = (): ComputerUsePreferences => ({ riskPolicy: 'relaxed', systemPermissionsDismissed: false, shareObservations: false, allowedApps: {} })
+const defaults = (): ComputerUsePreferences => ({ riskPolicy: 'relaxed', systemPermissionsDismissed: false, shareObservations: false, headedAllowed: false, allowedApps: {} })
 
 /** 持久授权与单轮执行分开；无人响应、超时、UI 故障一律拒绝。 */
 export class ComputerAuthorizationManager {
@@ -43,6 +43,7 @@ export class ComputerAuthorizationManager {
       if (raw.riskPolicy === 'strict' || raw.riskPolicy === 'standard' || raw.riskPolicy === 'relaxed') result.riskPolicy = raw.riskPolicy
       result.systemPermissionsDismissed = raw.systemPermissionsDismissed === true
       result.shareObservations = raw.shareObservations === true
+      result.headedAllowed = raw.headedAllowed === true
       if (raw.allowedApps && typeof raw.allowedApps === 'object' && !Array.isArray(raw.allowedApps)) {
         for (const [key, value] of Object.entries(raw.allowedApps)) {
           // 旧实现默认信任 Notes，不能把默认值冒充用户的明确授权。
@@ -55,13 +56,13 @@ export class ComputerAuthorizationManager {
   }
   getPreferences(): ComputerUsePreferences { return structuredClone(this.preferences) }
   updatePreferences(partial: Partial<ComputerUsePreferences>): ComputerUsePreferences {
-    if (!partial || typeof partial !== 'object' || Array.isArray(partial) || Object.keys(partial).some(key => !['riskPolicy', 'systemPermissionsDismissed', 'shareObservations', 'allowedApps'].includes(key))) throw new Error('无效桌面偏好')
+    if (!partial || typeof partial !== 'object' || Array.isArray(partial) || Object.keys(partial).some(key => !['riskPolicy', 'systemPermissionsDismissed', 'shareObservations', 'headedAllowed', 'allowedApps'].includes(key))) throw new Error('无效桌面偏好')
     const next = this.getPreferences()
     if (partial.riskPolicy !== undefined) {
       if (!['strict', 'standard', 'relaxed'].includes(partial.riskPolicy)) throw new Error('无效确认策略')
       next.riskPolicy = partial.riskPolicy
     }
-    for (const key of ['systemPermissionsDismissed', 'shareObservations'] as const) {
+    for (const key of ['systemPermissionsDismissed', 'shareObservations', 'headedAllowed'] as const) {
       if (partial[key] !== undefined) {
         if (typeof partial[key] !== 'boolean') throw new Error('无效授权偏好')
         next[key] = partial[key]
@@ -164,7 +165,7 @@ export class ComputerAuthorizationManager {
       else {
         const response = await this.waitForDecision(signal => this.showLocalDialog({ type: 'question', title: '首次使用电脑操作',
           message: '允许 Agent 按任务需要读取界面并操作电脑？',
-          detail: '界面文字会发送给您配置的 AI 模型，可能包含敏感信息。基础操作只需 macOS 辅助功能授权；录屏是可选能力，开启后可按需发送截图并显示实时预览。宽松策略不逐应用重复询问，您明确拒绝的应用仍不能操作；高风险动作执行前确认。此同意会保存，可在本地撤销。',
+          detail: '界面文字会发送给您配置的 AI 模型，可能包含敏感信息。默认通过 agent-desktop 辅助功能 API 操作；物理键鼠输入须在本地设置另行允许。录屏是可选能力，开启后可按需发送截图。宽松策略不逐应用重复询问，您明确拒绝的应用仍不能操作；高风险动作执行前确认。此同意会保存，可在本地撤销。',
           buttons: ['同意并继续', '取消'], defaultId: 1, cancelId: 1 }, signal), 1)
         allowed = response === 0
       }

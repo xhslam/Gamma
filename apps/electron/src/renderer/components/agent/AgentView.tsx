@@ -3487,7 +3487,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
         <div className={cn(
           'flex min-h-0 flex-1 w-full flex-col overflow-hidden',
-          embedded ? 'max-w-none' : 'max-w-[min(72rem,100%)] mx-auto',
+          embedded ? 'max-w-none' : 'max-w-3xl mx-auto',
         )}>
         {/* 消息区域 */}
         <AgentMessages
@@ -3525,7 +3525,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
         {/* 输入区域 — 交互横幅显示时隐藏，由横幅替代 */}
         {!hasBannerOverlay && (
-        <div className="px-2.5 pb-2.5 md:px-[18px] md:pb-[18px]" data-input-mode="agent">
+        <div className="px-4 pb-2.5 md:px-6 md:pb-4" data-input-mode="agent">
           <div
             className={cn(
               'gamma-composer bg-background/70 backdrop-blur-sm',
@@ -3663,8 +3663,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               placeholder={
                 agentChannelId && hasAvailableModel
                   ? sendWithCmdEnter
-                    ? '输入消息...（@ 引用文件，/ 调用 Skill，# 使用 MCP，& 引用会话，～ 引用待办/日程；⌘/Ctrl+Enter 发送）'
-                    : '输入消息...（@ 引用文件，/ 调用 Skill，# 使用 MCP，& 引用会话，～ 引用待办/日程；Enter 发送）'
+                    ? '输入消息...（⌘+Enter 发送）'
+                    : '输入消息...'
                   : !agentChannelId
                     ? '请先选择模型'
                     : '暂无可用模型，请先在设置中启用渠道'

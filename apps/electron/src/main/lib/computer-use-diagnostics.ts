@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { ComputerNativeHost } from './computer-native-host'
+import { AgentDesktopHost } from './agent-desktop-host'
 import { writeTextFileAtomic } from './safe-file'
 
 interface DiagnosticsApp {
@@ -54,9 +54,16 @@ function permissionsFromStatus(status: unknown): DiagnosticPermissions {
   const permissions = (status as Record<string, unknown>).permissions
   if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) throw new Error('invalid-status')
   const value = permissions as Record<string, unknown>
-  if (['accessibility', 'screen', 'listen', 'post'].some(key => typeof value[key] !== 'boolean')) throw new Error('invalid-status')
-  // 白名单复制，绝不保存helper的message、AX文字、图像或其他未知字段。
-  return { accessibility: value.accessibility as boolean, screen: value.screen as boolean, listen: value.listen as boolean, post: value.post as boolean }
+  const ax = typeof value.accessibility === 'boolean'
+    ? value.accessibility
+    : (value.accessibility as { state?: string } | undefined)?.state === 'granted'
+  const screen = typeof value.screen === 'boolean'
+    ? value.screen
+    : (value.screen_recording as { state?: string } | undefined)?.state === 'granted'
+  const listen = typeof value.listen === 'boolean' ? value.listen : ax
+  const post = typeof value.post === 'boolean' ? value.post : ax
+  if (typeof ax !== 'boolean' || typeof screen !== 'boolean') throw new Error('invalid-status')
+  return { accessibility: ax, screen, listen, post }
 }
 
 /** 同步设置隔离profile后才首次await；返回undefined时由原有启动流程继续。 */
@@ -90,14 +97,26 @@ async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOpti
     report.version = String(app.getVersion()).slice(0, 64)
     report.parentExecutable = app.getPath('exe')
     report.helperExecutable = app.isPackaged
-      ? join(options.resourcesPath, 'computer-use', 'gamma-computer-use-helper')
-      : join(app.getAppPath(), 'resources', 'computer-use', 'gamma-computer-use-helper')
+      ? join(options.resourcesPath, 'agent-desktop', 'agent-desktop')
+      : join(app.getAppPath(), 'resources', 'agent-desktop', 'agent-desktop')
     try { report.parentAX = options.parentAccessibility() }
     catch { report.errors.push('parent-accessibility-check-failed') }
     if (!existsSync(report.helperExecutable) && !options.createHost) {
       report.errors.push('native-helper-unavailable')
     } else {
-      host = options.createHost?.(report.helperExecutable) ?? new ComputerNativeHost(() => ({ executable: report.helperExecutable }))
+      host = options.createHost?.(report.helperExecutable) ?? {
+        async call(method: 'status', _params: Record<string, unknown>, timeoutMs: number) {
+          const res = await new AgentDesktopHost(() => ({ executable: report.helperExecutable })).execute(
+            `diag-${process.pid}`,
+            ['status'],
+            undefined,
+            timeoutMs,
+          )
+          if (!res.ok) throw new Error(res.error?.message || 'status-failed')
+          return res.data
+        },
+        async terminate() {},
+      }
       try { report.helperPermissions = permissionsFromStatus(await host.call('status', {}, 5000)) }
       catch { report.errors.push('native-status-failed') }
     }
