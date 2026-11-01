@@ -11,7 +11,6 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import { FileDiff, FolderOpen, PanelLeft, PanelRight, Split } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import {
   agentDiffDataAtom,
   agentDiffPanelTabAtom,
@@ -48,7 +47,6 @@ import {
 } from '@/lib/right-panel-exploration'
 import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
 import type { DiffPanelTabBarProps } from '@/components/diff/DiffPanelTabBar'
-import { OnDemandOverlayPanel } from './on-demand/OnDemandOverlayPanel'
 import { RightWorkspaceAddMenu } from '@/components/diff/RightWorkspaceAddMenu'
 import { useRightWorkspaceActions } from '@/hooks/useRightWorkspaceActions'
 
@@ -91,18 +89,6 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
   const filesBtnRef = React.useRef<HTMLButtonElement>(null)
   const changesBtnRef = React.useRef<HTMLButtonElement>(null)
   const explorationBtnRef = React.useRef<HTMLButtonElement>(null)
-
-  const activeBtnRef = React.useMemo(() => {
-    if (activeOverlay === 'files') return filesBtnRef
-    if (activeOverlay === 'changes') return changesBtnRef
-    if (activeOverlay === 'exploration') return explorationBtnRef
-    return undefined
-  }, [activeOverlay])
-
-  const lastActiveButtonRef = React.useRef<HTMLButtonElement | null>(null)
-  React.useLayoutEffect(() => {
-    if (activeBtnRef?.current) lastActiveButtonRef.current = activeBtnRef.current
-  }, [activeBtnRef])
 
   const sessions = useAtomValue(agentSessionsAtom)
   const layout = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId))
@@ -240,11 +226,7 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
     setDiffStatusMap,
   ])
 
-  const isPopoverOpen = Boolean(activeOverlay)
-
   return (
-    <Popover open={isPopoverOpen} onOpenChange={(open) => { if (!open) closeOverlay() }}>
-      <PopoverAnchor asChild>
         <div
           ref={navRef}
           className="titlebar-no-drag ml-auto flex items-center gap-1 relative z-40"
@@ -378,10 +360,5 @@ function OnDemandIconNav({ sessionId }: { sessionId: string }): React.ReactEleme
             />
           )}
         </div>
-      </PopoverAnchor>
-
-      {/* S1 浮层容器 */}
-      <OnDemandOverlayPanel sessionId={sessionId} activeButtonRef={lastActiveButtonRef} navRef={navRef} />
-    </Popover>
   )
 }

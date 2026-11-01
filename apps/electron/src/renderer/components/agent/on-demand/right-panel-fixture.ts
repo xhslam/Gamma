@@ -6,6 +6,7 @@ export const rightPanelFixture = String.raw`
   import { TooltipProvider } from '@/components/ui/tooltip'
   import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
   import { AgentHeader } from '@/components/agent/AgentHeader'
+  import { OnDemandConversationLayout } from '@/components/agent/on-demand/OnDemandConversationLayout'
   import { RightSidePanel } from '@/components/app-shell/RightSidePanel'
   import { WorkspacePanels } from '@/components/app-shell/WorkspacePanels'
   import {
@@ -210,10 +211,14 @@ export const rightPanelFixture = String.raw`
           { className: 'flex h-full min-h-0 flex-col bg-background' },
           React.createElement(AgentHeader, { sessionId }),
           React.createElement(
-            'main',
-            { className: 'flex-1 flex flex-col p-4 bg-background min-w-0', 'data-testid': 'chat-main-area' },
-            React.createElement('div', { className: 'text-sm font-medium text-foreground' }, '对话区域（自适应工作区宽度）'),
-            React.createElement('div', { className: 'mt-2 text-xs text-muted-foreground' }, 'S0/S1 状态下聊天占据全宽，S2 展开时让出右侧大面板空间。')
+            OnDemandConversationLayout,
+            { sessionId },
+            React.createElement(
+              'main',
+              { className: 'flex-1 flex flex-col p-4 bg-background min-w-0', 'data-testid': 'chat-main-area' },
+              React.createElement('div', { className: 'text-sm font-medium text-foreground' }, '对话区域（自适应工作区宽度）'),
+              React.createElement('div', { className: 'mt-2 text-xs text-muted-foreground' }, 'S0 聊天全宽，S1 快捷侧栏和 S2 大面板均独立占位，不遮挡会话。')
+            )
           )
         ),
         workspace: React.createElement(RightSidePanel, { width: 460 }),

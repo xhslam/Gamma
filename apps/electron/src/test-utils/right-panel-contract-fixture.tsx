@@ -4,6 +4,9 @@ import { Provider, createStore } from 'jotai'
 import type { FileAccessOptions, UnstagedChangesResult } from '@gamma/shared'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { OnDemandRightPanelNav } from '@/components/agent/OnDemandRightPanelNav'
+import { OnDemandConversationLayout } from '@/components/agent/on-demand/OnDemandConversationLayout'
+import { Message, MessageContent } from '@/components/ai-elements/message'
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation'
 import {
   agentSessionPathMapAtom,
   agentSessionsAtom,
@@ -64,7 +67,19 @@ export async function mountRightPanelContractFixture() {
           <header data-testid="contract-header" style={{ padding: '0 12px', display: 'flex', height: 32 }}>
             <OnDemandRightPanelNav sessionId={sessionId} />
           </header>
-          <button data-testid="contract-outside" type="button" style={{ alignSelf: 'flex-start', margin: 24 }}>对话区域</button>
+          <OnDemandConversationLayout sessionId={sessionId}>
+            <div data-testid="contract-conversation" className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col">
+              <Conversation>
+                <ConversationContent>
+                  <Message from="user"><MessageContent><div className="rounded-lg bg-primary/10 p-3">我发送的消息</div></MessageContent></Message>
+                  <Message from="assistant"><MessageContent><div>AI 回复</div></MessageContent></Message>
+                  <div style={{ height: 1200, flexShrink: 0 }} aria-hidden="true" />
+                </ConversationContent>
+              </Conversation>
+              <textarea data-testid="contract-input" aria-label="消息输入" className="m-4 shrink-0" />
+              <button data-testid="contract-outside" type="button" style={{ alignSelf: 'flex-start', margin: 12 }}>对话区域</button>
+            </div>
+          </OnDemandConversationLayout>
         </main>
       </TooltipProvider>
     </Provider>,

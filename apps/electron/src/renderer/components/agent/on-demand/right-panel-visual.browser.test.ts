@@ -24,6 +24,8 @@ interface PanelMetrics {
   width: number
   height: number
   anchorRight: number
+  left: number
+  chatRight: number
   right: number
   top: number
   anchorBottom: number
@@ -74,7 +76,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
   afterAll(async () => { await harness?.dispose() })
 
   for (const theme of ['light', 'dark'] as const) {
-    test(`When ${theme} 改动浮层展开 Then 暖色几何、虚拟34px和24px渐隐一致且不挤聊天`, async () => {
+    test(`When ${theme} 改动侧栏展开 Then 保留暖色几何、虚拟34px和24px渐隐，并与聊天分列`, async () => {
       const result = await harness.run<PanelMetrics>(`${boot}
         window.onDemandTest.setTheme('${theme}');
         const chat = document.querySelector('[data-testid="chat-main-area"]');
@@ -97,7 +99,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
         return {
           background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopWidth,
           padding: style.paddingTop, shadow: style.boxShadow, width: rect.width, height: rect.height,
-          right: rect.right, top: rect.top, anchorRight: anchor.right, anchorBottom: anchor.bottom,
+          right: rect.right, left: rect.left, chatRight: chat.getBoundingClientRect().right, top: rect.top, anchorRight: anchor.right, anchorBottom: anchor.bottom,
           rowHeight: list.querySelector('button').getBoundingClientRect().height,
           totalHeight: list.getBoundingClientRect().height, mounted: list.querySelectorAll('button').length,
           uiFont: getComputedStyle(nav).fontFamily, monoFont: getComputedStyle(list.querySelector('button .font-mono')).fontFamily,
@@ -114,10 +116,11 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       expect(result.border).toBe('1px')
       expect(result.padding).toBe('16px')
       expect(result.shadow).toBe('none')
-      expect(result.width).toBe(380)
-      expect(result.height).toBeLessThanOrEqual(420)
-      expect(Math.abs(result.right - result.anchorRight)).toBeLessThanOrEqual(1)
-      expect(result.top).toBeGreaterThanOrEqual(result.anchorBottom + 5)
+      expect(result.width).toBeGreaterThan(190)
+      expect(result.width).toBeLessThanOrEqual(352)
+      expect(result.height).toBeLessThanOrEqual(600)
+      expect(result.chatRight).toBeLessThanOrEqual(result.left)
+      expect(result.top).toBeGreaterThanOrEqual(result.anchorBottom)
       expect(result.rowHeight).toBe(34)
       expect(result.totalHeight).toBe(1181 * 34)
       expect(result.mounted).toBeGreaterThan(0)
@@ -130,7 +133,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       expect(result.midBottomFade).toBe('24px')
       expect(result.lastTopFade).toBe('24px')
       expect(result.lastBottomFade).toBe('0px')
-      expect(result.chatAfter).toBe(result.chatBefore)
+      expect(result.chatAfter).toBeLessThan(result.chatBefore)
       expect(result.icons).toBe(4)
     })
   }
@@ -239,7 +242,8 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
     `, { reducedMotion: true, zoom: 2, screenshot: join(artifacts, 'six-step-narrow-reduced.png') })
     expect(result.left).toBeGreaterThanOrEqual(12)
     expect(result.right).toBeLessThanOrEqual(result.viewport - 12)
-    expect(result.width).toBe(Math.min(380, result.viewport - 24))
+    expect(result.width).toBeLessThanOrEqual(result.viewport * 0.45)
+    expect(result.width).toBeGreaterThan(100)
     expect(result.animation).toBe('none')
     expect(result.translation).toBe('none')
     expect(result.focused).toBe(true)
