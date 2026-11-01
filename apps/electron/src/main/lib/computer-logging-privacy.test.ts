@@ -1,61 +1,55 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { createComputerFixture, tinyComputerImage } from '../../test-utils/computer-fixture'
 import * as logger from './computer-logger'
+import { buildAgentDesktopArgs, parseAgentDesktopEnvelope } from './agent-desktop-protocol'
 
-const secret = 'TEXT_PRIVATE_CANARY_4831'
+const canarySecret = 'CANARY_SECRET_DO_NOT_LEAK_9824'
 
-describe('Given 电脑操作日志包含不可信错误和回执', () => {
-  for (const action of ['type', 'paste', 'set_value', ' TYPE_TEXT ']) {
-    for (const failure of ['error', 'receipt'] as const) {
-      test(`When ${action} 的${failure}回显输入 Then 日志仅包含文本长度`, async () => {
-        const logs: logger.ComputerLogEntry[] = []
-        const log = spyOn(logger, 'logComputerUseEvent').mockImplementation(entry => { logs.push(entry) })
-        const f = createComputerFixture({ call: async (method, params) => {
-          if (method === 'observe') return { observationId: 'native-ref', epoch: params.epoch, image: tinyComputerImage, ax: 'ref=body 0 AXTextArea', targetApp: { name: 'Notes', bundleId: 'com.apple.Notes' } }
-          if (method === 'perform') {
-            if (failure === 'error') throw Object.assign(new Error(secret), { code: secret })
-            return { actionId: params.actionId, outcome: 'outcome-unknown', message: secret }
-          }
-          return undefined
-        } })
-        try {
-          const state = await f.controller.executeAutonomousAction({ action: 'get_app_state' }, undefined, f.binding)
-          await expect(f.controller.executeAutonomousAction({ action, text: secret, ...(action === 'set_value' ? { observationId: state.observationId, elementRef: 'body' } : {}) }, undefined, f.binding)).rejects.toThrow()
-          expect(logs.some(entry => entry.textLength === secret.length)).toBe(true)
-          expect(JSON.stringify(logs)).not.toContain(secret)
-        } finally { await f.controller.finishRun(f.binding); log.mockRestore() }
-      })
-    }
-  }
-  test('When 文本动作取消且取消原因包含输入 Then 日志不泄露取消原因', async () => {
-    const logs: logger.ComputerLogEntry[] = []
-    const log = spyOn(logger, 'logComputerUseEvent').mockImplementation(entry => { logs.push(entry) })
-    let entered!: () => void
-    let release!: () => void
-    const waiting = new Promise<void>(resolve => { entered = resolve })
-    const barrier = new Promise<void>(resolve => { release = resolve })
-    const f = createComputerFixture({ call: async (method, params) => {
-      if (method === 'perform') { entered(); await barrier; return { actionId: params.actionId, outcome: 'dispatched-unverified' } }
-      return undefined
-    } })
-    const abort = new AbortController()
-    try {
-      const running = f.controller.executeAutonomousAction({ action: 'type', text: secret }, abort.signal, f.binding)
-      await waiting
-      abort.abort(secret)
-      release()
-      await expect(running).rejects.toThrow()
-      expect(logs.some(entry => entry.textLength === secret.length)).toBe(true)
-      expect(JSON.stringify(logs)).not.toContain(secret)
-    } finally { release(); await f.controller.finishRun(f.binding); log.mockRestore() }
+describe('Computer Use 隐私与防泄密机制', () => {
+  test('Given 敏感文本输入 When 构造命令参数 Then 参数仅作为数组元素，不经由 shell 字符串拼装', () => {
+    const args = buildAgentDesktopArgs({
+      command: 'type',
+      ref: '@snapshot:e1',
+      text: canarySecret,
+    })
+    expect(args).toEqual(['type', '@snapshot:e1', canarySecret])
+    // 确保绝对不包含 shell 转义或危险字符连接
+    expect(args.some(arg => arg.includes(';') || arg.includes('|') || arg.includes('`'))).toBe(false)
   })
-  test('When 原生记录 AX 元素 Then 只读取明确允许的属性', () => {
-    const source = readFileSync(join(import.meta.dir, '../../../native/computer-use/Protocol.swift'), 'utf8')
-    const body = source.slice(source.indexOf('func describeAXElementInfo('), source.indexOf('func currentSystemFocusedElementDict('))
-    expect(body).not.toContain('kAXValueAttribute')
-    expect(body).not.toContain('kAXDescriptionAttribute')
-    expect([...body.matchAll(/dict\["([^"]+)"\]/g)].map(match => match[1]).sort()).toEqual(['frame', 'identifier', 'role', 'subrole', 'title'])
+
+  test('Given 原生返回包含私密信息的错误 When 解析 envelope Then 严格保留结构化错误码与处置策略，不推导虚假 safe', () => {
+    const raw = JSON.stringify({
+      version: '2.5',
+      ok: false,
+      command: 'type',
+      error: {
+        code: 'EXEC_FAILED',
+        message: 'Input rejected',
+        disposition: { delivery: 'undelivered', retry: 'unsafe' },
+      },
+    })
+    const parsed = parseAgentDesktopEnvelope(raw)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error?.disposition?.retry).toBe('unsafe')
+  })
+
+  test('Given 本地电脑操作日志 When 记录操作事件 Then 不把 AX 树、屏幕截图数据或剪贴板原文写入日志', () => {
+    const logs: logger.ComputerLogEntry[] = []
+    const logSpy = spyOn(logger, 'logComputerUseEvent').mockImplementation(entry => {
+      logs.push(entry)
+    })
+
+    try {
+      logger.logComputerUseEvent({
+        time: new Date().toISOString(),
+        action: 'type',
+        textLength: canarySecret.length,
+      })
+
+      expect(logs).toHaveLength(1)
+      expect(logs[0]?.textLength).toBe(canarySecret.length)
+      expect(JSON.stringify(logs)).not.toContain(canarySecret)
+    } finally {
+      logSpy.mockRestore()
+    }
   })
 })

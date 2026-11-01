@@ -1331,7 +1331,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       <style>{`
         .ProseMirror {
           outline: none;
-          padding: 9px 15px 0px;
+          padding: 12px 16px;
+          min-height: 48px;
           font-style: normal;
         }
         .ProseMirror p {

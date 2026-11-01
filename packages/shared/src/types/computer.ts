@@ -10,7 +10,7 @@ export interface ComputerBinding {
 }
 export interface ComputerRect { x: number; y: number; width: number; height: number }
 export interface ComputerTarget {
-  windowId: number
+  windowId: string | number
   pid: number
   processIdentity: string
   bundleId: string
@@ -46,6 +46,10 @@ export interface ComputerActionReceipt {
   message: string
 }
 export interface ComputerState {
+  backend?: 'agent-desktop'
+  backendVersion?: string
+  /** 仅本地明确许可可开启；headless 失败不会自动切换。 */
+  headedAllowed?: boolean
   supported: boolean
   phase: ComputerPhase
   /** 同轮停止不可自行恢复；下一条明确用户消息可开始新动作，不重放旧动作。 */
@@ -123,6 +127,8 @@ export interface ComputerAXContext {
 }
 
 export interface ComputerUsePreferences {
+  /** 允许物理键鼠输入；默认 false，独立于系统辅助功能权限。 */
+  headedAllowed?: boolean
   riskPolicy: ComputerRiskPolicy
   systemPermissionsDismissed: boolean
   /** 本地用户对桌面截图发送至所配置模型的持久同意；dismiss 不代表同意。 */

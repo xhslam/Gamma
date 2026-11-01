@@ -21,6 +21,8 @@ apps/electron/resources/computer-use/
 apps/electron/resources/eventkit/
 # OfficeCLI 随构建脚本下载、校验并嵌入安装包，不提交大体积第三方二进制。
 apps/electron/resources/officecli/
+# agent-desktop 由固定源码构建，产物及 receipt 不入仓。
+apps/electron/resources/agent-desktop/
 # bun build --compile 的临时中间产物
 *.bun-build
 

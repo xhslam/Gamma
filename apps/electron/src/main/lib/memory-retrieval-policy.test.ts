@@ -37,4 +37,11 @@ describe('提取预检是精确兜底，不是相似主题自动读取', () => {
     const rules = buildMemoryRetrievalRules()
     expect(rules).toContain('<memory_rules>'); expect(rules).toContain('<memory_examples>'); expect(rules).toContain('例6'); expect(rules).toContain('本轮为准'); expect(rules).toContain('不要凭一行描述猜正文')
   })
+  it('Given 全局规则 When 生成 Then 覆盖续做任务、通用问题澄清与回答前自检', () => {
+    const rules = buildMemoryRetrievalRules()
+    expect(rules).toContain('先读对应项目文件再动手')
+    expect(rules).toContain('这是通用问题所以没查记忆')
+    expect(rules).toContain('<memory_checklist>')
+    expect(rules).not.toContain('<memory_system>')
+  })
 })

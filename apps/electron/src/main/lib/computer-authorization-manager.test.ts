@@ -30,6 +30,24 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
     expect(manager.checkAppAuthorization('备忘录')).toBe('allowed')
   })
 
+  test('Given 既有授权偏好 When 首次读取物理输入许可 Then 默认为禁用且不影响外发同意', () => {
+    expect(manager.getPreferences().headedAllowed).toBe(false)
+    expect(manager.getPreferences().shareObservations).toBe(false)
+  })
+
+  test('Given 本地明确开启 headed When 保存并重启 Then 保留许可且可以独立撤销', () => {
+    manager.updatePreferences({ headedAllowed: true, shareObservations: true })
+    const restarted = new ComputerAuthorizationManager(tempConfigFile)
+    expect(restarted.getPreferences().headedAllowed).toBe(true)
+    restarted.updatePreferences({ headedAllowed: false })
+    expect(restarted.getPreferences()).toMatchObject({ headedAllowed: false, shareObservations: true })
+  })
+
+  test('Given 非布尔物理输入许可 When 更新 Then 拒绝且不改变原设置', () => {
+    expect(() => manager.updatePreferences({ headedAllowed: 'true' } as unknown as Parameters<typeof manager.updatePreferences>[0])).toThrow('无效授权偏好')
+    expect(manager.getPreferences().headedAllowed).toBe(false)
+  })
+
   test('未知应用首次检查返回 pending', () => {
     expect(manager.checkAppAuthorization('Safari')).toBe('pending')
     expect(manager.checkAppAuthorization('Calculator')).toBe('pending')

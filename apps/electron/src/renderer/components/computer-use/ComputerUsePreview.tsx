@@ -15,13 +15,27 @@ interface PreviewView {
 }
 
 const actionNames: Record<string, string> = {
-  screenshot: '观察屏幕', get_app_state: '查看应用', list_apps: '查找应用', list_windows: '查看窗口',
-  click: '点击', left_click: '点击', double_click: '双击', triple_click: '三击', right_click: '右键点击',
-  middle_click: '中键点击', mouse_move: '移动指针', move: '移动指针', drag: '拖动', left_click_drag: '拖动',
-  type: '输入文字', type_text: '输入文字', paste: '插入文字', key: '按下快捷键', press_key: '按下快捷键',
-  scroll: '滚动', wait: '等待画面', sleep: '等待画面', open_app: '打开应用', openapp: '打开应用', launch: '打开应用',
-  focus_window: '切换窗口', axPress: '操作控件', axSetValue: '填写控件', axFocus: '聚焦控件',
-  axAction: '操作控件', axSelectText: '选择文字', set_value: '填写控件', focus: '聚焦控件', select_text: '选择文字',
+  snapshot: '抓取元素树', find: '查找控件', screenshot: '截取屏幕', get: '读取属性', is: '检查状态',
+  click: '点击', 'double-click': '双击', double_click: '双击', 'triple-click': '三击', triple_click: '三击',
+  'right-click': '右键点击', right_click: '右键点击', type: '输入文字', 'set-value': '填写控件', set_value: '填写控件',
+  clear: '清空控件', focus: '聚焦控件', select: '选择文字', toggle: '切换状态', check: '勾选', uncheck: '取消勾选',
+  expand: '展开', collapse: '折叠', scroll: '滚动', 'scroll-to': '滚动到控件', press: '按键', hover: '悬停',
+  drag: '拖动', 'mouse-move': '移动指针', mouse_move: '移动指针', 'mouse-click': '鼠标点击', mouse_click: '鼠标点击',
+  'mouse-wheel': '鼠标滚轮', mouse_wheel: '鼠标滚轮', launch: '打开应用', 'close-app': '关闭应用', close_app: '关闭应用',
+  'list-windows': '查看窗口', list_windows: '查看窗口', 'list-displays': '查看显示器', list_displays: '查看显示器',
+  'list-apps': '查看应用', list_apps: '查看应用', 'focus-window': '切换窗口', focus_window: '切换窗口',
+  'resize-window': '调整窗口', resize_window: '调整窗口', 'move-window': '移动窗口', move_window: '移动窗口',
+  minimize: '最小化窗口', maximize: '最大化窗口', restore: '还原窗口', 'list-surfaces': '查看界面',
+  'open-system-surface': '打开系统界面', 'list-notifications': '查看通知', 'dismiss-notification': '忽略通知',
+  'dismiss-all-notifications': '清除所有通知', 'notification-action': '点击通知操作',
+  'clipboard-get': '读取剪贴板', 'clipboard-set': '写入剪贴板', 'clipboard-clear': '清空剪贴板',
+  wait: '等待', status: '查询状态', permissions: '查询权限', version: '查询版本', skills: '查询技能',
+  session: '会话管理', 'cursor-overlay': '光标指示', trace: '追踪调试',
+  // 兼容别名
+  get_app_state: '查看应用', left_click: '点击', middle_click: '中键点击', move: '移动指针',
+  left_click_drag: '拖动', type_text: '输入文字', paste: '插入文字', key: '按下快捷键', press_key: '按下快捷键',
+  sleep: '等待画面', open_app: '打开应用', openapp: '打开应用', axPress: '操作控件', axSetValue: '填写控件',
+  axFocus: '聚焦控件', axAction: '操作控件', axSelectText: '选择文字', select_text: '选择文字',
 }
 
 /** 增量帧只复用同一运行、同一观察的图片；禁止跨会话沿用旧画面。 */
@@ -138,7 +152,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
       revision.current += 1
       setView(old => ({ ...old, preview: null, stopping: false, error: null }))
     } catch {
-      setView(old => ({ ...old, stopping: false, error: '停止未确认，请重试或按 ⌃⌥Esc。' }))
+      setView(old => ({ ...old, stopping: false, error: '停止未确认，请重试或使用上方停止按钮。' }))
     }
   }
 
@@ -180,7 +194,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
           <div className="flex items-center gap-2 text-sm" role="status">
             {running && !view.error ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" /> : latest?.status === 'failed' ? <X className="size-3.5 text-warning" /> : <Circle className="size-3 shrink-0 text-muted-foreground" />}
             <span className="min-w-0 flex-1 truncate">{view.error ? '操作状态待确认' : `${label}${latest?.status === 'returned' ? ' · 已返回' : latest?.status === 'failed' ? ' · 未完成' : ''}`}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">⌃⌥Esc 停止</span>
+            <span className="shrink-0 text-xs text-muted-foreground">可随时停止</span>
           </div>
           {(preview?.activities.length ?? 0) > 1 && <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer rounded py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">近期步骤 · {preview!.activities.length}</summary>

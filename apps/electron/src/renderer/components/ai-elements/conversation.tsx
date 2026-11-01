@@ -61,7 +61,7 @@ export function ConversationContent({ className, ...props }: ConversationContent
   }, [scrollRef])
   return (
     <StickToBottom.Content
-      className={cn('flex flex-col gap-1 py-4 px-8', className)}
+      className={cn('flex flex-col gap-1 py-4 px-4 md:px-6', className)}
       {...props}
     />
   )

@@ -36,10 +36,10 @@ export function evaluateComputerRisk(params: ComputerExecuteParams, context: Com
   const bundle = (context?.bundleId ?? '').toLowerCase()
   const secondary = kind === 'perform_secondary_action'
   // 动作名只能增加风险，不能作为用户授权或代替 native 控件上下文。
-  const secondaryName = secondary ? (params.secondaryAction ?? '').trim() : ''
+  const secondaryName = secondary ? String(params.secondaryAction ?? '').trim() : ''
   const secondaryLabel = secondaryName.replace(/^AX/, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ')
   const label = [context?.title ?? '', context?.description ?? '', secondaryLabel].map(actionLabel).join(' ').trim()
-  const key = (params.key ?? params.text ?? '').toLowerCase().replace(/command|super/g, 'cmd').replace(/control/g, 'ctrl').replace(/option|opt/g, 'alt').replace(/-/g, '+').replace(/\s/g, '')
+  const key = String(params.key ?? params.text ?? '').toLowerCase().replace(/command|super/g, 'cmd').replace(/control/g, 'ctrl').replace(/option|opt/g, 'alt').replace(/-/g, '+').replace(/\s/g, '')
   const parts = key.split('+')
   const enter = parts.includes('enter') || parts.includes('return')
   const pointer = ['click', 'double_click', 'triple_click', 'left_click', 'right_click', 'middle_click', 'drag', 'left_click_drag'].includes(kind) || secondary
@@ -76,7 +76,7 @@ export function evaluateComputerRisk(params: ComputerExecuteParams, context: Com
     && !(policy === 'relaxed' && axDraftEdit && TEXT_ROLES.has(role))) return result('high', '通讯应用中的多行或富文本输入可能触发发送', true)
   if (kind === 'key' && COMMUNICATION.has(bundle) && (enter || (parts.includes('cmd') && parts.includes('shift') && parts.includes('d')))) return result('high', '通讯应用回车或发送快捷键可能发送消息/邮件', true)
   if (kind === 'key' && enter) {
-    const hasModifier = parts.some(part => ['cmd', 'ctrl', 'alt'].includes(part))
+    const hasModifier = parts.some((part: string) => ['cmd', 'ctrl', 'alt'].includes(part))
     if (!hasModifier && role === 'AXTextArea' && ['com.apple.notes', 'com.apple.textedit', 'com.apple.iwork.pages'].includes(bundle)) return result('low', '文档编辑区回车换行', policy === 'strict')
     // 不能以“当前是 Safari”推断所有文本框都是地址栏，登录/支付表单同样在浏览器内。
     const search = !hasModifier && context?.isTrustedSearch === true && (role === 'AXSearchField' || role === 'AXTextField')
