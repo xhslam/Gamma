@@ -101,7 +101,7 @@ app.setPath('userData', ${JSON.stringify(join(directory, 'user-data'))});
 app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   ${options.mainProcessReady ?? ''}
-  const window = new BrowserWindow({ width: 900, height: 600, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
+  const window = new BrowserWindow({ width: 900, height: 600, useContentSize: true, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
   ${options.mainWindowSetup ?? ''}
   try {
     await window.loadFile(${JSON.stringify(join(directory, 'index.html'))});

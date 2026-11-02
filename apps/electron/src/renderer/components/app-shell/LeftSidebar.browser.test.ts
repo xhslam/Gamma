@@ -10,6 +10,20 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
+  test('When Windows 夹具挂载完成 Then 内容视口、字体和侧栏动画均已稳定，普通标题完整显示', async () => {
+    const result = await renderer.run<{ viewport: number[]; width: number; opacity: string; fonts: string; titleFits: boolean }>(`
+      const fixture = await window.leftSidebarRegression.mount({ platform: 'Win32', width: 256 });
+      const container = document.querySelector('[data-sidebar-transition]');
+      const content = document.querySelector('[data-sidebar-transition-content]');
+      const title = [...fixture.row('parent').querySelectorAll('span')].find(span => span.textContent === '整理研究资料');
+      const result = { viewport: [innerWidth, innerHeight], width: container.getBoundingClientRect().width,
+        opacity: getComputedStyle(content).opacity, fonts: document.fonts.status,
+        titleFits: title.clientWidth > 0 && title.scrollWidth <= title.clientWidth };
+      fixture.root.unmount(); return result;
+    `)
+    expect(result).toEqual({ viewport: [900, 600], width: 256, opacity: '1', fonts: 'loaded', titleFits: true })
+  }, 30_000)
+
   test('When 点击 AGY 入口 Then 与 Markdown 一样作为右侧工作区栏目打开且不改选会话', async () => {
     expect(await renderer.run<{ view: string; workspace: string; agent: string; workspaceTab: string; componentTabs: string[]; current: string }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
