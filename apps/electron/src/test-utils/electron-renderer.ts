@@ -94,6 +94,7 @@ export async function createElectronRendererHarness(entrySource: string, options
       const mainPath = join(directory, `main-${++runId}.cjs`)
       const marker = 'GAMMA_RENDERER_RESULT:'
       // 不连接真实 PTY/剪贴板；结果只来自该次场景提供的 mock 数据。
+      // Windows Runner 使用真实 Chromium 离屏绘制，避免隐藏 HWND 的动画帧依赖桌面合成器。
       await writeFile(mainPath, `
 const { app, BrowserWindow } = require('electron');
 ${options.mainProcessSetup ?? ''}
@@ -101,7 +102,7 @@ app.setPath('userData', ${JSON.stringify(join(directory, 'user-data'))});
 app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   ${options.mainProcessReady ?? ''}
-  const window = new BrowserWindow({ width: 900, height: 600, useContentSize: true, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
+  const window = new BrowserWindow({ width: 900, height: 600, useContentSize: true, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, offscreen: process.platform === 'win32', ${options.preloadSource ? `preload: ${JSON.stringify(join(directory, 'preload.cjs'))}` : ''} } });
   ${options.mainWindowSetup ?? ''}
   try {
     await window.loadFile(${JSON.stringify(join(directory, 'index.html'))});

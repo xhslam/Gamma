@@ -29,7 +29,14 @@ export const leftSidebarFixtureSource = `
   const delay = (ms = 20) => new Promise(resolve => setTimeout(resolve, ms));
   const until = async predicate => {
     for (let i = 0; i < 150; i++) { if (predicate()) return; await delay(10); }
-    throw new Error('侧栏未达到预期状态：' + document.body.innerText.slice(0, 800) + rendererErrors.join('; '));
+    const transition = document.querySelector('[data-sidebar-transition]');
+    const content = document.querySelector('[data-sidebar-transition-content]');
+    throw new Error('侧栏未达到预期状态：' + JSON.stringify({
+      viewport: [innerWidth, innerHeight], visibility: document.visibilityState, fonts: document.fonts.status,
+      width: transition?.getBoundingClientRect().width, expectedWidth: transition?.style.width,
+      opacity: content && getComputedStyle(content).opacity,
+      animations: transition?.getAnimations({subtree:true}).map(animation => ({state: animation.playState, time: animation.currentTime})),
+    }) + document.body.innerText.slice(0, 800) + rendererErrors.join('; '));
   };
   const nativePlatform = navigator.platform;
   const nativeUserAgentData = navigator.userAgentData;
