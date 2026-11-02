@@ -36,6 +36,18 @@ jobs:
       - name: 安装依赖
         run: bun install --frozen-lockfile
 
+      - name: 安装 agent-desktop 固定 Rust 工具链
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup run 1.89.0 rustc --version --verbose
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 校验依赖补丁与源码准备
+        working-directory: apps/electron
+        run: bun test ./scripts/pi-retry-patch.test.ts ./scripts/prepare-agent-desktop.test.ts
+
       - name: 类型检查
         run: bun run typecheck
 

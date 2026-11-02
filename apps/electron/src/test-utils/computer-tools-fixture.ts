@@ -1,7 +1,6 @@
 import { Type } from 'typebox'
 import type { ToolDefinition, ExtensionToolContext } from '@earendil-works/pi-coding-agent'
-import { ComputerReobserveRequiredError } from '../main/lib/computer-controller'
-import type { ComputerExecuteParams } from '../main/lib/computer-controller'
+import type { AgentDesktopInput } from '../main/lib/agent-desktop-protocol'
 import { loadIsolatedModule } from './isolated-module'
 import { createComputerFixture } from './computer-fixture'
 
@@ -10,12 +9,11 @@ export function createComputerToolsFixture(options?: Parameters<typeof createCom
   const fixture = createComputerFixture(options)
   const { buildPiComputerTools } = loadIsolatedModule<ToolsModule>(`${import.meta.dir}/../main/lib/adapters/pi-computer-tools.ts`, {
     typebox: { Type },
-    '../computer-controller': { ComputerReobserveRequiredError },
     '../computer-service': { computerController: fixture.controller },
     '../computer-pause': { getComputerPauseReason: () => undefined },
   })
   const sdk = { defineTool: (definition: ToolDefinition) => definition } as unknown as Parameters<typeof buildPiComputerTools>[0]
   const tools = buildPiComputerTools(sdk, fixture.binding, 'user', fixture.controller)
   const computer = tools.find(tool => tool.name === 'computer')!
-  return { ...fixture, tools, execute: (params: ComputerExecuteParams) => computer.execute('synthetic-tool-call', params, undefined, undefined, {} as ExtensionToolContext) }
+  return { ...fixture, tools, execute: (params: AgentDesktopInput) => computer.execute('synthetic-tool-call', params, undefined, undefined, {} as ExtensionToolContext) }
 }

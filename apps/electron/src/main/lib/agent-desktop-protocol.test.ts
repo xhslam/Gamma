@@ -141,6 +141,45 @@ describe('agent-desktop-protocol', () => {
       ])
     })
 
+    it('Given find 计数开关 When 构造参数 Then 仅接受布尔值且 true 生成为裸标志', () => {
+      expect(buildAgentDesktopArgs({ command: 'find', count: true })).toEqual(['find', '--count'])
+      expect(buildAgentDesktopArgs({ command: 'find', count: false })).toEqual(['find'])
+      for (const count of [1, 'true', null]) {
+        expect(() => buildAgentDesktopArgs({ command: 'find', count })).toThrow('无效布尔选项: count')
+      }
+    })
+
+    it('Given wait 或 mouse-click 的数值 count When 构造参数 Then 保持上游数值语义', () => {
+      expect(buildAgentDesktopArgs({ command: 'wait', text: '完成', count: 2 })).toContain('--count=2')
+      expect(buildAgentDesktopArgs({ command: 'mouse-click', xy: '1,2', count: 2 })).toContain('--count=2')
+      for (const command of ['wait', 'mouse-click']) {
+        expect(() => buildAgentDesktopArgs({ command, count: true })).toThrow('无效数值选项: count')
+      }
+    })
+
+    it('Given 命令不支持的上下文字段 When 构造参数 Then 明确拒绝而非静默忽略', () => {
+      for (const input of [
+        { command: 'status', app: 'Notes' },
+        { command: 'list-windows', windowId: 123 },
+        { command: 'click', ref: '@s1:e1', app: 'Notes' },
+        { command: 'click', ref: '@s1:e1', windowId: '123' },
+        { command: 'screenshot', surface: 'menu' },
+        { command: 'snapshot', ref: '@s1:e1' },
+        { command: 'press', combo: 'return', surface: 'sheet' },
+      ]) {
+        expect(() => buildAgentDesktopArgs(input)).toThrow('包含未审阅选项')
+      }
+    })
+
+    it('Given 命令支持的作用域和引用 When 构造参数 Then 白名单字段全部生效', () => {
+      expect(buildAgentDesktopArgs({ command: 'snapshot', windowId: 123, surface: 'sheet', root: '@s1:e1' }))
+        .toEqual(['snapshot', '--window-id=123', '--surface=sheet', '--root=@s1:e1'])
+      expect(buildAgentDesktopArgs({ command: 'get', ref: '@s1:e1', property: 'name' }))
+        .toEqual(['get', '@s1:e1', '--property=name'])
+      expect(buildAgentDesktopArgs({ command: 'press', combo: 'return', app: 'Notes', windowId: '123' }))
+        .toEqual(['press', 'return', '--app=Notes', '--window-id=123'])
+    })
+
     it('click/type/press 包含 ref、text 与 headed 标志', () => {
       const clickArgs = buildAgentDesktopArgs({
         command: 'click',

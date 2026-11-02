@@ -1,8 +1,13 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, chmodSync, rmSync, existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { StringDecoder } from 'node:string_decoder'
+import { readAgentDesktopRefTarget } from './agent-desktop-ref-target'
+import { resolveInstalledComputerApp, type InstalledComputerApp } from './computer-installed-app'
+import type { ComputerRefTarget } from './computer-target-guard'
 import { parseAgentDesktopEnvelope, type AgentDesktopEnvelope } from './agent-desktop-protocol'
 
 const exec = promisify(execFile)
@@ -14,22 +19,35 @@ interface ProcessRow {
   state: string
 }
 
+/** 可注入的进程控制边界；默认实现只控制当前 run 创建的进程。 */
+interface ProcessControl {
+  listProcesses(): Promise<ProcessRow[]>
+  signal(pid: number, signal: NodeJS.Signals): void
+  terminateWindows(pid: number): Promise<void>
+}
+
 async function processRows(): Promise<ProcessRow[]> {
-  try {
-    const { stdout } = await exec('/bin/ps', ['-axo', 'pid=,ppid=,stat='], {
-      timeout: 2000,
-      maxBuffer: 4 * 1024 * 1024,
-    })
-    return stdout
-      .trim()
-      .split('\n')
-      .map((line) => {
-        const [pid, parent, state] = line.trim().split(/\s+/)
-        return { pid: Number(pid), parent: Number(parent), state: state ?? '' }
-      })
-  } catch {
-    return []
-  }
+  const { stdout } = await exec('/bin/ps', ['-axo', 'pid=,ppid=,stat='], {
+    timeout: 2000,
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  if (!stdout.trim()) throw new Error('进程枚举返回空结果，停止未确认')
+  return stdout.trim().split('\n').filter(Boolean).map((line) => {
+    const [pid, parent, state] = line.trim().split(/\s+/)
+    const row = { pid: Number(pid), parent: Number(parent), state: state ?? '' }
+    if (!Number.isInteger(row.pid) || row.pid <= 0 || !Number.isInteger(row.parent) || !row.state) {
+      throw new Error('进程枚举返回无效记录')
+    }
+    return row
+  })
+}
+
+const defaultProcessControl: ProcessControl = {
+  listProcesses: processRows,
+  signal: signalPid,
+  async terminateWindows(pid) {
+    await exec('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { timeout: 5000 })
+  },
 }
 
 function signalPid(pid: number, signal: NodeJS.Signals): void {
@@ -54,10 +72,21 @@ export class AgentDesktopHost {
   constructor(
     private readonly command: () => { executable: string },
     private readonly platform: NodeJS.Platform = process.platform,
+    private readonly processControl: Partial<ProcessControl> = {},
   ) {}
 
   isStopped(namespace: string): boolean {
     return this.stopped.has(namespace)
+  }
+
+  async resolveInstalledApp(identifier: string): Promise<InstalledComputerApp | undefined> {
+    return resolveInstalledComputerApp(identifier, this.platform)
+  }
+
+  async resolveRefTarget(namespace: string, ref: string): Promise<ComputerRefTarget> {
+    const run = this.runs.get(namespace)
+    if (!run || this.stopped.has(namespace)) throw new Error('引用不属于当前有效桌面运行')
+    return run.resolveRefTarget(ref)
   }
 
   async execute(
@@ -65,6 +94,7 @@ export class AgentDesktopHost {
     args: string[],
     signal?: AbortSignal,
     timeoutMs = 60_000,
+    validate?: () => void,
   ): Promise<AgentDesktopEnvelope> {
     if (this.stopped.has(namespace) || signal?.aborted) {
       throw new Error('桌面运行已停止；不得重放')
@@ -81,13 +111,13 @@ export class AgentDesktopHost {
       this.headedQueue = this.headedQueue.then(() => nextHeaded)
       await prevHeaded
       try {
-        return await this.executeInternal(namespace, args, signal, timeoutMs)
+        return await this.executeInternal(namespace, args, signal, timeoutMs, validate)
       } finally {
         releaseHeaded()
       }
     }
 
-    return await this.executeInternal(namespace, args, signal, timeoutMs)
+    return await this.executeInternal(namespace, args, signal, timeoutMs, validate)
   }
 
   private async executeInternal(
@@ -95,14 +125,16 @@ export class AgentDesktopHost {
     args: string[],
     signal?: AbortSignal,
     timeoutMs: number = 30_000,
+    validate?: () => void,
   ): Promise<AgentDesktopEnvelope> {
     if (this.stopped.has(namespace) || signal?.aborted) {
       throw new Error('桌面运行已停止；不得重放')
     }
 
+    validate?.()
     let run = this.runs.get(namespace)
     if (!run) {
-      run = new RunHost(this.command().executable, namespace, this.platform)
+      run = new RunHost(this.command().executable, namespace, this.platform, { ...defaultProcessControl, ...this.processControl })
       this.runs.set(namespace, run)
     }
 
@@ -110,7 +142,7 @@ export class AgentDesktopHost {
   }
 
   async terminate(namespace?: string): Promise<void> {
-    const entries = namespace
+    const entries = namespace !== undefined
       ? ([[namespace, this.runs.get(namespace)]] as const)
       : [...this.runs.entries()]
 
@@ -131,22 +163,34 @@ export class AgentDesktopHost {
 
 class RunHost {
   private root: string
+  private readonly desktopSessionId: string
   private currentChild?: ChildProcess
   private inFlight = false
   private closed = false
   private stopping?: Promise<void>
+  private childClosed?: Promise<void>
+  private owned = new Set<number>()
 
   constructor(
     private executable: string,
-    private namespace: string,
+    namespace: string,
     private platform: NodeJS.Platform,
+    private readonly processControl: ProcessControl,
   ) {
+    // 上游 session 只允许 1–64 个安全字符；完整摘要避免直接替换或截断造成碰撞。
+    // 原始 namespace 仍由 AgentDesktopHost 管理，停止和隔离语义不变。
+    this.desktopSessionId = createHash('sha256').update(namespace).digest('hex')
     const raw = mkdtempSync(join(tmpdir(), 'gamma-ad-'))
     this.root = existsSync(raw) ? realpathSync(raw) : raw
     try {
       chmodSync(this.root, 0o700)
     } catch {}
     mkdirSync(join(this.root, 'state'), { mode: 0o700 })
+  }
+
+  resolveRefTarget(ref: string): ComputerRefTarget {
+    if (this.closed || this.inFlight) throw new Error('桌面引用当前不可核验')
+    return readAgentDesktopRefTarget(this.root, this.desktopSessionId, ref)
   }
 
   async execute(
@@ -168,32 +212,32 @@ class RunHost {
       return await new Promise<AgentDesktopEnvelope>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined
         let stdout = ''
+        let outputBytes = 0
+        const decoder = new StringDecoder('utf8')
         let completed = false
 
         const cleanUp = () => {
           if (timer) clearTimeout(timer)
           signal?.removeEventListener('abort', onAbort)
-          this.currentChild = undefined
           this.inFlight = false
         }
 
-        const onAbort = () => {
+        const stopAndReject = (message: string) => {
           if (completed) return
           completed = true
-          void this.terminate().finally(() => {
-            cleanUp()
-            reject(new Error('桌面操作已停止；投递状态未知，不得重试'))
-          })
+          void this.terminate().then(
+            () => { cleanUp(); reject(new Error(message)) },
+            (error: unknown) => {
+              cleanUp()
+              reject(new Error(`${message}；进程树停止未确认`, { cause: error }))
+            },
+          )
         }
+        const onAbort = () => stopAndReject('桌面操作已停止；投递状态未知，不得重试')
 
         signal?.addEventListener('abort', onAbort, { once: true })
         timer = setTimeout(() => {
-          if (completed) return
-          completed = true
-          void this.terminate().finally(() => {
-            cleanUp()
-            reject(new Error('agent-desktop 执行超时；投递状态未知，不得重试'))
-          })
+          stopAndReject('agent-desktop 执行超时；投递状态未知，不得重试')
         }, boundedTimeout)
 
         if (signal?.aborted) {
@@ -213,25 +257,29 @@ class RunHost {
             LANG: 'en_US.UTF-8',
             TMPDIR: process.env.TMPDIR || tmpdir(),
             AGENT_DESKTOP_HOME: join(this.root, 'state'),
-            AGENT_DESKTOP_SESSION: this.namespace,
+            AGENT_DESKTOP_SESSION: this.desktopSessionId,
             AGENT_DESKTOP_NO_UPDATE_NOTIFIER: '1',
           },
           stdio: ['ignore', 'pipe', 'pipe'],
         })
 
         this.currentChild = child
+        if (child.pid) this.owned.add(child.pid)
+        this.childClosed = new Promise<void>((resolveClose) => {
+          child.once('close', () => {
+            if (this.currentChild === child) this.currentChild = undefined
+            resolveClose()
+          })
+        })
 
         child.stdout.on('data', (chunk: Buffer) => {
-          stdout += chunk.toString('utf8')
-          if (Buffer.byteLength(stdout) > MAX_OUTPUT) {
-            if (!completed) {
-              completed = true
-              void this.terminate().finally(() => {
-                cleanUp()
-                reject(new Error('agent-desktop 响应超出有界输出；投递状态未知'))
-              })
-            }
+          if (completed) return
+          outputBytes += chunk.length
+          if (outputBytes > MAX_OUTPUT) {
+            stopAndReject('agent-desktop 响应超出有界输出；投递状态未知')
+            return
           }
+          stdout += decoder.write(chunk)
         })
 
         // 丢弃 stderr，避免桌面原文泄露到日志
@@ -249,9 +297,10 @@ class RunHost {
         child.once('close', (code) => {
           if (completed) return
           completed = true
+          if (!this.closed) this.owned.clear()
           cleanUp()
 
-          const trimmed = stdout.trim()
+          const trimmed = (stdout + decoder.end()).trim()
           if (!trimmed) {
             reject(
               new Error(
@@ -280,39 +329,57 @@ class RunHost {
 
     this.stopping = (async () => {
       const child = this.currentChild
-      if (child && child.pid) {
-        if (this.platform === 'win32') {
-          await exec('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-            timeout: 5000,
-          }).catch(() => {})
-        } else {
-          // 冻结并回收进程树
-          signalPid(child.pid, 'SIGSTOP')
-          const owned = new Set([child.pid])
-          for (let pass = 0; pass < 8; pass++) {
-            const rows = await processRows()
-            let changed = false
-            for (const row of rows) {
-              if (owned.has(row.parent) && !owned.has(row.pid)) {
-                owned.add(row.pid)
-                signalPid(row.pid, 'SIGSTOP')
-                changed = true
-              }
+      if (this.platform === 'win32') {
+        const pid = child?.pid ?? this.owned.values().next().value
+        if (pid !== undefined) await this.processControl.terminateWindows(pid)
+      } else if (this.owned.size) {
+        // 先冻结父进程，再逐层冻结后代；枚举或信号失败必须保留所有权以供停止重试。
+        for (const pid of this.owned) this.processControl.signal(pid, 'SIGSTOP')
+        let stable = false
+        for (let pass = 0; pass < 8; pass++) {
+          const rows = await this.processControl.listProcesses()
+          let changed = false
+          for (const row of rows) {
+            if (this.owned.has(row.parent) && !this.owned.has(row.pid)) {
+              this.owned.add(row.pid)
+              this.processControl.signal(row.pid, 'SIGSTOP')
+              changed = true
             }
-            if (!changed) break
           }
-          for (const pid of [...owned].reverse()) {
-            signalPid(pid, 'SIGKILL')
-          }
+          if (!changed) { stable = true; break }
+        }
+        if (!stable) throw new Error('进程树枚举未收敛，停止未确认')
+        for (const pid of [...this.owned].reverse()) this.processControl.signal(pid, 'SIGKILL')
+
+        const deadline = Date.now() + 3000
+        while (true) {
+          const rows = await this.processControl.listProcesses()
+          // 僵尸已退出且不能执行操作，无需等待系统父进程完成回收。
+          const alive = rows.some((row) => this.owned.has(row.pid) && !row.state.startsWith('Z'))
+          if (!alive) break
+          if (Date.now() >= deadline) throw new Error('进程树仍在运行，停止未确认')
+          await new Promise<void>((resolve) => setTimeout(resolve, 25))
         }
       }
-
-      if (existsSync(this.root)) {
+      if (this.childClosed) {
+        let timer: ReturnType<typeof setTimeout> | undefined
         try {
-          rmSync(this.root, { recursive: true, force: true })
-        } catch {}
+          await Promise.race([
+            this.childClosed,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error('执行者 close 未确认')), 3000)
+            }),
+          ])
+        } finally {
+          if (timer) clearTimeout(timer)
+        }
       }
-    })()
+      this.owned.clear()
+      if (existsSync(this.root)) rmSync(this.root, { recursive: true, force: true })
+    })().catch((error: unknown) => {
+      this.stopping = undefined
+      throw error
+    })
 
     return this.stopping
   }

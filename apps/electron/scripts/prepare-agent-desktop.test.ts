@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { AGENT_DESKTOP_SOURCE, agentDesktopTarget } from './prepare-agent-desktop-manifest'
 import { computeSha256, isInstalledAndValid, prepareAgentDesktop, validateSource } from './prepare-agent-desktop'
 
@@ -80,4 +80,28 @@ describe('Given agent-desktop 固定源码构建', () => {
     execFileSync('git', ['-C', directory, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture'])
     expect(() => validateSource(directory)).toThrow('提交')
   }))
+})
+
+it('Given Git 全局启用 autocrlf When 初始化自有源码缓存 Then 本地禁用转换且 checkout 保留 LF', () => temporary(directory => {
+  const source = join(directory, 'source')
+  mkdirSync(source)
+  const config = join(directory, 'gitconfig')
+  writeFileSync(config, '[core]\n\tautocrlf = true\n')
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: '1' }
+  execFileSync(process.execPath, ['-e', `import { initializeAgentDesktopCheckout } from ${JSON.stringify(resolve(import.meta.dir, 'prepare-agent-desktop.ts'))}; initializeAgentDesktopCheckout(${JSON.stringify(source)});`], { env, stdio: 'pipe' })
+  expect(execFileSync('git', ['config', '--local', '--get', 'core.autocrlf'], { cwd: source, env, encoding: 'utf8' }).trim()).toBe('false')
+  const file = join(source, 'LICENSE')
+  writeFileSync(file, 'fixed source\nLF only\n')
+  execFileSync('git', ['add', 'LICENSE'], { cwd: source, env, stdio: 'pipe' })
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], { cwd: source, env, stdio: 'pipe' })
+  rmSync(file)
+  execFileSync('git', ['checkout', '--', 'LICENSE'], { cwd: source, env, stdio: 'pipe' })
+  expect(readFileSync(file, 'utf8')).toBe('fixed source\nLF only\n')
+}))
+
+it('Given Windows 与 Release 工作流 When 固定源码构建 Then 安装与清单一致的 Rust 版本', () => {
+  for (const name of ['windows-check.yml', 'release.yml']) {
+    const workflow = readFileSync(resolve(import.meta.dir, '../../../.github/workflows', name), 'utf8')
+    expect(workflow).toContain(`rustup toolchain install ${AGENT_DESKTOP_SOURCE.rustToolchain} --profile minimal`)
+  }
 })

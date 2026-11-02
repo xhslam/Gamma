@@ -275,6 +275,7 @@ export interface ElectronAPI {
   onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => () => void
   getComputerPreferences: () => Promise<import('@gamma/shared').ComputerUsePreferences>
   updateComputerPreferences: (partial: Partial<import('@gamma/shared').ComputerUsePreferences>) => Promise<import('@gamma/shared').ComputerUsePreferences>
+  revokeComputerAppAuthorization: (app: string) => Promise<import('@gamma/shared').ComputerUsePreferences>
   decideComputerAppAuth: (requestId: string, decision: import('@gamma/shared').ComputerAppAuthDecision) => Promise<boolean>
   decideComputerRiskConfirm: (requestId: string, confirmed: boolean) => Promise<boolean>
   onComputerAppAuthRequested: (callback: (req: import('@gamma/shared').ComputerAppAuthRequest) => void) => () => void
@@ -1386,6 +1387,7 @@ const electronAPI: ElectronAPI = {
   },
   getComputerPreferences: () => ipcRenderer.invoke('computer:get-preferences') as Promise<import('@gamma/shared').ComputerUsePreferences>,
   updateComputerPreferences: (partial: Partial<import('@gamma/shared').ComputerUsePreferences>) => ipcRenderer.invoke('computer:update-preferences', partial) as Promise<import('@gamma/shared').ComputerUsePreferences>,
+  revokeComputerAppAuthorization: (app: string) => ipcRenderer.invoke('computer:revoke-app-authorization', app) as Promise<import('@gamma/shared').ComputerUsePreferences>,
   decideComputerAppAuth: (requestId: string, decision: import('@gamma/shared').ComputerAppAuthDecision) => ipcRenderer.invoke('computer:decide-app-auth', requestId, decision) as Promise<boolean>,
   decideComputerRiskConfirm: (requestId: string, confirmed: boolean) => ipcRenderer.invoke('computer:decide-risk-confirm', requestId, confirmed) as Promise<boolean>,
   onComputerAppAuthRequested: (callback: (req: import('@gamma/shared').ComputerAppAuthRequest) => void) => {

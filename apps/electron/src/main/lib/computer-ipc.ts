@@ -57,6 +57,10 @@ export function registerComputerIpc(): void {
     verify(event, true)
     return computerAuthorizationManager.updatePreferences(partial)
   })
+  ipcMain.handle(COMPUTER_IPC_CHANNELS.REVOKE_APP_AUTHORIZATION, (event, app: string) => {
+    verify(event, true)
+    return computerAuthorizationManager.revokeAppAuthorization(app)
+  })
   ipcMain.handle(COMPUTER_IPC_CHANNELS.DECIDE_APP_AUTH, (event, requestId: string, decision: ComputerAppAuthDecision) => {
     verify(event, true)
     if (typeof requestId !== 'string' || requestId.length > 128 || !['once', 'always', 'denied', 'cancelled'].includes(decision)) throw new Error('无效授权决定')

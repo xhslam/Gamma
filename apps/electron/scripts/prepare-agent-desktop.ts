@@ -68,6 +68,12 @@ export function isInstalledAndValid(directory: string, target: AgentDesktopTarge
   } catch { return false }
 }
 
+/** 逐字节校验固定源码，不继承 Windows 的全局 CRLF 自动转换；只设置新建缓存仓库。 */
+export function initializeAgentDesktopCheckout(directory: string): void {
+  run('git', ['init', '-q'], directory)
+  run('git', ['config', '--local', 'core.autocrlf', 'false'], directory)
+}
+
 function buildFromSource(options: PrepareOptions, staging: string, target: AgentDesktopTarget): BuildToolchain {
   if (options.platform !== process.platform) throw new Error('agent-desktop 必须在目标平台 Runner 上构建')
   const cache = resolve(options.cacheDir ?? join(options.resourcesDir, '..', '.cache', 'agent-desktop'))
@@ -76,7 +82,7 @@ function buildFromSource(options: PrepareOptions, staging: string, target: Agent
   if (!existsSync(source)) {
     const checkout = mkdtempSync(join(cache, '.checkout-'))
     try {
-      run('git', ['init', '-q'], checkout)
+      initializeAgentDesktopCheckout(checkout)
       run('git', ['fetch', '--depth=1', AGENT_DESKTOP_SOURCE.repository, AGENT_DESKTOP_SOURCE.commit], checkout)
       run('git', ['checkout', '--detach', 'FETCH_HEAD'], checkout)
       validateSource(checkout)

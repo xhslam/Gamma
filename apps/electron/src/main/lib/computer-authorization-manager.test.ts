@@ -284,3 +284,48 @@ describe('Given 宽松策略的任务授权', () => {
     expect(manager.getPreferences().shareObservations).toBe(false)
   })
 })
+
+describe('Given 授权等待与本地设置并发修改', () => {
+  const create = () => createStandardManager(join(tmpdir(), `gamma-race-${randomUUID()}.json`))
+  test('When 原子撤销单项 Then 保留刚写入的其他授权并清除本次许可', () => {
+    const manager = create()
+    manager.recordAppDecision('One', 'always', 'app.one')
+    manager.recordAppDecision('One', 'once', 'app.one', 'run')
+    manager.recordAppDecision('Two', 'always', 'app.two')
+    expect(manager.revokeAppAuthorization(' APP.ONE ').allowedApps).toEqual({ 'app.two': 'always' })
+    expect(manager.checkAppAuthorization('One', 'app.one', 'run')).toBe('pending')
+    expect(() => manager.revokeAppAuthorization(' ')).toThrow()
+  })
+  test('When 等待后设置新增拒绝 Then 迟到允许不覆盖拒绝', async () => {
+    const manager = create()
+    let finish!: (decision: 'always') => void
+    manager.setUiHandlers({ appAuth: () => new Promise(resolve => { finish = resolve }) })
+    const waiting = manager.ensureAppAuthorized('App', 'app.example')
+    await Promise.resolve(); await Promise.resolve()
+    manager.recordAppDecision('App', 'denied', 'app.example')
+    finish('always')
+    await expect(waiting).rejects.toThrow()
+    expect(manager.checkAppAuthorization('App', 'app.example')).toBe('denied')
+  })
+  test('When 等待观察同意时明确撤销 Then 迟到同意不恢复外发', async () => {
+    const manager = create()
+    let finish!: (allowed: boolean) => void
+    manager.setUiHandlers({ observationConsent: () => new Promise(resolve => { finish = resolve }) })
+    const waiting = manager.ensureObservationConsent()
+    await Promise.resolve(); await Promise.resolve()
+    manager.updatePreferences({ shareObservations: false })
+    finish(true)
+    await expect(waiting).rejects.toThrow()
+    expect(manager.getPreferences().shareObservations).toBe(false)
+  })
+  test('When 等待风险确认时改变策略 Then 旧确认不得授权执行', async () => {
+    const manager = create()
+    let finish!: (allowed: boolean) => void
+    manager.setUiHandlers({ riskConfirm: () => new Promise(resolve => { finish = resolve }) })
+    const waiting = manager.confirmRiskAction({ requestId: 'race', title: '发送', reason: '外发', actionKind: 'click', authMethod: 'dialog' })
+    await Promise.resolve(); await Promise.resolve()
+    manager.updatePreferences({ riskPolicy: 'strict' })
+    finish(true)
+    expect(await waiting).toBe(false)
+  })
+})
