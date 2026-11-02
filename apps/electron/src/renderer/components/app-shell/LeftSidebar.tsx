@@ -3296,7 +3296,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
             containIntrinsicSize: 'auto var(--workbench-sidebar-row-height, 34px)',
           }}
           className={cn(
-            'session-quick-switch-row group relative w-full flex items-center gap-1.5 rounded-lg py-1.5 pl-2.5 pr-1.5 transition-colors duration-150 titlebar-no-drag text-left',
+            'session-quick-switch-row group relative w-full flex items-center gap-1 rounded-lg py-1.5 pl-2.5 pr-1.5 transition-colors duration-150 titlebar-no-drag text-left',
             !editing && 'cursor-grab active:cursor-grabbing',
             active && 'agent-session-item-active',
             leftAccent
@@ -3388,7 +3388,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
           </div>
 
           {!editing && (
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1">
               {delegationSummary && (
                 <div
                   className="flex shrink-0 items-center justify-end gap-1 text-[11px] leading-4 text-foreground/55"

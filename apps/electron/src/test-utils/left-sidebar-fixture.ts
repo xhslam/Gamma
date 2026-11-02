@@ -108,7 +108,15 @@ export const leftSidebarFixtureSource = `
       root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null,
         React.createElement(Layout, { width: options.width ?? 256 }))));
       await until(() => document.querySelector(options.collapsed ? '[data-testid="collapsed-sidebar-header"]' : '.gamma-sidebar'));
-      await delay(80);
+      // 80ms 早于真实 220ms 入场动画；等待最终几何和字体，不依赖机器渲染速度。
+      await document.fonts.ready;
+      await until(() => {
+        const container = document.querySelector('[data-sidebar-transition]');
+        const content = document.querySelector('[data-sidebar-transition-content]');
+        return container && content
+          && Math.abs(container.getBoundingClientRect().width - (options.collapsed ? 0 : options.width ?? 256)) < 0.1
+          && getComputedStyle(content).opacity === (options.collapsed ? '0' : '1');
+      });
       return {
         root, calls,
         button: label => document.querySelector('button[aria-label="' + label + '"]'),
