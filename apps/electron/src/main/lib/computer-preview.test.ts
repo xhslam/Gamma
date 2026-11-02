@@ -10,12 +10,12 @@ test('Given 工具观察不变 When 连续读取视频 Then 画面独立更新�
   let next = 'video-1'
   const f = createComputerFixture({ call: async method => method === 'previewFrame' ? videoFrame(next) : undefined })
   expect(await f.controller.getPreview(request)).toBeNull()
-  const observed = await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
+  await f.controller.execute(f.binding, { command: 'screenshot' })
   const observations = f.calls.filter(call => call.method === 'observe').length
   const preview = (await f.controller.getPreview(request))!
   expect(preview.frame?.dataUrl).toStartWith('data:image/jpeg;base64,')
   expect(preview.frame?.frameId).toBe('video-1')
-  expect(preview.frame?.frameId).not.toBe(observed.observationId!)
+  expect(preview.frame?.frameId).not.toBe('tool-screenshot')
   expect(preview.activities.at(-1)).toMatchObject({ action: 'screenshot', status: 'returned' })
   expect(JSON.stringify(preview)).not.toContain('FIXTURE_AX')
   expect(await f.controller.getPreview({ ...request, sessionId: 'other-session' })).toBeNull()
@@ -23,7 +23,7 @@ test('Given 工具观察不变 When 连续读取视频 Then 画面独立更新�
   next = 'video-2'
   expect((await f.controller.getPreview(request))?.frame?.frameId).toBe('video-2')
   expect(f.calls.filter(call => call.method === 'observe').length).toBe(observations)
-  await f.controller.executeAutonomousAction({ action: 'click', coordinate: [0, 0], observationId: observed.observationId }, undefined, f.binding)
+  await f.controller.execute(f.binding, { command: 'click', ref: '@snapshot:e1' })
   expect(f.actions).toHaveLength(1)
   await f.controller.finishRun(f.binding)
   expect(await f.controller.getPreview(request)).toBeNull()
@@ -31,9 +31,9 @@ test('Given 工具观察不变 When 连续读取视频 Then 画面独立更新�
 
 test('Given 旧预览 When 另一会话或旧run请求停止/暂停 Then 不影响当前运行', async () => {
   const f = createComputerFixture({ call: async method => method === 'previewFrame' ? videoFrame() : undefined })
-  await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
-  expect(() => f.controller.stopPreview('other', f.binding.runId)).toThrow('已结束')
-  expect(() => f.controller.stopPreview(f.binding.sessionId, 'old-run')).toThrow('已结束')
+  await f.controller.execute(f.binding, { command: 'screenshot' })
+  await expect(f.controller.stopPreview('other', f.binding.runId)).rejects.toThrow('已结束')
+  await expect(f.controller.stopPreview(f.binding.sessionId, 'old-run')).rejects.toThrow('已结束')
   const before = f.calls.length
   expect(await f.controller.getPreview({ ...request, runId: 'old-run', live: false })).toBeNull()
   expect(f.calls.length).toBe(before)
@@ -46,7 +46,7 @@ test('Given 旧预览 When 另一会话或旧run请求停止/暂停 Then 不影�
 test('Given 在途视频读取 When 撤销同意/停止 Then 迟到帧被丢弃', async () => {
   let release!: (value: unknown) => void
   const f = createComputerFixture({ call: async method => method === 'previewFrame' ? new Promise(resolve => { release = resolve }) : undefined })
-  await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
+  await f.controller.execute(f.binding, { command: 'screenshot' })
   const pending = f.controller.getPreview(request)
   f.auth.updatePreferences({ shareObservations: false })
   release(videoFrame())
@@ -59,7 +59,7 @@ test('Given 收起预览或原生流不可用 When 读取 Then 关闭视频或�
   let available = false
   const f = createComputerFixture({ call: async (method, params) => method === 'previewFrame'
     ? params.enabled === false ? { mode: 'paused' } : available ? videoFrame() : { mode: 'unavailable' } : undefined })
-  await f.controller.executeAutonomousAction({ action: 'screenshot' }, undefined, f.binding)
+  await f.controller.execute(f.binding, { command: 'screenshot' })
   expect(await f.controller.getPreview(request)).toMatchObject({ mode: 'unavailable', frame: undefined })
   available = true
   expect((await f.controller.getPreview(request))?.frame?.frameId).toBe('video-1')

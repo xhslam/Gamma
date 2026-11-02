@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import type { ComputerBinding } from '@gamma/shared'
+import type { ExtensionToolContext } from '@earendil-works/pi-coding-agent'
 import { buildPiComputerTools } from './pi-computer-tools'
 import type { ComputerController } from '../computer-controller'
 import type { AgentDesktopEnvelope } from '../agent-desktop-protocol'
 import { ComputerRunPausedError } from '../computer-pause'
+import { compactComputerScreenshots } from './pi-computer-context'
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
+import { Value } from 'typebox/value'
 
 describe('Pi computer 工具集成 agent-desktop 协议', () => {
   const binding: ComputerBinding = {
@@ -51,7 +55,7 @@ describe('Pi computer 工具集成 agent-desktop 协议', () => {
     } as unknown as ComputerController
 
     const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController)[0]!
-    const output = (await (tool.execute as any)('call-1', { command: 'snapshot', app: 'Notes' }, undefined)) as {
+    const output = (await tool.execute('call-1', { command: 'snapshot', app: 'Notes' }, undefined, undefined, {} as ExtensionToolContext)) as {
       content: Array<{ type: string; text?: string }>
       details: unknown
     }
@@ -84,17 +88,49 @@ describe('Pi computer 工具集成 agent-desktop 协议', () => {
     } as unknown as ComputerController
 
     const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController)[0]!
-    const output = (await (tool.execute as any)('call-2', { command: 'screenshot' }, undefined)) as {
+    const output = (await tool.execute('call-2', { command: 'screenshot' }, undefined, undefined, {} as ExtensionToolContext)) as {
       content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>
+      details: unknown
     }
 
     expect(output.content).toHaveLength(2)
     expect(output.content[0]!.type).toBe('text')
     expect(output.content[1]!.type).toBe('image')
     expect(output.content[1]!.mimeType).toBe('image/png')
+    expect(output.content[0]!.text).not.toContain((mockEnvelope.data as { data: string }).data)
+    expect(JSON.parse(output.content[0]!.text!)).toEqual({ ...mockEnvelope, data: { format: 'png', width: 1, height: 1 } })
+    expect(output.details).toBe(mockEnvelope)
     expect(output.content[1]!.data).toBe(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAA=',
     )
+  })
+
+  test('Given find、wait、mouse-click 的 count When 校验工具 schema Then 同时暴露布尔开关与数值计数', () => {
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', {} as ComputerController)[0]!
+    for (const input of [{ command: 'find', count: true }, { command: 'wait', count: 2 }, { command: 'mouse-click', count: 2 }]) {
+      expect(Value.Check(tool.parameters, input)).toBe(true)
+    }
+    expect(Value.Check(tool.parameters, { command: 'find', count: 'true' })).toBe(false)
+  })
+
+  test('Given 截图工具结果 When 压缩历史截图 Then 文本不遗留 base64 且原始 details 保持不变', async () => {
+    const envelope: AgentDesktopEnvelope = {
+      version: '2.5', ok: true, command: 'screenshot',
+      data: { data: 'UNIQUE_SCREENSHOT_BASE64', format: 'png', width: 10, height: 20 },
+    }
+    const original = JSON.stringify(envelope)
+    const controller = { execute: async () => envelope } as unknown as ComputerController
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', controller)[0]!
+    const output = await tool.execute('screenshot-call', { command: 'screenshot' }, undefined, undefined, {} as ExtensionToolContext)
+    const messages: AgentMessage[] = [{
+      role: 'toolResult', toolCallId: 'screenshot-call', toolName: 'computer', timestamp: 1,
+      isError: false, content: output.content,
+    }]
+    const compacted = compactComputerScreenshots(messages, 0)
+    expect(JSON.stringify(compacted)).not.toContain('UNIQUE_SCREENSHOT_BASE64')
+    expect(JSON.stringify(messages)).toContain('UNIQUE_SCREENSHOT_BASE64')
+    expect(output.details).toBe(envelope)
+    expect(JSON.stringify(envelope)).toBe(original)
   })
 
   test('Given 运行已暂停或中断 When 执行 Then 返回结构化错误与 interrupted 标识', async () => {
@@ -105,7 +141,7 @@ describe('Pi computer 工具集成 agent-desktop 协议', () => {
     } as unknown as ComputerController
 
     const tool = buildPiComputerTools(mockSdk, binding, 'user', mockController)[0]!
-    const output = (await (tool.execute as any)('call-3', { command: 'click', ref: '@s1:e1' }, undefined)) as {
+    const output = (await tool.execute('call-3', { command: 'click', ref: '@s1:e1' }, undefined, undefined, {} as ExtensionToolContext)) as {
       content: Array<{ type: string; text?: string }>
       details: { interrupted?: boolean; reason?: string }
     }

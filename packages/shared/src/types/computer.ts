@@ -104,6 +104,7 @@ export const COMPUTER_IPC_CHANNELS = {
   STATE_CHANGED: 'computer:state-changed',
   GET_PREFERENCES: 'computer:get-preferences',
   UPDATE_PREFERENCES: 'computer:update-preferences',
+  REVOKE_APP_AUTHORIZATION: 'computer:revoke-app-authorization',
   DECIDE_APP_AUTH: 'computer:decide-app-auth',
   DECIDE_RISK_CONFIRM: 'computer:decide-risk-confirm',
   APP_AUTH_REQUESTED: 'computer:app-auth-requested',
@@ -131,7 +132,7 @@ export interface ComputerUsePreferences {
   headedAllowed?: boolean
   riskPolicy: ComputerRiskPolicy
   systemPermissionsDismissed: boolean
-  /** 本地用户对桌面截图发送至所配置模型的持久同意；dismiss 不代表同意。 */
+  /** 本地用户对界面文字及可用截图发送至所配置模型的持久同意；dismiss 不代表同意。 */
   shareObservations?: boolean
   allowedApps: Record<string, 'always' | 'denied'>
 }

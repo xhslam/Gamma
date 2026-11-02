@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { decodeComputerFixtureState, verifyComputerUseLive } from './verify-computer-use-live'
+import { decodeComputerFixtureState, findComputerFixtureRef, verifyComputerUseLive } from './verify-computer-use-live'
 import { buildComputerAppKitFixture, createComputerLiveFixture, emptyComputerFixtureState } from './computer-use-live-fixtures'
 
 const token = '00000000-0000-4000-8000-000000000210'
@@ -8,23 +8,26 @@ describe('Given 真实键鼠验收脚本', () => {
   test('When 未显式确认 Then 拒绝且不触发应用、服务器或权限操作', async () => {
     await expect(verifyComputerUseLive(false)).rejects.toThrow('显式传入 --confirm-local-test')
   })
-  test('When 检查验收证据 Then 复用生产授权与输入链路，以真实页面事件而非投递回执判定', () => {
+  test('When 检查验收证据 Then 使用生产 agent-desktop 和真实夹具状态，不冒充物理键鼠验收', () => {
     const source = readFileSync(new URL('./verify-computer-use-live.ts', import.meta.url), 'utf8')
     expect(source).toContain('new ComputerAuthorizationManager()')
-    expect(source).toContain('new ComputerController(host, { authManager: auth })')
+    expect(source).toContain('new ComputerController(native, { authManager: auth })')
+    expect(source).toContain('new AgentDesktopHost(')
+    expect(source).not.toContain('ComputerNativeHost')
+    expect(source).not.toContain('executeAutonomousAction')
     expect(source).not.toContain('setUiHandlers(')
     expect(source).not.toContain('updatePreferences(')
-    expect(source).toContain("state.text !== '中文输入验收🚀'")
-    expect(source).toContain('state.clicks !== 1')
-    expect(source).toContain('state.scrollY <= beforeScroll')
-    expect(source).toContain("key: 'cmd+l'")
-    expect(source).toContain('focused=true')
-    expect(source).toContain('windowId: b.windowId')
-    expect(source).toContain('a.pid !== b.pid')
     expect(source).toContain("states['native-A']!.text !== '原生窗口A🚀'")
+    expect(source).toContain('headedKeyboardMouseTested: false')
     expect(source).toContain('await controller.finishRun(binding)')
     expect(source).toContain('await native.terminate()')
     expect(source).toContain("appKitProcess?.kill('SIGTERM')")
+  })
+  test('When 从原生树定位控件 Then 必须唯一匹配，不能猜测引用', () => {
+    const node = { name: '输入', ref_id: '@snapshot:e1' }
+    expect(findComputerFixtureRef({ children: [node] }, '输入')).toBe('@snapshot:e1')
+    expect(() => findComputerFixtureRef({}, '输入')).toThrow('唯一')
+    expect(() => findComputerFixtureRef({ children: [node, { ...node, ref_id: '@snapshot:e2' }] }, '输入')).toThrow('唯一')
   })
   test('When 创建动态场景 Then 深树、计时、标题更新与延迟移动是夹具业务行为，不伪造原生输入', () => {
     const fixture = createComputerLiveFixture(token)

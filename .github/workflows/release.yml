@@ -40,6 +40,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: 安装 agent-desktop 固定 Rust 工具链
+        run: rustup toolchain install 1.89.0 --profile minimal
+
       - name: 安装依赖
         run: bun install --frozen-lockfile
 
@@ -120,6 +123,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: 安装 agent-desktop 固定 Rust 工具链
+        run: rustup toolchain install 1.89.0 --profile minimal
 
       - name: 安装依赖
         run: bun install --frozen-lockfile
@@ -343,6 +349,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential python3
 
+      - name: 安装 agent-desktop 固定 Rust 工具链
+        run: rustup toolchain install 1.89.0 --profile minimal
+
       - name: 安装依赖
         run: bun install --frozen-lockfile
 
@@ -381,6 +390,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: 安装 agent-desktop 固定 Rust 工具链
+        run: rustup toolchain install 1.89.0 --profile minimal
 
       - name: 安装依赖
         run: bun install --frozen-lockfile

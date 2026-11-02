@@ -416,13 +416,11 @@ export function buildAgentDesktopArgs(input: AgentDesktopInput): string[] {
   }
 
   const globals = ['headed', 'waitFor', 'waitForGone', 'waitTimeout']
-  const schemaContext = ['app', 'windowId', 'surface', 'ref']
   const allowed = new Set([
     'command',
     ...command.positional,
     ...command.options,
     ...globals,
-    ...schemaContext,
     // 兼容别名
     ...(input.command === 'notification-action' ? ['notificationAction'] : []),
   ])
@@ -437,7 +435,8 @@ export function buildAgentDesktopArgs(input: AgentDesktopInput): string[] {
 
   for (const [key, value] of Object.entries(input)) {
     if (key === 'command' || value === undefined) continue
-    const kind = OPTION_KINDS[key]
+    // 上游 find 的 --count 是布尔开关；wait / mouse-click 则要求数值。
+    const kind = key === 'count' && input.command === 'find' ? 'boolean' : OPTION_KINDS[key]
     if (kind === 'string') {
       const strVal = String(value)
       if (strVal.length > 32_000 || strVal.includes('\0')) {
@@ -452,7 +451,7 @@ export function buildAgentDesktopArgs(input: AgentDesktopInput): string[] {
         throw new Error(`无效数值选项: ${key}`)
       }
     } else if (kind === 'boolean') {
-      if (typeof value !== 'boolean' && !(key === 'count' && input.command === 'find')) {
+      if (typeof value !== 'boolean') {
         throw new Error(`无效布尔选项: ${key}`)
       }
     } else if (kind === 'strings') {

@@ -1,0 +1,2 @@
+# 补丁必须保持 LF，避免 Windows checkout 改写用于匹配依赖源码的上下文。
+patches/*.patch text eol=lf

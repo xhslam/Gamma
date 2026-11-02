@@ -35,13 +35,11 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
     if (inFlight.current) return
     inFlight.current = true; setBusy(true); setError(null)
     try {
-      // 保存前重新读取完整表，避免用页面打开时的旧副本覆盖其他应用授权。
-      const latest = await window.electronAPI.getComputerPreferences()
-      const allowedApps = { ...latest.allowedApps }
-      if (app) delete allowedApps[app]
-      const next = await window.electronAPI.updateComputerPreferences(app ? { allowedApps } : { shareObservations: false })
+      const next = app
+        ? await window.electronAPI.revokeComputerAppAuthorization(app)
+        : await window.electronAPI.updateComputerPreferences({ shareObservations: false })
       if (mounted.current) setPreferences(next)
-    } catch { if (mounted.current) setError('授权撤销失败，已保留原设置，请重试。') }
+    } catch { if (mounted.current) setError('授权撤销失败或结果未知，请重新读取授权状态。') }
     finally { inFlight.current = false; if (mounted.current) setBusy(false) }
   }
   const setHeaded = async (allowed: boolean): Promise<void> => {

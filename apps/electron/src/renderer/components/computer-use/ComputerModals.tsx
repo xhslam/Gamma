@@ -19,6 +19,9 @@ import { ComputerUseStatus } from './ComputerUseStatus'
 export function ComputerModals(): React.ReactElement {
   const [appAuthReq, setAppAuthReq] = React.useState<ComputerAppAuthRequest | null>(null)
   const [appError, setAppError] = React.useState<string | null>(null)
+  const [riskError, setRiskError] = React.useState<string | null>(null)
+  const appInFlight = React.useRef(false)
+  const riskInFlight = React.useRef(false)
   const [riskReq, setRiskReq] = React.useState<ComputerRiskConfirmRequest | null>(null)
 
   React.useEffect(() => {
@@ -26,7 +29,7 @@ export function ComputerModals(): React.ReactElement {
       setAppError(null); setAppAuthReq(req)
     })
     const unsubRisk = window.electronAPI.onComputerRiskConfirmRequested((req) => {
-      setRiskReq(req)
+      setRiskError(null); setRiskReq(req)
     })
 
     return () => {
@@ -35,23 +38,39 @@ export function ComputerModals(): React.ReactElement {
     }
   }, [])
 
-  const handleAppDecision = async (decision: ComputerAppAuthDecision) => {
-    if (!appAuthReq) return
+  const handleAppDecision = async (decision: ComputerAppAuthDecision): Promise<void> => {
+    if (!appAuthReq || appInFlight.current) return
+    appInFlight.current = true
     const request = appAuthReq
     setAppAuthReq(null); setAppError(null)
-    try { await window.electronAPI.decideComputerAppAuth(request.requestId, decision) }
-    catch { setAppAuthReq(request); setAppError('授权决定未送达，请重试；尚未保存此选择。') }
+    try {
+      const accepted = await window.electronAPI.decideComputerAppAuth(request.requestId, decision)
+      if (!accepted) setAppError('应用授权请求已失效，此选择未应用。请检查当前设置。')
+    } catch {
+      // IPC 异常不能证明主进程未收到，不能重开旧请求或宣称未保存。
+      setAppError('应用授权决定的投递结果未知。请检查本地授权状态，不要重复提交旧请求。')
+    } finally { appInFlight.current = false }
   }
 
-  const handleRiskDecision = async (confirmed: boolean) => {
-    if (!riskReq) return
+  const handleRiskDecision = async (confirmed: boolean): Promise<void> => {
+    if (!riskReq || riskInFlight.current) return
+    riskInFlight.current = true
     const id = riskReq.requestId
-    setRiskReq(null)
-    await window.electronAPI.decideComputerRiskConfirm(id, confirmed)
+    setRiskReq(null); setRiskError(null)
+    try {
+      const accepted = await window.electronAPI.decideComputerRiskConfirm(id, confirmed)
+      if (!accepted) setRiskError('风险确认请求已失效，此选择未应用。请检查当前任务状态。')
+    } catch {
+      setRiskError('风险确认的投递结果未知。请检查任务执行结果，不要重复提交或重放动作。')
+    } finally { riskInFlight.current = false }
   }
 
   return (
     <>
+      {(appError || riskError) && <div role="alert" className="fixed bottom-4 right-4 z-50 max-w-md rounded-lg border bg-background p-3 text-sm text-destructive">
+        {appError && <p>{appError}</p>}
+        {riskError && <p>{riskError}</p>}
+      </div>}
       {/* 按应用授权 */}
       <Dialog open={!!appAuthReq} onOpenChange={(open) => { if (!open) void handleAppDecision('cancelled') }}>
         <DialogContent className="max-w-md">
@@ -79,11 +98,10 @@ export function ComputerModals(): React.ReactElement {
               </div>
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              允许后 Agent 可以读取界面文字并操作该应用的控件。基础操作只需 Gamma 辅助功能授权；截图与实时画面使用可选录屏权限。您随时可以停止，应用限制可在通用设置中调整。
+              本次允许仅在当前运行有效；总是允许或总是拒绝会保存，可在通用设置恢复默认。应用授权不替代界面观察外发同意或高风险动作确认。基础操作使用 Gamma 辅助功能授权；截图需要可选录屏权限，物理键鼠输入需另行允许。
             </p>
           </div>
 
-          {appError && <p role="alert" className="text-xs text-destructive">{appError}</p>}
           <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2 sm:justify-end">
             <Button type="button" variant="ghost" size="sm" onClick={() => void handleAppDecision('cancelled')}>取消</Button>
             <Button

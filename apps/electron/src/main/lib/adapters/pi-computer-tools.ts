@@ -102,7 +102,7 @@ const ComputerToolSchema = Type.Object({
   nativeId: Type.Optional(Type.String({ description: '按原生自动化 ID (AXIdentifier) 查找' })),
   exact: Type.Optional(Type.Boolean({ description: '是否要求严格精确匹配' })),
   states: Type.Optional(Type.Array(Type.String(), { description: '无障碍状态过滤，如 enabled=true' })),
-  count: Type.Optional(Type.Boolean({ description: '仅返回匹配数量' })),
+  count: Type.Optional(Type.Union([Type.Boolean(), Type.Number()], { description: 'find 使用布尔开关仅返回匹配数量；wait 使用期望匹配数，mouse-click 使用点击次数' })),
   first: Type.Optional(Type.Boolean({ description: '仅返回第一个匹配项' })),
   last: Type.Optional(Type.Boolean({ description: '仅返回最后一个匹配项' })),
   nth: Type.Optional(Type.Number({ description: '返回第 N 个匹配项 (0-indexed)' })),
@@ -182,27 +182,31 @@ export function buildPiComputerTools(
             signal,
           )
 
-          const textPayload = JSON.stringify(envelope)
+          let textEnvelope = envelope
           const contentItems: Array<
             | { type: 'text'; text: string }
             | { type: 'image'; data: string; mimeType: 'image/png' }
-          > = [{ type: 'text', text: textPayload }]
+          > = []
 
-          // 若命令为截图且包含 base64 图像，同时送入图片上下文
+          // base64 只进入 image 块，避免压缩图片后仍在文本中遗留；details 保留原始 envelope。
           if (
             envelope.command === 'screenshot' &&
             envelope.ok &&
             envelope.data &&
             typeof envelope.data === 'object' &&
             'data' in envelope.data &&
-            typeof (envelope.data as { data: unknown }).data === 'string'
+            typeof envelope.data.data === 'string'
           ) {
+            const { data, ...metadata } = envelope.data
+            textEnvelope = { ...envelope, data: metadata }
             contentItems.push({
               type: 'image',
-              data: (envelope.data as { data: string }).data,
+              data,
               mimeType: 'image/png',
             })
           }
+
+          contentItems.unshift({ type: 'text', text: JSON.stringify(textEnvelope) })
 
           return {
             content: contentItems,

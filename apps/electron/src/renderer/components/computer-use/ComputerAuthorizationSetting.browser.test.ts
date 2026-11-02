@@ -12,15 +12,16 @@ beforeAll(async () => {
       window.writes=[];window.permissionRequests=[];window.permissions={accessibility:false,screen:false,listen:false,post:false}
       window.electronAPI={
         getComputerPreferences:async()=>{if(options?.readFails)throw Error('读取失败');return structuredClone(preferences)},
+        revokeComputerAppAuthorization:async app=>{window.writes.push({revoke:app});if(options?.writeFails)throw Error('保存失败');delete preferences.allowedApps[app];return structuredClone(preferences)},
         updateComputerPreferences:async update=>{window.writes.push(update);if(options?.writeFails)throw Error('保存失败');preferences={...preferences,...update};return structuredClone(preferences)},
         requestComputerPermission:async permission=>{window.permissionRequests.push(permission);if(options?.permissionFails)throw Error('请求失败');if(!options?.permissionDeclined)window.permissions[permission]=true;return {phase:'disabled',permissions:window.permissions}},
         getComputerState:async()=>({phase:'disabled',permissions:window.permissions})
       }
       createRoot(document.getElementById('root')).render(React.createElement(ComputerAuthorizationSetting))
     }
-    window.mountModal=()=>{
+    window.mountModal=(options)=>{
       window.writes=[]
-      window.electronAPI={onComputerAppAuthRequested:listener=>{window.askAppAuth=listener;return ()=>{}},onComputerRiskConfirmRequested:()=>()=>{},decideComputerAppAuth:async(id,decision)=>{window.writes.push({id,decision});return true}}
+      window.electronAPI={onComputerAppAuthRequested:listener=>{window.askAppAuth=listener;return ()=>{}},onComputerRiskConfirmRequested:listener=>{window.askRisk=listener;return ()=>{}},decideComputerRiskConfirm:async(id,confirmed)=>{window.writes.push({id,confirmed});if(options?.reject)throw Error('未知投递');return !options?.expired},decideComputerAppAuth:async(id,decision)=>{window.writes.push({id,decision});if(options?.reject)throw Error('未知投递');return !options?.expired}}
       createRoot(document.getElementById('root')).render(React.createElement(ComputerModals))
     }
     window.until=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,10))}throw Error('未达到预期DOM状态')}
@@ -38,7 +39,7 @@ test('Given 已保存的允许/拒绝和外发同意 When 恢复默认并撤销�
     await window.until(()=>document.body.textContent.includes('尚未同意桌面观察外发'))
     return {writes:window.writes,preserved,revoked:!document.body.textContent.includes('撤销外发同意')}
   `)
-  expect(result).toEqual({ writes: [{ allowedApps: { 'app.two': 'denied' } }, { shareObservations: false }], preserved: true, revoked: true })
+  expect(result).toEqual({ writes: [{ revoke: 'app.one' }, { shareObservations: false }], preserved: true, revoked: true })
 }, 20_000)
 test('Given 保存失败 When 撤销 Then 原授权仍显示且提供错误', async () => {
   const result = await renderer.run<{ kept: boolean; error: string }>(`
@@ -124,3 +125,39 @@ test('Given 系统授权请求失败 When 在设置中操作 Then 显示重试�
   `)
   expect(result).toEqual({ writes: [], kept: true, retry: true })
 })
+
+
+test('Given 风险确认已过期或IPC失败 When 用户确认 Then 显示真实状态且不重开或重放', async () => {
+  for (const mode of ['expired', 'reject']) {
+    const result = await renderer.run<{ text: string; writes: unknown[]; dialogs: number }>(`
+      window.mountModal({${mode}:true})
+      await window.until(()=>window.askRisk)
+      window.askRisk({requestId:'risk-result',title:'高风险',reason:'发送',actionKind:'click',authMethod:'dialog'})
+      await window.until(()=>document.querySelector('[role="dialog"]'))
+      Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='确认执行').click()
+      await window.until(()=>document.querySelector('[role="alert"]'))
+      return {text:document.querySelector('[role="alert"]').textContent,writes:window.writes,dialogs:document.querySelectorAll('[role="dialog"]').length}
+    `)
+    expect(result.writes).toEqual([{ id: 'risk-result', confirmed: true }])
+    expect(result.dialogs).toBe(0)
+    expect(result.text).toContain(mode === 'expired' ? '已失效' : '未知')
+  }
+}, 20_000)
+
+test('Given 应用授权IPC失败或过期 When 提交决定 Then 不声称未保存且不自动重试', async () => {
+  for (const mode of ['expired', 'reject']) {
+    const result = await renderer.run<{ text: string; writes: unknown[]; dialogs: number }>(`
+      window.mountModal({${mode}:true})
+      await window.until(()=>window.askAppAuth)
+      window.askAppAuth({requestId:'app-result',appName:'App'})
+      await window.until(()=>document.querySelector('[role="dialog"]'))
+      Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='总是允许').click()
+      await window.until(()=>document.querySelector('[role="alert"]'))
+      return {text:document.querySelector('[role="alert"]').textContent,writes:window.writes,dialogs:document.querySelectorAll('[role="dialog"]').length}
+    `)
+    expect(result.writes).toEqual([{ id: 'app-result', decision: 'always' }])
+    expect(result.dialogs).toBe(0)
+    expect(result.text).toContain(mode === 'expired' ? '已失效' : '未知')
+    expect(result.text).not.toContain('尚未保存')
+  }
+}, 20_000)

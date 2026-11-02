@@ -85,8 +85,20 @@ export class ComputerAuthorizationManager {
     }
     this.preferences = next
     this.revision++
+    // 设置写入后立即失效所有旧确认，迟到答复不能恢复已撤销的能力。
+    this.cancelPending()
     for (const listener of this.preferenceListeners) listener(this.getPreferences())
     return this.getPreferences()
+  }
+  /** 在主进程当前快照上单项撤销，不接受 renderer 的整表副本。 */
+  revokeAppAuthorization(app: string): ComputerUsePreferences {
+    if (typeof app !== 'string' || !app.trim() || app.length > 256) throw new Error('无效应用授权')
+    const key = normalizeKey(app)
+    const allowedApps = { ...this.preferences.allowedApps }
+    delete allowedApps[key]
+    const result = this.updatePreferences({ allowedApps })
+    for (const keys of this.once.values()) keys.delete(key)
+    return result
   }
   getRevision(): number { return this.revision }
   onPreferencesChanged(listener: (preferences: ComputerUsePreferences) => void): () => void {
@@ -193,12 +205,12 @@ export class ComputerAuthorizationManager {
         })
       } else {
         const response = await this.waitForDecision(signal => this.showLocalDialog({ type: 'question', title: '应用控制授权', message: `Agent 请求操作应用：${appName}`,
-          detail: bundleId ?? appName, buttons: ['本次允许', '总是允许', '总是拒绝', '取消'], defaultId: 3, cancelId: 3 }, signal), 3)
+          detail: `${bundleId ?? appName}\n本次允许仅限当前运行；总是允许或拒绝会保存。此授权不替代观察外发同意或高风险动作确认。`, buttons: ['本次允许', '总是允许', '总是拒绝', '取消'], defaultId: 3, cancelId: 3 }, signal), 3)
         decision = response === 0 ? 'once' : response === 1 ? 'always' : response === 2 ? 'denied' : undefined
       }
     } catch { decision = undefined }
     if (generation !== this.generation) throw new Error('应用授权等待已被停止')
-    if (!validDecision(decision) || decision === 'cancelled') throw new Error('本次应用授权未完成，请重试；未保存任何应用决定')
+    if (!validDecision(decision) || decision === 'cancelled') throw new Error('本次应用授权未完成；请检查本地授权状态后重新发起，不要自动重放动作')
     this.recordAppDecision(appName, decision, bundleId, scope)
     if (decision === 'denied') throw new Error(`用户拒绝了操作应用 ${appName} 的请求`)
     return true

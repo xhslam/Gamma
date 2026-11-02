@@ -1,131 +1,157 @@
 import { describe, expect, test } from 'bun:test'
 import { createComputerFixture } from '../../test-utils/computer-fixture'
 
-const screenshot = { action: 'screenshot' }
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(done => { resolve = done })
+  return { promise, resolve }
+}
 
-describe('Given 与其他工具平级的按需 Computer Use', () => {
-  test('When 用户直接调用 screenshot Then 绑定真实运行并返回截图', async () => {
-    const f = createComputerFixture()
-    const result = await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
-    expect(result.image?.width).toBe(1)
-    expect(f.controller.getState().sessionId).toBe(f.binding.sessionId)
+describe('Given 生产 computer 执行入口', () => {
+  test('When 原生返回观察 Then 如实返回 envelope，不生成虚构截图和窗口', async () => {
+    const f = createComputerFixture({ call: async method => method === 'screenshot' ? { marker: 'native-observation' } : undefined })
+    const result = await f.controller.execute(f.binding, { command: 'screenshot' })
+    expect(result.data).toEqual({ marker: 'native-observation' })
+    expect(result).not.toHaveProperty('image')
+    expect(result).not.toHaveProperty('windows')
     expect(f.controller.isDesktopRun(f.binding)).toBe(true)
-    for (const name of ['Bash', 'read', 'mcp__service__read', 'computer']) {
-      expect(() => f.controller.assertTool(f.binding, name)).not.toThrow()
-    }
     await f.controller.finishRun(f.binding)
   })
 
-  test('When 本轮结束再发新任务 Then 不要求重新启用且不阻断普通运行', async () => {
+  test('When 用户停止 Then 同轮不重放，下一条消息可以使用新 run', async () => {
     const f = createComputerFixture()
-    await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
-    const release = f.controller.reserveRun('other-file-session')
-    release()
-    await f.controller.finishRun(f.binding)
-
-    const next = { ...f.binding, runId: 'run-2' }
-    f.controller.beginRun(next, 'user', true)
-    await expect(f.controller.executeAutonomousAction(screenshot, undefined, next)).resolves.toHaveProperty('image')
-    await f.controller.finishRun(next)
-  })
-
-  test('When 用户停止后同轮重试 Then 拒绝；下一条用户消息才可开始新动作', async () => {
-    const f = createComputerFixture()
-    await f.controller.executeAutonomousAction(screenshot, undefined, f.binding)
-    let revoked = false
-    f.controller.onRevoked(f.binding, () => { revoked = true })
+    await f.controller.execute(f.binding, { command: 'screenshot' })
     await f.controller.stop('用户接管', 'paused')
-    expect(revoked).toBe(true)
-    await expect(f.controller.executeAutonomousAction(screenshot, undefined, f.binding)).rejects.toThrow('暂停')
+    const count = f.calls.length
+    await expect(f.controller.execute(f.binding, { command: 'screenshot' })).rejects.toThrow('暂停')
+    expect(f.calls).toHaveLength(count)
     await f.controller.finishRun(f.binding)
-
-    const next = { ...f.binding, runId: 'next-user-message' }
+    const next = { ...f.binding, runId: 'next-message' }
     f.controller.beginRun(next, 'user', true)
-    await f.controller.executeAutonomousAction(screenshot, undefined, next)
+    await expect(f.controller.execute(next, { command: 'screenshot' })).resolves.toMatchObject({ ok: true })
     await f.controller.finishRun(next)
   })
 
-  test('When 后台来源或伪造绑定 Then 不启动 helper', async () => {
-    for (const options of [{ source: 'automation' }, { source: 'delegation' }]) {
-      const f = createComputerFixture(options)
-      await expect(f.controller.executeAutonomousAction(screenshot, undefined, f.binding)).rejects.toThrow()
+  test('When 后台来源或伪造绑定 Then 不调用原生执行器', async () => {
+    for (const source of ['automation', 'delegation']) {
+      const f = createComputerFixture({ source })
+      await expect(f.controller.execute(f.binding, { command: 'screenshot' })).rejects.toThrow()
+      expect(f.calls).toHaveLength(0)
+      await f.controller.finishRun(f.binding)
     }
     const f = createComputerFixture()
-    await expect(f.controller.executeAutonomousAction(screenshot, undefined, { ...f.binding, runId: 'forged' })).rejects.toThrow('有效运行')
+    await expect(f.controller.execute({ ...f.binding, modelId: 'forged' }, { command: 'screenshot' })).rejects.toThrow('有效')
+    expect(f.calls).toHaveLength(0)
+    await f.controller.finishRun(f.binding)
   })
 
-  test('When 用户拒绝外发同意 Then 不读取桌面或启动应用', async () => {
-    const f = createComputerFixture({ consent: false })
-    f.auth.setUiHandlers({ observationConsent: async () => false })
-    await expect(f.controller.executeAutonomousAction({ action: 'open_app', app: 'Notes' }, undefined, f.binding)).rejects.toThrow('外发同意')
+  test('When 没有观察同意或 headed 许可 Then 不执行', async () => {
+    const f = createComputerFixture({ consent: false, headed: false })
+    await expect(f.controller.execute(f.binding, { command: 'snapshot', app: 'Notes' })).rejects.toThrow('外发同意')
+    f.auth.updatePreferences({ shareObservations: true })
+    await expect(f.controller.execute(f.binding, { command: 'mouse-click', xy: '1,2', headed: true })).rejects.toThrow('物理键鼠')
+    expect(f.calls).toHaveLength(0)
+    await f.controller.finishRun(f.binding)
+  })
+
+  test('When 原生返回业务失败 Then 保留失败和 disposition，不自动重放', async () => {
+    const f = createComputerFixture({ policy: 'relaxed', call: async () => ({ version: '2.5', command: 'press', ok: false,
+      error: { code: 'EXEC_FAILED', message: '原生投递失败', disposition: { delivery: 'unknown', retry: 'unsafe' } } }) })
+    const result = await f.controller.execute(f.binding, { command: 'press', combo: 'Tab' })
+    expect(result).toMatchObject({ ok: false, error: { disposition: { retry: 'unsafe' } } })
+    expect(f.calls).toHaveLength(1)
+    await f.controller.finishRun(f.binding)
+  })
+})
+
+describe('Given 正在等待本地确认', () => {
+  test('When 尚未创建原生 run 就停止，随后风险批准到达 Then 不投递', async () => {
+    const answer = deferred<boolean>()
+    const entered = deferred<void>()
+    const f = createComputerFixture()
+    f.auth.setUiHandlers({ riskConfirm: async () => { entered.resolve(); return answer.promise } })
+    const pending = f.controller.execute(f.binding, { command: 'clipboard-clear' })
+    const rejection = pending.then(() => undefined, (error: unknown) => error)
+    await entered.promise
+    await f.controller.stop('用户停止')
+    answer.resolve(true)
+    expect(await rejection).toBeInstanceOf(Error)
     expect(f.calls.filter(call => call.method !== 'terminate')).toHaveLength(0)
   })
 
-  test('When 原生回执错误或拒绝 Then 不宣称执行成功且不自动重放', async () => {
-    const f = createComputerFixture({
-      call: async () => ({
-        version: '2.5',
-        ok: false,
-        command: 'press',
-        error: {
-          code: 'EXEC_FAILED',
-          message: '模拟原生按键投递失败',
-          disposition: { delivery: 'undelivered', retry: 'unsafe' },
-        },
-      }),
-    })
-    await expect(f.controller.executeAutonomousAction({ action: 'key', key: 'cmd+n' }, undefined, f.binding)).rejects.toThrow('原生按键投递失败')
-    await f.controller.finishRun(f.binding)
+  test('When 应用授权等待期间停止 Then 迟到 always 不持久化也不投递', async () => {
+    const answer = deferred<'always'>()
+    const entered = deferred<void>()
+    const f = createComputerFixture({ trustedApps: false, policy: 'standard' })
+    f.auth.setUiHandlers({ appAuth: async () => { entered.resolve(); return answer.promise } })
+    const pending = f.controller.execute(f.binding, { command: 'launch', app: 'Notes' })
+    const rejection = pending.then(() => undefined, (error: unknown) => error)
+    await entered.promise
+    await f.controller.stop('用户停止')
+    answer.resolve('always')
+    expect(await rejection).toBeInstanceOf(Error)
+    expect(f.auth.getPreferences().allowedApps).toEqual({})
+    expect(f.actions).toHaveLength(0)
   })
 
-  test('When 目标应用未授权且用户取消 Then 拒绝执行操作', async () => {
-    const f = createComputerFixture({ trustedApps: false })
-    f.auth.setUiHandlers({ appAuth: async () => 'denied' })
-    await expect(
-      f.controller.executeAutonomousAction({ action: 'open_app', app: 'UnapprovedApp' }, undefined, f.binding),
-    ).rejects.toThrow('拒绝')
-    await f.controller.finishRun(f.binding)
-  })
-
-  test('When 点击或等待参数无效 Then 明确拒绝执行', async () => {
-    const f = createComputerFixture()
-    for (const action of [
-      { action: 'click', x: -1, y: 0 },
-      { action: 'click', x: 1, y: 0 },
-      { action: 'wait', duration: Number.NaN },
-      { action: 'wait', duration: 15 },
-    ]) {
-      await expect(f.controller.executeAutonomousAction(action, undefined, f.binding)).rejects.toThrow()
+  test('When 风险确认期间取消 signal 或撤销 headed Then 最终门禁阻断动作', async () => {
+    for (const change of ['abort', 'headed'] as const) {
+      const answer = deferred<boolean>()
+      const entered = deferred<void>()
+      const f = createComputerFixture()
+      const abort = new AbortController()
+      f.auth.setUiHandlers({ riskConfirm: async () => { entered.resolve(); return answer.promise } })
+      const pending = f.controller.execute(f.binding, { command: 'clipboard-clear', headed: true }, abort.signal)
+      const rejection = pending.then(() => undefined, (error: unknown) => error)
+      await entered.promise
+      if (change === 'abort') abort.abort()
+      else f.auth.updatePreferences({ headedAllowed: false })
+      answer.resolve(true)
+      expect(await rejection).toBeInstanceOf(Error)
+      expect(f.actions).toHaveLength(0)
+      await f.controller.finishRun(f.binding)
     }
-    await f.controller.finishRun(f.binding)
   })
 
-  test('When 调用列窗、聚焦、组合键和拖拽 Then 使用新 agent-desktop 命令协议', async () => {
-    const f = createComputerFixture()
-    const listed = await f.controller.executeAutonomousAction({ action: 'list_windows' }, undefined, f.binding)
-    expect(listed.windows?.[0]?.windowId).toBe(12)
-    await f.controller.executeAutonomousAction({ action: 'focus_window', windowId: 12 }, undefined, f.binding)
-    const keyed = await f.controller.executeAutonomousAction({ action: 'key', key: 'cmd+shift+n' }, undefined, f.binding)
-    await f.controller.executeAutonomousAction({ action: 'drag', coordinate: [100, 100], start_coordinate: [0, 0], observationId: keyed.observationId }, undefined, f.binding)
-    expect(f.actions.map(action => action.kind)).toEqual(['list-windows', 'focus_window', 'key', 'drag'])
+  test('When 运行结束 Then 本次应用授权清除', async () => {
+    const f = createComputerFixture({ trustedApps: false, policy: 'standard' })
+    f.auth.recordAppDecision('Notes', 'once', 'com.apple.Notes', f.binding.runId)
+    expect(f.auth.checkAppAuthorization('Notes', 'com.apple.Notes', f.binding.runId)).toBe('allowed')
     await f.controller.finishRun(f.binding)
+    expect(f.auth.checkAppAuthorization('Notes', 'com.apple.Notes', f.binding.runId)).toBe('pending')
   })
+})
 
-  test('When 高风险动作（如 close-app）用户取消确认 Then 阻断执行且不发送命令', async () => {
-    const f = createComputerFixture()
-    f.auth.setUiHandlers({ riskConfirm: async () => false })
-    await expect(
-      f.controller.execute(f.binding, { command: 'close-app', app: 'Notes' }),
-    ).rejects.toThrow('用户已取消高风险动作')
-    expect(f.actions.filter(a => a.kind === 'close-app')).toHaveLength(0)
-    await f.controller.finishRun(f.binding)
-  })
+test('Given 会话停止时原生退出缓慢 When 迟到应用批准到达 Then 在等待退出之前已失效', async () => {
+  const answer = deferred<'always'>()
+  const entered = deferred<void>()
+  const exit = deferred<void>()
+  const f = createComputerFixture({ trustedApps: false, policy: 'standard', call: async method => {
+    if (method === 'terminate') await exit.promise
+    return undefined
+  } })
+  f.auth.setUiHandlers({ appAuth: async () => { entered.resolve(); return answer.promise } })
+  const pending = f.controller.execute(f.binding, { command: 'launch', app: 'Notes' }).catch((error: unknown) => error)
+  await entered.promise
+  const stopping = f.controller.stopForSession(f.binding.sessionId, '会话停止')
+  answer.resolve('always')
+  await pending
+  expect(f.auth.getPreferences().allowedApps).toEqual({})
+  exit.resolve()
+  await stopping
+  expect(f.actions).toHaveLength(0)
+})
 
-  test('When 未开启 headed 许可 When 执行 headed 操作 Then 明确阻断且不隐式降级', async () => {
-    const f = createComputerFixture({ headed: false })
-    await expect(
-      f.controller.execute(f.binding, { command: 'mouse-click', xy: '100,200', headed: true }),
-    ).rejects.toThrow('未开启物理键鼠输入许可')
-    await f.controller.finishRun(f.binding)
-  })
+test('Given 原生观察进行中 When 授权发生变化 Then 不返回迟到观察，也不声称动作未投递', async () => {
+  const f = createComputerFixture({ call: async method => {
+    if (method !== 'snapshot') return undefined
+    f.auth.updatePreferences({ headedAllowed: false })
+    return { privateText: 'PRIVATE_LATE_OBSERVATION' }
+  } })
+  let error: unknown
+  try { await f.controller.execute(f.binding, { command: 'snapshot', app: 'Notes' }) } catch (caught) { error = caught }
+  expect(error).toBeInstanceOf(Error)
+  expect(error).toHaveProperty('details.stopReason', '执行期间授权或运行状态已变化；动作可能已投递，观察结果已丢弃，不得重放。')
+  expect((error as Error).message).not.toContain('PRIVATE_LATE_OBSERVATION')
+  await f.controller.finishRun(f.binding)
 })

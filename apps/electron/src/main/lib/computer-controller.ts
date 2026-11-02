@@ -1,13 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type {
-  ComputerAction,
   ComputerBinding,
   ComputerPermission,
   ComputerPermissions,
   ComputerPreview,
   ComputerPreviewRequest,
   ComputerState,
-  ComputerTarget,
 } from '@gamma/shared'
 import {
   computerAuthorizationManager,
@@ -16,20 +14,12 @@ import {
 import {
   AGENT_DESKTOP_VERSION,
   buildAgentDesktopArgs,
-  type AgentDesktopCommand,
   type AgentDesktopEnvelope,
   type AgentDesktopInput,
 } from './agent-desktop-protocol'
+import type { InstalledComputerApp } from './computer-installed-app'
+import { authorizeComputerTarget, type ComputerRefTarget } from './computer-target-guard'
 import { ComputerRunPausedError, computerPausedToolMessage } from './computer-pause'
-
-/** 已证明在投递前拒绝；允许重新观察和重新规划，绝不自动重放。 */
-export class ComputerReobserveRequiredError extends Error {
-  readonly reobserveRequired = true
-  constructor(message: string, readonly countFailure = true) {
-    super(message)
-    this.name = 'ComputerReobserveRequiredError'
-  }
-}
 
 export interface ComputerStopDiagnostic {
   action?: string
@@ -44,8 +34,11 @@ export interface ComputerHost {
     args: string[],
     signal?: AbortSignal,
     timeoutMs?: number,
+    validate?: () => void,
   ): Promise<AgentDesktopEnvelope>
   terminate(namespace?: string): Promise<void>
+  resolveInstalledApp?(identifier: string): Promise<InstalledComputerApp | undefined>
+  resolveRefTarget?(namespace: string, ref: string): Promise<ComputerRefTarget>
   call?(
     method: string,
     params?: Record<string, unknown>,
@@ -64,21 +57,6 @@ export interface ComputerExecuteParams {
   combo?: string
   headed?: boolean
   [key: string]: unknown
-}
-
-export interface ComputerApplication {
-  appName: string
-  bundleId?: string
-  pid?: number
-  isRunning?: boolean
-}
-
-export interface ComputerExecuteResult {
-  message: string
-  state?: ComputerState
-  windows?: ComputerTarget[]
-  data?: unknown
-  envelope?: AgentDesktopEnvelope
 }
 
 interface RunContext {
@@ -294,9 +272,11 @@ export class ComputerController {
   }
 
   async finishRun(binding: ComputerBinding): Promise<void> {
+    this.authManager.cancelPending()
     this.activeRuns.delete(binding.runId)
     this.desktopRuns.delete(binding.runId)
     this.contexts.delete(binding.runId)
+    this.authManager.clearRun(binding.runId)
     this.stoppedRuns.delete(binding.runId)
     this.stoppedRunReasons.delete(binding.runId)
 
@@ -317,25 +297,7 @@ export class ComputerController {
 
   async stopForSession(sessionId: string, reason: string): Promise<void> {
     this.lastStopReason.set(sessionId, reason)
-    const activeRunsToStop: ComputerBinding[] = []
-
-    for (const active of this.activeRuns.values()) {
-      if (active.sessionId === sessionId) {
-        this.stoppedRuns.add(active.runId)
-        this.stoppedRunReasons.set(active.runId, reason)
-        activeRunsToStop.push(active)
-      }
-    }
-
-    await Promise.all(
-      activeRunsToStop.map((b) => this.host.terminate(b.runId)),
-    )
-
-    for (const active of activeRunsToStop) {
-      this.activeRuns.delete(active.runId)
-      this.desktopRuns.delete(active.runId)
-    }
-
+    // 桌面停止本来就是全局屏障；复用唯一入口，先失效确认再等待退出，失败也会发布 error。
     await this.stop(reason)
   }
 
@@ -350,6 +312,8 @@ export class ComputerController {
         this.getRunStopReason(binding.runId) ?? '未提供停止原因',
       )
     }
+    const context = this.contexts.get(binding.runId)
+    if (context?.source !== 'user') throw new Error('后台任务不允许桌面操控')
     const active = this.activeRuns.get(binding.runId)
     if (!active || !sameBinding(active, binding) || this.stopping) {
       throw new Error('没有当前运行有效的本地桌面授权')
@@ -393,6 +357,9 @@ export class ComputerController {
         this.stoppedRunReasons.set(active.runId, reason)
       }
     }
+
+    this.authManager.cancelPending()
+    for (const runId of this.activeRuns.keys()) this.authManager.clearRun(runId)
 
     if (this.stopping) return this.stopping
 
@@ -501,24 +468,30 @@ export class ComputerController {
       : [...this.activeRuns.values()].find((b) => b.sessionId === sessionId)
     if (!active || active.sessionId !== sessionId || !this.isDesktopRun(active)) return null
 
-    let frameRes: any
-    if (typeof (this.host as any).call === 'function') {
+    let frameRes: unknown
+    if (this.host.call) {
       try {
-        frameRes = await (this.host as any).call('previewFrame', { enabled: live, frameId })
+        frameRes = await this.host.call('previewFrame', { enabled: live, frameId })
       } catch {}
     }
 
-    if (!this.authManager.getPreferences().shareObservations || this.stopping) {
+    if (!this.authManager.getPreferences().shareObservations || this.stopping || this.activeRuns.get(active.runId) !== active || this.isRunStopped(active.runId)) {
       return null
     }
 
-    const mode = frameRes?.mode ?? (this.state.permissions?.screen ? 'live' : 'accessibility')
-    const frame = frameRes?.frame ? {
-      frameId: frameRes.frame.frameId,
-      capturedAt: frameRes.frame.capturedAt ?? this.now(),
-      width: frameRes.frame.width ?? 960,
-      height: frameRes.frame.height ?? 600,
-      dataUrl: frameId === frameRes.frame.frameId ? undefined : (frameRes.frame.dataUrl ?? (frameRes.frame.data ? `data:image/jpeg;base64,${frameRes.frame.data}` : undefined)),
+    const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
+    const response = isRecord(frameRes) ? frameRes : undefined
+    const rawMode = response?.mode
+    const mode: ComputerPreview['mode'] = rawMode === 'live' || rawMode === 'accessibility' || rawMode === 'paused' || rawMode === 'unavailable'
+      ? rawMode : 'accessibility'
+    const rawFrame = isRecord(response?.frame) ? response.frame : undefined
+    const frame = rawFrame && typeof rawFrame.frameId === 'string' ? {
+      frameId: rawFrame.frameId,
+      capturedAt: typeof rawFrame.capturedAt === 'number' ? rawFrame.capturedAt : this.now(),
+      width: typeof rawFrame.width === 'number' ? rawFrame.width : 960,
+      height: typeof rawFrame.height === 'number' ? rawFrame.height : 600,
+      dataUrl: frameId === rawFrame.frameId ? undefined : typeof rawFrame.dataUrl === 'string' ? rawFrame.dataUrl
+        : typeof rawFrame.data === 'string' ? `data:image/jpeg;base64,${rawFrame.data}` : undefined,
     } : undefined
 
     return {
@@ -543,98 +516,6 @@ export class ComputerController {
     return this.getState(sessionId)
   }
 
-  async executeAutonomousAction(
-    action: Record<string, unknown>,
-    signal?: AbortSignal,
-    binding?: ComputerBinding,
-  ): Promise<any> {
-    const targetBinding = binding ?? [...this.activeRuns.values()][0]
-    if (!targetBinding) {
-      throw new Error('没有有效运行')
-    }
-    if (this.isRunStopped(targetBinding.runId)) {
-      throw new ComputerRunPausedError(
-        this.getRunStopReason(targetBinding.runId) ?? '本轮电脑操作已停止',
-      )
-    }
-    if (!this.activeRuns.has(targetBinding.runId)) {
-      throw new Error('没有有效运行')
-    }
-    const context = this.contexts.get(targetBinding.runId)
-    if (context && (context.source === 'automation' || context.source === 'delegation')) {
-      throw new Error('后台任务不允许桌面操控')
-    }
-
-    const actionName = (action.action || action.kind || 'screenshot') as string
-    if (actionName === 'click' && action.x !== undefined && ((action.x as number) < 0 || (action.x as number) > 0)) {
-      throw new Error('无效坐标')
-    }
-    if (actionName === 'wait') {
-      if (typeof action.duration !== 'number' || Number.isNaN(action.duration) || action.duration > 10) {
-        throw new Error('无效等待时间')
-      }
-    }
-
-    let command: AgentDesktopCommand = 'screenshot'
-    const input: AgentDesktopInput = { command }
-
-    if (actionName === 'screenshot') {
-      command = 'screenshot'
-    } else if (actionName === 'open_app' || actionName === 'launch') {
-      command = 'launch'
-      input.app = typeof action.app === 'string' ? action.app : typeof action.appName === 'string' ? action.appName : undefined
-    } else if (actionName === 'list_windows') {
-      command = 'list-windows'
-    } else if (actionName === 'focus_window') {
-      command = 'focus-window'
-      if (action.windowId !== undefined) input.windowId = action.windowId as any
-    } else if (actionName === 'key' || actionName === 'press') {
-      command = 'press'
-      input.combo = typeof action.key === 'string' ? action.key : typeof action.combo === 'string' ? action.combo : 'Tab'
-    } else if (actionName === 'click') {
-      if (Array.isArray(action.coordinate)) {
-        command = 'mouse-click'
-        input.xy = `${action.coordinate[0]},${action.coordinate[1]}`
-        input.headed = true
-      } else if (action.x !== undefined && action.y !== undefined) {
-        command = 'mouse-click'
-        input.xy = `${action.x},${action.y}`
-        input.headed = true
-      } else {
-        command = 'click'
-        input.ref = (action.ref || action.elementRef || '@snapshot:e1') as string
-      }
-    } else if (actionName === 'drag') {
-      command = 'drag'
-      if (Array.isArray(action.start_coordinate) && Array.isArray(action.coordinate)) {
-        input.fromXy = `${action.start_coordinate[0]},${action.start_coordinate[1]}`
-        input.toXy = `${action.coordinate[0]},${action.coordinate[1]}`
-        input.headed = true
-      }
-    } else if (actionName === 'type') {
-      command = 'type'
-      input.ref = (action.ref || action.elementRef || '@snapshot:e1') as string
-      input.text = typeof action.text === 'string' ? action.text : ''
-    } else if (actionName === 'wait') {
-      command = 'wait'
-      input.duration = typeof action.duration === 'number' ? action.duration : 1
-    }
-    input.command = command
-
-    const envelope = await this.execute(targetBinding, input, signal)
-    if (!envelope.ok) {
-      throw new Error(envelope.error?.message || '操作失败')
-    }
-
-    return {
-      observationId: `obs-${Date.now()}`,
-      image: { data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0m0AAAAASUVORK5CYII=', mimeType: 'image/png', width: 1, height: 1 },
-      windows: [{ windowId: 12, pid: 34, processIdentity: 'fixture-process', bundleId: 'com.apple.Notes', title: 'Fixture', bounds: { x: 0, y: 0, width: 800, height: 600 } }],
-      data: envelope.data,
-      envelope,
-    }
-  }
-
   /**
    * 执行 agent-desktop 命令。
    * 集成白名单参数校验、应用授权、headed 许可校验与高风险动作确认。
@@ -644,29 +525,21 @@ export class ComputerController {
     input: AgentDesktopInput,
     signal?: AbortSignal,
   ): Promise<AgentDesktopEnvelope> {
-    this.assertTool(binding, 'computer')
-    this.assertObservationSharing(binding)
-
-    if (signal?.aborted) {
-      throw new Error('操作已取消')
-    }
-
-    // 校验 headed 物理键鼠输入权限
-    if (input.headed) {
-      const preferences = this.authManager.getPreferences()
-      if (!preferences.headedAllowed) {
-        throw new Error(
-          '未开启物理键鼠输入许可；请在设置中开启“允许物理键鼠输入（headed）”，或使用 headless 语义操作。',
-        )
+    buildAgentDesktopArgs(input)
+    const assertCurrent = (): void => {
+      this.assertTool(binding, 'computer')
+      this.assertObservationSharing(binding)
+      if (signal?.aborted) throw new Error('操作已取消')
+      if (input.headed && !this.authManager.getPreferences().headedAllowed) {
+        throw new Error('未开启物理键鼠输入许可；请在设置中开启 headed，或使用 headless 语义操作。')
       }
     }
+    assertCurrent()
 
-    // 应用级授权检查
-    if (typeof input.app === 'string' && input.app.trim()) {
-      const appName = input.app.trim()
-      this.publish({ targetApp: { bundleId: '', name: appName } })
-      await this.authManager.ensureAppAuthorized(appName, undefined, binding.runId)
-    }
+    const authorized = await authorizeComputerTarget(this.host, this.authManager, binding.runId, input, assertCurrent, signal)
+    authorized.validate()
+    input = authorized.input
+    const args = buildAgentDesktopArgs(input)
 
     // 敏感高风险动作二次确认
     const highRiskCommands = new Set([
@@ -687,12 +560,13 @@ export class ComputerController {
         targetApp: typeof input.app === 'string' ? input.app : undefined,
         authMethod: 'dialog',
       })
+      assertCurrent()
       if (!confirmed) {
         throw new Error(`用户已取消高风险动作: ${input.command}`)
       }
     }
 
-    const args = buildAgentDesktopArgs(input)
+    authorized.validate()
     const activityId = randomUUID()
     const activity: ComputerPreview['activities'][number] = {
       id: activityId,
@@ -710,7 +584,11 @@ export class ComputerController {
     this.publish({ phase: 'active' })
 
     try {
-      const envelope = await this.host.execute(binding.runId, args, signal)
+      authorized.validate()
+      const envelope = await this.host.execute(binding.runId, args, signal, undefined, authorized.validate)
+      try { authorized.validate() } catch {
+        throw new ComputerRunPausedError('执行期间授权或运行状态已变化；动作可能已投递，观察结果已丢弃，不得重放。')
+      }
       activity.status = envelope.ok ? 'returned' : 'failed'
 
       if (!envelope.ok && envelope.error?.code === 'PERM_DENIED') {
