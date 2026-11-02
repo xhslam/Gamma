@@ -19,9 +19,36 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const result = { viewport: [innerWidth, innerHeight], width: container.getBoundingClientRect().width,
         opacity: getComputedStyle(content).opacity, fonts: document.fonts.status,
         titleFits: title.clientWidth > 0 && title.scrollWidth <= title.clientWidth };
+      if (!result.titleFits) {
+        const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+        throw new Error('普通标题空间不足：' + JSON.stringify({ ...result, titleWidth: title.clientWidth, titleScroll: title.scrollWidth,
+          font: getComputedStyle(title).font, gutter: scroll.offsetWidth - scroll.clientWidth,
+          rowWidth: fixture.row('parent').clientWidth }));
+      }
       fixture.root.unmount(); return result;
     `)
     expect(result).toEqual({ viewport: [900, 600], width: 256, opacity: '1', fonts: 'loaded', titleFits: true })
+  }, 30_000)
+
+  test('When 为经典滚动条预留至少 12px 宽度 Then 普通标题仍完整显示且操作按钮不重叠', async () => {
+    const result = await renderer.run<{ reserved: number; titleWidth: number; titleScroll: number; separated: boolean }>(`
+      const fixture = await window.leftSidebarRegression.mount({ platform: 'Win32', width: 256 });
+      const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+      // macOS overlay 不占据布局宽度；补足相同预算，不能让本机验证忽略 Windows 的经典滚动条。
+      const nativeGutter = scroll.offsetWidth - scroll.clientWidth;
+      scroll.style.paddingInlineEnd = Math.max(0, 12 - nativeGutter) + 'px';
+      const row = fixture.row('parent');
+      const title = [...row.querySelectorAll('span')].find(span => span.textContent === '整理研究资料');
+      const archive = row.querySelector('button[aria-label="归档"]');
+      const toggle = row.querySelector('button[aria-label="展开子会话"]');
+      const result = { reserved: nativeGutter + parseFloat(getComputedStyle(scroll).paddingInlineEnd),
+        titleWidth: title.clientWidth, titleScroll: title.scrollWidth,
+        separated: toggle.getBoundingClientRect().right <= archive.getBoundingClientRect().left };
+      fixture.root.unmount(); return result;
+    `)
+    expect(result.reserved).toBeGreaterThanOrEqual(12)
+    expect(result.titleWidth).toBeGreaterThanOrEqual(result.titleScroll)
+    expect(result.separated).toBe(true)
   }, 30_000)
 
   test('When 点击 AGY 入口 Then 与 Markdown 一样作为右侧工作区栏目打开且不改选会话', async () => {
