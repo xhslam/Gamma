@@ -14,8 +14,8 @@ const GITHUB_API_BASE = 'https://api.github.com'
 
 /** GitHub 仓库配置（从 electron-builder.yml） */
 const GITHUB_REPO = {
-  owner: 'ErlichLiu',
-  repo: 'Proma',
+  owner: 'xhslam',
+  repo: 'Gamma',
 }
 
 /** Release 缓存 */
