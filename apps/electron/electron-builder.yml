@@ -16,6 +16,9 @@ directories:
 # 压缩配置
 compression: normal
 
+# 显式包含平台/架构，避免并行构建的附件重名。
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
 # ASAR 打包配置
 # 启用 ASAR 归档，将 Pi native addon 与其它 native binary 解压到 app.asar.unpacked/ 避免路径问题
 asar: true
@@ -204,13 +207,12 @@ deb:
     - libxkbcommon0
     - libxrandr2
     - libxss1
-  artifactName: gamma_${version}_${arch}.${ext}
 
 # ============================================
 # 发布配置
-# 每个平台的 build job 通过 --publish always 直接上传到 GitHub Release。
+# 各平台仅构建；统一门禁校验后由发布 job 上传并公开。
 # ============================================
 publish:
   provider: github
-  owner: proma-ai
-  repo: Proma
+  owner: xhslam
+  repo: Gamma
