@@ -79,6 +79,8 @@ describe('Given 生产按需面板与 Chromium 原生鼠标事件', () => {
       await nativeClick(files)
       const switchedBack = f.activeOverlay()
       await nativeClick(files)
+      // 关闭先淡出再收回布局，等待真实退出完成而不是固定180ms。
+      await f.until(() => !document.querySelector('[data-testid="on-demand-overlay-panel"]'))
       return {
         first, switched, switchedBack,
         sameButtonClosed: f.activeOverlay() === null && !document.querySelector('[data-testid="on-demand-overlay-panel"]'),
@@ -101,7 +103,7 @@ describe('Given 生产按需面板与 Chromium 原生鼠标事件', () => {
       const outsideFocused = document.activeElement === document.querySelector('[data-testid="contract-outside"]')
       await nativeClick(changes)
       await window.rightPanelNativeInput({ type: 'escape' })
-      await f.delay(180)
+      await f.until(() => !document.querySelector('[data-testid="on-demand-overlay-panel"]'))
       return {
         outsideClosed, outsideFocused,
         escapeClosed: f.activeOverlay() === null && !document.querySelector('[data-testid="on-demand-overlay-panel"]'),

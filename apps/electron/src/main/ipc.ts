@@ -291,6 +291,7 @@ import { exitPlanService } from './lib/agent-exit-plan-service'
 import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getConfigDir, getWorkspaceSkillsDir, getScratchPadPath, getMemoryDir } from './lib/config-paths'
 import { writeTextFileAtomic } from './lib/safe-file'
 import { getCachedDefaultAppInfo, saveCachedDefaultAppInfo } from './lib/default-app-cache'
+import { loadDefaultAppIcon } from './lib/default-app-icon'
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from './lib/storage-service'
 import type { CleanupOptions } from './lib/storage-service'
 import {
@@ -793,17 +794,13 @@ function extOf(filePath: string): string {
 }
 
 async function getAppIconDataUrl(appPath: string): Promise<string> {
-  // macOS: 用 sips 把 App bundle 的 .icns 转成 64×64 PNG 再读。
-  // 不要用 nativeImage.createFromPath(.icns) + resize ——某些 Electron 版本对多分辨率 .icns
-  // resize 时会 SIGTRAP 直接崩主进程。
-  if (process.platform === 'darwin' && appPath.endsWith('.app')) {
-    const dataUrl = await getMacAppIconViaSips(appPath)
-    if (dataUrl) return dataUrl
-  }
-
-  const icon = await app.getFileIcon(appPath, { size: 'large' })
-  if (icon.isEmpty()) return ''
-  return icon.toDataURL()
+  return loadDefaultAppIcon(process.platform, appPath, {
+    loadMacIcon: getMacAppIconViaSips,
+    loadNativeIcon: async (path) => {
+      const icon = await app.getFileIcon(path, { size: 'large' })
+      return icon.isEmpty() ? '' : icon.toDataURL()
+    },
+  })
 }
 
 async function getMacAppIconViaSips(appPath: string): Promise<string> {
@@ -3850,8 +3847,8 @@ export function registerIpcHandlers(): void {
   // 打开支持文件与文件夹混合选择的 Composer 对话框
   ipcMain.handle(
     ATTACHMENT_IPC_CHANNELS.OPEN_FILE_OR_FOLDER_DIALOG,
-    async (): Promise<FileOrFolderDialogResult> => {
-      return openFileOrFolderDialog()
+    async (event): Promise<FileOrFolderDialogResult> => {
+      return openFileOrFolderDialog(BrowserWindow.fromWebContents(event.sender))
     }
   )
 

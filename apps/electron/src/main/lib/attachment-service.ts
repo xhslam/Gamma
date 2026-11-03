@@ -323,8 +323,11 @@ export async function openFileDialog(): Promise<FileDialogResult> {
  * 打开 Agent Composer 的混合选择对话框。
  * 文件按附件语义读取，文件夹只返回路径，交由会话目录授权流程处理。
  */
-export async function openFileOrFolderDialog(): Promise<FileOrFolderDialogResult> {
-  const parentWindow = BrowserWindow.getFocusedWindow()
+export async function openFileOrFolderDialog(sourceWindow?: BrowserWindow | null): Promise<FileOrFolderDialogResult> {
+  // 优先绑定发起请求的窗口，避免菜单关闭或失焦时选择器落到应用后方。
+  const parentWindow = sourceWindow && !sourceWindow.isDestroyed()
+    ? sourceWindow
+    : BrowserWindow.getFocusedWindow()
   let dialogOptions: Electron.OpenDialogOptions
 
   if (process.platform === 'win32' || process.platform === 'linux') {

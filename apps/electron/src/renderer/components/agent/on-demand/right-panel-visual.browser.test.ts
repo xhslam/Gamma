@@ -12,7 +12,7 @@ const openChanges = `${boot}
   window.onDemandTest.inject1181Changes();
   window.onDemandTest.toggleOverlay('changes');
   await window.onDemandTest.until(() => document.querySelector('[data-testid="on-demand-changes-virtual-container"] button'));
-  await window.onDemandTest.delay(220);
+  await window.onDemandTest.delay(300);
 `
 
 interface PanelMetrics {
@@ -75,6 +75,49 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
   let harness: VisualRendererHarness
   beforeAll(async () => { harness = await createVisualRendererHarness(rightPanelFixture) }, 300_000)
   afterAll(async () => { await harness?.dispose() })
+
+  test('When 展开再收起 Then 布局平滑让位、面板与内容分层淡入，退出结束后才卸载', async () => {
+    const result = await harness.run(`${boot}
+      const slot = document.querySelector('.gamma-on-demand-slot');
+      const chat = document.querySelector('[data-testid="chat-main-area"]');
+      const original = chat.getBoundingClientRect().width;
+      window.onDemandTest.toggleOverlay('files');
+      await window.onDemandTest.until(() => document.querySelector('[data-testid="on-demand-overlay-panel"]'));
+      await window.onDemandTest.delay(60);
+      const panel = document.querySelector('[data-testid="on-demand-overlay-panel"]');
+      const widthDuring = slot.getBoundingClientRect().width;
+      const opacityDuring = Number(getComputedStyle(panel).opacity);
+      const layerDelay = getComputedStyle(panel.querySelector('.gamma-on-demand-content')).animationDelay;
+      await window.onDemandTest.delay(260);
+      const widthOpen = slot.getBoundingClientRect().width;
+      const opacityOpen = Number(getComputedStyle(panel).opacity);
+      window.onDemandTest.closeOverlay();
+      await window.onDemandTest.delay(45);
+      const retained = panel.isConnected;
+      const inert = panel.inert;
+      const fading = Number(getComputedStyle(panel).opacity) < opacityOpen;
+      await window.onDemandTest.until(() => !document.querySelector('[data-testid="on-demand-overlay-panel"]'));
+      return {smoothWidth:widthDuring>0&&widthDuring<widthOpen,fadeIn:opacityDuring<1&&opacityOpen===1,
+        layered:parseFloat(layerDelay)>0,retained,inert,fading,
+        restored:Math.abs(chat.getBoundingClientRect().width-original)<1};
+    `)
+    expect(result).toEqual({ smoothWidth: true, fadeIn: true, layered: true, retained: true, inert: true, fading: true, restored: true })
+  })
+
+  test('When 收起中快速重开并切换标签 Then 不被旧退出计时器卸载', async () => {
+    const result = await harness.run(`${boot}
+      window.onDemandTest.toggleOverlay('files');
+      await window.onDemandTest.delay(300);
+      const panel = document.querySelector('[data-testid="on-demand-overlay-panel"]');
+      window.onDemandTest.closeOverlay();
+      await window.onDemandTest.delay(45);
+      window.onDemandTest.toggleOverlay('changes');
+      await window.onDemandTest.delay(420);
+      const current = document.querySelector('[data-testid="on-demand-overlay-panel"]');
+      return {samePanel:current===panel,tab:current?.dataset.activeOverlay,interactive:current?.inert===false,opacity:current&&getComputedStyle(current).opacity};
+    `)
+    expect(result).toEqual({ samePanel: true, tab: 'changes', interactive: true, opacity: '1' })
+  })
 
   for (const theme of ['light', 'dark'] as const) {
     test(`When ${theme} 改动侧栏展开 Then 保留暖色几何、虚拟34px和24px渐隐，并与聊天分列`, async () => {
@@ -153,17 +196,31 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
 
   for (const theme of ['light', 'dark'] as const) {
     test(`When ${theme} 文件与改动面板依次打开 Then 共用有轻微色差的面板底色`, async () => {
-      const result = await harness.run<{ files: string; changes: string }>(`${boot}
+      const result = await harness.run<{ files: string; changes: string; filesHalfHeight: boolean; changesHalfHeight: boolean; sameWidth: boolean; sameTop: boolean }>(`${boot}
         window.onDemandTest.setTheme('${theme}');
         window.onDemandTest.toggleOverlay('files');
         await window.onDemandTest.until(() => document.querySelector('[data-active-overlay="files"]'));
-        const files = getComputedStyle(document.querySelector('[data-testid="on-demand-overlay-panel"]')).backgroundColor;
+        await window.onDemandTest.delay(300);
+        const panel = document.querySelector('[data-testid="on-demand-overlay-panel"]');
+        const files = getComputedStyle(panel).backgroundColor;
+        const filesRect = panel.getBoundingClientRect();
+        const layoutHeight = document.querySelector('[data-testid="on-demand-conversation-layout"]').getBoundingClientRect().height;
+        const halfHeight = (layoutHeight - 24) / 2;
         window.onDemandTest.toggleOverlay('changes');
         await window.onDemandTest.until(() => document.querySelector('[data-active-overlay="changes"]'));
-        return {files, changes:getComputedStyle(document.querySelector('[data-testid="on-demand-overlay-panel"]')).backgroundColor};
+        const changesPanel = document.querySelector('[data-testid="on-demand-overlay-panel"]');
+        const changesRect = changesPanel.getBoundingClientRect();
+        return {files, changes:getComputedStyle(changesPanel).backgroundColor,
+          filesHalfHeight:Math.abs(filesRect.height-halfHeight)<1,
+          changesHalfHeight:Math.abs(changesRect.height-halfHeight)<1,
+          sameWidth:filesRect.width===changesRect.width, sameTop:filesRect.top===changesRect.top};
       `)
       expect(result.files).toBe(result.changes)
       expect(result.files).not.toBe('rgba(0, 0, 0, 0)')
+      expect(result.filesHalfHeight).toBe(true)
+      expect(result.changesHalfHeight).toBe(true)
+      expect(result.sameWidth).toBe(true)
+      expect(result.sameTop).toBe(true)
     })
   }
 
@@ -172,7 +229,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       window.onDemandTest.inject1181Files();
       window.onDemandTest.toggleOverlay('files');
       await window.onDemandTest.until(() => document.querySelector('[data-testid="on-demand-files-virtual-container"] button'));
-      await window.onDemandTest.delay(220);
+      await window.onDemandTest.delay(300);
       const list = document.querySelector('[data-testid="on-demand-files-virtual-container"]');
       const rows = [...list.querySelectorAll('button')];
       const longRow = rows.find(row => row.textContent.includes('very-long-file-title-'));
@@ -257,17 +314,17 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
   })
 
   test('When 窄窗且reduced-motion Then 浮层不越界、无缩放位移动画且保留焦点回到入口', async () => {
-    const result = await harness.run<{ left: number; right: number; width: number; viewport: number; animation: string; translation: string; focused: boolean }>(`${boot}
+    const result = await harness.run<{ left: number; right: number; width: number; viewport: number; animation: string; translation: string; focused: boolean; immediateClose: boolean; noTransition: boolean }>(`${boot}
       window.onDemandTest.toggleOverlay('files');
       await window.onDemandTest.until(() => document.querySelector('[data-testid="on-demand-overlay-panel"] input'));
       await window.onDemandTest.delay(50);
       const panel = document.querySelector('[data-testid="on-demand-overlay-panel"]'), rect = panel.getBoundingClientRect();
       const style = getComputedStyle(panel);
       const metric = {left: rect.left, right: rect.right, width: rect.width, viewport: innerWidth,
-        animation: style.animationName, translation: getComputedStyle(document.querySelector('[data-testid="on-demand-right-panel-nav"] button svg')).translate};
+        animation: style.animationName, noTransition: getComputedStyle(document.querySelector('.gamma-on-demand-slot')).transitionDuration === '0s', translation: getComputedStyle(document.querySelector('[data-testid="on-demand-right-panel-nav"] button svg')).translate};
       document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true}));
       await window.onDemandTest.delay(60);
-      return {...metric, focused: document.activeElement?.getAttribute('aria-label')?.includes('文件') === true};
+      return {...metric, focused: document.activeElement?.getAttribute('aria-label')?.includes('文件') === true, immediateClose:!document.querySelector('[data-testid="on-demand-overlay-panel"]')};
     `, { reducedMotion: true, zoom: 2, screenshot: join(artifacts, 'six-step-narrow-reduced.png') })
     expect(result.left).toBeGreaterThanOrEqual(12)
     expect(result.right).toBeLessThanOrEqual(result.viewport - 12)
@@ -276,6 +333,8 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
     expect(result.animation).toBe('none')
     expect(result.translation).toBe('none')
     expect(result.focused).toBe(true)
+    expect(result.noTransition).toBe(true)
+    expect(result.immediateClose).toBe(true)
   })
 
   test('When 调研浮层呈现两行标题 Then 复用24px标题与滚动层但保留跳转箭头', async () => {
