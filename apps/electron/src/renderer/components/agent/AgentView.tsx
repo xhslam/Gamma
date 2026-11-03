@@ -18,8 +18,8 @@ import * as React from 'react'
 import { flushSync, unstable_batchedUpdates } from 'react-dom'
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, ListTodo, Paperclip, Plus, MessageSquareText } from 'lucide-react'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, ListTodo } from 'lucide-react'
+import { ComposerAttachmentMenu } from './ComposerAttachmentMenu'
 import { ConversationReferenceChips } from './ConversationReferenceChips'
 import { ConversationReferenceDialog } from './ConversationReferenceDialog'
 import type { AgentContextRef, AgentContextRefMode } from '@gamma/shared'
@@ -3329,40 +3329,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     {
       key: 'attach-content',
       node: (
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={inputToolbarButtonClass}
-                  aria-label="添加附件或引用对话"
-                >
-                  <Plus className="size-[17px]" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="top"><p>添加附件或引用对话</p></TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="start" side="top" className="w-48">
-            <DropdownMenuItem
-              onClick={() => void handleAttachContent()}
-              className="flex items-center gap-2 cursor-pointer text-xs"
-            >
-              <Paperclip className="size-3.5" />
-              <span>附加文件或文件夹</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => richTextInputRef.current?.openReferencePicker('conversations')}
-              className="flex items-center gap-2 cursor-pointer text-xs"
-            >
-              <MessageSquareText className="size-3.5" />
-              <span>引用对话</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ComposerAttachmentMenu
+          onAttachContent={handleAttachContent}
+          onReferenceConversations={() => richTextInputRef.current?.openReferencePicker('conversations')}
+        />
       ),
     },
     {
