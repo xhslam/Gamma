@@ -6,6 +6,8 @@
  * silently alter that managed runtime. Inline extension factories remain
  * available: Pi loads them independently of `noExtensions`.
  */
+import { normalizeProjectPathForComparison } from '../project-instruction-resolver'
+
 export interface GammaProjectInstructionFile {
   path: string
   content: string
@@ -32,10 +34,25 @@ export function createGammaProjectInstructionFilesOverride(files: GammaProjectIn
 }
 
 
-/** Keep managed workspace rules ahead of user-project rules in Pi project context. */
+/** 显式叠加三层规则；同一真实路径只保留靠后的层，避免重复并保持覆盖顺序。 */
 export function combineGammaInstructionFiles(
   workspaceFile: GammaProjectInstructionFile | undefined,
   projectFiles: GammaProjectInstructionFile[],
+  globalFile?: GammaProjectInstructionFile,
 ): GammaProjectInstructionFile[] {
-  return workspaceFile ? [workspaceFile, ...projectFiles] : projectFiles
+  const layers = [
+    ...(globalFile ? [{ file: globalFile, source: '全局' }] : []),
+    ...(workspaceFile ? [{ file: workspaceFile, source: '工作区' }] : []),
+    ...projectFiles.map((file) => ({ file, source: '项目' })),
+  ]
+  const seen = new Set<string>()
+  return layers.reverse().filter(({ file }) => {
+    const key = normalizeProjectPathForComparison(file.path)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).reverse().map(({ file, source }) => ({
+    path: file.path,
+    content: `规则来源：${source}（${file.path}）\n规则叠加顺序：全局 < 工作区 < 项目；全部加载，冲突时以靠后的规则为准。项目规则仅适用于对应项目范围。\n\n${file.content}`,
+  }))
 }

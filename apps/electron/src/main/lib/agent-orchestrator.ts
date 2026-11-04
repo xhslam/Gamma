@@ -65,6 +65,7 @@ import { getSettings } from './settings-service'
 import { buildSystemPrompt, buildDynamicContext } from './agent-prompt-builder'
 import { resolveProjectInstructions } from './project-instruction-resolver'
 import { combineGammaInstructionFiles } from './adapters/pi-resource-loader-overrides'
+import { readGlobalAgentsInstruction } from './agent-instruction-files'
 import { MAX_CONTEXT_MESSAGES, buildContextPrompt, buildRecoveryPrompt, buildReferencedSessionsPrompt } from './agent-session-context-prompt'
 import { buildReferencedPlanningPrompt } from './planning-reference-context'
 import { permissionService } from './agent-permission-service'
@@ -1550,7 +1551,8 @@ export class AgentOrchestrator {
         ? (() => {
             try {
               const file = readWorkspaceAgentsMd(workspaceSlug)
-              return file.isText && file.content
+              if (!file.isText) throw new Error('AGENTS.md 不是有效的 UTF-8 文本')
+              return file.content
                 ? { path: getWorkspaceAgentsMdPath(workspaceSlug), content: file.content }
                 : undefined
             } catch (error) {
@@ -1562,6 +1564,7 @@ export class AgentOrchestrator {
       const instructionFiles = combineGammaInstructionFiles(
         managedWorkspaceInstructionFile,
         projectInstructions?.sources.map(({ path, content }) => ({ path, content })) ?? [],
+        readGlobalAgentsInstruction(),
       )
       // 每次前台对话都基于受管 memory/ 的真实缺口给出渐进引导；自动化、桥接与委派绝不主动追问。
       const projectKnowledgeMaintenanceApproved = workspaceSlug
