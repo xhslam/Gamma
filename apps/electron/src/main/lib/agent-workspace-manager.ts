@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, cpSync, mkdirSync
 import { cp as cpAsync, readFile as readFileAsync, realpath as realpathAsync, writeFile as writeFileAsync } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { writeExistingSkillFile } from './skill-file-write'
+import { readAgentsMdFile } from './agent-instruction-files'
 import { rmSyncWithRetry, renameIfDestinationAbsentWithRetry, renameWithRetry } from './fs-retry'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { writeJsonFileAtomic, readJsonFileSafe, writeTextFileAtomic } from './safe-file'
@@ -1593,22 +1594,7 @@ export function getWorkspaceMemorySummary(workspaceSlug: string): WorkspaceMemor
 }
 
 export function readWorkspaceAgentsMd(workspaceSlug: string): SkillFileContent {
-  const abs = getWorkspaceAgentsMdPath(workspaceSlug)
-  if (!existsSync(abs)) {
-    return { relativePath: WORKSPACE_AGENTS_MD, isText: true, size: 0, content: '' }
-  }
-  const st = statSync(abs)
-  if (!st.isFile()) throw new Error(`${WORKSPACE_AGENTS_MD} 不是文件`)
-  if (st.size > SKILL_FILE_SIZE_LIMIT) {
-    throw new Error(`文件过大（${(st.size / 1024 / 1024).toFixed(2)} MB），超过 10 MB 限制`)
-  }
-  const binary = isLikelyBinaryFile(abs, st.size)
-  return {
-    relativePath: WORKSPACE_AGENTS_MD,
-    isText: !binary,
-    size: st.size,
-    content: binary ? undefined : readFileSync(abs, 'utf-8'),
-  }
+  return readAgentsMdFile(getWorkspaceAgentsMdPath(workspaceSlug))
 }
 
 export function writeWorkspaceAgentsMd(workspaceSlug: string, content: string, expectedContent?: string): void {
