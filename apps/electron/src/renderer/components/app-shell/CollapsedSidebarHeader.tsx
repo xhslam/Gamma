@@ -29,7 +29,7 @@ export function CollapsedSidebarHeader(): React.ReactElement {
     <header
       data-testid="collapsed-sidebar-header"
       className={cn(
-        'relative z-[60] flex h-11 shrink-0 items-center gap-2 bg-content-area pr-4 titlebar-drag-region',
+        'gamma-topbar relative z-[60] flex items-center gap-2 pr-4 titlebar-drag-region',
         detectIsMac() ? 'pl-20' : 'pl-3',
       )}
     >
@@ -51,7 +51,7 @@ export function SidebarExpandButton(): React.ReactElement {
             size="icon"
             aria-label="展开侧边栏"
             aria-expanded={false}
-            className="size-8 shrink-0 text-muted-foreground hover:text-foreground titlebar-no-drag"
+            className="size-7 shrink-0 text-muted-foreground hover:text-foreground titlebar-no-drag"
             onClick={() => setCollapsed(false)}
           >
             <PanelLeft size={16} strokeWidth={1.5} />

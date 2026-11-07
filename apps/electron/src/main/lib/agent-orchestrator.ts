@@ -1402,15 +1402,6 @@ export class AgentOrchestrator {
           )
         }
 
-        // 视觉助手由用户在全局设置中显式启用并选择外发渠道；在正常会话中直接放行，
-        // 仍由工具服务限制为当前会话/附加目录内的图片。计划模式不执行任何外发操作。
-        if (toolName === 'VisionRelay') {
-          if (currentMode === 'plan') {
-            return { behavior: 'deny' as const, message: '计划模式下不能将本地图片发送给视觉模型，请在计划获批后执行。' }
-          }
-          return { behavior: 'allow' as const }
-        }
-
         // 选择 file input 后，站点可能自动把本地文件上传到第三方；即使路径已在会话授权目录内，
         // 仍需逐次确认该外发边界，不能被通用 Browser 放行规则覆盖。
         if (toolName === 'BrowserUpload') {

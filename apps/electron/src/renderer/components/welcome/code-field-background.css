@@ -1,19 +1,51 @@
 .code-field-background {
   --code-field-ink: hsl(var(--muted-foreground));
   --code-field-glow: hsl(var(--background-interaction));
-  --code-field-base-opacity: 0.15;
-  --code-field-glow-opacity: 0.64;
+  --code-field-base-opacity: 0.08;
+  --code-field-glow-opacity: 0.47;
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   user-select: none;
-  opacity: 1;
-  mask-image: linear-gradient(to bottom, transparent, black 8%, black 88%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 9%, black 88%, transparent);
 }
 
 .dark .code-field-background {
-  --code-field-base-opacity: 0.1;
-  --code-field-glow-opacity: 0.62;
+  --code-field-base-opacity: 0.065;
+  --code-field-glow-opacity: 0.84;
+}
+
+/* 间距留给会话内容，画布从面板的实际边缘开始绘制。 */
+.gamma-workbench-frame .gamma-panel[data-panel="content"]:has(.code-field-background) {
+  padding: 0;
+}
+.gamma-workbench-frame .gamma-panel[data-panel="content"] [data-agent-conversation-root]:has(> .code-field-background) {
+  padding: 0 var(--panel-padding) var(--panel-padding);
+}
+
+/* 像素标记属于空白会话布景，跟随输入框位置。 */
+[data-agent-conversation-root]:has(.code-field-background) .gamma-composer {
+  position: relative;
+}
+
+[data-agent-conversation-root]:has(.code-field-background) .gamma-composer::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  bottom: 100%;
+  width: 24px;
+  height: 16px;
+  background: hsl(var(--primary));
+  clip-path: polygon(0 25%, 16.67% 25%, 16.67% 0, 83.33% 0, 83.33% 25%, 100% 25%, 100% 50%, 83.33% 50%, 83.33% 100%, 66.67% 100%, 66.67% 75%, 33.33% 75%, 33.33% 100%, 16.67% 100%, 16.67% 50%, 0 50%);
+  pointer-events: none;
+}
+
+.dark:not([class*="theme-"]) .gamma-panel[data-panel="content"]:has(.code-field-background) {
+  background-color: color-mix(in srgb, hsl(var(--content-area)) 70%, hsl(var(--palette-light-text-hsl)));
+}
+
+.dark:not([class*="theme-"]) [data-agent-conversation-root]:has(.code-field-background) .gamma-agent-topbar {
+  background-color: transparent;
 }

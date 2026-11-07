@@ -15,7 +15,7 @@ beforeAll(async () => {
     import { BrowserSlot } from '@/components/browser/BrowserSlot'
     import { TooltipProvider } from '@/components/ui/tooltip'
     import { getWorkspaceResizeWidth, clampRightPanelWidth } from '@/components/app-shell/right-panel-layout'
-    import { currentAgentSessionIdAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelOpenAtomFamily, agentWorkspaceTabIdsAtom } from '@/atoms/agent-atoms'
+    import { currentAgentSessionIdAtom, agentSessionsAtom, agentWorkspacesAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelOpenAtomFamily, agentWorkspaceTabIdsAtom } from '@/atoms/agent-atoms'
     import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
     import '@/styles/globals.css'
     document.head.insertAdjacentHTML('beforeend','<style>html,body,#root{height:100%;margin:0}#root{width:800px;height:500px;display:flex}</style>')
@@ -46,7 +46,8 @@ beforeAll(async () => {
         store.set(currentAgentSessionIdAtom,'A');
         store.set(agentSidePanelOpenAtomFamily('A'),true);
         store.set(agentWorkspaceTabIdsAtom,new Map([['A',['terminal:layout']],['B',['terminal:layout']]]));
-        store.set(agentSessionsAtom,[{id:'A',title:'会话A',updatedAt:2},{id:'B',title:'会话B',updatedAt:1}]);
+        store.set(agentWorkspacesAtom,[{id:'project-a',name:'Gamma 项目'}]);
+        store.set(agentSessionsAtom,[{id:'A',title:'会话A',workspaceId:'project-a',updatedAt:2},{id:'B',title:'会话B',updatedAt:1}]);
         store.set(agentSidePanelLayoutMapAtom,layouts ?? {A:{width:300,hasOpenedWideWorkspace:false,widePanelWidthOverride:null}});
         const Draft=({name})=>{React.useEffect(()=>{mounts[name]++},[]);return React.createElement('input',{'aria-label':name+'草稿',defaultValue:name+'初稿'})};
         function Shell(){
@@ -92,6 +93,7 @@ describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
         const titleRect=title.getBoundingClientRect(),tabsRect=tabs.getBoundingClientRect();
         results.push({oneButton:document.querySelectorAll('[aria-label="展开侧边栏"]').length===1,
           oneTitle:document.querySelectorAll('[aria-label="会话菜单：会话A"]').length===1,
+          projectContext:title.closest('[data-testid="agent-session-header"]').querySelector('[title="Gamma 项目"]')?.textContent === 'Gamma 项目',
           sameRow:Math.abs((titleRect.top+titleRect.bottom)/2-(tabsRect.top+tabsRect.bottom)/2)<4,
           inset:!!button && button.getBoundingClientRect().left>=80,
           leading:!!button && button.closest('[data-workspace-pane]').dataset.workspacePane===(side==='left'?'workspace':'agent'),
@@ -102,8 +104,8 @@ describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
       fixture.root.unmount();return results;
     `)
     expect(results).toEqual([
-      {oneButton:true,oneTitle:true,sameRow:true,inset:true,leading:true,draftRetained:true},
-      {oneButton:true,oneTitle:true,sameRow:true,inset:true,leading:true,draftRetained:true},
+      {oneButton:true,oneTitle:true,projectContext:true,sameRow:true,inset:true,leading:true,draftRetained:true},
+      {oneButton:true,oneTitle:true,projectContext:true,sameRow:true,inset:true,leading:true,draftRetained:true},
       {expanded:true},
     ])
   }, 30_000)

@@ -63,7 +63,7 @@ import { activeSessionIdAtom } from '@/atoms/tab-atoms'
 import { automationsAtom, automationFormAtom, automationToDraft } from '@/atoms/automation-atoms'
 import { openWorkspaceComponentAtom } from '@/atoms/agent-atoms'
 import { environmentCheckDialogOpenAtom } from '@/atoms/environment'
-import { settingsOpenAtom, settingsTabAtom } from '@/atoms/settings-tab'
+import { openSettingsToTabAtom, settingsOpenAtom } from '@/atoms/settings-tab'
 import { useOpenPreview } from '@/components/diff/preview-opener'
 import { getFileParentPath } from '@/lib/file-utils'
 import { parseQuotedSelectionRefs, replaceAgentHistoryQuoteMentionsWithLabels } from '@/lib/quoted-selection'
@@ -1181,7 +1181,7 @@ export function AssistantErrorTail({
 
   const setEnvDialogOpen = useSetAtom(environmentCheckDialogOpenAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
-  const setSettingsTab = useSetAtom(settingsTabAtom)
+  const openSettingsToTab = useSetAtom(openSettingsToTabAtom)
   const setModelSelectorOpen = useSetAtom(modelSelectorOpenAtom)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
 
@@ -1205,8 +1205,7 @@ export function AssistantErrorTail({
         setEnvDialogOpen(true)
         break
       case 'open_channel_settings':
-        setSettingsTab('channels')
-        setSettingsOpen(true)
+        openSettingsToTab('channels')
         break
       case 'settings':
         setSettingsOpen(true)

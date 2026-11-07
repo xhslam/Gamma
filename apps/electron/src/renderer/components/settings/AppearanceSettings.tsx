@@ -213,7 +213,7 @@ export function AppearanceSettings(): React.ReactElement {
           {/* 特殊风格 - 标签在上，卡片在下 */}
           <div className="px-4 py-3 space-y-2">
             <div className="text-sm font-medium text-foreground">特殊风格</div>
-            <div className="grid grid-cols-7 gap-3">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-4 min-[720px]:grid-cols-7">
               {SPECIAL_STYLES.map((style) => (
                 <StyleCard
                   key={style.id}
@@ -261,12 +261,13 @@ function StyleCard({
       type="button"
       onClick={onSelect}
       title={style.tooltip}
-      className="group flex flex-col items-center gap-2 focus-visible:outline-none"
+      aria-pressed={isSelected}
+      className="group flex min-w-0 flex-col items-center gap-2 focus-visible:outline-none"
     >
       {/* 图片卡片本体 */}
       <div
         className={cn(
-          'relative rounded-lg overflow-hidden w-[99px] h-[183px] transition-all duration-150',
+          'relative rounded-lg overflow-hidden aspect-[4/3] w-full max-w-[88px] transition-all duration-150',
           isSelected
             ? 'ring-2 ring-primary shadow-lg shadow-primary/20'
             : 'ring-1 ring-border/50 group-hover:ring-border group-focus-visible:ring-2 group-focus-visible:ring-primary group-focus-visible:ring-offset-1'

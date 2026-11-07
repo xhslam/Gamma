@@ -15,7 +15,7 @@ import { UserAvatar } from '@/components/session/UserAvatar'
 import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
 import { automationFormAtom, automationsAtom } from '@/atoms/automation-atoms'
 import { planningTabAtom } from '@/atoms/planning-atoms'
-import { settingsOpenAtom, settingsTabAtom } from '@/atoms/settings-tab'
+import { openSettingsToTabAtom, settingsOpenAtom } from '@/atoms/settings-tab'
 import {
   agentSessionsAtom,
   agentSDKMessagesCacheAtom,
@@ -348,11 +348,6 @@ function formatRelativeUpdatedAt(updatedAt: number, now: number): string {
   return `${Math.floor(diff / year)}年`
 }
 
-const SIDEBAR_DRAG_STRIP_HEIGHT = {
-  expandedMac: 30,
-  expanded: 4,
-} as const
-
 interface QuickSwitchTarget {
   id: string
   title: string
@@ -508,16 +503,6 @@ function getArchivedDelegatedChildren(
   ))
 }
 
-function SidebarWindowDragStrip({ height }: { height: number }): React.ReactElement {
-  return (
-    <div
-      aria-hidden="true"
-      className="sidebar-window-drag-strip"
-      style={{ height }}
-    />
-  )
-}
-
 /** 不可变地切换 Set 中某个成员的存在状态（存在则删除，不存在则添加），返回新 Set */
 function toggleSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   const next = new Set(prev)
@@ -547,9 +532,8 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   const automations = useAtomValue(automationsAtom)
   const setAutomations = useSetAtom(automationsAtom)
   const automationCount = automations.length
-  const settingsOpen = useAtomValue(settingsOpenAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
-  const setSettingsTab = useSetAtom(settingsTabAtom)
+  const openSettingsToTab = useSetAtom(openSettingsToTabAtom)
   const draftSessionIds = useAtomValue(draftSessionIdsAtom)
   const setDraftSessionIds = useSetAtom(draftSessionIdsAtom)
   const setAgentMessagesCache = useSetAtom(agentSDKMessagesCacheAtom)
@@ -683,9 +667,8 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   }, [refreshAgentSidebarSessions, viewMode])
 
   const handleUpdateButtonClick = React.useCallback((): void => {
-    setSettingsTab('about')
-    setSettingsOpen(true)
-  }, [setSettingsOpen, setSettingsTab])
+    openSettingsToTab('about')
+  }, [openSettingsToTab])
 
   React.useEffect(() => {
     const id = window.setInterval(() => setRelativeTimeNow(Date.now()), 60_000)
@@ -1636,7 +1619,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       if (processedQuickSwitchEventsRef.current.has(event)) return
       processedQuickSwitchEventsRef.current.add(event)
       if (event.isComposing) return
-      if (settingsOpen || searchDialogOpen) return
+      if (searchDialogOpen) return
 
       const number = getQuickSwitchNumber(event)
       if (number !== null && hasOnlyPrimaryModifier(event, isMac)) {
@@ -1698,7 +1681,6 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     }
   }, [
     isMac,
-    settingsOpen,
     searchDialogOpen,
     handleSelectAgentSession,
     refreshQuickSwitchTargets,
@@ -2509,42 +2491,32 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       )}
       style={{ width: width ?? 256, minWidth: 200, flexShrink: 0 }}
     >
-      <SidebarWindowDragStrip
-        height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.expandedMac : SIDEBAR_DRAG_STRIP_HEIGHT.expanded}
-      />
-
-      {/* 面板内边距承担顶部留白；macOS仅补8px，避免叠加旧30px补偿并挤压历史区。 */}
-      <div className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-2' : 'h-0')} />
-
-      {/* 字标与窗口控制独立成行，为工作模式和列表保留清晰层级。 */}
-      <div className="titlebar-drag-region shrink-0">
-        <div className="flex h-12 items-center justify-between">
-          <span className="gamma-wordmark select-none text-2xl leading-none tracking-tight text-foreground">Gamma</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button data-icon-button="true"
-                type="button"
-                aria-label="收起侧边栏"
-                onClick={() => setSidebarCollapsed(true)}
-                className={cn(
-                  'sidebar-collapse-button size-8 flex-shrink-0 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] titlebar-no-drag transition-colors duration-150'
-                )}
-              >
-                <PanelLeft size={16} strokeWidth={1.5} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <span className="flex items-center gap-2">
-                <span>收起侧边栏</span>
-                <ShortcutKeycaps
-                  shortcutId="toggle-sidebar"
-                  keycapClassName="h-5 min-w-5 px-1 text-[11px]"
-                  separatorClassName="text-[10px]"
-                />
-              </span>
-            </TooltipContent>
-          </Tooltip>
-        </div>
+      {/* macOS 左上角留给原生窗口按钮。 */}
+      <div className={cn('gamma-topbar gamma-sidebar-topbar flex items-center gap-2 pr-3 titlebar-drag-region', isMac ? 'pl-20' : 'pl-3')}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button data-icon-button="true"
+              type="button"
+              aria-label="收起侧边栏"
+              aria-expanded={!sidebarCollapsed}
+              onClick={() => setSidebarCollapsed(true)}
+              className="sidebar-collapse-button flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground titlebar-no-drag"
+            >
+              <PanelLeft size={16} strokeWidth={1.5} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <span className="flex items-center gap-2">
+              <span>收起侧边栏</span>
+              <ShortcutKeycaps
+                shortcutId="toggle-sidebar"
+                keycapClassName="h-5 min-w-5 px-1 text-[11px]"
+                separatorClassName="text-[10px]"
+              />
+            </span>
+          </TooltipContent>
+        </Tooltip>
+        <span className="select-none text-sm font-medium text-foreground/80">Gamma</span>
       </div>
 
       {/* 新建始终在主导航首位，搜索置于底部账户区。 */}
@@ -2771,16 +2743,29 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       </div>
 
       {/* 底部账户区保留个人资料、搜索、更新与设置入口。 */}
-      <div className="shrink-0 border-t border-foreground/[0.06]">
-        <div className="flex items-center gap-1 rounded-md text-foreground/75 titlebar-no-drag">
+      <div className="gamma-sidebar-footer shrink-0">
+        <div className="flex h-full items-center gap-1 px-3 text-foreground/85 titlebar-no-drag">
           <button
             type="button"
             aria-label="个人资料与设置"
-            onClick={handleOpenSettings}
-            className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+            onClick={() => openSettingsToTab('general')}
+            className="grid h-7 min-w-0 flex-1 grid-cols-[24px_minmax(0,1fr)_24px] items-center gap-1 rounded-md px-1 transition-colors hover:bg-muted hover:text-foreground"
           >
-            <UserAvatar avatar={userProfile.avatar} size={28} />
-            <FadeTitle className="flex-1 truncate text-left text-sm">{userProfile.userName || 'Gamma'}</FadeTitle>
+            <UserAvatar avatar={userProfile.avatar} size={24} className="rounded-full border-0" />
+            <FadeTitle className="min-w-0 truncate text-center text-sm font-medium" title={userProfile.userName || 'Gamma'}>{userProfile.userName || 'Gamma'}</FadeTitle>
+          </button>
+          <button
+            type="button"
+            aria-label="打开设置"
+            onClick={handleOpenSettings}
+            className="relative flex size-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+          >
+            <div className="relative flex-shrink-0">
+              <Settings size={16} strokeWidth={1.5} />
+              {hasEnvironmentIssues && (
+                <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-destructive" />
+              )}
+            </div>
           </button>
           {hasUpdate && (
             <SidebarUpdateButton
@@ -2799,7 +2784,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                 type="button"
                 aria-label="搜索"
                 onClick={() => setSearchDialogOpen(true)}
-                className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
               >
                 <Search size={16} strokeWidth={1.5} />
               </button>
@@ -2811,19 +2796,6 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
               </span>
             </TooltipContent>
           </Tooltip>
-          <button
-            type="button"
-            aria-label="打开设置"
-            onClick={handleOpenSettings}
-            className="relative flex size-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
-          >
-            <div className="relative flex-shrink-0">
-              <Settings size={16} strokeWidth={1.5} />
-              {hasEnvironmentIssues && (
-                <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-destructive" />
-              )}
-            </div>
-          </button>
         </div>
       </div>
 

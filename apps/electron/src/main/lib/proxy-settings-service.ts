@@ -5,7 +5,7 @@
  * 配置文件存储在 ~/.gamma/proxy-settings.json。
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ProxyConfig } from '@gamma/shared'
 import { getProxySettingsPath } from './config-paths'
 import { detectSystemProxy } from './system-proxy-detector'
@@ -80,27 +80,6 @@ export async function getProxySettings(): Promise<ProxyConfig> {
   } catch (error) {
     console.error('[代理配置] 读取配置失败:', error)
     return DEFAULT_PROXY_CONFIG
-  }
-}
-
-/**
- * 保存代理配置
- *
- * @param config 代理配置
- */
-export async function saveProxySettings(config: ProxyConfig): Promise<void> {
-  const configPath = getProxySettingsPath()
-
-  try {
-    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
-    systemProxyCache = undefined
-    console.log('[代理配置] 配置已保存:', {
-      ...config,
-      manualUrl: config.manualUrl ? redactProxyUrl(config.manualUrl) : '',
-    })
-  } catch (error) {
-    console.error('[代理配置] 保存配置失败:', error)
-    throw new Error('保存代理配置失败')
   }
 }
 

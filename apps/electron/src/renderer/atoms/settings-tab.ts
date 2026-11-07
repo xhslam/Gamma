@@ -1,39 +1,30 @@
-/**
- * Settings Tab Atom - 设置标签页状态
- *
- * 管理设置面板中当前激活的标签页：
- * - general: 通用设置
- * - channels: 渠道配置
- * - proxy: 代理配置
- * - appearance: 外观设置
- * - about: 关于
- */
-
 import { atom } from 'jotai'
+import type { SettingsTab } from '../../types/settings'
+export type { SettingsTab } from '../../types/settings'
 
-export type SettingsTab = 'general' | 'channels' | 'memory' | 'vision-relay' | 'proxy' | 'appearance' | 'markdown-editor' | 'about' | 'bots' | 'shortcuts' | 'voice-input' | 'migration' | 'storage'
-
-/** 当前设置标签页（不持久化，每次打开设置默认显示渠道） */
+/** 记住当前设置分类，下次打开时继续。 */
 export const settingsTabAtom = atom<SettingsTab>('channels')
 
-/** 设置浮窗是否打开 */
-export const settingsOpenAtom = atom(false)
-
-/** 渠道创建表单是否有未保存内容（用于拦截导航离开） */
-export const channelFormDirtyAtom = atom(false)
-
-/** 外部请求关闭设置面板（如 Cmd+W），SettingsPanel 监听后弹出确认对话框 */
-export const settingsCloseRequestedAtom = atom(false)
-
-/**
- * 从设置工作区离开时暂存的会话导航目标。
- * 渠道表单有未保存内容时，SettingsPanel 确认放弃后再执行该导航。
- */
-export interface SettingsSessionNavigation {
-  type: 'agent'
-  sessionId: string
-  title: string
-  /** 导航经设置脏表单确认并真正执行后提交的调用方 intent。 */
-  onOpened?: () => void
+interface SettingsWindowRequest {
+  tab: SettingsTab
+  navigate: boolean
 }
-export const settingsPendingSessionNavigationAtom = atom<SettingsSessionNavigation | null>(null)
+
+export const settingsWindowRequestAtom = atom<SettingsWindowRequest | null>(null)
+
+/** 没有指定分类的请求只唤回已打开的窗口。 */
+export const settingsOpenAtom = atom(
+  get => get(settingsWindowRequestAtom) !== null,
+  (get, set, open: boolean) => {
+    set(settingsWindowRequestAtom, open ? { tab: get(settingsTabAtom), navigate: false } : null)
+  },
+)
+
+/** 深链接即使在设置已打开时，也会请求切换分类。 */
+export const openSettingsToTabAtom = atom(null, (_get, set, tab: SettingsTab) => {
+  set(settingsTabAtom, tab)
+  set(settingsWindowRequestAtom, { tab, navigate: true })
+})
+
+/** 仅在独立设置窗口内使用，拦截未保存的渠道表单导航。 */
+export const channelFormDirtyAtom = atom(false)

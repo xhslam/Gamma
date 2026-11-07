@@ -9,6 +9,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Check, ChevronDown, Pencil, Split, X } from 'lucide-react'
 import {
   agentSessionsAtom,
+  agentWorkspacesAtom,
   agentSideTemporaryAgentMapAtom,
   agentDiffPanelTabAtom,
   agentSidePanelLayoutAtomFamily,
@@ -37,6 +38,8 @@ interface AgentHeaderProps {
 export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement | null {
   const sessions = useAtomValue(agentSessionsAtom)
   const session = sessions.find((s) => s.id === sessionId) ?? null
+  const workspaces = useAtomValue(agentWorkspacesAtom)
+  const workspaceName = workspaces.find((workspace) => workspace.id === session?.workspaceId)?.name
   const setAgentSessions = useSetAtom(agentSessionsAtom)
   const setTabs = useSetAtom(tabsAtom)
   const isRightPanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
@@ -111,13 +114,18 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
 
   return (
     <div data-testid="agent-session-header" className={cn(
-      'gamma-ui relative z-[51] flex min-w-0 shrink-0 items-center gap-2 px-3',
-      sidebarCollapsed ? 'h-11' : 'h-[48px]',
+      'gamma-topbar gamma-agent-topbar gamma-ui relative z-[51] flex min-w-0 items-center gap-2 px-2',
       ownsWindowControls && detectIsMac() && 'pl-20',
     )}>
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}
       <div className="absolute inset-0 titlebar-drag-region pointer-events-none" />
       {ownsWindowControls && <SidebarExpandButton />}
+      {workspaceName && (
+        <div className="flex min-w-0 max-w-[30%] items-center gap-2">
+          <FadeTitle className="truncate text-sm text-muted-foreground" title={workspaceName}>{workspaceName}</FadeTitle>
+          <span aria-hidden="true" className="text-sm text-muted-foreground/60">/</span>
+        </div>
+      )}
       {editing ? (
         <div className="flex items-center gap-1.5 flex-1 min-w-0 titlebar-no-drag">
           <input
@@ -126,7 +134,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
             onChange={(e) => setEditTitle(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={saveTitle}
-            className="flex-1 bg-transparent text-[15px] font-normal border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
+            className="flex-1 bg-transparent text-sm font-medium border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
             maxLength={100}
           />
           <button data-icon-button="true"
@@ -151,10 +159,10 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="titlebar-no-drag group flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted/60"
+              className="titlebar-no-drag group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted"
               aria-label={`会话菜单：${session.title}`}
             >
-              <FadeTitle className="truncate text-[15px] font-normal text-foreground">{session.title}</FadeTitle>
+              <FadeTitle className="truncate text-sm font-medium text-foreground">{session.title}</FadeTitle>
               <ChevronDown className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </button>
           </DropdownMenuTrigger>
@@ -172,7 +180,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="titlebar-no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
+              className="titlebar-no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
               aria-label={`打开 ${explorationBranches.length} 个探索分支`}
               title={`打开探索分支（${explorationBranches.length}）`}
             >

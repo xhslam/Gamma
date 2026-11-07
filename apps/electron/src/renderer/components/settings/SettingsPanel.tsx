@@ -1,327 +1,177 @@
-/**
- * SettingsPanel - 设置面板
- *
- * 在应用主工作区中展示左侧导航和右侧 ScrollArea 内容区域。
- * 使用 Jotai atom 管理当前标签页状态，保持已有设置项与分组顺序。
- */
+import * as React from 'react'
+import { useAtom, useAtomValue } from 'jotai'
+import { BookOpen, Brain, HardDrive, Info, Keyboard, Palette, Radio, Settings } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { detectIsMac } from '@/lib/platform'
+import { channelFormDirtyAtom, settingsTabAtom } from '@/atoms/settings-tab'
+import type { SettingsTab } from '@/atoms/settings-tab'
+import { hasUpdateAtom } from '@/atoms/updater'
+import { hasEnvironmentIssuesAtom } from '@/atoms/environment'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { ChannelSettings } from './ChannelSettings'
+import { GeneralSettings } from './GeneralSettings'
+import { AppearanceSettings } from './AppearanceSettings'
+import { MarkdownEditorSettingsPage } from './MarkdownEditorSettings'
+import { AboutSettings } from './AboutSettings'
+import { ShortcutSettings } from './ShortcutSettings'
+import { StorageSettings } from './StorageSettings'
+import { GlobalMemorySettings } from './GlobalMemorySettings'
 
-import * as React from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { cn } from "@/lib/utils";
-import { detectIsWindows } from "@/lib/platform";
-import { getWindowTitlebarDragInsetStyle } from "@/lib/window-titlebar-layout";
-import {
-  Settings,
-  Radio,
-  Eye,
-  Palette,
-  Info,
-  Globe,
-  BookOpen,
-  Bot,
-  ArrowLeft,
-  Keyboard,
-  Mic,
-  HardDriveDownload,
-  HardDrive,
-  Brain,
-} from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { ShortcutKeycaps } from "@/components/shortcuts/ShortcutKeycaps";
-import {
-  settingsTabAtom,
-  channelFormDirtyAtom,
-  settingsCloseRequestedAtom,
-  settingsOpenAtom,
-  settingsPendingSessionNavigationAtom,
-  type SettingsSessionNavigation,
-} from "@/atoms/settings-tab";
-import type { SettingsTab } from "@/atoms/settings-tab";
-import { activeViewAtom } from "@/atoms/active-view";
-import { automationFormAtom } from "@/atoms/automation-atoms";
-import { hasUpdateAtom } from "@/atoms/updater";
-import { hasEnvironmentIssuesAtom } from "@/atoms/environment";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { ChannelSettings } from "./ChannelSettings";
-import { VisionRelaySettings } from "./VisionRelaySettings";
-import { GeneralSettings } from "./GeneralSettings";
-import { ProxySettings } from "./ProxySettings";
-import { AppearanceSettings } from "./AppearanceSettings";
-import { MarkdownEditorSettingsPage } from "./MarkdownEditorSettings";
-import { AboutSettings } from "./AboutSettings";
-import { BotHubSettings } from "./BotHubSettings";
-import { ShortcutSettings } from "./ShortcutSettings";
-import { VoiceInputSettings } from "./VoiceInputSettings";
-import { MigrationSettings } from "./MigrationSettings";
-import { StorageSettings } from "./StorageSettings";
-import { GlobalMemorySettings } from "./GlobalMemorySettings";
-import { useOpenSession } from '@/hooks/useOpenSession'
-
-/** 设置 Tab 定义 */
-interface TabItem {
-  id: SettingsTab;
-  label: string;
-  icon: React.ReactNode;
+interface SettingsCategory {
+  label: string
+  icon: LucideIcon
+  page: React.ComponentType
+  keywords: string
 }
 
-/** 基础 Tabs（所有模式都有） */
-const BASE_TABS: TabItem[] = [
-  { id: "general", label: "通用设置", icon: <Settings size={16} /> },
-  { id: "channels", label: "模型配置", icon: <Radio size={16} /> },
-  { id: "memory", label: "长期记忆", icon: <Brain size={16} /> },
-  { id: "vision-relay", label: "视觉助手", icon: <Eye size={16} /> },
-  { id: "proxy", label: "代理设置", icon: <Globe size={16} /> },
-];
-
-const BOTS_TAB: TabItem = {
-  id: "bots",
-  label: "远程连接",
-  icon: <Bot size={16} />,
-};
-const SHORTCUTS_TAB: TabItem = {
-  id: "shortcuts",
-  label: "快捷键管理",
-  icon: <Keyboard size={16} />,
-};
-const VOICE_INPUT_TAB: TabItem = {
-  id: "voice-input",
-  label: "语音输入",
-  icon: <Mic size={16} />,
-};
-/** 尾部 Tabs */
-const TAIL_TABS: TabItem[] = [
-  { id: "migration", label: "数据迁移", icon: <HardDriveDownload size={16} /> },
-  { id: "storage", label: "磁盘管理", icon: <HardDrive size={16} /> },
-  { id: "appearance", label: "外观设置", icon: <Palette size={16} /> },
-  { id: "markdown-editor", label: "文档设置", icon: <BookOpen size={16} /> },
-  { id: "about", label: "关于/更新", icon: <Info size={16} /> },
-];
-
-/** 根据标签页 id 渲染对应内容 */
-function renderTabContent(tab: SettingsTab): React.ReactElement {
-  switch (tab) {
-    case "general":
-      return <GeneralSettings />;
-    case "channels":
-      return <ChannelSettings />;
-    case "memory":
-      return <GlobalMemorySettings />;
-    case "vision-relay":
-      return <VisionRelaySettings />;
-    case "proxy":
-      return <ProxySettings />;
-    case "appearance":
-      return <AppearanceSettings />;
-    case "markdown-editor":
-      return <MarkdownEditorSettingsPage />;
-    case "about":
-      return <AboutSettings />;
-    case "bots":
-      return <BotHubSettings />;
-    case "shortcuts":
-      return <ShortcutSettings />;
-    case "voice-input":
-      return <VoiceInputSettings />;
-    case "migration":
-      return <MigrationSettings />;
-    case "storage":
-      return <StorageSettings />;
-    default:
-      return <GeneralSettings />;
-  }
+const categories: Record<SettingsTab, SettingsCategory> = {
+  general: { label: '通用设置', icon: Settings, page: GeneralSettings, keywords: '账号 个人资料 用户名 头像 通知 声音 输入 归档 灵动岛 生产力 Git PR 日程 定时任务' },
+  channels: { label: '模型配置', icon: Radio, page: ChannelSettings, keywords: '渠道 提供商 服务商 API Key 模型 Copilot OpenAI 端点' },
+  memory: { label: '长期记忆', icon: Brain, page: GlobalMemorySettings, keywords: '全局记忆 文件 MEMORY' },
+  appearance: { label: '外观设置', icon: Palette, page: AppearanceSettings, keywords: '主题 深色 浅色 跟随系统 颜色 字号 背景 密度 图标' },
+  'markdown-editor': { label: '文档设置', icon: BookOpen, page: MarkdownEditorSettingsPage, keywords: 'Markdown 主题 字体 字号 排版 编辑器 行距 工具栏 语法' },
+  shortcuts: { label: '快捷键管理', icon: Keyboard, page: ShortcutSettings, keywords: '按键 键盘 热键 发送 Cmd Enter' },
+  storage: { label: '磁盘管理', icon: HardDrive, page: StorageSettings, keywords: '空间 存储 清理 临时 缓存 归档' },
+  about: { label: '关于/更新', icon: Info, page: AboutSettings, keywords: '版本 更新日志 环境 诊断 运行时 终端' },
 }
+const categoryIds = Object.keys(categories) as SettingsTab[]
 
 interface SettingsPanelProps {
-  onClose?: () => void;
+  onClose: () => void
 }
 
-export function SettingsPanel({
-  onClose,
-}: SettingsPanelProps): React.ReactElement {
-  const isWindows = React.useMemo(() => detectIsWindows(), [])
-  const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
-  const channelFormDirty = useAtomValue(channelFormDirtyAtom);
-  const [closeRequested, setCloseRequested] = useAtom(settingsCloseRequestedAtom);
-  const [pendingSessionNavigation, setPendingSessionNavigation] = useAtom(settingsPendingSessionNavigationAtom);
-  const setSettingsOpen = useSetAtom(settingsOpenAtom);
-  const setActiveView = useSetAtom(activeViewAtom);
-  const setAutomationForm = useSetAtom(automationFormAtom);
-  const hasUpdate = useAtomValue(hasUpdateAtom);
-  const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom);
-  const openSession = useOpenSession()
-  /** 统一的退出拦截对话框状态 */
-  type PendingAction =
-    | { type: 'tab'; tabId: SettingsTab }
-    | { type: 'close' }
-    | { type: 'session'; navigation: SettingsSessionNavigation }
-    | null
-  const [pendingAction, setPendingAction] = React.useState<PendingAction>(null)
-  const showNavDialog = pendingAction !== null
+export function SettingsPanel({ onClose }: SettingsPanelProps): React.ReactElement {
+  const [activeTab, setActiveTab] = useAtom(settingsTabAtom)
+  const channelFormDirty = useAtomValue(channelFormDirtyAtom)
+  const showAboutBadge = useAtomValue(hasUpdateAtom)
+  const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom)
+  const [query, setQuery] = React.useState('')
+  const [pendingAction, setPendingAction] = React.useState<SettingsTab | 'close' | null>(null)
+  const contentRef = React.useRef<HTMLDivElement>(null)
+  const searchRef = React.useRef<HTMLInputElement>(null)
+  const isMac = React.useMemo(detectIsMac, [])
+  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  const matches = categoryIds.filter(id => words.every(word =>
+    `${categories[id].label} ${categories[id].keywords}`.toLocaleLowerCase().includes(word),
+  ))
+  const Page = categories[activeTab].page
 
-  /** 执行待处理的操作 */
-  const executePendingAction = (): void => {
-    if (!pendingAction) return
-    if (pendingAction.type === 'tab') {
-      setActiveTab(pendingAction.tabId)
-    } else if (pendingAction.type === 'session') {
-      openSession(
-        pendingAction.navigation.type,
-        pendingAction.navigation.sessionId,
-        pendingAction.navigation.title,
-        {
-          bypassSettingsGuard: true,
-          onOpened: pendingAction.navigation.onOpened,
-        },
-      )
-    } else {
-      onClose?.()
-    }
-    setPendingAction(null)
-  }
-
-  /** 取消待处理的操作 */
-  const cancelPendingAction = (): void => {
-    setPendingAction(null)
-  }
-
-  /** 切换标签页时检测是否有未保存内容 */
-  const handleTabChange = (tabId: SettingsTab): void => {
-    if (tabId === activeTab) return
-    if (activeTab === 'channels' && channelFormDirty) {
-      setPendingAction({ type: 'tab', tabId })
+  const navigate = React.useCallback((tab: SettingsTab) => {
+    if (tab === activeTab) {
+      setQuery('')
       return
     }
-    setActiveTab(tabId)
-  }
-
-  /** 关闭设置面板时检测是否有未保存内容 */
-  const handleClose = React.useCallback((): void => {
     if (activeTab === 'channels' && channelFormDirty) {
-      setPendingAction({ type: 'close' })
+      setPendingAction(tab)
       return
     }
-    onClose?.()
+    setActiveTab(tab)
+    setQuery('')
+  }, [activeTab, channelFormDirty, setActiveTab])
+
+  const handleClose = React.useCallback(() => {
+    if (activeTab === 'channels' && channelFormDirty) {
+      setPendingAction('close')
+      return
+    }
+    onClose()
   }, [activeTab, channelFormDirty, onClose])
 
-  /** 按 ESC 退出设置面板：window 级监听确保焦点在设置面板内任何位置（含 body）都生效；
-   *  Radix 弹层（Select 下拉/AlertDialog/Popover 等）处理 ESC 时会 preventDefault，
-   *  此时交给弹层自行关闭，不退出设置。 */
+  React.useEffect(() => window.electronAPI.onSettingsWindowNavigate?.(navigate), [navigate])
+  React.useEffect(() => window.electronAPI.onSettingsWindowCloseRequested?.(handleClose), [handleClose])
   React.useEffect(() => {
-    const handleWindowKeyDown = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      if (e.defaultPrevented) return
-      handleClose()
+    contentRef.current?.querySelector('[data-radix-scroll-area-viewport]')?.scrollTo(0, 0)
+  }, [activeTab])
+
+  React.useEffect(() => {
+    const handleKey = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || pendingAction) return
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        searchRef.current?.focus()
+      }
+      if (event.key !== 'Escape') return
+      if (query && document.activeElement === searchRef.current) setQuery('')
+      else handleClose()
     }
-    window.addEventListener('keydown', handleWindowKeyDown)
-    return () => window.removeEventListener('keydown', handleWindowKeyDown)
-  }, [handleClose])
-
-  // 左侧会话点击在渠道表单有未保存内容时，由 useOpenSession 暂存目标并交给此处确认。
-  React.useEffect(() => {
-    if (!pendingSessionNavigation) return
-    setPendingAction({ type: 'session', navigation: pendingSessionNavigation })
-    setPendingSessionNavigation(null)
-  }, [pendingSessionNavigation, setPendingSessionNavigation])
-
-  // Cmd+W 等外部关闭请求：弹出确认对话框
-  React.useEffect(() => {
-    if (closeRequested && activeTab === 'channels') {
-      setPendingAction({ type: 'close' })
-      setCloseRequested(false)
-    }
-  }, [closeRequested, activeTab, setCloseRequested])
-
-  // 通用设置导航；Agent Skills / MCP 独立在侧边栏能力中心管理。
-  const tabs = React.useMemo(() => {
-    return [
-      ...BASE_TABS,
-      VOICE_INPUT_TAB,
-      BOTS_TAB,
-      SHORTCUTS_TAB,
-      ...TAIL_TABS,
-    ];
-  }, []);
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [handleClose, pendingAction, query])
 
   return (
-    <div className="gamma-settings-shell flex h-full min-h-0 flex-col text-foreground">
-      <div className="relative h-[35px] flex-shrink-0">
-        <div
-          aria-hidden="true"
-          className="titlebar-drag-region pointer-events-none absolute inset-y-0 left-0"
-          style={getWindowTitlebarDragInsetStyle(isWindows)}
-        />
-      </div>
-
-      {/* 主体：左导航 + 右内容 */}
-      <div className="gamma-settings-layout flex flex-1 min-h-0">
-        {/* 左侧 Tab 导航 */}
-        <div data-panel="settings-nav" className="gamma-panel flex h-full min-h-0 w-[277px] flex-shrink-0 flex-col">
-          <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto scrollbar-thin">
-            {tabs.map((tab) => (
+    <div className="gamma-settings-shell flex h-full min-h-0 text-foreground">
+      <aside data-panel="settings-nav" className="gamma-settings-nav flex min-h-0 shrink-0 flex-col">
+        <div className="gamma-settings-titlebar titlebar-drag-region" aria-hidden="true" />
+        <div className="mx-3 mb-2 flex h-[26px] items-center border-b border-border/70">
+          <input
+            ref={searchRef}
+            aria-label="搜索设置"
+            placeholder="搜索设置…"
+            type="search"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter' && matches[0]) navigate(matches[0]) }}
+            className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground focus-visible:placeholder:text-foreground/70"
+          />
+        </div>
+        <nav aria-label="设置分类" className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3">
+          {matches.map(id => {
+            const { icon: Icon, label } = categories[id]
+            return (
               <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
+                key={id}
+                type="button"
+                aria-current={activeTab === id ? 'page' : undefined}
+                onClick={() => navigate(id)}
                 className={cn(
-                  "gamma-list-row flex items-center gap-2 rounded-md px-3 text-sm transition-colors",
-                  activeTab === tab.id
-                    ? "bg-muted text-foreground font-medium"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  'flex h-[26px] w-full items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
+                  activeTab === id ? 'bg-foreground/[0.09] font-medium' : 'text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground',
                 )}
               >
-                {tab.icon}
-                <span>{tab.label}</span>
-                {tab.id === "about" && (hasUpdate || hasEnvironmentIssues) && (
-                  <span className="w-2 h-2 rounded-full bg-destructive" />
-                )}
+                <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
+                <span>{label}</span>
+                {id === 'about' && (showAboutBadge || hasEnvironmentIssues) && <span className="size-1.5 rounded-full bg-destructive" />}
               </button>
-            ))}
-          </nav>
-          <div className="flex-shrink-0 pt-2">
-            <button
-              onClick={handleClose}
-              className="gamma-list-row group flex w-full items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
-            >
-              <ArrowLeft size={16} />
-              <span>返回</span>
-              <span aria-hidden="true" className="ml-auto inline-flex opacity-0 transition-opacity group-hover:opacity-100">
-                <ShortcutKeycaps accelerator="Esc" />
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* 右侧内容区域 */}
-        <ScrollArea data-panel="settings-content" className="gamma-panel min-w-0 flex-1">
-          <div className="mx-auto w-full max-w-[1080px]">
-            {renderTabContent(activeTab)}
+            )
+          })}
+          {matches.length === 0 && <p role="status" className="px-2 py-2 text-xs text-muted-foreground">没有匹配的设置</p>}
+        </nav>
+      </aside>
+      <section className="flex min-w-0 flex-1 flex-col" aria-label={categories[activeTab].label}>
+        <header className="gamma-settings-titlebar titlebar-drag-region flex shrink-0 items-center justify-center">
+          {isMac && <h1 className="translate-y-1.5 text-[13px] font-medium">设置</h1>}
+        </header>
+        <ScrollArea ref={contentRef} data-panel="settings-content" className="min-h-0 min-w-0 flex-1">
+          <div className="gamma-settings-page mx-auto w-full max-w-[880px] px-6 pb-6 pt-6">
+            <Page key={activeTab} />
           </div>
         </ScrollArea>
-      </div>
+      </section>
 
-      {/* 退出拦截弹窗（侧边栏导航 / X 关闭 / Cmd+W） */}
-      <AlertDialog open={showNavDialog} onOpenChange={(open) => { if (!open) cancelPendingAction() }}>
+      <AlertDialog open={pendingAction !== null} onOpenChange={open => { if (!open) setPendingAction(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>放弃未保存的更改？</AlertDialogTitle>
-            <AlertDialogDescription>
-              当前渠道配置尚未保存，确定要离开吗？
-            </AlertDialogDescription>
+            <AlertDialogDescription>当前渠道配置尚未保存，确定要离开吗？</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelPendingAction}>留在当前页</AlertDialogCancel>
-            <AlertDialogAction onClick={executePendingAction}>放弃并离开</AlertDialogAction>
+            <AlertDialogCancel>留在当前页</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (pendingAction === 'close') onClose()
+              else if (pendingAction) {
+                setActiveTab(pendingAction)
+                setQuery('')
+              }
+              setPendingAction(null)
+            }}>放弃并离开</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }

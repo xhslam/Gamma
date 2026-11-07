@@ -126,7 +126,7 @@ import {
   getExplorationSidePanelTab,
 } from '@/atoms/agent-atoms'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
-import { settingsOpenAtom } from '@/atoms/settings-tab'
+import { openSettingsToTabAtom } from '@/atoms/settings-tab'
 import { longTextPasteAsAttachmentEnabledAtom } from '@/atoms/ui-preferences'
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/channel-atoms'
 import { todoPlanningGroupsAtom } from '@/atoms/planning-atoms'
@@ -510,7 +510,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const agentModelId = sessionMetaModelId ?? sessionModelMap.get(sessionId) ?? defaultModelId
   const [agentThinking, setAgentThinking] = useAtom(agentThinkingAtom)
   const agentEffort = useAtomValue(agentEffortAtom)
-  const setSettingsOpen = useSetAtom(settingsOpenAtom)
+  const openSettingsToTab = useSetAtom(openSettingsToTabAtom)
   const setModelSelectorOpen = useSetAtom(modelSelectorOpenAtom)
   const setDraftSessionIds = useSetAtom(draftSessionIdsAtom)
   const globalWorkspaceId = useAtomValue(currentAgentWorkspaceIdAtom)
@@ -3527,7 +3527,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
                 <button
                   type="button"
                   className="text-xs underline underline-offset-2 hover:text-foreground transition-colors"
-                  onClick={() => !hasAvailableModel ? setSettingsOpen(true) : setModelSelectorOpen(true)}
+                  onClick={() => {
+                    if (hasAvailableModel) setModelSelectorOpen(true)
+                    else openSettingsToTab('channels')
+                  }}
                 >
                   {!hasAvailableModel ? '前往设置' : '选择模型'}
                 </button>

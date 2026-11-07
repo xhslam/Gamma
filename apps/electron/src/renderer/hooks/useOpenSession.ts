@@ -1,5 +1,5 @@
 /**
- * 打开或聚焦 Agent 会话，恢复文件预览并同步项目和设置导航 guard。
+ * 打开或聚焦 Agent 会话，恢复文件预览并同步项目。
  */
 
 import * as React from 'react'
@@ -20,15 +20,8 @@ import {
   currentAgentWorkspaceIdAtom,
   unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
-import {
-  channelFormDirtyAtom,
-  settingsOpenAtom,
-  settingsPendingSessionNavigationAtom,
-} from '@/atoms/settings-tab'
-
 interface OpenSessionOptions {
-  bypassSettingsGuard?: boolean
-  /** 仅在导航实际执行后调用；设置 Guard 取消时不会调用。 */
+  /** 仅在导航实际执行后调用。 */
   onOpened?: () => void
 }
 
@@ -44,19 +37,8 @@ export function useOpenSession(): OpenSessionFn {
   const agentSessions = useAtomValue(agentSessionsAtom)
   const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
-  const settingsOpen = useAtomValue(settingsOpenAtom)
-  const channelFormDirty = useAtomValue(channelFormDirtyAtom)
-  const setSettingsOpen = useSetAtom(settingsOpenAtom)
-  const setPendingSessionNavigation = useSetAtom(settingsPendingSessionNavigationAtom)
-
   return React.useCallback(
     (type: 'agent', sessionId: string, title: string, options?: OpenSessionOptions): void => {
-      if (!options?.bypassSettingsGuard && settingsOpen && channelFormDirty) {
-        setPendingSessionNavigation({ type, sessionId, title, onOpened: options?.onOpened })
-        return
-      }
-      setSettingsOpen(false)
-
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = buildOpenTabRestore(
         sessionId,
@@ -89,6 +71,6 @@ export function useOpenSession(): OpenSessionFn {
       }
       options?.onOpened?.()
     },
-    [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted, settingsOpen, channelFormDirty, setSettingsOpen, setPendingSessionNavigation],
+    [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted],
   )
 }

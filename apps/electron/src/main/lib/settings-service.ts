@@ -43,7 +43,6 @@ export function getSettings(): AppSettings {
       richTextRenderingEnabled: false,
       workbenchDensity: normalizeWorkbenchDensity(undefined),
       feishuSessionMirror: { mode: 'off' },
-      visionRelay: { enabled: false },
       windowsShellPreference: 'auto',
       agentThinking: { type: 'adaptive' },
       gitAttributionEnabled: true,
@@ -84,7 +83,6 @@ export function getSettings(): AppSettings {
       richTextRenderingEnabled: data.richTextRenderingEnabled ?? false,
       workbenchDensity: normalizeWorkbenchDensity(data.workbenchDensity),
       feishuSessionMirror: data.feishuSessionMirror ?? { mode: 'off' },
-      visionRelay: data.visionRelay ?? { enabled: false },
       windowsShellPreference: settings.windowsShellPreference ?? 'auto',
       lastWindowsTerminalProfile: process.platform === 'win32'
         ? sanitizeWindowsTerminalProfile(settings.lastWindowsTerminalProfile ?? legacyLastTerminalProfile)
@@ -110,7 +108,6 @@ export function getSettings(): AppSettings {
       richTextRenderingEnabled: false,
       workbenchDensity: normalizeWorkbenchDensity(undefined),
       feishuSessionMirror: { mode: 'off' },
-      visionRelay: { enabled: false },
       windowsShellPreference: 'auto',
       agentThinking: { type: 'adaptive' },
       gitAttributionEnabled: true,

@@ -105,17 +105,6 @@ body {
   app-region: drag;
 }
 
-/* Left sidebar sits above the global titlebar layer, so it owns a stable top drag strip. */
-.sidebar-window-drag-strip {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1;
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
 .sidebar-control-surface {
   background-color: hsl(var(--sidebar-control-surface));
   box-shadow: inset 0 0 0 0.5px hsl(var(--sidebar-control-stroke));
@@ -123,12 +112,6 @@ body {
 
 .sidebar-control-surface:hover {
   background-color: hsl(var(--sidebar-control-surface-hover));
-}
-
-/* Gamma 的侧栏字标与交互层级；主题仍使用现有 token。 */
-.gamma-wordmark {
-  font-family: var(--font-ui);
-  font-weight: 500;
 }
 
 .gamma-sidebar button:focus-visible,
