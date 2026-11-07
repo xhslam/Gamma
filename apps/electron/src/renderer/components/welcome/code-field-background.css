@@ -25,21 +25,33 @@
   padding: 0 var(--panel-padding) var(--panel-padding);
 }
 
-/* 像素标记属于空白会话布景，跟随输入框位置。 */
-[data-agent-conversation-root]:has(.code-field-background) .gamma-composer {
+/* 刺猬常驻输入框上沿，不依赖空白会话背景，也不拦截输入。 */
+[data-agent-conversation-root] .gamma-composer {
   position: relative;
 }
 
-[data-agent-conversation-root]:has(.code-field-background) .gamma-composer::after {
+[data-agent-conversation-root] .gamma-composer::after {
   content: '';
   position: absolute;
   right: 12px;
   bottom: 100%;
-  width: 24px;
-  height: 16px;
-  background: hsl(var(--primary));
-  clip-path: polygon(0 25%, 16.67% 25%, 16.67% 0, 83.33% 0, 83.33% 25%, 100% 25%, 100% 50%, 83.33% 50%, 83.33% 100%, 66.67% 100%, 66.67% 75%, 33.33% 75%, 33.33% 100%, 16.67% 100%, 16.67% 50%, 0 50%);
+  width: 36px;
+  height: 29px;
+  background: url('../../assets/bots/composer-hedgehog.svg') center bottom / contain no-repeat;
   pointer-events: none;
+  animation: composer-hedgehog-idle 3.6s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes composer-hedgehog-idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-agent-conversation-root] .gamma-composer::after {
+    animation: none;
+  }
 }
 
 .dark:not([class*="theme-"]) .gamma-panel[data-panel="content"]:has(.code-field-background) {

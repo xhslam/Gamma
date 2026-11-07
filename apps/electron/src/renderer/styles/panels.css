@@ -65,8 +65,20 @@
 .gamma-topbar {
   height: var(--workbench-topbar-height);
   flex-shrink: 0;
-  border-bottom: 1px solid var(--workbench-divider);
+  position: relative;
+  /* 保留原有高度，分隔线单独绘制，避免与相邻区域及竖向边界相接。 */
+  border-bottom: 1px solid transparent;
   background-color: hsl(var(--content-area));
+}
+
+.gamma-topbar::after {
+  content: '';
+  position: absolute;
+  inset-inline: var(--panel-padding);
+  bottom: -1px;
+  height: 1px;
+  background-color: var(--workbench-divider);
+  pointer-events: none;
 }
 
 .gamma-workbench-frame .gamma-panel:has(.gamma-topbar) {

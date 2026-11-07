@@ -43,7 +43,7 @@ beforeAll(async () => {
             React.createElement(Conversation, null, React.createElement(ConversationContent, {className:'h-full'},
               React.createElement('div', {className:'welcome-empty-state flex h-full items-center justify-center'},
                 React.createElement('h1', null, '下午好'))))),
-          React.createElement('input', {id:'input',placeholder:'输入消息…',className:'gamma-composer bg-background',style:{padding:24}}))))));
+          React.createElement('div', {id:'input',tabIndex:0,className:'gamma-composer bg-background',style:{padding:24}}, '输入消息…'))))));
     }
     window.mountFullField = () => flushSync(() => root.render(React.createElement(FullField)));
     window.fieldSample = () => {
@@ -88,6 +88,24 @@ describe('Given 逐源帧驱动的新会话字符背景', () => {
     `)
     expect(result).toEqual({ covers: true, touchesSidebar: true, limited: true, behind: true, focused: true })
   }, 30_000)
+
+  for (const reducedMotion of [false, true]) {
+    test(`Given 常驻刺猬 When 有无背景切换且减少动态效果为 ${reducedMotion} Then 形象保留且遵循动态偏好`, async () => {
+      const result = await renderer.run<{ before: string; after: string; animation: string; pointer: string; width: string }>(`
+        window.mountFullField();
+        const composer = document.getElementById('input');
+        const before = getComputedStyle(composer, '::after').backgroundImage;
+        document.querySelector('canvas').remove();
+        const style = getComputedStyle(composer, '::after');
+        return {before,after:style.backgroundImage,animation:style.animationName,pointer:style.pointerEvents,width:style.width};
+      `, { reducedMotion })
+      expect(decodeURIComponent(result.before)).toContain("fill='#704B38'")
+      expect(result.after).toBe(result.before)
+      expect(result.animation).toBe(reducedMotion ? 'none' : 'composer-hedgehog-idle')
+      expect(result.pointer).toBe('none')
+      expect(result.width).toBe('36px')
+    }, 30_000)
+  }
 
   for (const dark of [true, false]) {
     test(`When 使用${dark ? '深' : '浅'}色主题 Then 原片光带按时间轴在字符中起亮`, async () => {
