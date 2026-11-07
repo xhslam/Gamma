@@ -13,6 +13,11 @@ import React, { useEffect, useMemo, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
 import { useSetAtom, useAtomValue, useStore } from 'jotai'
 import App from './App'
+import { isSettingsTab } from '../types/settings'
+import { userProfileAtom } from './atoms/user-profile'
+import { loadMarkdownEditorPreferencesAtom } from './atoms/markdown-editor-preferences'
+import { sendWithCmdEnterAtom, shortcutOverridesAtom } from './atoms/shortcut-atoms'
+import { TooltipProvider } from './components/ui/tooltip'
 import {
   themeModeAtom,
   themeStyleAtom,
@@ -64,12 +69,8 @@ import {
 } from './atoms/markdown-font-size'
 import { useGlobalAgentListeners } from './hooks/useGlobalAgentListeners'
 import { tabsAtom, activeTabIdAtom, getPersistableTabState } from './atoms/tab-atoms'
-import { feishuBotStatesAtom } from './atoms/feishu-atoms'
-import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
-import { slackBotStatesAtom } from './atoms/slack-atoms'
 import { channelsAtom, channelsLoadedAtom } from './atoms/channel-atoms'
-import { channelFormDirtyAtom, settingsOpenAtom, settingsTabAtom } from './atoms/settings-tab'
-import type { FeishuBotBridgeState, FeishuBridgeState, DingTalkBotBridgeState, DingTalkBridgeState } from '@gamma/shared'
+import { openSettingsToTabAtom, settingsOpenAtom, settingsTabAtom } from './atoms/settings-tab'
 import { Toaster } from './components/ui/sonner'
 import { toast } from 'sonner'
 import { ArrowRight } from 'lucide-react'
@@ -93,12 +94,13 @@ const isVoiceDictationIndicatorWindow = new URLSearchParams(window.location.sear
 const isDetachedPreviewWindow = new URLSearchParams(window.location.search).get('window') === 'detached-preview'
 const isWorkspaceMemoryWindow = new URLSearchParams(window.location.search).get('window') === 'workspace-memory'
 const isAgentStatusHoverWindow = new URLSearchParams(window.location.search).get('window') === 'agent-status-hover'
-const isMainWindow = !isQuickTaskWindow && !isVoiceDictationIndicatorWindow && !isDetachedPreviewWindow && !isWorkspaceMemoryWindow && !isAgentStatusHoverWindow
+const isSettingsWindow = new URLSearchParams(window.location.search).get('window') === 'settings'
+const isMainWindow = !isSettingsWindow && !isQuickTaskWindow && !isVoiceDictationIndicatorWindow && !isDetachedPreviewWindow && !isWorkspaceMemoryWindow && !isAgentStatusHoverWindow
 
 initializePerformanceMonitor()
 
 // 主窗口与记忆窗口均由内部面板管理滚动，避免页面本身出现第二层滚动。
-if (isMainWindow || isWorkspaceMemoryWindow) {
+if (isMainWindow || isWorkspaceMemoryWindow || isSettingsWindow) {
   document.documentElement.classList.add('gamma-main-window')
 }
 
@@ -370,13 +372,7 @@ function UpdaterInitializer(): null {
               type="button"
               className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.96]"
               onClick={() => {
-                // 从更新提示进入设置也要保留尚未保存的渠道配置。
-                if (store.get(settingsOpenAtom) && store.get(settingsTabAtom) === 'channels' && store.get(channelFormDirtyAtom)) {
-                  toast.info('请先保存或取消当前渠道配置，再查看更新。')
-                  return
-                }
-                store.set(settingsTabAtom, 'about')
-                store.set(settingsOpenAtom, true)
+                store.set(openSettingsToTabAtom, 'about')
               }}
             >
               查看更新
@@ -698,38 +694,11 @@ function AgentListenersInitializer(): null {
  *
  * - 订阅飞书 Bridge 状态变化
  * - 定期上报用户在场状态（用于智能通知路由）
- * - 监听通知已发送事件（显示 Sonner + 桌面通知）
  */
 function FeishuInitializer(): null {
   const store = useStore()
 
   useEffect(() => {
-    // 加载初始多 Bot 状态
-    window.electronAPI.getFeishuMultiStatus?.()
-      .then((multiState: { bots: Record<string, FeishuBotBridgeState> }) => {
-        store.set(feishuBotStatesAtom, multiState.bots)
-      })
-      .catch(() => {
-        // 回退：使用旧 API 获取单 Bot 状态
-        window.electronAPI.getFeishuStatus()
-          .then((state: FeishuBridgeState) => {
-            const s = state as FeishuBotBridgeState
-            const botId = s.botId ?? 'default'
-            store.set(feishuBotStatesAtom, { [botId]: { ...s, botId, botName: s.botName ?? '飞书助手' } })
-          })
-          .catch((err: unknown) => console.error('[FeishuInitializer] 加载状态失败:', err))
-      })
-
-    // 订阅状态变化（现在每次推送包含 botId）
-    const cleanupStatus = window.electronAPI.onFeishuStatusChanged((raw: FeishuBridgeState) => {
-      const state = raw as FeishuBotBridgeState
-      const botId = state.botId ?? 'default'
-      store.set(feishuBotStatesAtom, (prev) => ({
-        ...prev,
-        [botId]: { ...state, botId, botName: state.botName ?? '飞书助手' },
-      }))
-    })
-
     // 定期上报在场状态（5 秒间隔 + 焦点变化时即时上报）
     const reportPresence = (): void => {
       const activeSessionId = store.get(currentAgentSessionIdAtom)
@@ -743,70 +712,9 @@ function FeishuInitializer(): null {
     window.addEventListener('blur', reportPresence)
 
     return () => {
-      cleanupStatus()
       clearInterval(interval)
       window.removeEventListener('focus', reportPresence)
       window.removeEventListener('blur', reportPresence)
-    }
-  }, [store])
-
-  return null
-}
-
-/**
- * DingTalkInitializer
- *
- * - 加载多 Bot 初始状态
- * - 订阅钉钉 Bridge 状态变化
- */
-function SlackInitializer(): null {
-  const store = useStore()
-
-  useEffect(() => {
-    window.electronAPI.getSlackStatus()
-      .then((multiState) => store.set(slackBotStatesAtom, multiState.bots))
-      .catch((error: unknown) => console.error('[SlackInitializer] 加载状态失败:', error))
-    const cleanup = window.electronAPI.onSlackStatusChanged((state) => {
-      store.set(slackBotStatesAtom, (previous) => ({ ...previous, [state.botId]: state }))
-    })
-    return cleanup
-  }, [store])
-
-  return null
-}
-
-function DingTalkInitializer(): null {
-  const store = useStore()
-
-  useEffect(() => {
-    // 加载初始多 Bot 状态
-    window.electronAPI.getDingTalkMultiStatus?.()
-      .then((multiState: { bots: Record<string, DingTalkBotBridgeState> }) => {
-        store.set(dingtalkBotStatesAtom, multiState.bots)
-      })
-      .catch(() => {
-        // 回退：使用旧 API 获取单 Bot 状态
-        window.electronAPI.getDingTalkStatus()
-          .then((state: DingTalkBridgeState) => {
-            const s = state as DingTalkBotBridgeState
-            const botId = s.botId ?? 'default'
-            store.set(dingtalkBotStatesAtom, { [botId]: { ...s, botId, botName: s.botName ?? '钉钉助手' } })
-          })
-          .catch((err: unknown) => console.error('[DingTalkInitializer] 加载状态失败:', err))
-      })
-
-    // 订阅状态变化（现在每次推送包含 botId）
-    const cleanupStatus = window.electronAPI.onDingTalkStatusChanged((raw: DingTalkBridgeState) => {
-      const state = raw as DingTalkBotBridgeState
-      const botId = state.botId ?? 'default'
-      store.set(dingtalkBotStatesAtom, (prev) => ({
-        ...prev,
-        [botId]: { ...state, botId, botName: state.botName ?? '钉钉助手' },
-      }))
-    })
-
-    return () => {
-      cleanupStatus()
     }
   }, [store])
 
@@ -912,6 +820,86 @@ function TabStatePersistenceInitializer(): null {
   return null
 }
 
+/** 独立设置窗口提交后，从磁盘刷新工作区所用的偏好，不重启工作区。 */
+function SettingsWindowSync(): null {
+  const store = useStore()
+  useEffect(() => window.electronAPI.onSettingsWindowClosed(tab => {
+    store.set(settingsOpenAtom, false)
+    store.set(settingsTabAtom, tab)
+    void Promise.all([
+      window.electronAPI.getSettings(),
+      window.electronAPI.listChannels(),
+      window.electronAPI.getUserProfile(),
+    ]).then(([settings, channels, profile]) => {
+      store.set(channelsAtom, channels)
+      store.set(channelsLoadedAtom, true)
+      store.set(agentChannelIdAtom, settings.agentChannelId ?? null)
+      store.set(agentModelIdAtom, settings.agentModelId ?? null)
+      store.set(userProfileAtom, profile)
+      store.set(shortcutOverridesAtom, settings.shortcutOverrides ?? {})
+      store.set(sendWithCmdEnterAtom, settings.sendWithCmdEnter ?? false)
+    }).catch(error => console.error('[设置] 刷新工作区失败:', error))
+    initializeUiPreferences(
+      value => store.set(longTextPasteAsAttachmentEnabledAtom, value),
+      value => store.set(richTextRenderingEnabledAtom, value),
+      value => store.set(sessionHoverPreviewEnabledAtom, value),
+      value => store.set(productivityToolsAtom, value),
+      value => store.set(workbenchDensityAtom, value),
+    )
+    initializeMarkdownFontSize(value => store.set(markdownFontSizeAtom, value))
+    initializeNotifications(
+      value => store.set(notificationsEnabledAtom, value),
+      value => store.set(notificationSoundEnabledAtom, value),
+      value => store.set(notificationSoundsAtom, value),
+    )
+    void store.set(loadMarkdownEditorPreferencesAtom).catch(console.error)
+  }), [store])
+  return null
+}
+
+function SettingsWindowApp({ Panel }: { Panel: React.ComponentType<{ onClose: () => void }> }): React.ReactElement {
+  const store = useStore()
+  React.useLayoutEffect(() => {
+    const initial = new URLSearchParams(window.location.search).get('tab')
+    if (isSettingsTab(initial)) store.set(settingsTabAtom, initial)
+    let active = true
+    void window.electronAPI.readySettingsWindow().then(tab => {
+      if (active && tab) store.set(settingsTabAtom, tab)
+    }).catch(console.error)
+    void window.electronAPI.getSettings().then(settings => {
+      if (!active) return
+      store.set(agentChannelIdAtom, settings.agentChannelId ?? null)
+      store.set(agentModelIdAtom, settings.agentModelId ?? null)
+      store.set(shortcutOverridesAtom, settings.shortcutOverrides ?? {})
+      store.set(sendWithCmdEnterAtom, settings.sendWithCmdEnter ?? false)
+    }).catch(console.error)
+    void window.electronAPI.listChannels().then(channels => {
+      if (active) {
+        store.set(channelsAtom, channels)
+        store.set(channelsLoadedAtom, true)
+      }
+    }).catch(console.error)
+    void window.electronAPI.getUserProfile().then(profile => {
+      if (active) store.set(userProfileAtom, profile)
+    }).catch(console.error)
+    const cleanupUpdater = initializeUpdater(value => store.set(updateStatusAtom, value))
+    initShortcutRegistry()
+    return () => {
+      active = false
+      cleanupUpdater()
+    }
+  }, [store])
+  const close = React.useCallback(() => {
+    void window.electronAPI.closeSettingsWindow(store.get(settingsTabAtom)).catch(console.error)
+  }, [store])
+  return (
+    <TooltipProvider>
+      <Panel onClose={close} />
+      <Toaster />
+    </TooltipProvider>
+  )
+}
+
 // ===== 快速任务窗口：轻量渲染 =====
 if (isQuickTaskWindow) {
   import('./components/quick-task/QuickTaskApp').then(({ QuickTaskApp }) => {
@@ -952,6 +940,19 @@ if (isQuickTaskWindow) {
       </React.StrictMode>
     )
   })
+} else if (isSettingsWindow) {
+  document.title = '设置'
+  import('./components/settings/SettingsPanel').then(({ SettingsPanel }) => {
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <>
+        <ThemeInitializer />
+        <NotificationsInitializer />
+        <UiPreferencesInitializer />
+        <MarkdownFontSizeInitializer />
+        <SettingsWindowApp Panel={SettingsPanel} />
+      </>,
+    )
+  })
 } else if (isAgentStatusHoverWindow) {
   import('./components/agent-status-hover/HoverPanel').then(({ HoverPanel }) => {
     ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -976,10 +977,9 @@ if (isQuickTaskWindow) {
       <AutomationInitializer />
       <PlanningInitializer />
       <FeishuInitializer />
-      <SlackInitializer />
-      <DingTalkInitializer />
       <TabStatePersistenceInitializer />
       <VoiceDictationApp embedded />
+      <SettingsWindowSync />
       <GlobalShortcuts />
       <TabSwitcher />
       <App />

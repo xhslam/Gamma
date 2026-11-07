@@ -257,16 +257,6 @@ export interface AgentIslandSettings {
   enabled?: boolean
 }
 
-/**
- * 给无视觉输入能力的 Agent 使用的独立视觉模型路由。
- * 仅保存用户已有渠道和模型的 ID，凭据继续由渠道加密存储管理。
- */
-export interface VisionRelaySettings {
-  enabled: boolean
-  channelId?: string
-  modelId?: string
-}
-
 /** 可在通用设置中关闭的本地生产力工具；缺省保持开启以兼容已有用户。 */
 export interface ProductivityToolsSettings {
   todosEnabled: boolean
@@ -365,8 +355,6 @@ export interface AppSettings {
   voiceDictation?: VoiceDictationPersistedSettings
   /** 飞书 Session 镜像设置：每个 Gamma Session 可创建一个仅包含用户与指定 Bot 的飞书群 */
   feishuSessionMirror?: FeishuSessionMirrorSettings
-  /** 无视觉输入能力 Agent 的视觉助手路由 */
-  visionRelay?: VisionRelaySettings
   /** 已确认的受管浏览器风险告知版本；低于当前版本时首次使用会再次要求确认。 */
   browserRiskDisclaimerVersion?: number
   /** Todo 与日程的可见性和 Agent 工具注入开关，默认全部开启。 */
@@ -418,9 +406,22 @@ export interface PersistedTabSettings {
   activeTabId: string | null
 }
 
+export const SETTINGS_TABS = ['general', 'channels', 'memory', 'appearance', 'markdown-editor', 'about', 'shortcuts', 'storage'] as const
+export type SettingsTab = (typeof SETTINGS_TABS)[number]
+
+export function isSettingsTab(value: unknown): value is SettingsTab {
+  return SETTINGS_TABS.some(tab => tab === value)
+}
+
 /** 设置 IPC 通道 */
 export const SETTINGS_IPC_CHANNELS = {
   GET: 'settings:get',
+  WINDOW_OPEN: 'settings:window-open',
+  WINDOW_READY: 'settings:window-ready',
+  WINDOW_NAVIGATE: 'settings:window-navigate',
+  WINDOW_CLOSE_REQUESTED: 'settings:window-close-requested',
+  WINDOW_CONFIRM_CLOSE: 'settings:window-confirm-close',
+  WINDOW_CLOSED: 'settings:window-closed',
   UPDATE: 'settings:update',
   UPDATE_SYNC: 'settings:update-sync',
   GET_SYSTEM_THEME: 'settings:get-system-theme',
@@ -476,9 +477,7 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   /** 获取语音输入设置 */
   GET_SETTINGS: 'voice-dictation:get-settings',
   /** 更新语音输入设置 */
-  UPDATE_SETTINGS: 'voice-dictation:update-settings',
   /** 测试豆包 ASR 连接 */
-  TEST_CONNECTION: 'voice-dictation:test-connection',
   /** 唤起或停止语音输入浮窗 */
   TOGGLE: 'voice-dictation:toggle',
   /** 开始语音输入会话 */

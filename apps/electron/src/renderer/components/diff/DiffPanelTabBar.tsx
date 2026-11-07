@@ -312,12 +312,12 @@ export function DiffPanelTabBar({
   }, [tabs, visibleTabs?.left, visibleTabs?.right])
 
   return (
-    <div ref={barRef} className={cn('relative flex shrink-0 items-center border-b border-border/50 bg-content-area', sidebarCollapsed ? 'h-11' : 'h-10', ownsWindowControls && detectIsMac() && 'pl-20')}>
+    <div ref={barRef} className={cn('gamma-topbar relative flex items-center', ownsWindowControls && detectIsMac() && 'pl-20')}>
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
       {ownsWindowControls && <SidebarExpandButton />}
       <div className="relative flex h-full min-w-0 flex-1 items-center titlebar-no-drag">
         <div className="relative flex min-w-0 flex-1 self-stretch">
-          <div ref={tabListRef} className={cn('flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 scrollbar-none', sidebarCollapsed ? 'h-full py-1' : 'h-9 pt-1.5 pb-0.5')} role="tablist" aria-label={`${workspaceSideLabel}工作区`}>
+          <div ref={tabListRef} className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 scrollbar-none" role="tablist" aria-label={`${workspaceSideLabel}工作区`}>
           {orderedTabs.map((tab) => {
             const selected = activeTab === tab.id
             const isSplitView = visibleTabs?.left !== undefined && visibleTabs.right !== undefined

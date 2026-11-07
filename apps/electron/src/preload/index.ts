@@ -1,3 +1,4 @@
+import type { SettingsTab } from '../types/settings'
 /**
  * Preload 脚本
  *
@@ -6,7 +7,7 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   AgentReferenceWarningNotice,
@@ -67,8 +68,6 @@ import type {
   InstallerDownloadRequest,
   InstallerDownloadResult,
   InstallerProgressPayload,
-  ProxyConfig,
-  SystemProxyDetectResult,
   GitHubRelease,
   GitHubReleaseListOptions,
   PermissionRequest,
@@ -178,13 +177,11 @@ import type {
   VoiceDictationPreviewInput,
   VoiceDictationResizeInput,
   VoiceDictationSettings,
-  VoiceDictationSettingsUpdate,
   VoiceDictationShownEvent,
   VoiceDictationStartInput,
   VoiceDictationIndicatorEvent,
   VoiceDictationStateEvent,
   VoiceDictationStopInput,
-  VoiceDictationTestResult,
   VoiceDictationToggleInput,
   VoiceDictationTranscriptEvent,
   VoiceDictationTextDeliveryInput,
@@ -407,6 +404,12 @@ export interface ElectronAPI {
   // ===== 应用设置相关 =====
 
   /** 获取应用设置 */
+  openSettingsWindow: (tab: SettingsTab, navigate: boolean) => Promise<void>
+  readySettingsWindow: () => Promise<SettingsTab | null>
+  closeSettingsWindow: (tab: SettingsTab) => Promise<void>
+  onSettingsWindowNavigate: (callback: (tab: SettingsTab) => void) => () => void
+  onSettingsWindowCloseRequested: (callback: () => void) => () => void
+  onSettingsWindowClosed: (callback: (tab: SettingsTab) => void) => () => void
   getSettings: () => Promise<AppSettings>
 
   /** 更新应用设置 */
@@ -475,17 +478,6 @@ export interface ElectronAPI {
   onInstallerProgress: (
     callback: (payload: InstallerProgressPayload) => void,
   ) => () => void
-
-  // ===== 代理配置相关 =====
-
-  /** 获取代理配置 */
-  getProxySettings: () => Promise<ProxyConfig>
-
-  /** 更新代理配置 */
-  updateProxySettings: (config: ProxyConfig) => Promise<void>
-
-  /** 检测系统代理 */
-  detectSystemProxy: () => Promise<SystemProxyDetectResult>
 
   // ===== Agent 会话管理相关 =====
 
@@ -1137,9 +1129,7 @@ export interface ElectronAPI {
   /** 获取语音输入设置 */
   getVoiceDictationSettings: () => Promise<VoiceDictationSettings>
   /** 更新语音输入设置 */
-  updateVoiceDictationSettings: (updates: VoiceDictationSettingsUpdate) => Promise<VoiceDictationSettings>
   /** 测试语音输入连接 */
-  testVoiceDictationConnection: (updates?: VoiceDictationSettingsUpdate) => Promise<VoiceDictationTestResult>
   /** 唤起或停止语音输入浮窗 */
   toggleVoiceDictation: (input?: VoiceDictationToggleInput) => Promise<void>
   /** 开始语音输入会话 */
@@ -1192,11 +1182,6 @@ export interface ElectronAPI {
   onTrayOpenAgentSession: (callback: (data: TrayOpenAgentSessionData) => void) => () => void
   /** 订阅菜单栏创建会话事件 */
   onTrayCreateSession: (callback: () => void) => () => void
-
-  // ===== 数据迁移 =====
-
-  /** 在系统文件管理器中打开 Gamma 数据文件夹 */
-  openMigrationDataFolder: () => Promise<void>
 
   // ===== 存储管理 =====
 
@@ -1583,6 +1568,24 @@ const electronAPI: ElectronAPI = {
   },
 
   // 应用设置
+  openSettingsWindow: (tab, navigate) => ipcRenderer.invoke(SETTINGS_IPC_CHANNELS.WINDOW_OPEN, tab, navigate),
+  readySettingsWindow: () => ipcRenderer.invoke(SETTINGS_IPC_CHANNELS.WINDOW_READY),
+  closeSettingsWindow: (tab) => ipcRenderer.invoke(SETTINGS_IPC_CHANNELS.WINDOW_CONFIRM_CLOSE, tab),
+  onSettingsWindowNavigate: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, tab: SettingsTab): void => callback(tab)
+    ipcRenderer.on(SETTINGS_IPC_CHANNELS.WINDOW_NAVIGATE, listener)
+    return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.WINDOW_NAVIGATE, listener) }
+  },
+  onSettingsWindowCloseRequested: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(SETTINGS_IPC_CHANNELS.WINDOW_CLOSE_REQUESTED, listener)
+    return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.WINDOW_CLOSE_REQUESTED, listener) }
+  },
+  onSettingsWindowClosed: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, tab: SettingsTab): void => callback(tab)
+    ipcRenderer.on(SETTINGS_IPC_CHANNELS.WINDOW_CLOSED, listener)
+    return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.WINDOW_CLOSED, listener) }
+  },
   getSettings: () => {
     return ipcRenderer.invoke(SETTINGS_IPC_CHANNELS.GET)
   },
@@ -1668,19 +1671,6 @@ const electronAPI: ElectronAPI = {
     const listener = (_: unknown, payload: InstallerProgressPayload) => callback(payload)
     ipcRenderer.on(INSTALLER_IPC_CHANNELS.PROGRESS, listener)
     return () => ipcRenderer.off(INSTALLER_IPC_CHANNELS.PROGRESS, listener)
-  },
-
-  // 代理配置
-  getProxySettings: () => {
-    return ipcRenderer.invoke(PROXY_IPC_CHANNELS.GET_SETTINGS)
-  },
-
-  updateProxySettings: (config: ProxyConfig) => {
-    return ipcRenderer.invoke(PROXY_IPC_CHANNELS.UPDATE_SETTINGS, config)
-  },
-
-  detectSystemProxy: () => {
-    return ipcRenderer.invoke(PROXY_IPC_CHANNELS.DETECT_SYSTEM)
   },
 
   // Agent 会话管理
@@ -2672,14 +2662,6 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.GET_SETTINGS)
   },
 
-  updateVoiceDictationSettings: (updates: VoiceDictationSettingsUpdate) => {
-    return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.UPDATE_SETTINGS, updates)
-  },
-
-  testVoiceDictationConnection: (updates?: VoiceDictationSettingsUpdate) => {
-    return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.TEST_CONNECTION, updates)
-  },
-
   toggleVoiceDictation: (input?: VoiceDictationToggleInput) => {
     return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.TOGGLE, input)
   },
@@ -2796,7 +2778,6 @@ const electronAPI: ElectronAPI = {
     return () => { ipcRenderer.removeListener(TRAY_IPC_CHANNELS.CREATE_SESSION, listener) }
   },
 
-  openMigrationDataFolder: () => ipcRenderer.invoke('migration:open-data-folder'),
 
   // ===== 存储管理 =====
 

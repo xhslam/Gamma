@@ -15,6 +15,8 @@ beforeAll(async () => {
     import { CodeFieldBackground } from '@/components/welcome/CodeFieldBackground';
     import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
     import '@/styles/globals.css';
+    // 测试宿主的原生窗口默认隐藏，主动模拟前台页面。
+    Object.defineProperty(document, 'hidden', {value:false,configurable:true});
     const root = createRoot(document.getElementById('root'));
     window.mountField = dark => {
       document.documentElement.classList.toggle('dark', dark);
@@ -29,7 +31,11 @@ beforeAll(async () => {
     };
     function FullField() {
       const [container, setContainer] = React.useState(null);
-      return React.createElement('main', {id:'panel',ref:setContainer,className:'relative isolate flex h-full flex-col overflow-hidden',style:{height:'100vh'}},
+      return React.createElement('div',{className:'gamma-workbench flex',style:{height:'100vh'}},
+        React.createElement('div',{className:'gamma-workbench-frame'},
+        React.createElement('aside',{id:'sidebar',style:{width:208,flexShrink:0}}),
+        React.createElement('main',{id:'panel','data-panel':'content',className:'gamma-panel h-full min-w-0 flex-1 overflow-hidden'},
+        React.createElement('div', {ref:setContainer,'data-agent-conversation-root':'',className:'relative isolate flex h-full flex-col overflow-hidden'},
         React.createElement('header', {style:{height:40,flexShrink:0}}, '新会话'),
         React.createElement('div', {id:'column',className:'flex min-h-0 flex-1 flex-col w-full mx-auto',style:{maxWidth:560}},
           React.createElement('div', {id:'field',className:'relative flex min-h-0 flex-1'},
@@ -37,31 +43,20 @@ beforeAll(async () => {
             React.createElement(Conversation, null, React.createElement(ConversationContent, {className:'h-full'},
               React.createElement('div', {className:'welcome-empty-state flex h-full items-center justify-center'},
                 React.createElement('h1', null, '下午好'))))),
-          React.createElement('input', {id:'input',placeholder:'输入消息…',className:'gamma-composer bg-background',style:{padding:24}})));
+          React.createElement('input', {id:'input',placeholder:'输入消息…',className:'gamma-composer bg-background',style:{padding:24}}))))));
     }
     window.mountFullField = () => flushSync(() => root.render(React.createElement(FullField)));
     window.fieldSample = () => {
       const canvas = document.querySelector('canvas');
       const data = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-      let sum = 0, pixels = 0, contrastPixels = 0;
-      const background = getComputedStyle(document.body).backgroundColor.match(/[\\d.]+/g).slice(0,3).map(Number);
-      for (let i = 3; i < data.length; i += 4) {
-        sum += data[i] * (i % 97); if (data[i]) pixels++;
-        const contrast = Math.max(...background.map((value, channel) => Math.abs(data[i-3+channel]-value)*data[i]/255));
-        if (contrast >= 12) contrastPixels++;
+      let sum = 0, pixels = 0, blue = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        sum += data[i+3] * ((i % 97) + 1);
+        if (data[i+3]) pixels++;
+        if (data[i+3] > 12 && data[i+2] - data[i] > 30) blue++;
       }
       const style = getComputedStyle(canvas);
-      return {sum,pixels,contrastPixels,width:canvas.width,height:canvas.height,pointer:style.pointerEvents,opacity:style.opacity,hidden:canvas.getAttribute('aria-hidden')};
-    };
-    window.clickField = (selector = '.welcome-empty-state', button = 0) => {
-      const target = document.querySelector(selector);
-      const bounds = target.getBoundingClientRect();
-      target.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button,isPrimary:true,clientX:bounds.x+bounds.width/2,clientY:bounds.y+bounds.height/2}));
-    };
-    window.moveField = (selector = '.welcome-empty-state', options = {}) => {
-      const target = document.querySelector(selector);
-      const bounds = target.getBoundingClientRect();
-      target.dispatchEvent(new PointerEvent('pointermove', {bubbles:true,isPrimary:true,pointerType:'mouse',buttons:0,clientX:bounds.x+bounds.width/2,clientY:bounds.y+bounds.height/2,...options}));
+      return {sum,pixels,blue,pointer:style.pointerEvents,hidden:canvas.getAttribute('aria-hidden')};
     };
     window.unmountField = () => flushSync(() => root.unmount());
     window.mountField(true);
@@ -69,11 +64,11 @@ beforeAll(async () => {
 }, 60_000)
 afterAll(async () => { await renderer?.dispose() })
 
-interface Sample { sum: number; pixels: number; contrastPixels: number; width: number; height: number; pointer: string; opacity: string; hidden: string }
+interface Sample { sum: number; pixels: number; blue: number; pointer: string; hidden: string }
 
-describe('Given 新会话的字符流场背景', () => {
-  test('When 内容栏限宽 Then 背景覆盖面板两侧、标题和输入区且不遮挡控件', async () => {
-    const result = await renderer.run<{ covers: boolean; limited: boolean; behind: boolean; focused: boolean; ripple: boolean }>(`
+describe('Given 逐源帧驱动的新会话字符背景', () => {
+  test('When 内容栏限宽 Then 背景覆盖全会话且输入区仍可点击和聚焦', async () => {
+    const result = await renderer.run<{ covers: boolean; touchesSidebar: boolean; limited: boolean; behind: boolean; focused: boolean }>(`
       window.mountFullField();
       await new Promise(resolve => setTimeout(resolve, 160));
       const panel = document.getElementById('panel');
@@ -84,217 +79,60 @@ describe('Given 新会话的字符流场背景', () => {
       const inputBounds = input.getBoundingClientRect();
       const behind = document.elementFromPoint(inputBounds.x+20,inputBounds.y+20) === input;
       input.focus();
-      const before = window.fieldSample().sum;
-      panel.dispatchEvent(new PointerEvent('pointermove', {bubbles:true,pointerType:'mouse',isPrimary:true,clientX:20,clientY:area.bottom-20}));
-      await new Promise(resolve => setTimeout(resolve, 80));
       return {
         covers:bounds.x===area.x && bounds.y===area.y && bounds.width===area.width && bounds.height===area.height,
+        touchesSidebar:document.getElementById('sidebar').getBoundingClientRect().right===bounds.left,
         limited:document.getElementById('column').getBoundingClientRect().width===560 && area.width>560,
-        behind,focused:document.activeElement===input,ripple:window.fieldSample().sum!==before
+        behind,focused:document.activeElement===input
       };
-    `, { screenshot: artifacts ? join(artifacts, 'code-field-full-panel.png') : undefined })
-    expect(result.covers).toBe(true)
-    expect(result.limited).toBe(true)
-    expect(result.behind).toBe(true)
-    expect(result.focused).toBe(true)
-    expect(result.ripple).toBe(true)
-  }, 30_000)
-
-  test('When 全覆盖面板缩窄 Then 背景只覆盖本面板且不溢出至相邻区域', async () => {
-    const result = await renderer.run<{ width: number; left: number; right: number; panelRight: number }>(`
-      window.mountFullField();
-      const panel = document.getElementById('panel');
-      panel.style.width='320px'; panel.style.marginLeft='100px';
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const bounds = document.querySelector('canvas').getBoundingClientRect();
-      return {width:bounds.width,left:bounds.left,right:bounds.right,panelRight:panel.getBoundingClientRect().right};
     `)
-    expect(result.width).toBe(320)
-    expect(result.left).toBe(100)
-    expect(result.right).toBe(result.panelRight)
+    expect(result).toEqual({ covers: true, touchesSidebar: true, limited: true, behind: true, focused: true })
   }, 30_000)
 
   for (const dark of [true, false]) {
-    test(`When 使用${dark ? '深' : '浅'}色主题 Then 字符颜色保持静态且输入框仍可聚焦`, async () => {
-      const result = await renderer.run<{ before: Sample; after: Sample; focused: boolean }>(`
+    test(`When 使用${dark ? '深' : '浅'}色主题 Then 原片光带按时间轴在字符中起亮`, async () => {
+      const result = await renderer.run<{ before: Sample; peak: Sample; later: Sample }>(`
         window.mountField(${dark});
-        await new Promise(resolve => setTimeout(resolve, 160));
+        await new Promise(resolve => setTimeout(resolve, 300));
         const before = window.fieldSample();
-        await new Promise(resolve => setTimeout(resolve, 600));
-        document.getElementById('input').focus();
-        return {before,after:window.fieldSample(),focused:document.activeElement.id==='input'};
-      `, { screenshot: artifacts ? join(artifacts, `code-field-${dark ? 'dark' : 'light'}.png`) : undefined })
+        await new Promise(resolve => setTimeout(resolve, 3050));
+        const peak = window.fieldSample();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return {before,peak,later:window.fieldSample()};
+      `, { screenshot: artifacts ? join(artifacts, `gamma-motion-${dark ? 'dark' : 'light'}.png`) : undefined })
       expect(result.before.pixels).toBeGreaterThan(1000)
-      expect(result.after.sum).toBe(result.before.sum)
-      expect(result.before.opacity).toBe('1')
-      expect(result.before.contrastPixels).toBeGreaterThan(1000)
-      expect(result.before.hidden).toBe('true')
-      expect(result.before.pointer).toBe('none')
-      expect(result.focused).toBe(true)
+      expect(result.before.blue).toBe(0)
+      expect(result.peak.blue).toBeGreaterThan(1000)
+      expect(result.later.sum).not.toBe(result.peak.sum)
+      expect(result.peak.pointer).toBe('none')
+      expect(result.peak.hidden).toBe('true')
     }, 30_000)
   }
-  for (const theme of ['', 'dark', 'theme-ocean-light', 'theme-forest-light', 'theme-slate-light', 'dark theme-ocean-dark', 'dark theme-forest-dark', 'dark theme-slate-dark', 'dark theme-terminal-dark']) {
-    test(`When 在 ${theme || '默认亮色'} 中靠近或点击 Then 交互高亮均为深蓝色且静止底色不变`, async () => {
-      const result = await renderer.run<{ ink: string; hover: string[]; click: string[] }>(`
-        window.mountField(${theme.startsWith('dark')});
-        document.documentElement.className=${JSON.stringify(theme)};
-        await new Promise(resolve => setTimeout(resolve, 160));
-        const context = document.querySelector('canvas').getContext('2d');
-        const ink = context.fillStyle;
-        const fillText = context.fillText.bind(context);
-        const colors = new Set();
-        context.fillText = (...args) => { colors.add(context.fillStyle); fillText(...args); };
-        window.moveField();
-        await new Promise(resolve => setTimeout(resolve, 160));
-        const hover = [...colors].filter(color => color !== ink);
-        colors.clear();
-        window.clickField();
-        await new Promise(resolve => setTimeout(resolve, 320));
-        return {ink,hover,click:[...colors].filter(color => color !== ink)};
-      `, { screenshot: artifacts ? join(artifacts, `code-field-blue-${theme.replaceAll(' ', '-') || 'light'}.png`) : undefined })
-      const dark = theme.startsWith('dark')
-      const expected = dark ? '#3156a3' : '#1e3a8a'
-      expect(result.ink).toBe(dark ? '#b0aea5' : '#5e5d59')
-      expect(result.hover).toEqual([expected])
-      expect(result.click).toEqual([expected])
-    }, 30_000)
-  }
-  test('When 系统要求减少动态效果 Then 保留静态纹理且不再变换字符', async () => {
+
+  test('When 系统要求减少动态效果 Then 静态字符保持可见且不响应点击', async () => {
     const result = await renderer.run<{ before: Sample; after: Sample }>(`
-      await new Promise(resolve => setTimeout(resolve, 160));
+      await new Promise(resolve => setTimeout(resolve, 200));
       const before = window.fieldSample();
-      window.clickField();
-      window.moveField();
-      await new Promise(resolve => setTimeout(resolve, 300));
+      document.getElementById('field').dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,isPrimary:true,button:0,clientX:180,clientY:160}));
+      await new Promise(resolve => setTimeout(resolve, 3200));
       return {before,after:window.fieldSample()};
     `, { reducedMotion: true })
     expect(result.before.pixels).toBeGreaterThan(1000)
-    expect(result.after.sum).toBe(result.before.sum)
+    expect(result.after).toEqual(result.before)
   }, 30_000)
-  test('When 鼠标移动 Then 产生局部扩散水光，停下后恢复原样并停止重绘', async () => {
-    const result = await renderer.run<{ local: boolean; changed: boolean; restored: boolean; idlePaints: number; synchronousPaints: number }>(`
-      window.mountField(true);
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const canvas = document.querySelector('canvas');
-      const context = canvas.getContext('2d');
-      const before = window.fieldSample().sum;
-      const farBefore = context.getImageData(0,0,100,100).data.slice();
-      const clear = context.clearRect.bind(context);
-      let paints = 0;
-      context.clearRect = (...args) => { paints++; clear(...args); };
-      window.moveField();
-      const synchronousPaints = paints;
-      await new Promise(resolve => setTimeout(resolve, 80));
-      const changed = window.fieldSample().sum !== before;
-      const farAfter = context.getImageData(0,0,100,100).data;
-      const local = farBefore.every((value,index) => value===farAfter[index]);
-      await new Promise(resolve => setTimeout(resolve, 1800));
-      const restored = window.fieldSample().sum === before;
-      paints = 0;
-      await new Promise(resolve => setTimeout(resolve, 200));
-      return {local,changed,restored,idlePaints:paints,synchronousPaints};
-    `)
-    expect(result.local).toBe(true)
-    expect(result.changed).toBe(true)
-    expect(result.restored).toBe(true)
-    expect(result.idlePaints).toBe(0)
-    expect(result.synchronousPaints).toBe(0)
-  }, 30_000)
-  test('When 鼠标离开 Then 已产生的水光继续扩散而不是立即熄灭', async () => {
-    const result = await renderer.run<{ fading: boolean; restored: boolean }>(`
-      window.mountField(true);
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const before = window.fieldSample().sum;
-      window.moveField();
-      await new Promise(resolve => setTimeout(resolve, 150));
-      document.querySelector('canvas').parentElement.dispatchEvent(new PointerEvent('pointerleave'));
-      await new Promise(resolve => setTimeout(resolve, 200));
-      const fading = window.fieldSample().sum !== before;
-      await new Promise(resolve => setTimeout(resolve, 1600));
-      return {fading,restored:window.fieldSample().sum === before};
-    `)
-    expect(result.fading).toBe(true)
-    expect(result.restored).toBe(true)
-  }, 30_000)
-  test('When 鼠标经过输入控件、触屏移动或拖动 Then 背景不响应', async () => {
-    const result = await renderer.run<{ before: number; after: number }>(`
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const now = performance.now(); performance.now = () => now;
+
+  test('When 窗口隐藏 Then 停止合成并显示静态底纹', async () => {
+    const result = await renderer.run<{ peak: number; hidden: Sample; later: Sample }>(`
+      await new Promise(resolve => setTimeout(resolve, 3300));
+      const peak = window.fieldSample().blue;
+      Object.defineProperty(document, 'hidden', {value:true});
       document.dispatchEvent(new Event('visibilitychange'));
-      const before = window.fieldSample().sum;
-      const button = document.createElement('button'); button.id='hover-button';
-      button.textContent='按钮'; document.querySelector('.welcome-empty-state').append(button);
-      window.moveField('#hover-button');
-      window.moveField('.welcome-empty-state',{pointerType:'touch'});
-      window.moveField('.welcome-empty-state',{buttons:1});
-      document.dispatchEvent(new Event('visibilitychange'));
-      return {before,after:window.fieldSample().sum};
+      const hidden = window.fieldSample();
+      await new Promise(resolve => setTimeout(resolve, 200));
+      return {peak,hidden,later:window.fieldSample()};
     `)
-    expect(result.after).toBe(result.before)
-  }, 30_000)
-  for (const theme of ['theme-ocean-light', 'theme-forest-light', 'theme-slate-light']) {
-    test(`When 切换到明亮主题 ${theme} Then 字符仍有可辨识对比度`, async () => {
-      const result = await renderer.run<Sample>(`
-        window.mountField(false);
-        document.documentElement.className=${JSON.stringify(theme)};
-        await new Promise(resolve => setTimeout(resolve, 160));
-        return window.fieldSample();
-      `, { screenshot: artifacts ? join(artifacts, 'code-field-' + theme + '.png') : undefined })
-      expect(result.opacity).toBe('1')
-      expect(result.contrastPixels).toBeGreaterThan(1000)
-    }, 30_000)
-  }
-  test('When 点击空白处 Then 从点击圆心扩散并渐隐且不拦截事件', async () => {
-    const result = await renderer.run<{ before: number; after: number; blocked: boolean; restored: boolean }>(`
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const before = window.fieldSample().sum;
-      let blocked = false;
-      document.getElementById('field').addEventListener('pointerdown', event => { blocked = event.defaultPrevented; });
-      window.clickField();
-      await new Promise(resolve => setTimeout(resolve, 320));
-      const after = window.fieldSample().sum;
-      await new Promise(resolve => setTimeout(resolve, 2400));
-      return {before,after,blocked,restored:window.fieldSample().sum === before};
-    `, { screenshot: artifacts ? join(artifacts, 'code-field-ripple.png') : undefined })
-    expect(result.after).not.toBe(result.before)
-    expect(result.blocked).toBe(false)
-    expect(result.restored).toBe(true)
-  }, 30_000)
-  test('When 点击按钮、输入区或右键 Then 不触发背景涟漪', async () => {
-    const result = await renderer.run<{ before: number; after: number }>(`
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const field = document.querySelector('.welcome-empty-state');
-      for (const tag of ['button','input','a','div']) {
-        const control = document.createElement(tag);
-        control.id = 'control-' + tag;
-        if (tag === 'div') control.contentEditable = 'true';
-        control.textContent = '交互控件';
-        field.append(control);
-      }
-      const before = window.fieldSample().sum;
-      for (const tag of ['button','input','a','div']) window.clickField('#control-' + tag);
-      window.clickField('.welcome-empty-state', 2);
-      await new Promise(resolve => setTimeout(resolve, 350));
-      return {before,after:window.fieldSample().sum};
-    `)
-    expect(result.after).toBe(result.before)
-  }, 30_000)
-  test('When 缩窄面板并卸载 Then 画布跟随容器且释放动画', async () => {
-    const result = await renderer.run<{ width: number; height: number; removed: boolean; paintsAfterUnmount: number }>(`
-      document.getElementById('field').style.width='320px';
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const sample = window.fieldSample();
-      let paints = 0;
-      const context = document.querySelector('canvas').getContext('2d');
-      const clear = context.clearRect.bind(context);
-      context.clearRect = (...args) => { paints++; clear(...args); };
-      window.unmountField();
-      await new Promise(resolve => setTimeout(resolve, 160));
-      return {width:sample.width,height:sample.height,removed:!document.querySelector('canvas'),paintsAfterUnmount:paints};
-    `, { dpr: 3 })
-    expect(result.width).toBe(640)
-    expect(result.height).toBeGreaterThan(0)
-    expect(result.removed).toBe(true)
-    expect(result.paintsAfterUnmount).toBe(0)
+    expect(result.peak).toBeGreaterThan(1000)
+    expect(result.hidden.blue).toBe(0)
+    expect(result.later).toEqual(result.hidden)
   }, 30_000)
 })

@@ -76,12 +76,19 @@ function expectPanel(style: PanelStyle, dark: boolean): void {
 }
 
 describe('Given 第4步面板与布局规范', () => {
-  test('When 三个主面板在亮暗及历史主题中显示 Then 共用圆角外框、接缝零间隙无圆角，行内代码仍为6px', async () => {
+  test('When 三个主面板在亮暗及历史主题中显示 Then 四边贴合窗口且接缝零间隙，行内代码仍为6px', async () => {
     for (const theme of ['', 'dark', 'dark theme-terminal-dark']) {
-      const result = await renderer.run<{ panels: PanelStyle[]; frameRadius: string; gaps: number[]; inset: number; codeRadius: string; background: string }>(`
+      const result = await renderer.run<{ panels: PanelStyle[]; frameRadius: string; frameOutline: string; gaps: number[]; insets: number[]; codeRadius: string; background: string }>(`
         const f=window.panelsFixture;await f.mount({theme:${JSON.stringify(theme)}});
-        const outer=document.querySelector('.gamma-workbench'),panels=f.framePanels(),rects=panels.map(e=>e.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
-        return {panels:panels.map(f.metrics),frameRadius:getComputedStyle(document.querySelector('.gamma-workbench-frame')).borderRadius,gaps:rects.slice(1).map((r,i)=>r.left-rects[i].right),inset:rects[0].left-outer.getBoundingClientRect().left,codeRadius:getComputedStyle(document.querySelector('code')).borderRadius,background:getComputedStyle(outer).backgroundColor};
+        const outer=document.querySelector('.gamma-workbench').getBoundingClientRect();
+        const frame=document.querySelector('.gamma-workbench-frame'),frameBounds=frame.getBoundingClientRect();
+        const frameStyle=getComputedStyle(frame),panels=f.framePanels();
+        const rects=panels.map(e=>e.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
+        return {panels:panels.map(f.metrics),frameRadius:frameStyle.borderRadius,frameOutline:frameStyle.outlineStyle,
+          gaps:rects.slice(1).map((r,i)=>r.left-rects[i].right),
+          insets:[frameBounds.left-outer.left,frameBounds.top-outer.top,outer.right-frameBounds.right,outer.bottom-frameBounds.bottom],
+          codeRadius:getComputedStyle(document.querySelector('code')).borderRadius,
+          background:getComputedStyle(document.querySelector('.gamma-workbench')).backgroundColor};
       `)
       expect(result.panels).toHaveLength(3)
       for (const panel of result.panels) {
@@ -90,9 +97,10 @@ describe('Given 第4步面板与布局规范', () => {
         expect(panel.padding).toBe('16px')
         expect(panel.background).toBe(theme ? 'rgb(38, 38, 36)' : 'rgb(255, 255, 255)')
       }
-      expect(result.frameRadius).toBe('12px')
+      expect(result.frameRadius).toBe('0px')
+      expect(result.frameOutline).toBe('none')
       expect(result.gaps).toEqual([0, 0])
-      expect(result.inset).toBe(8)
+      expect(result.insets).toEqual([0, 0, 0, 0])
       expect(result.codeRadius).toBe('6px')
       expect(result.background).toBe(theme ? 'rgb(31, 30, 29)' : 'rgb(250, 249, 245)')
     }
@@ -125,7 +133,7 @@ describe('Given 第4步面板与布局规范', () => {
       await f.mount({open:false,collapsed:true,windows:true});const pane=document.querySelector('[data-workspace-pane="workspace"]');
       return {retained,mounts:f.mounts.agent-before,workspaceWidth:pane.getBoundingClientRect().width,gap:getComputedStyle(document.querySelector('[data-testid="agent-workspace-layout"]')).columnGap,top:getComputedStyle(document.querySelector('.gamma-workbench')).paddingTop};
     `)
-    expect(result).toEqual({ retained: true, mounts: 0, workspaceWidth: 0, gap: '0px', top: '40px' })
+    expect(result).toEqual({ retained: true, mounts: 0, workspaceWidth: 0, gap: '0px', top: '32px' })
   }, 30_000)
 
   test('When 打开对话框、提示确认、侧边面板、浮层、菜单和选择器 Then 统一面板几何且不使用重阴影', async () => {

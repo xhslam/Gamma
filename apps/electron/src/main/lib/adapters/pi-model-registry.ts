@@ -656,7 +656,7 @@ async function findPiCatalogModel(provider: ProviderType, modelId: string): Prom
 
 /**
  * 解析模型图片输入能力。未知模型保持 unknown，由调用方决定是否保守拒绝。
- * 视觉助手等会产生数据外发的功能必须仅接受 confirmed supported。
+ * 会产生数据外发的功能必须仅接受 confirmed supported。
  */
 export async function resolvePiImageInputCapability(
   provider: ProviderType,
@@ -670,29 +670,6 @@ export async function resolvePiImageInputCapability(
   const catalogModel = await findPiCatalogModel(provider, resolvedModelId)
   if (!catalogModel) return 'unknown'
   return catalogModel.input.includes('image') ? 'supported' : 'unsupported'
-}
-
-/** Vision Relay 的实际请求路由。 */
-export interface PiVisionRelayRoute {
-  adapterProvider: ProviderType
-  baseUrl?: string
-}
-
-export async function resolvePiVisionRelayRoute(
-  provider: ProviderType,
-  modelId: string | undefined,
-): Promise<PiVisionRelayRoute | undefined> {
-  const resolvedModelId = stripLegacyAgentSdkContextSuffix(modelId)
-  if (provider === 'opencode-go-openai' || !resolvedModelId) return undefined
-  // DeepSeek Flash 的实验视觉模型尚未进入 Pi catalog；其渠道协议无需 catalog 分流。
-  if (supportsPiNativeImageInput(resolvedModelId)) {
-    return { adapterProvider: provider }
-  }
-
-  const catalogModel = await findPiCatalogModel(provider, resolvedModelId)
-  if (!catalogModel?.input.includes('image')) return undefined
-
-  return { adapterProvider: provider }
 }
 
 /**

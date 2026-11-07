@@ -244,7 +244,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       components: string[]; session: string; project: string; view: string; hasLegacyPromotion: boolean
     }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      const brand = document.querySelector('.gamma-wordmark').textContent;
+      const brand = document.querySelector('.gamma-sidebar-topbar').textContent.trim();
       const title = [...fixture.row('parent').querySelectorAll('span')].find(span => span.textContent === '整理研究资料');
       const titleFits = title.clientWidth > 0 && title.scrollWidth <= title.clientWidth;
       const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
@@ -348,10 +348,10 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return results;
     `)
     expect(results).toHaveLength(4)
-    for (const result of results) expect(result).toEqual({ absent: true, fits: true, focusable: true, height: 44, fallback: true })
+    for (const result of results) expect(result).toEqual({ absent: true, fits: true, focusable: true, height: 29, fallback: true })
   }, 30_000)
 
-  test('When 空列表或超长名称在 200px 浅深色侧栏展示 Then 操作入口可见且容器不会横向溢出', async () => {
+  test('When 空列表或超长名称在 200px 浅深色侧栏展示 Then 底栏入口可见且更新提示和长用户名不会挤出容器', async () => {
     const results = await renderer.run<Array<{ dark: boolean; empty: boolean; width: number; overflow: string[]; controls: boolean }>>(`
       const api = window.leftSidebarRegression, results = [], now = Date.now(), long = '极长的项目与会话名称'.repeat(40);
       for (const dark of [false,true]) for (const empty of [false,true]) {
@@ -364,7 +364,14 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         const overflow = [sidebar, ...sidebar.querySelectorAll('nav, [data-session-switch-id], [class*="overflow-y-auto"]')]
           .filter(node => node.scrollWidth > node.clientWidth + 1)
           .map(node => node.getAttribute('aria-label') || node.dataset.sessionSwitchId || node.className);
-        const controls = !!fixture.button('新建任务') && !!fixture.button('搜索') && !!fixture.button('打开设置');
+        const footer = sidebar.querySelector('.gamma-sidebar-footer');
+        const footerBounds = footer.getBoundingClientRect();
+        const controls = !!fixture.button('新建任务') && ['个人资料与设置', '搜索', '打开设置'].every(label => {
+          const button = fixture.button(label);
+          if (!button || !footer.contains(button)) return false;
+          const bounds = button.getBoundingClientRect();
+          return bounds.width >= 28 && bounds.left >= footerBounds.left && bounds.right <= footerBounds.right;
+        });
         results.push({ dark, empty, width: sidebar.getBoundingClientRect().width, overflow, controls }); fixture.root.unmount();
       }
       return results;

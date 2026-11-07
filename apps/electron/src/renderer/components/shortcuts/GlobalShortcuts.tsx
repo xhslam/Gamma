@@ -11,7 +11,7 @@
 
 import { useEffect, useCallback } from 'react'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
-import { settingsOpenAtom, channelFormDirtyAtom, settingsCloseRequestedAtom } from '@/atoms/settings-tab'
+import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { searchDialogOpenAtom } from '@/atoms/search-atoms'
 import {
   tabsAtom,
@@ -64,9 +64,7 @@ import {
  * 挂载后从 settings 加载自定义配置，并注册所有应用级快捷键。
  */
 export function GlobalShortcuts(): null {
-  const [settingsOpen, setSettingsOpen] = useAtom(settingsOpenAtom)
-  const channelFormDirty = useAtomValue(channelFormDirtyAtom)
-  const setSettingsCloseRequested = useSetAtom(settingsCloseRequestedAtom)
+  const setSettingsOpen = useSetAtom(settingsOpenAtom)
   const [searchOpen, setSearchOpen] = useAtom(searchDialogOpenAtom)
   const [shortcutGuideOpen, setShortcutGuideOpen] = useAtom(shortcutGuideOpenAtom)
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
@@ -115,15 +113,6 @@ export function GlobalShortcuts(): null {
       setShortcutGuideOpen(false)
       return
     }
-    if (settingsOpen) {
-      // 渠道表单有未保存内容时，通知 SettingsPanel 弹出确认对话框
-      if (channelFormDirty) {
-        setSettingsCloseRequested(true)
-        return
-      }
-      setSettingsOpen(false)
-      return
-    }
     if (searchOpen) {
       setSearchOpen(false)
       return
@@ -145,7 +134,7 @@ export function GlobalShortcuts(): null {
 
     if (!activeTabId) return
     requestClose(activeTabId)
-  }, [shortcutGuideOpen, setShortcutGuideOpen, settingsOpen, setSettingsOpen, channelFormDirty, setSettingsCloseRequested, searchOpen, setSearchOpen, activeTab, activeAgentSidePanelTab, isActiveAgentSidePanelOpen, activeTabId, requestClose])
+  }, [shortcutGuideOpen, setShortcutGuideOpen, searchOpen, setSearchOpen, activeTab, activeAgentSidePanelTab, isActiveAgentSidePanelOpen, activeTabId, requestClose])
 
   // 监听菜单 IPC 事件（Cmd+W 被 Electron 菜单拦截后通过 IPC 转发）
   useEffect(() => {

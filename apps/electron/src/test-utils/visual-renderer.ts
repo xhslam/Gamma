@@ -53,9 +53,12 @@ export async function createVisualRendererHarness(entrySource: string): Promise<
     const assets = output.filter((item) => item.type === 'asset')
     const styles = assets.filter((item) => item.fileName.endsWith('.css'))
       .map((item) => `<link rel="stylesheet" href="${item.fileName}">`).join('')
+    // Vite 按入口所在目录生成相对资源 URL，入口落盘时保留该目录。
+    const entryPath = join(directory, chunk.fileName)
+    await mkdir(dirname(entryPath), { recursive: true })
     await Promise.all([
-      writeFile(join(directory, 'renderer.js'), chunk.code),
-      writeFile(join(directory, 'index.html'), `<!doctype html><html><head><meta charset="UTF-8">${styles}</head><body><div id="root"></div><script src="renderer.js"></script></body></html>`),
+      writeFile(entryPath, chunk.code),
+      writeFile(join(directory, 'index.html'), `<!doctype html><html><head><meta charset="UTF-8">${styles}</head><body><div id="root"></div><script src="${chunk.fileName}"></script></body></html>`),
       ...assets.map(async (asset) => {
         const path = join(directory, asset.fileName)
         await mkdir(dirname(path), { recursive: true })

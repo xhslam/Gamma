@@ -32,15 +32,3 @@ export interface SystemProxyDetectResult {
   /** 结果消息 */
   message: string
 }
-
-/**
- * 代理配置相关 IPC 通道常量
- */
-export const PROXY_IPC_CHANNELS = {
-  /** 获取代理配置 */
-  GET_SETTINGS: 'proxy:get-settings',
-  /** 更新代理配置 */
-  UPDATE_SETTINGS: 'proxy:update-settings',
-  /** 检测系统代理 */
-  DETECT_SYSTEM: 'proxy:detect-system',
-} as const

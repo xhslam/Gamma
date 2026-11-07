@@ -25,9 +25,8 @@ import { productivityToolsAtom, workbenchDensityAtom } from '@/atoms/ui-preferen
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { WorkspaceMemoryChangeObserver } from '@/components/agent-skills/WorkspaceMemoryChangeObserver'
 import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleObserver'
-import { settingsOpenAtom } from '@/atoms/settings-tab'
+import { settingsOpenAtom, settingsWindowRequestAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
-import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { ComputerModals } from '@/components/computer-use'
 import { detectIsWindows } from '@/lib/platform'
 import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
@@ -80,14 +79,16 @@ export function AppShell(): React.ReactElement {
   const activeRightPanelSplit = useAtomValue(agentSidePanelSplitMapAtom).get(currentSessionId ?? '') ?? null
   const [isPanelOpen, setIsPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
   const automationForm = useAtomValue(automationFormAtom)
-  const settingsOpen = useAtomValue(settingsOpenAtom)
+  const settingsRequest = useAtomValue(settingsWindowRequestAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
-  const appContentRef = React.useRef<HTMLDivElement>(null)
 
-  // Settings 覆盖原内容时，用 inert 移除后台焦点目标；不能在仍持有焦点的节点上设置 aria-hidden。
-  React.useLayoutEffect(() => {
-    appContentRef.current?.toggleAttribute('inert', settingsOpen)
-  }, [settingsOpen])
+  React.useEffect(() => {
+    if (!settingsRequest) return
+    void window.electronAPI.openSettingsWindow(settingsRequest.tab, settingsRequest.navigate).catch(error => {
+      console.error('[设置] 打开窗口失败:', error)
+      setSettingsOpen(false)
+    })
+  }, [settingsRequest, setSettingsOpen])
 
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
   const [activeView, setActiveView] = useAtom(activeViewAtom)
@@ -295,9 +296,8 @@ export function AppShell(): React.ReactElement {
 
       <div data-workbench-density={density} className="shell-bg relative h-screen w-screen overflow-hidden bg-background">
         <div
-          ref={appContentRef}
           data-sidebar-collapsed={sidebarCollapsed}
-          className={cn('gamma-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
+          className={cn('gamma-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows))}
         >
           <div className="gamma-workbench-frame">
             <SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>
@@ -328,11 +328,6 @@ export function AppShell(): React.ReactElement {
         <ComputerModals />
         <TerminalLifecycleObserver />
         {currentWorkspace && <WorkspaceMemoryChangeObserver workspaceSlug={currentWorkspace.slug} />}
-        {settingsOpen && (
-          <div className="absolute inset-0 z-[60]">
-            <SettingsPanel onClose={() => setSettingsOpen(false)} />
-          </div>
-        )}
 
       </div>
     </>

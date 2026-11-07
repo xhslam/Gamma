@@ -1,3 +1,4 @@
+import { closeSettingsWindow, openSettingsWindow, readySettingsWindow } from './lib/settings-window'
 import { resolvePiBudgetContextWindow } from './lib/adapters/pi-model-registry'
 import { registerReferenceWarningListener } from './lib/conversation-reference/send-snapshot'
 import { prepareAgentReferenceInput } from './lib/agent-send-outbox-service'
@@ -13,7 +14,7 @@ import { existsSync, realpathSync, readFileSync, writeFileSync, mkdirSync, statS
 import { realpath, stat, writeFile, readdir, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import type { GlobalMemoryEntry } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS, TRAY_IPC_CHANNELS } from '../types'
 import { setAppIconVariant } from './lib/app-icon-service'
@@ -33,10 +34,8 @@ import type {
   VoiceDictationPreviewInput,
   VoiceDictationResizeInput,
   VoiceDictationSettings,
-  VoiceDictationSettingsUpdate,
   VoiceDictationStartInput,
   VoiceDictationStopInput,
-  VoiceDictationTestResult,
   VoiceDictationTextDeliveryInput,
   VoiceDictationToggleInput,
   MicPermissionResult,
@@ -83,8 +82,6 @@ import type {
   InstallerManifest,
   InstallerDownloadRequest,
   InstallerDownloadResult,
-  ProxyConfig,
-  SystemProxyDetectResult,
   GitHubRelease,
   GitHubReleaseListOptions,
   PermissionResponse,
@@ -213,9 +210,8 @@ import {
   downloadInstaller,
   launchInstaller,
 } from './lib/installer-downloader'
-import { getEffectiveProxyUrl, getProxySettings, saveProxySettings } from './lib/proxy-settings-service'
+import { getEffectiveProxyUrl } from './lib/proxy-settings-service'
 import { getFetchFn } from './lib/proxy-fetch'
-import { detectSystemProxy } from './lib/system-proxy-detector'
 import {
   listAutomations,
   getAutomation,
@@ -288,7 +284,7 @@ import { permissionService } from './lib/agent-permission-service'
 import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
-import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getConfigDir, getWorkspaceSkillsDir, getScratchPadPath, getMemoryDir } from './lib/config-paths'
+import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceSkillsDir, getScratchPadPath, getMemoryDir } from './lib/config-paths'
 import { writeTextFileAtomic } from './lib/safe-file'
 import { getCachedDefaultAppInfo, saveCachedDefaultAppInfo } from './lib/default-app-cache'
 import { loadDefaultAppIcon } from './lib/default-app-icon'
@@ -2036,6 +2032,13 @@ export function registerIpcHandlers(): void {
 
   // ===== 应用设置相关 =====
 
+  ipcMain.handle(SETTINGS_IPC_CHANNELS.WINDOW_OPEN, (event, tab: unknown, navigate: unknown) =>
+    openSettingsWindow(event.sender, tab, navigate === true))
+  ipcMain.handle(SETTINGS_IPC_CHANNELS.WINDOW_READY, event =>
+    readySettingsWindow(event.sender))
+  ipcMain.handle(SETTINGS_IPC_CHANNELS.WINDOW_CONFIRM_CLOSE, (event, tab: unknown) =>
+    closeSettingsWindow(event.sender, tab))
+
   // 获取应用设置
   ipcMain.handle(
     SETTINGS_IPC_CHANNELS.GET,
@@ -2300,32 +2303,6 @@ export function registerIpcHandlers(): void {
     INSTALLER_IPC_CHANNELS.LAUNCH,
     async (_event, filePath: string): Promise<void> => {
       await launchInstaller(filePath)
-    }
-  )
-
-  // ===== 代理配置相关 =====
-
-  // 获取代理配置
-  ipcMain.handle(
-    PROXY_IPC_CHANNELS.GET_SETTINGS,
-    async (): Promise<ProxyConfig> => {
-      return getProxySettings()
-    }
-  )
-
-  // 更新代理配置
-  ipcMain.handle(
-    PROXY_IPC_CHANNELS.UPDATE_SETTINGS,
-    async (_, config: ProxyConfig): Promise<void> => {
-      await saveProxySettings(config)
-    }
-  )
-
-  // 检测系统代理
-  ipcMain.handle(
-    PROXY_IPC_CHANNELS.DETECT_SYSTEM,
-    async (): Promise<SystemProxyDetectResult> => {
-      return detectSystemProxy()
     }
   )
 
@@ -5435,24 +5412,6 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(
-    VOICE_DICTATION_IPC_CHANNELS.UPDATE_SETTINGS,
-    async (_, updates: VoiceDictationSettingsUpdate): Promise<VoiceDictationSettings> => {
-      const { updateVoiceDictationSettings } = await import('./lib/voice-dictation-settings-service')
-      return updateVoiceDictationSettings(updates)
-    }
-  )
-
-  ipcMain.handle(
-    VOICE_DICTATION_IPC_CHANNELS.TEST_CONNECTION,
-    async (_, updates?: VoiceDictationSettingsUpdate): Promise<VoiceDictationTestResult> => {
-      const { getVoiceDictationSettings } = await import('./lib/voice-dictation-settings-service')
-      const { testDoubaoAsrConnection } = await import('./lib/doubao-asr-service')
-      const settings = { ...getVoiceDictationSettings(), ...(updates ?? {}) }
-      return testDoubaoAsrConnection(settings)
-    }
-  )
-
-  ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.TOGGLE,
     async (event, input?: VoiceDictationToggleInput): Promise<void> => {
       const { toggleVoiceDictationWindow } = await import('./lib/voice-dictation-window')
@@ -5588,14 +5547,6 @@ export function registerIpcHandlers(): void {
       return requestMicrophonePermission()
     }
   )
-
-  // ===== 数据迁移 =====
-
-  ipcMain.handle('migration:open-data-folder', async (): Promise<void> => {
-    const dataDir = getConfigDir()
-    const error = await shell.openPath(dataDir)
-    if (error) throw new Error(`无法打开 Gamma 数据文件夹：${error}`)
-  })
 
   // ===== 窗口控制（Windows 自定义标题栏按钮）=====
 
