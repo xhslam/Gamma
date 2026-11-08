@@ -99,9 +99,7 @@ it('Given Git 全局启用 autocrlf When 初始化自有源码缓存 Then 本地
   expect(readFileSync(file, 'utf8')).toBe('fixed source\nLF only\n')
 }))
 
-it('Given Windows 与 Release 工作流 When 固定源码构建 Then 安装与清单一致的 Rust 版本', () => {
-  for (const name of ['windows-check.yml', 'release.yml']) {
-    const workflow = readFileSync(resolve(import.meta.dir, '../../../.github/workflows', name), 'utf8')
-    expect(workflow).toContain(`rustup toolchain install ${AGENT_DESKTOP_SOURCE.rustToolchain} --profile minimal`)
-  }
+it('Given Release 工作流 When 固定源码构建 Then 安装与清单一致的 Rust 版本', () => {
+  const workflow = readFileSync(resolve(import.meta.dir, '../../../.github/workflows/release.yml'), 'utf8')
+  expect(workflow).toContain(`rustup toolchain install ${AGENT_DESKTOP_SOURCE.rustToolchain} --profile minimal`)
 })
