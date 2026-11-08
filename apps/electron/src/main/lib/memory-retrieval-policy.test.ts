@@ -33,15 +33,20 @@ describe('提取预检是精确兜底，不是相似主题自动读取', () => {
     expect(selectMemoryCandidates('我的职业经历是什么', files, new Set())).toHaveLength(1)
     expect(selectMemoryCandidates('我的职业经历是什么', files, new Set(['global:/profile.md']))).toEqual([])
   })
-  it('Given 系统规则 When 生成 Then 包含完整决策、敏感边界、批量及6个示例', () => {
+  it('Given 系统规则 When 生成 Then 包含统一记忆规则的分工、步骤、使用与例子', () => {
     const rules = buildMemoryRetrievalRules()
-    expect(rules).toContain('<memory_rules>'); expect(rules).toContain('<memory_examples>'); expect(rules).toContain('例6'); expect(rules).toContain('本轮为准'); expect(rules).toContain('不要凭一行描述猜正文')
+    expect(rules).toContain('# 记忆规则')
+    expect(rules).toContain('第一步：回答前，先对照目录')
+    expect(rules).toContain('第二步：怎么用')
+    expect(rules).toContain('第三步：要不要写')
+    expect(rules).toContain('例 1（读）')
   })
-  it('Given 全局规则 When 生成 Then 覆盖续做任务、通用问题澄清与回答前自检', () => {
+  it('Given 全局规则 When 生成 Then 覆盖三层分工、冲突优先级与结尾核心原则', () => {
     const rules = buildMemoryRetrievalRules()
-    expect(rules).toContain('先读对应项目文件再动手')
-    expect(rules).toContain('这是通用问题所以没查记忆')
-    expect(rules).toContain('<memory_checklist>')
-    expect(rules).not.toContain('<memory_system>')
+    expect(rules).toContain('用户记忆（global:）')
+    expect(rules).toContain('项目记忆（workspace:）')
+    expect(rules).toContain('AGENTS.md——这里必须遵守的规则')
+    expect(rules).toContain('用户这句话 > AGENTS.md > 项目记忆 > 用户记忆')
+    expect(rules).toContain('最重要的三句：先对照目录再回答；用记忆要自然；只写用户自己说的。')
   })
 })

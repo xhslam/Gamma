@@ -61,8 +61,7 @@ describe('Pi真实生命周期下的提取与一次性兜底', () => {
     expect(JSON.stringify(requests[2])).not.toContain('请先 memory_read 再回答')
     const system = requests[2]!.messages.filter(message => message.role === 'system').map(message => String(message.content)).join('')
     expect(system.match(/<memory_listing>\n/g)).toHaveLength(1)
-    expect(system.match(/<memory_recording_rules>/g)).toHaveLength(1)
-    expect(system.match(/<memory_rules>/g)).toHaveLength(1)
+    expect(system.match(/# 记忆规则/g)).toHaveLength(1)
   }, 20000)
   it('Given 已读文件外部变更 When 恢复会话 Then 通知更新、屏蔽旧正文并要求重读', async () => {
     const { requests } = await runFixture('我的秋考安排是什么？', (_request, index) => index === 1 || index === 4 ? toolResponse(['global:/areas/exam.md', 'workspace:/areas/exam.md']) : response('按当前科目安排。'), { update: true })

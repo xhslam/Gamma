@@ -1981,7 +1981,7 @@ export interface WorkspaceMemoryGuidance {
 export function getWorkspaceMemoryGuidance(workspaceSlug: string): WorkspaceMemoryGuidance {
   const memoryDir = getWorkspaceAutoMemoryPath(workspaceSlug)
   return {
-    needsCollaborationProfile: !isRegularFile(join(memoryDir, 'user-profile.md')),
+    needsCollaborationProfile: !isRegularFile(join(memoryDir, 'workflow.md')) && !isRegularFile(join(memoryDir, 'user-profile.md')),
   }
 }
 

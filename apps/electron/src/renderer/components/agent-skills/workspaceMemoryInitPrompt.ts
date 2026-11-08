@@ -7,14 +7,37 @@ export const MEMORY_HISTORY_RANGE_OPTIONS: Array<{ value: MemoryHistoryRange; la
   { value: 'all', label: '全部', promptLabel: '全部可用历史' },
 ]
 
+export const AGENTS_MD_TEMPLATE = `# <项目名> 规则
+
+## 项目一句话
+（一两句话）
+
+## 常用命令
+- 开发：
+- 测试：
+- 构建：
+
+## 必须遵守
+1.
+2.
+
+## 禁止
+-
+
+## 输出与代码风格
+-
+
+## 记忆分工（固定段，不要改）
+- 本文件写"必须怎么做"；项目是什么、为什么这么定、踩过什么坑，写进 memory/。
+- 用户个人信息和偏好不写在这里，写进全局用户记忆。
+- Agent 改动本文件前必须先问用户。`
+
 /** This block is project-portable policy, while exact Gamma paths remain in the workspace prompt. */
 export const PROJECT_KNOWLEDGE_MAINTENANCE_BLOCK = `<!-- gamma:knowledge-maintenance:start -->
-## 协作知识演进（Gamma 维护）
-
-- 保持本文件中的项目地图与已验证项目事实同步；命令、架构、边界和入口变化时做最小更新，不复制到协作记忆。
-- Gamma 工作区的 \`memory/\` 是可扩展的长期协作知识库：\`MEMORY.md\` 只做主题索引和路由，按证据创建用户画像、协作偏好、纠错与经验、决策理由等主题文件；不要把临时过程或长篇证据写入其中。
-- 用户画像按具体领域渐进修订，不以“新手/专家”等全局标签定性。只有稳定、会改变未来协作判断的信息才值得维护。若记忆时间敏感、状态会更新，或记录具有后续判断价值的阶段性进展，须在对应正文相邻标注事实/状态的发生、生效或截至时间（至少日期；日内顺序、截止点或时区会影响判断时写明时间和时区），不能用文件修改时间替代；稳定事实无需额外添加时间戳。
-- 基于明确、稳定证据的 Memory 最小增量可直接写入并在完成后说明；仅在删除或大段覆盖、与既有记录冲突、存在不确定推断，或可能涉及敏感个人信息时，先提出候选并取得确认。项目地图的已验证事实可直接更新。历史会话仅在用户授权后作为分批、限量的补充证据，不得全量扫描。
+## 记忆分工（固定段，不要改）
+- 本文件写"必须怎么做"；项目是什么、为什么这么定、踩过什么坑，写进 memory/。
+- 用户个人信息和偏好不写在这里，写进全局用户记忆。
+- Agent 改动本文件前必须先问用户。
 <!-- gamma:knowledge-maintenance:end -->`
 
 export function getMemoryHistoryRangeLabel(value: MemoryHistoryRange): string {
@@ -23,27 +46,25 @@ export function getMemoryHistoryRangeLabel(value: MemoryHistoryRange): string {
 
 /** Starts the user-authorized project-map and collaboration-profile bootstrap. */
 export function buildWorkspaceKnowledgeBootstrapPrompt(): string {
-  return `请开始建立当前项目的协作知识，但不要把它做成一次性“用户/项目档案”问卷。按以下顺序渐进进行。
+  return `请开始建立当前项目的规则与协作约定。按以下顺序渐进进行：
 
-## 第一阶段：先建立可维护的项目地图
-用户已授权你主动维护系统提示中给出的两个 \`AGENTS.md\`：项目根的 \`AGENTS.md\` 与 Gamma 工作区的 \`AGENTS.md\`。
+## 第一阶段：建立规则 AGENTS.md
+用户已授权你基于已核验的项目事实初始化或维护 \`AGENTS.md\`。
+1. \`AGENTS.md\` 里只放指令，不放会变的事实，也不放进度。每条规则一句话、能检验，全文控制在 80 行内。若文件缺失，使用以下模板创建：
 
-1. 先读取两份现有文件（若存在），再用最小必要的项目证据核验：manifest、实际脚本、测试配置、目录入口、近期相关文档。不要只凭文件名或一般经验猜测。
-2. 项目根 \`AGENTS.md\` 负责项目地图：架构、目录、命令、验证、项目边界和关键文档索引。Gamma 工作区 \`AGENTS.md\` 只负责 Gamma 的执行环境、工作流和指向项目根规则的入口；不要复制项目事实，也不要枚举已安装 Skills——它们会动态注入系统提示词。
-3. 缺失时创建简洁的最小索引；已有时只做可验证的增量更新。优先维护已有 \`<!-- gamma:... -->\` 或兼容的 \`<!-- proma:... -->\` 区块，保留原标记；没有时只追加受管区块，绝不整体重写、删除或覆盖用户手写规则。
-4. 确保项目根 \`AGENTS.md\` 包含知识演进协议。\`<!-- proma:knowledge-maintenance:start -->\` 与 \`<!-- gamma:knowledge-maintenance:start -->\` 是同一协议的旧、新标记；已有任一种时只做最小修订并保留原标记，不因改名追加第二个区块。两种均不存在时，追加下方完整区块：
+\`\`\`markdown
+${AGENTS_MD_TEMPLATE}
+\`\`\`
 
-${PROJECT_KNOWLEDGE_MAINTENANCE_BLOCK}
+2. 确保包含固定的“记忆分工”区块。若已有旧协议标记 \`<!-- proma:knowledge-maintenance:start -->\` 或 \`<!-- gamma:knowledge-maintenance:start -->\`，做最小修订并保留原标记。
 
-5. 完成阶段后报告核验来源和更新的两份文件。无需为这两份 \`AGENTS.md\` 另行请求写入确认。
-
-## 第二阶段：通过真实对话建立协作画像
-项目地图完成后，不要读取历史会话。只在当前回复末尾提出**一个**与本次过程有关、能改善未来协作判断的简短问题，例如用户希望了解解释深度、确认方式，或在当前技术领域的熟悉度。
-
-不要让用户笼统介绍自己或项目。“小白/专业”只能是按领域、可随新证据修订的判断，不能写成全局标签。用户直接回答了稳定协作信息时，可最小创建或更新 \`memory/user-profile.md\`，并同步更新 \`MEMORY.md\` 的简短路由；在回复中说明写入结果。只有删除/大段覆盖、与既有记录冲突、存在不确定推断或涉及敏感个人信息时，才先复述候选并请求确认。用户跳过时停止追问并正常继续。
+## 第二阶段：建立项目协作约定
+项目规则完成后，不要读取历史会话。只在当前回复末尾提出**一个**与本次项目协作约定有关的简短问题（例如代码改动前是否先出方案、测试验收要求等）。
+用户直接回答了项目协作约定时，可最小创建或更新 \`memory/workflow.md\`（只记录在这个项目里的协作约定，不再镜像全局画像），并同步更新 \`MEMORY.md\` 的单行索引（格式为 \`- [workflow.md] 项目协作约定\`）。
+写完不要在回复里提“已记住”。只有删除/大段覆盖、冲突、涉及敏感信息时，才先问用户。
 
 ## 第三阶段：历史会话只作补证据
-本次没有阅读历史会话的授权。等协作画像已有初步内容后，另行邀请用户决定是否授权分批扫描当前工作区的高信号会话。`
+本次没有阅读历史会话的授权。等协作约定已有初步记录后，另行邀请用户决定是否授权分批扫描当前工作区的高信号会话。`
 }
 
 /** Builds an explicit, bounded historical-session evidence pass after profile bootstrap. */
@@ -53,7 +74,7 @@ export function buildWorkspaceSessionEvidencePrompt(historyRange: MemoryHistoryR
     ? '用户明确选择全部可用历史；仍必须优先近期和高信号会话，并在得到足够证据后停止。'
     : `只处理${rangeLabel}的会话；若证据不足，不得自行扩大范围。`
 
-  return `用户已授权你将当前项目工作区的历史会话作为**补充证据**，不是全量记忆蒸馏。协作记忆或项目地图的既有内容仍是优先上下文。
+  return `用户已授权你将当前项目工作区的历史会话作为**补充证据**，不是全量记忆蒸馏。项目规则或记忆文件的既有内容仍是优先上下文。
 
 范围与预算：
 - ${rangeGuidance}
@@ -62,7 +83,7 @@ export function buildWorkspaceSessionEvidencePrompt(historyRange: MemoryHistoryR
 - 每批提炼后判断证据是否已经足够；足够即停止。不足时说明缺口，并由用户决定是否授权下一批。
 
 写入边界：
-- 你可以基于已核验的项目事实，小幅维护系统提示中给出的项目根或 Gamma 工作区 \`AGENTS.md\`，但必须保留用户内容并遵守两份文件的职责边界。
-- 对 \`memory/\` 的用户画像、偏好、纠错、经验和决策理由，基于明确证据的最小增量可直接写入并说明；时间敏感、可更新或有后续价值的过程性内容必须在正文相邻标注对应的发生、生效或截至时间，不能以文件修改时间替代；稳定事实无需额外添加时间戳。只有删除/大段覆盖、冲突、不确定推断或敏感信息才先展示候选并取得确认。
-- 不要把会话流水账、一次性任务过程或未经验证的推断写入任何长期文件；不要读取或写入其他工作区的会话或记忆。`
+- 项目规则 \`AGENTS.md\` 只放必须遵守的指令与边界，Agent 改动前必须先问用户。
+- 项目记忆写入 \`memory/\`：\`workflow.md\`（协作约定）、\`project.md\`（目标与技术栈）、\`decisions.md\`（决定与理由：\`- [stated] 2026-10-xx 决定：X；理由：Y；状态：有效\`）、\`lessons.md\`（踩坑：\`- [verified] 现象 → 原因 → 解法（依据：…，2026-10-xx）\`）。\`MEMORY.md\` 只做单行索引。
+- 最小增量写入，写完不要在回复里提“已记住”。只有删除/大段覆盖、冲突、涉及敏感信息才先问用户。`
 }

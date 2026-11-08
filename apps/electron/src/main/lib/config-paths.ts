@@ -725,5 +725,11 @@ export function getMemoryDir(userId?: string): string {
     console.log(`[配置] 已创建长期记忆目录: ${dir}`)
   }
 
+  // 确保 areas/ 目录存在（放进行中的事）
+  const areasDir = join(dir, 'areas')
+  if (!existsSync(areasDir)) {
+    mkdirSync(areasDir, { recursive: true })
+  }
+
   return dir
 }

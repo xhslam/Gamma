@@ -169,11 +169,18 @@ export function WorkspaceMemoryWindowApp(): React.ReactElement {
   }, [save])
 
   const createIndex = React.useCallback(() => {
+    const defaultTemplate = `# 记忆索引
+
+- [workflow.md] 项目协作约定
+- [project.md] 目标、技术栈与运行测试
+- [decisions.md] 技术决定与理由
+- [lessons.md] 踩坑记录与解法
+`
     selectedPathRef.current = 'MEMORY.md'
-    textRef.current = '# Memory\n'
+    textRef.current = defaultTemplate
     dirtyRef.current = true
     setSelectedPath('MEMORY.md')
-    setText('# Memory\n')
+    setText(defaultTemplate)
     setDirty(true)
     setRemoteChanged(false)
     setViewMode('edit')

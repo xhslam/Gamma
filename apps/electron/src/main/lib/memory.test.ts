@@ -518,10 +518,9 @@ describe('长期记忆接入冒烟测试 (Smoke Test)', () => {
       const serializedSession2Messages = JSON.stringify(session2Request!.messages)
       expect(serializedSession2Messages).toContain('profile.md')
       expect(serializedSession2Messages).toContain('落花流水')
-      expect(serializedSession2Messages).toContain('<memory_rules>')
+      expect(serializedSession2Messages).toContain('# 记忆规则')
       expect(serializedSession2Messages).toContain('<profile>')
       expect(serializedSession2Messages).toContain('<preferences>')
-      expect(serializedSession2Messages).toContain('<reminder>')
 
       // 步骤 4：发"帮我翻译这句话"，确认没有产生写入
       const mtimeBefore = readFileSync(profilePath, 'utf8')

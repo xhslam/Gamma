@@ -15,6 +15,8 @@ import {
   Search,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import type { GlobalMemoryEntry } from '@gamma/shared'
 import { Button } from '../ui/button'
@@ -40,12 +42,25 @@ function formatTime(timestamp: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+function splitFrontmatter(text: string): { hasFrontmatter: boolean; frontmatter: string; body: string } {
+  const match = text.match(/^(\uFEFF?)(---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))([\s\S]*)$/)
+  if (!match) {
+    return { hasFrontmatter: false, frontmatter: '', body: text }
+  }
+  return {
+    hasFrontmatter: true,
+    frontmatter: (match[1] ?? '') + (match[2] ?? ''),
+    body: match[3] ?? '',
+  }
+}
+
 export function GlobalMemorySettings(): React.ReactElement {
   const [loading, setLoading] = React.useState(true)
   const [entries, setEntries] = React.useState<GlobalMemoryEntry[]>([])
   const [selectedPath, setSelectedPath] = React.useState<string | null>(null)
   const [searchQuery, setSearchQuery] = React.useState('')
   const [editContent, setEditContent] = React.useState('')
+  const [showFrontmatter, setShowFrontmatter] = React.useState(false)
   const [isDirty, setIsDirty] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'success' | 'error'>('idle')
@@ -184,7 +199,7 @@ export function GlobalMemorySettings(): React.ReactElement {
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Brain className="size-5 text-primary" />
-            全局长期记忆 (Pi Extension)
+            全局长期记忆
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
             跨会话沉淀的用户身份 (profile.md)、回答偏好 (preferences.md) 与个人习惯。Agent 会在对话中自动沉淀与调用。
@@ -219,7 +234,7 @@ export function GlobalMemorySettings(): React.ReactElement {
           <Input
             value={newFilePath}
             onChange={(e) => setNewFilePath(e.target.value)}
-            placeholder="例如: profile.md 或 topics/habits.md"
+            placeholder="例如: profile.md 或 areas/gamma.md 或 topics/habits.md"
             className="h-8 flex-1 text-xs"
             autoFocus
           />
@@ -322,7 +337,7 @@ export function GlobalMemorySettings(): React.ReactElement {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground mr-2">
+                  <span className="text-[11px] text-muted-foreground mr-2 whitespace-nowrap shrink-0">
                     更新于: {formatTime(selectedEntry.updatedAt)}
                   </span>
                   <Button
@@ -368,14 +383,56 @@ export function GlobalMemorySettings(): React.ReactElement {
                   </Button>
                 </div>
               )}
-              <div className="flex-1 p-4">
-                <Textarea
-                  value={editContent}
-                  onChange={handleContentChange}
-                  className="h-full resize-none font-mono text-xs leading-relaxed border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 p-0"
-                  placeholder="记忆内容..."
-                />
-              </div>
+              {(() => {
+                const { hasFrontmatter, frontmatter, body } = splitFrontmatter(editContent)
+                return (
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    {hasFrontmatter && (
+                      <div className="border-b bg-muted/20 px-4 py-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setShowFrontmatter((prev) => !prev)}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {showFrontmatter ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                          <span className="font-medium">元数据 (Frontmatter)</span>
+                          <span className="text-[11px] opacity-70">
+                            {showFrontmatter ? '点击折叠' : '已折叠 · 包含 name/description/aliases'}
+                          </span>
+                        </button>
+                        {showFrontmatter && (
+                          <div className="mt-2 rounded border bg-muted/40 p-2">
+                            <Textarea
+                              value={frontmatter}
+                              onChange={(e) => {
+                                const newFrontmatter = e.target.value
+                                setEditContent(newFrontmatter + body)
+                                setIsDirty(true)
+                                setSaveStatus('idle')
+                              }}
+                              className="h-24 resize-none font-mono text-[11px] leading-relaxed border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                              placeholder="frontmatter..."
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex-1 p-4 overflow-hidden">
+                      <Textarea
+                        value={hasFrontmatter ? body : editContent}
+                        onChange={(e) => {
+                          const newBody = e.target.value
+                          setEditContent(hasFrontmatter ? frontmatter + newBody : newBody)
+                          setIsDirty(true)
+                          setSaveStatus('idle')
+                        }}
+                        className="h-full resize-none font-mono text-xs leading-relaxed border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 p-0"
+                        placeholder="记忆内容..."
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
