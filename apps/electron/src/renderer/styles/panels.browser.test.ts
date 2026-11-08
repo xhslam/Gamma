@@ -106,10 +106,10 @@ describe('Given 第4步面板与布局规范', () => {
     }
   }, 30_000)
 
-  test('When 顶栏并排且交换工作区方向 Then 面板零间隙但横线在各自区域内独立结束', async () => {
+  test('When 顶栏并排且交换工作区方向 Then 各区域独立绘制的横线在同一高度延伸到面板边缘', async () => {
     for (const theme of ['', 'dark', 'dark theme-terminal-dark']) {
       for (const side of ['left', 'right']) {
-        const result = await renderer.run<Array<{ left: string; right: string; height: string; border: string; pointer: string; lineColor: string; dividerColor: string; gap: number }>>(`
+        const result = await renderer.run<Array<{ left: string; right: string; height: string; border: string; pointer: string; lineColor: string; dividerColor: string; gap: number; y: number; fullWidth: boolean; headerLine: string }>>(`
           const f=window.panelsFixture;await f.mount({theme:${JSON.stringify(theme)},side:${JSON.stringify(side)}});
           const panels=f.framePanels();
           panels.forEach((panel,index)=>{
@@ -119,19 +119,24 @@ describe('Given 第4步面板与布局规范', () => {
           });
           const sorted=panels.map(p=>p.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
           return panels.map(panel=>{
-            const header=panel.querySelector('.gamma-topbar'),style=getComputedStyle(header),line=getComputedStyle(header,'::after');
+            const header=panel.querySelector('.gamma-topbar'),style=getComputedStyle(header),line=getComputedStyle(panel,'::after');
+            const bounds=panel.getBoundingClientRect();
             return {left:line.left,right:line.right,height:style.height,border:style.borderBottomColor,pointer:line.pointerEvents,
-              lineColor:line.backgroundColor,dividerColor:style.getPropertyValue('--workbench-divider').trim(),gap:sorted[1].left-sorted[0].right};
+              lineColor:line.backgroundColor,dividerColor:style.getPropertyValue('--workbench-divider').trim(),gap:sorted[1].left-sorted[0].right,
+              y:bounds.top+parseFloat(line.top),fullWidth:Math.abs(parseFloat(line.width)-(panel.clientWidth))<1,headerLine:getComputedStyle(header,'::after').content};
           });
         `)
         for (const sample of result) {
-          expect(sample.left).toBe('16px')
-          expect(sample.right).toBe('16px')
+          expect(sample.left).toBe('0px')
+          expect(sample.right).toBe('0px')
           expect(sample.height).toBe('29px')
           expect(sample.border).toBe('rgba(0, 0, 0, 0)')
           expect(sample.pointer).toBe('none')
           expect(sample.lineColor).not.toBe('rgba(0, 0, 0, 0)')
           expect(sample.gap).toBe(0)
+          expect(sample.y).toBe(result[0]!.y)
+          expect(sample.fullWidth).toBe(true)
+          expect(sample.headerLine).toBe('none')
         }
       }
     }

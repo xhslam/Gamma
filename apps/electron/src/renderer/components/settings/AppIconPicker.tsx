@@ -133,7 +133,7 @@ export function AppIconPicker(): React.ReactElement {
   }, [platform.isMac, state.activeIcon, state.initializing, state.loadError, setState])
 
   return (
-    <SettingsSection title="应用图标" description="白底黑银为默认图标，可选择其余九款配色">
+    <SettingsSection title="应用图标" description="米白蓝绿为默认图标，另有 12 款配色可选">
       <SettingsCard divided={false}>
         <div className="space-y-3 px-4 py-4">
           <AppIconGrid

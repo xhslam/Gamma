@@ -46,7 +46,26 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('图标设置真实 Chromium 交互', () => {
-  test('Given 旧配色配置与延迟读取 When 打开外观设置 Then 加载时禁用且读取后归一化为白底黑银', async () => {
+  test('Given 已保存旧版冰蓝配色 When 加载十三款像素图标并切换新增款 Then 正确迁移、图片完整加载且保存新增ID', async () => {
+    const result = await renderer.run<{ count: number; loaded: boolean; migrated: string; chosen: string; calls: string[] }>(`
+      const calls = []
+      const picker = await window.iconRegression.mount({
+        getSettings: async () => ({ appIconVariant: 'ice-blue' }),
+        setAppIcon: async id => { calls.push(id); return true },
+      })
+      await window.iconRegression.until(() => picker.buttons().every(button => !button.disabled))
+      await window.iconRegression.until(() => [...document.querySelectorAll('[role="group"] img')].every(image => image.complete && image.naturalWidth === 1024)).catch(() => {
+        throw new Error(JSON.stringify([...document.querySelectorAll('[role="group"] img')].map(image => ({ src: image.src, complete: image.complete, width: image.naturalWidth }))))
+      })
+      const migrated = picker.chosen()
+      picker.buttons().find(button => button.getAttribute('aria-label') === '长春花蓝').click()
+      await window.iconRegression.until(() => picker.chosen() === '长春花蓝')
+      return { count: picker.buttons().length, loaded: true, migrated, chosen: picker.chosen(), calls }
+    `)
+    expect(result).toEqual({ count: 13, loaded: true, migrated: '午夜冰青', chosen: '长春花蓝', calls: ['periwinkle'] })
+  }, 20_000)
+
+  test('Given 旧配色配置与延迟读取 When 打开外观设置 Then 加载时禁用且读取后归一化为米白蓝绿', async () => {
     const result = await renderer.run<{ loadingDisabled: boolean; chosen: string; ready: boolean }>(`
       let finishRead
       const picker = await window.iconRegression.mount({ getSettings: () => new Promise(resolve => { finishRead = resolve }) })
@@ -56,7 +75,7 @@ describe('图标设置真实 Chromium 交互', () => {
       await window.iconRegression.until(() => picker.buttons().every(button => !button.disabled))
       return { loadingDisabled, chosen: picker.chosen(), ready: !picker.status().includes('正在读取') }
     `)
-    expect(result).toEqual({ loadingDisabled: true, chosen: '白底黑银（默认）', ready: true })
+    expect(result).toEqual({ loadingDisabled: true, chosen: '米白蓝绿（默认）', ready: true })
   }, 20_000)
 
   test('Given 图标切换正在进行 When 重复点击且IPC返回失败 Then 仅提交一次并保留原图标与错误提示', async () => {
@@ -65,7 +84,7 @@ describe('图标设置真实 Chromium 交互', () => {
       let finishSave
       const picker = await window.iconRegression.mount({ setAppIcon: id => { calls.push(id); return new Promise(resolve => { finishSave = resolve }) } })
       await window.iconRegression.until(() => picker.buttons().every(button => !button.disabled))
-      const iceBlue = picker.buttons().find(button => button.getAttribute('aria-label') === '黑底冰蓝')
+      const iceBlue = picker.buttons().find(button => button.getAttribute('aria-label') === '午夜冰青')
       iceBlue.click()
       iceBlue.click()
       await window.iconRegression.until(() => picker.buttons().every(button => button.disabled))
@@ -75,7 +94,7 @@ describe('图标设置真实 Chromium 交互', () => {
       await window.iconRegression.until(() => document.body.textContent.includes('图标切换失败'))
       return { calls, pendingDisabled, chosen: picker.chosen(), error: document.body.textContent.includes('图标切换失败') }
     `)
-    expect(result).toEqual({ calls: ['ice-blue'], pendingDisabled: true, chosen: '白底黑银（默认）', error: true })
+    expect(result).toEqual({ calls: ['midnight-cyan'], pendingDisabled: true, chosen: '米白蓝绿（默认）', error: true })
   }, 20_000)
 
   test('Given 读取配置失败 When 点击重试后成功保存新款 Then 清除读取错误并更新选中图标', async () => {
@@ -83,7 +102,7 @@ describe('图标设置真实 Chromium 交互', () => {
       let reads = 0
       const calls = []
       const picker = await window.iconRegression.mount({
-        getSettings: async () => { if (++reads === 1) throw new Error('读取失败'); return { appIconVariant: 'ice-blue' } },
+        getSettings: async () => { if (++reads === 1) throw new Error('读取失败'); return { appIconVariant: 'midnight-cyan' } },
         setAppIcon: async id => { calls.push(id); return true },
       })
       await window.iconRegression.until(() => document.querySelector('[role="alert"]'))
@@ -91,11 +110,11 @@ describe('图标设置真实 Chromium 交互', () => {
       document.querySelector('[role="alert"] button').click()
       await window.iconRegression.until(() => picker.buttons().every(button => !button.disabled))
       const selectedBefore = picker.chosen()
-      picker.buttons().find(button => button.getAttribute('aria-label') === '白底蓝银').click()
-      await window.iconRegression.until(() => picker.chosen() === '白底蓝银')
+      picker.buttons().find(button => button.getAttribute('aria-label') === '晴空钴蓝').click()
+      await window.iconRegression.until(() => picker.chosen() === '晴空钴蓝')
       return { reads, errorDisabled, selectedBefore, selectedAfter: picker.chosen(), calls }
     `)
-    expect(result).toEqual({ reads: 2, errorDisabled: true, selectedBefore: '黑底冰蓝', selectedAfter: '白底蓝银', calls: ['sapphire-silver'] })
+    expect(result).toEqual({ reads: 2, errorDisabled: true, selectedBefore: '午夜冰青', selectedAfter: '晴空钴蓝', calls: ['sky-cobalt'] })
   }, 20_000)
 
   test('Given Windows或Linux When 点击图标预览 Then 保持禁用与平台提示且不提交切换IPC', async () => {

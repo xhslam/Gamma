@@ -66,7 +66,7 @@
   height: var(--workbench-topbar-height);
   flex-shrink: 0;
   position: relative;
-  /* 保留原有高度，分隔线单独绘制，避免与相邻区域及竖向边界相接。 */
+  /* 分隔线不参与高度计算，避免顶栏内容改变三个区域的对齐。 */
   border-bottom: 1px solid transparent;
   background-color: hsl(var(--content-area));
 }
@@ -74,7 +74,7 @@
 .gamma-topbar::after {
   content: '';
   position: absolute;
-  inset-inline: var(--panel-padding);
+  inset-inline: 0;
   bottom: -1px;
   height: 1px;
   background-color: var(--workbench-divider);
@@ -82,7 +82,24 @@
 }
 
 .gamma-workbench-frame .gamma-panel:has(.gamma-topbar) {
+  position: relative;
   padding-top: 0;
+}
+
+/* 横线由各面板独立绘制到边缘，避开内容内边距及内部 overflow 裁切。 */
+.gamma-workbench-frame .gamma-panel:has(.gamma-topbar)::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--workbench-topbar-height) - 1px);
+  height: 1px;
+  background-color: var(--workbench-divider);
+  pointer-events: none;
+  z-index: 70;
+}
+
+.gamma-workbench-frame .gamma-panel .gamma-topbar::after {
+  content: none;
 }
 
 .gamma-sidebar-topbar,

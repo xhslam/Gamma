@@ -70,16 +70,18 @@ export async function createElectronRendererHarness(entrySource: string, options
     // 仅检查 font-family 将无法发现真实字形加载失败。
     const assets = output.filter((item) => item.type === 'asset')
     const stylesheets = cssAssets.map((item) => `<link rel="stylesheet" href="${item.fileName}">`).join('')
+    // IIFE 内的资源 URL 以当前脚本为基准，入口也须保留 Vite 的 assets/ 层级。
+    await mkdir(dirname(join(directory, chunk.fileName)), { recursive: true })
     await Promise.all([
       ...(options.preloadSource ? [writeFile(join(directory, 'preload.cjs'), options.preloadSource)] : []),
-      writeFile(join(directory, 'renderer.js'), chunk.code),
+      writeFile(join(directory, chunk.fileName), chunk.code),
       ...assets.map(async (item) => {
         if (item.type !== 'asset') return
         const target = join(directory, item.fileName)
         await mkdir(dirname(target), { recursive: true })
         await writeFile(target, item.source)
       }),
-      writeFile(join(directory, 'index.html'), `<!doctype html><html><head><meta charset="UTF-8">${stylesheets}</head><body><div id="root"></div><script src="renderer.js"></script></body></html>`),
+      writeFile(join(directory, 'index.html'), `<!doctype html><html><head><meta charset="UTF-8">${stylesheets}</head><body><div id="root"></div><script src="${chunk.fileName}"></script></body></html>`),
     ])
   } catch (error) {
     await rm(directory, { recursive: true, force: true })

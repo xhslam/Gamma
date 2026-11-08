@@ -46,7 +46,7 @@ describe('应用图标偏好的读取与原子保存', () => {
       writeJsonFileAtomic(settingsPath, { appIconVariant: 'black', themeMode: 'dark', sendWithCmdEnter: true })
       const result = await runSettingsScenario(settingsPath, `
         const initial = getSettings()
-        const updated = updateSettings({ appIconVariant: 'emerald-gold' })
+        const updated = updateSettings({ appIconVariant: 'mint-forest' })
         const restored = getSettings()
         const saved = JSON.parse(readFileSync(settingsPath, 'utf-8'))
         const backup = JSON.parse(readFileSync(settingsPath + '.bak', 'utf-8'))
@@ -61,8 +61,8 @@ describe('应用图标偏好的读取与原子保存', () => {
         }))
       `)
       expect(result).toEqual({
-        initialVariant: 'default', updatedVariant: 'emerald-gold', restoredVariant: 'emerald-gold',
-        savedVariant: 'emerald-gold', backupVariant: 'black', themeMode: 'dark', sendWithCmdEnter: true,
+        initialVariant: 'default', updatedVariant: 'mint-forest', restoredVariant: 'mint-forest',
+        savedVariant: 'mint-forest', backupVariant: 'black', themeMode: 'dark', sendWithCmdEnter: true,
       })
       expect(existsSync(settingsPath + '.tmp')).toBe(false)
     } finally {
@@ -70,7 +70,7 @@ describe('应用图标偏好的读取与原子保存', () => {
     }
   })
 
-  test('Given 缺失或损坏的配置 When 读取图标偏好 Then 返回默认白底黑银', async () => {
+  test('Given 缺失或损坏的配置 When 读取图标偏好 Then 返回默认米白蓝绿', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'gamma-app-icon-settings-'))
     const settingsPath = join(tempDir, 'settings.json')
     const scenario = `console.log(JSON.stringify({ initialVariant: getSettings().appIconVariant }))`
@@ -92,7 +92,7 @@ describe('应用图标偏好的读取与原子保存', () => {
       const result = await runSettingsScenario(settingsPath, `
         const before = readFileSync(settingsPath, 'utf-8')
         let didThrow = false
-        try { updateSettings({ appIconVariant: 'emerald-gold' }) } catch { didThrow = true }
+        try { updateSettings({ appIconVariant: 'mint-forest' }) } catch { didThrow = true }
         console.log(JSON.stringify({ initialVariant: getSettings().appIconVariant, didThrow, unchanged: before === readFileSync(settingsPath, 'utf-8') }))
       `)
       expect(result).toEqual({ initialVariant: 'default', didThrow: true, unchanged: true })

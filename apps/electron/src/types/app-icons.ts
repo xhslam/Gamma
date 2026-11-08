@@ -1,34 +1,53 @@
-/** 应用图标与品牌素材共用的十款配色，默认款为白底黑银。 */
+/** 与 Auris 同系列的像素 γ 图标，米白蓝绿为默认款。 */
 interface AppIconDefinition {
   id: string
   name: string
   description: string
   fileName: string
+  background: string
+  foreground: string
 }
 
 export const APP_ICON_VARIANTS = [
-  { id: 'default', name: '白底黑银', description: '默认配色 · 黑银与柔白', fileName: 'gamma-black-silver-light.png' },
-  { id: 'silver-glow', name: '黑底银辉', description: '银白光芒与黑色', fileName: 'gamma-silver-glow-dark.png' },
-  { id: 'emerald-gold', name: '白底翡翠金', description: '翡翠绿、金色与柔白', fileName: 'gamma-emerald-gold-light.png' },
-  { id: 'sapphire-silver', name: '白底蓝银', description: '宝石蓝、银色与柔白', fileName: 'gamma-sapphire-silver-light.png' },
-  { id: 'amethyst', name: '白底紫晶', description: '紫水晶与柔白', fileName: 'gamma-amethyst-light.png' },
-  { id: 'coral', name: '白底珊瑚', description: '珊瑚橘与暖白', fileName: 'gamma-coral-light.png' },
-  { id: 'ice-blue', name: '黑底冰蓝', description: '冰蓝、银白与深蓝', fileName: 'gamma-ice-blue-dark.png' },
-  { id: 'neon-violet', name: '黑底蓝紫', description: '蓝紫光芒与深蓝', fileName: 'gamma-neon-violet-dark.png' },
-  { id: 'ruby-gold', name: '黑底赤金', description: '赤红、金橘与黑色', fileName: 'gamma-ruby-gold-dark.png' },
-  { id: 'emerald-glow', name: '黑底翡翠金', description: '翡翠光芒、金色与黑色', fileName: 'gamma-emerald-glow-dark.png' },
+  { id: 'default', name: '米白蓝绿', description: '米白与蓝绿色', fileName: 'gamma-ivory-teal.png', background: '#F2EBDD', foreground: '#345F6C' },
+  { id: 'cream-orange', name: '奶油橙', description: '奶油白与赤陶橙', fileName: 'gamma-cream-orange.png', background: '#F8EEE3', foreground: '#B94816' },
+  { id: 'lavender', name: '浅紫罗兰', description: '浅薰衣草与紫罗兰', fileName: 'gamma-lavender.png', background: '#EBE1FC', foreground: '#6122C8' },
+  { id: 'sky-cobalt', name: '晴空钴蓝', description: '晴空蓝与钴蓝', fileName: 'gamma-sky-cobalt.png', background: '#DEECFC', foreground: '#124FCD' },
+  { id: 'blush-raspberry', name: '樱花莓红', description: '樱花粉与覆盆子红', fileName: 'gamma-blush-raspberry.png', background: '#FBE4EE', foreground: '#B41D56' },
+  { id: 'mint-forest', name: '薄荷森林', description: '浅薄荷与森林绿', fileName: 'gamma-mint-forest.png', background: '#E3F6E9', foreground: '#1C633B' },
+  { id: 'butter-cocoa', name: '奶油可可', description: '奶油黄与可可棕', fileName: 'gamma-butter-cocoa.png', background: '#FFF2C7', foreground: '#55341C' },
+  { id: 'terracotta', name: '赤陶暖白', description: '赤陶与暖白', fileName: 'gamma-terracotta.png', background: '#B9553C', foreground: '#FFF3D8' },
+  { id: 'periwinkle', name: '长春花蓝', description: '长春花蓝与象牙白', fileName: 'gamma-periwinkle.png', background: '#7986E8', foreground: '#FFF6E5' },
+  { id: 'midnight-cyan', name: '午夜冰青', description: '午夜蓝与冰青', fileName: 'gamma-midnight-cyan.png', background: '#12264B', foreground: '#25D9EE' },
+  { id: 'aubergine-lilac', name: '暗紫丁香', description: '暗紫与丁香紫', fileName: 'gamma-aubergine-lilac.png', background: '#32133F', foreground: '#D7B4F3' },
+  { id: 'charcoal-amber', name: '炭黑琥珀', description: '炭黑与琥珀金', fileName: 'gamma-charcoal-amber.png', background: '#2D2D30', foreground: '#FFB52E' },
+  { id: 'forest-mint', name: '深林薄荷', description: '深森林绿与浅薄荷', fileName: 'gamma-forest-mint.png', background: '#104A38', foreground: '#D9F5E4' },
 ] as const satisfies readonly AppIconDefinition[]
 
 export type AppIconVariantId = (typeof APP_ICON_VARIANTS)[number]['id']
 
-/** IPC 只接受内置图标 ID，禁止任意路径。 */
+/** 只在读取旧设置时迁移；IPC 仍只接受当前内置 ID。 */
+const LEGACY_ICON_VARIANTS: Readonly<Record<string, AppIconVariantId>> = {
+  'silver-glow': 'charcoal-amber',
+  'emerald-gold': 'mint-forest',
+  'sapphire-silver': 'sky-cobalt',
+  'amethyst': 'lavender',
+  'coral': 'cream-orange',
+  'ice-blue': 'midnight-cyan',
+  'neon-violet': 'aubergine-lilac',
+  'ruby-gold': 'terracotta',
+  'emerald-glow': 'forest-mint',
+}
+
 export function isAppIconVariantId(value: unknown): value is AppIconVariantId {
   return typeof value === 'string' && APP_ICON_VARIANTS.some((variant) => variant.id === value)
 }
 
-/** 旧配色、缺失值与未知配置统一回退到白底黑银。 */
+/** 旧版金属配色映射至接近的新款；缺失或未知值回退默认款。 */
 export function normalizeAppIconVariant(value: unknown): AppIconVariantId {
-  return isAppIconVariantId(value) ? value : 'default'
+  if (isAppIconVariantId(value)) return value
+  return typeof value === 'string' && Object.hasOwn(LEGACY_ICON_VARIANTS, value)
+    ? LEGACY_ICON_VARIANTS[value]! : 'default'
 }
 
 /** 返回相对于 bundled resources 的路径；无效 ID 不解析。 */

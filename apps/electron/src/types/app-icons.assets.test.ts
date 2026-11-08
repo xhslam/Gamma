@@ -11,25 +11,8 @@ const sourcesDir = join(resourcesDir, 'icon-sources')
 const logosDir = join(resourcesDir, 'gamma-logos')
 const previewsDir = join(electronDir, 'src/renderer/assets/bots/gamma-logos')
 
-interface SourceIdentity {
-  id: string
-  fileName: string
-  sha256: string
-}
-
-// 来自用户上传原文件的独立校验值，避免只验证生成器自身的映射或常量。
-const SOURCE_IDENTITIES = [
-  { id: 'default', fileName: 'gamma-black-silver-light.png', sha256: 'e9376ffcd87a430fe559b232b6e161c97c2c4803e96f0773781050c024dbc8e2' },
-  { id: 'silver-glow', fileName: 'gamma-silver-glow-dark.png', sha256: 'c6883128e13b98b4504d1a2a2f88ac312e406d92481ca124ed770eb0c585fd96' },
-  { id: 'emerald-gold', fileName: 'gamma-emerald-gold-light.png', sha256: '398263cb863a1b7a8d457752286fbdd69a5e8e0d58df0c4de44817b061a23e7d' },
-  { id: 'sapphire-silver', fileName: 'gamma-sapphire-silver-light.png', sha256: 'c1644aa8449992ea6bab8fc80c6774c056cc15d28195c801a202cbd4c6f5effc' },
-  { id: 'amethyst', fileName: 'gamma-amethyst-light.png', sha256: '1d45c2b02a3c04a884deb40725603ec0de746e46b8906da157c3a24ad656c491' },
-  { id: 'coral', fileName: 'gamma-coral-light.png', sha256: '3d9d462fbc8fb94b1096546a88a5ad3f406f232539302fce40a460bcab2db1f8' },
-  { id: 'ice-blue', fileName: 'gamma-ice-blue-dark.png', sha256: '1c4c79674f1b0a5adc23e9f32baa5280a03bca1166f1397b07e6315437478b93' },
-  { id: 'neon-violet', fileName: 'gamma-neon-violet-dark.png', sha256: 'ba567c168645abfcb7ed83f345cfc0ee0ef545cc299f9e0ec8de3b7bb88f14a6' },
-  { id: 'ruby-gold', fileName: 'gamma-ruby-gold-dark.png', sha256: '1a54c2d2c35157764dbfc07146e94c79df476b67a32ed32d91498d5f16c8a4f0' },
-  { id: 'emerald-glow', fileName: 'gamma-emerald-glow-dark.png', sha256: '8e4afa2182974f1b955bcedffedf98f29aae093cfb64244c0b09d5d2f0ff7d3f' },
-] as const satisfies readonly SourceIdentity[]
+// 独立验收配色数量与默认品牌色，避免旧金属资源混入导出。
+const SOURCE_IDENTITIES = APP_ICON_VARIANTS
 
 interface DecodedIcon {
   pixels: Buffer
@@ -152,25 +135,24 @@ function readIco256(): Buffer {
   throw new Error('Windows 图标缺少 256px 图像')
 }
 
-describe('十款应用图标的原始来源、Dock 几何与打包资源', () => {
-  test('Given 用户上传的十张原图 When 读取源文件与配色映射 Then 原图保持1254px且各ID对应独立校验过的原文件', async () => {
-    expect(APP_ICON_VARIANTS).toHaveLength(10)
-    expect(new Set(APP_ICON_VARIANTS.map((variant) => variant.id)).size).toBe(10)
-    expect(APP_ICON_VARIANTS[0]).toMatchObject({ id: 'default', name: '白底黑银', fileName: 'gamma-black-silver-light.png' })
+describe('十三款应用图标的原始来源、Dock 几何与打包资源', () => {
+  test('Given 已确认的十三款像素配色 When 读取资源清单 Then ID唯一且所有预览与运行文件齐全', async () => {
+    expect(APP_ICON_VARIANTS).toHaveLength(13)
+    expect(new Set(APP_ICON_VARIANTS.map((variant) => variant.id)).size).toBe(13)
+    expect(APP_ICON_VARIANTS[0]).toMatchObject({ id: 'default', name: '米白蓝绿', fileName: 'gamma-ivory-teal.png', background: '#F2EBDD', foreground: '#345F6C' })
+    const source = readFileSync(join(sourcesDir, 'pixel-gamma.svg'), 'utf-8')
+    expect(source).toContain('<path')
+    expect(source).not.toContain('<image')
     const expectedFiles = SOURCE_IDENTITIES.map((source) => source.fileName).sort()
-    for (const dir of [sourcesDir, logosDir, previewsDir]) {
+    for (const dir of [logosDir, previewsDir]) {
       expect(readdirSync(dir).filter((file) => file.startsWith('gamma-') && file.endsWith('.png')).sort()).toEqual(expectedFiles)
     }
     for (const identity of SOURCE_IDENTITIES) {
-      expect(APP_ICON_VARIANTS.find((variant) => variant.id === identity.id)?.fileName).toBe(identity.fileName)
-      const source = readFileSync(join(sourcesDir, identity.fileName))
-      expect(createHash('sha256').update(source).digest('hex')).toBe(identity.sha256)
-      expect(await sharp(source).metadata()).toMatchObject({ width: 1254, height: 1254, format: 'png' })
       expect(getAppIconResourcePath(identity.id)).toBe(identity.id === 'default' ? 'icon.png' : `gamma-logos/${identity.fileName}`)
     }
   })
 
-  test('Given 十款运行资源与renderer预览 When 解码各图 Then 主体放大4%为857px且透明圆角与预览一致', async () => {
+  test('Given 十三款运行资源与renderer预览 When 解码各图 Then 主体放大4%为857px且透明圆角与预览一致', async () => {
     const distinctExports = new Set<string>()
     for (const identity of SOURCE_IDENTITIES) {
       const icon = readFileSync(join(logosDir, identity.fileName))
@@ -178,40 +160,33 @@ describe('十款应用图标的原始来源、Dock 几何与打包资源', () =>
       expectDockGeometry(await decodeRgba(icon, 1024))
       distinctExports.add(createHash('sha256').update(icon).digest('hex'))
     }
-    expect(distinctExports.size).toBe(10)
+    expect(distinctExports.size).toBe(13)
   })
 
-  test('Given 深浅背景与金属图案 When 导出透明边界 Then 每款内部颜色完整保留且深色像素仍不透明', async () => {
-    for (const identity of SOURCE_IDENTITIES) {
-      const source = readFileSync(join(sourcesDir, identity.fileName))
-      // 圆角内的中央471px正方形始终属于不透明区域，用原图独立缩放验证颜色与映射。
-      const expected = await sharp(source).resize(857, 857).ensureAlpha()
-        .extract({ left: 193, top: 193, width: 471, height: 471 }).raw().toBuffer()
-      const actual = await sharp(join(logosDir, identity.fileName))
-        .extract({ left: 276, top: 276, width: 471, height: 471 }).raw().toBuffer()
-      expect(actual.equals(expected)).toBe(true)
-      let opaqueDarkPixels = 0
-      let nonOpaquePixels = 0
-      for (let offset = 0; offset < actual.length; offset += 4) {
-        if (actual[offset + 3] !== 255) nonOpaquePixels++
-        if (actual[offset]! < 30 && actual[offset + 1]! < 30 && actual[offset + 2]! < 30) opaqueDarkPixels++
-      }
-      expect(nonOpaquePixels).toBe(0)
-      if (identity.id === 'silver-glow' || identity.id === 'default') {
-        expect(opaqueDarkPixels).toBeGreaterThan(1000)
+  test('Given 深浅与彩色底板 When 检查笔画与留白 Then 十三款均保留不透明的像素γ与对应配色', async () => {
+    for (const variant of APP_ICON_VARIANTS) {
+      const image = await decodeRgba(readFileSync(join(logosDir, variant.fileName)), 1024)
+      const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16))
+      // 独立取样：左上臂、右上臂、下钩，以及分叉中间和两侧留白。
+      for (const [x, y, color] of [
+        [320, 270, variant.foreground], [680, 270, variant.foreground], [520, 750, variant.foreground],
+        [510, 300, variant.background], [200, 512, variant.background], [800, 512, variant.background],
+      ] as const) {
+        const offset = (y * 1024 + x) * 4
+        expect([...image.pixels.subarray(offset, offset + 4)]).toEqual([...rgb(color), 255])
       }
     }
   })
 
-  test('Given 默认白底黑银的处理后PNG When 读取应用图标与内部品牌图 Then 两处使用同一份带透明留白的1024px导出', async () => {
-    const defaultIcon = readFileSync(join(logosDir, 'gamma-black-silver-light.png'))
+  test('Given 默认米白蓝绿的处理后PNG When 读取应用图标与内部品牌图 Then 两处使用同一份带透明留白的1024px导出', async () => {
+    const defaultIcon = readFileSync(join(logosDir, 'gamma-ivory-teal.png'))
     const appIcon = readFileSync(join(resourcesDir, 'icon.png'))
     expect(appIcon.equals(defaultIcon)).toBe(true)
     expect(readFileSync(join(electronDir, 'src/renderer/assets/models/gamma.png')).equals(defaultIcon)).toBe(true)
     expectDockGeometry(await decodeRgba(appIcon, 1024))
   })
 
-  test('Given macOS安装图标 When 解码容器中各分辨率PNG Then 均保留透明四角与放大后的主体且1024px图对应默认白底黑银', async () => {
+  test('Given macOS安装图标 When 解码容器中各分辨率PNG Then 均保留透明四角与放大后的主体且1024px图对应默认米白蓝绿', async () => {
     const defaultPixels = (await decodeRgba(readFileSync(join(resourcesDir, 'icon.png')), 1024)).pixels
     for (const entry of readIcnsImages()) {
       const size = (await sharp(entry.png).metadata()).width
@@ -235,7 +210,7 @@ describe('十款应用图标的原始来源、Dock 几何与打包资源', () =>
     }
   })
 
-  test('Given Windows安装图标 When 解码256px容器图像 Then 保留四角透明与缩放后的21px留白且内部黑色不被挖空', async () => {
+  test('Given Windows安装图标 When 解码256px容器图像 Then 保留四角透明与缩放后的21px留白且内部蓝绿色不被挖空', async () => {
     const image = await decodeRgba(readIco256(), 256)
     const expectedPixels = await sharp(join(resourcesDir, 'icon.png')).resize(256, 256).raw().toBuffer()
     // 缩小滤波可在边界产生极低alpha；以半透明阈值独立验收约214px主体的实际尺寸。
@@ -258,7 +233,7 @@ describe('十款应用图标的原始来源、Dock 几何与打包资源', () =>
         if (x < 72 || x > 183 || y < 72 || y > 183) continue
         if (alpha !== 255) nonOpaqueInteriorPixels++
         const offset = (y * 256 + x) * 4
-        if (image.pixels[offset]! < 30 && image.pixels[offset + 1]! < 30 && image.pixels[offset + 2]! < 30) opaqueDarkPixels++
+        if (image.pixels[offset]! < 90 && image.pixels[offset + 1]! < 120 && image.pixels[offset + 2]! < 130) opaqueDarkPixels++
         for (let channel = 0; channel < 3; channel++) {
           colorDifference += Math.abs(image.pixels[offset + channel]! - expectedPixels[offset + channel]!)
           comparedChannels++
@@ -269,7 +244,7 @@ describe('十款应用图标的原始来源、Dock 几何与打包资源', () =>
     expect(opaqueMarginPixels).toBe(0)
     expect(nonOpaqueInteriorPixels).toBe(0)
     expect(opaqueDarkPixels).toBeGreaterThan(50)
-    // 不同缩小滤波器允许少量RGB差异，但应保持默认白底黑银。
+    // 不同缩小滤波器允许少量RGB差异，但应保持默认米白蓝绿。
     expect(colorDifference / comparedChannels).toBeLessThan(5)
   })
 })

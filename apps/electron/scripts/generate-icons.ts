@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-/** 从不可变原图导出十款带透明留白的应用图标，复用现有 sharp 和 electron-builder。 */
+/** 从统一像素矢量源导出十三款带透明留白的应用图标，复用现有 sharp 和 electron-builder。 */
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -32,15 +32,17 @@ const tempDir = mkdtempSync(join(tmpdir(), 'gamma-icons-'))
 
 try {
   for (const variant of APP_ICON_VARIANTS) {
-    // 始终从原始文件导出，避免再次运行时把已留白的图标继续缩小。
-    const sourcePath = join(resourcesDir, 'icon-sources', variant.fileName)
-    const body = await sharp(sourcePath)
+    // 每款共用同一矢量轮廓，确保颜色切换时形状与留白一致。
+    const source = readFileSync(join(resourcesDir, 'icon-sources/pixel-gamma.svg'), 'utf-8')
+      .replace('#F2EBDD', variant.background)
+      .replace('#345F6C', variant.foreground)
+    const body = await sharp(Buffer.from(source))
       .resize(bodySize, bodySize)
       .ensureAlpha()
       .composite([{ input: mask, blend: 'dest-in' }])
       .png()
       .toBuffer()
-    // 只裁外部几何轮廓，保留图案内部的背景与金属光泽。
+    // 只裁外部几何轮廓，保留不透明底板与像素笔画。
     const output = await sharp(body)
       .extend({ top: leadingPadding, bottom: trailingPadding, left: leadingPadding, right: trailingPadding, background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
@@ -66,7 +68,7 @@ try {
     copyFileSync(iconPath, join(resourcesDir, `icon.${format}`))
   }
 
-  console.log('[图标] 已导出放大 4% 的十款透明圆角 PNG，及默认白底黑银 ICNS / ICO 图标')
+  console.log('[图标] 已导出十三款像素 γ 透明圆角 PNG，及默认米白蓝绿 ICNS / ICO 图标')
 } finally {
   rmSync(tempDir, { recursive: true, force: true })
 }
