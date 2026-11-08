@@ -26,7 +26,7 @@ jobs:
         run: |
           bun -e 'import { releaseVersion } from "./apps/electron/scripts/release-artifacts"; import pkg from "./apps/electron/package.json"; releaseVersion(process.env.RELEASE_TAG, pkg.version); if (process.env.GITHUB_REPOSITORY !== "xhslam/Gamma") throw new Error("发布仓库不匹配")'
       - name: 发布门禁回归
-        run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts apps/electron/scripts/install-electron.test.ts
+        run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts apps/electron/scripts/install-electron.test.ts apps/electron/scripts/fetch-with-retry.test.ts
       - run: bun run typecheck
       - name: 校验发布脚本类型
         run: bunx --no-install tsc --noEmit --target ESNext --module Preserve --moduleResolution bundler --types bun --skipLibCheck apps/electron/scripts/release-artifacts.ts apps/electron/scripts/publish-release.ts apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts
@@ -88,7 +88,8 @@ jobs:
             ~/.cache/electron
             ~/.cache/electron-builder
             ${{ env.electron_config_cache }}
-          key: release-${{ matrix.target }}-${{ hashFiles('bun.lock', 'apps/electron/scripts/prepare-agent-desktop-manifest.ts') }}
+            apps/electron/resources/officecli
+          key: release-${{ matrix.target }}-${{ hashFiles('bun.lock', 'apps/electron/scripts/prepare-agent-desktop-manifest.ts', 'apps/electron/scripts/prepare-officecli.ts') }}
       - run: rustup toolchain install 1.89.0 --profile minimal
       - run: bun install --frozen-lockfile
       - name: 准备 Electron（有限重试）

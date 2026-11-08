@@ -54,7 +54,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             apps/electron/.cache/agent-desktop
-          key: windows-x64-${{ hashFiles('bun.lock', 'apps/electron/scripts/prepare-agent-desktop-manifest.ts') }}
+            apps/electron/resources/officecli
+          key: windows-x64-${{ hashFiles('bun.lock', 'apps/electron/scripts/prepare-agent-desktop-manifest.ts', 'apps/electron/scripts/prepare-officecli.ts') }}
 
       - name: 准备 Electron（有限重试）
         run: bun run apps/electron/scripts/install-electron.ts
@@ -69,7 +70,7 @@ jobs:
 
       - name: 校验依赖补丁与源码准备
         working-directory: apps/electron
-        run: bun test ./scripts/pi-retry-patch.test.ts ./scripts/prepare-agent-desktop.test.ts ./scripts/install-electron.test.ts
+        run: bun test ./scripts/pi-retry-patch.test.ts ./scripts/prepare-agent-desktop.test.ts ./scripts/install-electron.test.ts ./scripts/fetch-with-retry.test.ts
 
       - name: 类型检查
         run: bun run typecheck

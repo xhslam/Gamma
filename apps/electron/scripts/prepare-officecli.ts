@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto'
 import { chmod, mkdir, open, rename, rm } from 'node:fs/promises'
 import { existsSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { fetchWithRetry } from './fetch-with-retry'
 
 const OFFICECLI_VERSION = 'v1.0.145'
 const RELEASE_BASE_URL = `https://github.com/iOfficeAI/OfficeCLI/releases/download/${OFFICECLI_VERSION}`
@@ -61,8 +62,7 @@ const assets: Record<string, Asset> = {
 }
 
 function fail(message: string): never {
-  console.error(`[prepare:officecli] ${message}`)
-  process.exit(1)
+  throw new Error(`[prepare:officecli] ${message}`)
 }
 
 function isAllowedDownloadUrl(url: URL): boolean {
@@ -79,7 +79,7 @@ async function fetchOfficialAsset(url: string): Promise<Response> {
   let target = new URL(url)
   for (let redirectsLeft = 5; redirectsLeft >= 0; redirectsLeft--) {
     if (!isAllowedDownloadUrl(target)) fail(`下载地址不受信任：${target.hostname}`)
-    const response = await fetch(target, { redirect: 'manual' })
+    const response = await fetchWithRetry(target, { redirect: 'manual' })
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location')
       if (!location || redirectsLeft === 0) fail('下载重定向无效或次数过多')
