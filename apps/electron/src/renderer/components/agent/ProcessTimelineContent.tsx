@@ -56,22 +56,23 @@ interface ProcessTimelineTextProps {
   thinking?: boolean
 }
 
-/** 思考只保留两行斜体预览；点击原文即可展开，不额外添加标签或展开按钮。 */
+/** 过程文字统一为单行预览；折叠时不让原文空行撑高节点，展开后保留完整格式。 */
 export function ProcessTimelineText({ text, thinking = false }: ProcessTimelineTextProps): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
-  const [overflows, setOverflows] = React.useState(false)
+  const [canExpand, setCanExpand] = React.useState(false)
   const textRef = React.useRef<HTMLSpanElement>(null)
   const contentId = React.useId()
+  const preview = text.replace(/\s+/g, ' ').trim()
 
   React.useLayoutEffect(() => {
     const element = textRef.current
-    if (!element) return
-    const measure = (): void => setOverflows(element.scrollHeight > 56)
+    if (!element || expanded) return
+    const measure = (): void => setCanExpand(element.scrollWidth > element.clientWidth || /[\r\n\u2028\u2029]/.test(text.trim()))
     const frame = requestAnimationFrame(measure)
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     return () => { cancelAnimationFrame(frame); observer.disconnect() }
-  }, [text])
+  }, [text, expanded])
 
   return (
     <button
@@ -79,9 +80,9 @@ export function ProcessTimelineText({ text, thinking = false }: ProcessTimelineT
       className={cn('process-timeline-row process-timeline-text-row', thinking && 'process-timeline-thinking')}
       aria-expanded={expanded}
       aria-controls={contentId}
-      onClick={() => { if (overflows || expanded) setExpanded((value) => !value) }}
+      onClick={() => { if (canExpand || expanded) setExpanded((value) => !value) }}
     >
-      <span id={contentId} ref={textRef} data-process-text="" className={cn('process-timeline-text', !expanded && 'line-clamp-2')}>{text}</span>
+      <span id={contentId} ref={textRef} data-process-text="" className="process-timeline-text">{expanded ? text : preview}</span>
     </button>
   )
 }

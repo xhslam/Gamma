@@ -49,23 +49,25 @@
 .process-timeline-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; width: 20px; height: 28px; padding: 0; border: none; background: none; color: var(--process-status); font-size: 13px; line-height: 28px; }
 .process-timeline-log { transition: opacity 200ms ease; }
 .process-timeline-log[data-expanded='true'] { animation: process-status-fade 200ms ease both; }
-.process-timeline-step { position: relative; min-width: 0; min-height: 28px; padding-left: 20px; }
+.process-timeline-step { position: relative; min-width: 0; min-height: 32px; padding-left: 24px; }
 .process-timeline-node {
-  position: absolute; top: 10px; left: 0; width: 8px; height: 8px;
+  position: absolute; top: 14px; left: 2px; width: 4px; height: 4px;
   border: 0 solid transparent; border-radius: 50%; color: var(--process-secondary); background-color: currentColor;
   transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
 }
-.process-timeline-node[data-status='success'] { color: hsl(var(--success)); }
+.process-timeline-node[data-status='success'] { color: var(--process-secondary); }
 .process-timeline-node[data-status='error'] { color: hsl(var(--destructive)); }
 .process-timeline-node[data-status='pending'],
 .process-timeline-node[data-status='approval-submitting'],
 .process-timeline-node[data-status='running'] { color: hsl(var(--warning)); border: 1px solid currentColor; background-color: transparent; }
-.process-timeline-connector { position: absolute; top: 18px; bottom: -10px; left: 3.5px; width: 1px; background-color: var(--process-line); pointer-events: none; }
-.process-timeline-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 28px; padding: 0; border: none; background: none; color: var(--process-main); font-size: 13px; line-height: 28px; text-align: left; }
+.process-timeline-connector { position: absolute; top: 22px; bottom: -10px; left: 3.5px; width: 1px; background-color: var(--process-line); pointer-events: none; }
+.process-timeline-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 32px; padding: 0; border: none; background: none; color: var(--process-main); font-size: 13px; line-height: 32px; text-align: left; }
 .process-timeline-row:focus-visible,
 .process-timeline-toggle:focus-visible { outline: 1px solid var(--process-secondary); outline-offset: 2px; }
-.process-timeline-text-row { height: auto; min-height: 28px; align-items: flex-start; }
-.process-timeline-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* 折叠节点共用工具行高度；原文中的空行只在用户主动展开后显示。 */
+.process-timeline-text-row { height: auto; min-height: 32px; }
+.process-timeline-text { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: anywhere; }
+.process-timeline-text-row[aria-expanded='true'] .process-timeline-text { overflow: visible; text-overflow: clip; white-space: pre-wrap; }
 .process-timeline-thinking { color: var(--process-secondary); font-style: italic; }
 .process-timeline-details { padding: 4px 0 8px; color: var(--process-secondary); font-size: 13px; }
 @keyframes process-check-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
@@ -77,11 +79,6 @@
 
 /* 参考视频的轨迹：来源行、柔和结果卡与连续的高度收拢。 */
 .process-timeline { --process-main: hsl(var(--foreground) / .76); --process-secondary: hsl(var(--foreground) / .50); }
-.process-timeline-step { padding-left: 24px; }
-.process-timeline-node { width: 4px; height: 4px; top: 12px; left: 2px; }
-.process-timeline-node[data-status='success'] { color: var(--process-secondary); }
-.process-timeline-connector { left: 3.5px; top: 20px; bottom: -8px; }
-.process-timeline-row { gap: 8px; height: 32px; line-height: 32px; }
 .process-trace-icon { flex-shrink: 0; color: var(--process-secondary); }
 .process-trace-tool > .process-timeline-row { font-weight: 600; }
 .process-trace-tool > .process-timeline-row > svg:last-child { flex-shrink: 0; color: var(--process-secondary); }
@@ -95,7 +92,6 @@
 @keyframes process-trace-label-in { from { opacity: 0; filter: blur(3px); transform: translateY(3px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .process-trace-reveal { transition: none; } }
 
-.process-timeline-text-row { line-height: 28px; height: auto; }
 .process-timeline-log { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms cubic-bezier(.22,1,.36,1), opacity 240ms ease; }
 .process-timeline-log[data-expanded='true'] { grid-template-rows: 1fr; }
 .process-timeline-log > div { min-height: 0; overflow: hidden; }

@@ -180,19 +180,86 @@ describe('Given 可折叠执行过程时间线', () => {
     expect(view.rowIcons).toBe(8)
   }, 30_000)
 
-  test('When 思考超过两行 Then 默认两行淡色斜体且可展开，没有标签、背景和边框', async () => {
-    const view = await renderer.run<{ before: number; after: number; style: string; label: boolean; border: string; background: string }>(`
-      const api=window.timeline;await api.render({blocks:[{type:'thinking',thinking:'第一行\\n第二行\\n第三行\\n第四行'}]});
-      const text=document.querySelector('[data-process-text]'),button=text.closest('button'),before=text.getBoundingClientRect().height;
-      button.click();await api.wait(250);
-      return {before,after:text.getBoundingClientRect().height,style:getComputedStyle(text).fontStyle,label:document.getElementById('root').textContent.includes('THINKING'),border:getComputedStyle(button).borderStyle,background:getComputedStyle(button).backgroundColor};
+  test('When 思考包含多行 Then 默认单行淡色斜体，可展开完整原文并恢复紧凑高度', async () => {
+    const view = await renderer.run<{ before: number; after: number; collapsed: number; original: boolean; style: string; label: boolean; border: string; background: string }>(`
+      const api=window.timeline,thinking='第一行\\n第二行\\n第三行\\n第四行';
+      await api.render({blocks:[{type:'thinking',thinking}]});
+      const text=document.querySelector('[data-process-text]'),button=text.closest('button'),before=button.getBoundingClientRect().height;
+      button.click();await api.wait(100);
+      const after=button.getBoundingClientRect().height,original=text.textContent===thinking;
+      button.click();await api.wait(100);
+      return {before,after,collapsed:button.getBoundingClientRect().height,original,style:getComputedStyle(text).fontStyle,label:document.getElementById('root').textContent.includes('THINKING'),border:getComputedStyle(button).borderStyle,background:getComputedStyle(button).backgroundColor};
     `)
-    expect(view.before).toBe(56)
-    expect(view.after).toBe(112)
+    expect(view.before).toBe(32)
+    expect(view.after).toBe(128)
+    expect(view.collapsed).toBe(32)
+    expect(view.original).toBe(true)
     expect(view.style).toBe('italic')
     expect(view.label).toBe(false)
     expect(view.border).toBe('none')
     expect(view.background).toBe('rgba(0, 0, 0, 0)')
+  }, 30_000)
+
+  test('When 工具与带空行的思考文字混排 Then 流式历史态和亮暗窄宽下均保持统一单行高度', async () => {
+    const views = await renderer.run<Array<{
+      stepHeights: number[]; rowHeights: number[]; gaps: number[]; hiddenDetails: number[]; nodeOffsets: number[]; overflow: boolean
+    }>>(`
+      const api=window.timeline,root=document.getElementById('root'),views=[];
+      const blocks=[
+        {type:'tool_use',id:'a',name:'Read',input:{path:'/repo/very-long-project-path/current-state.json'}},
+        {type:'thinking',thinking:'\\n\\n**Executing approved rewrite**\\n\\n检查执行链布局，保留完整原文。\\n\\n'},
+        {type:'thinking',thinking:'检查结构'},
+        {type:'thinking',thinking:'  **Checking repository state**\\r\\n\\r\\n核对仓库与工具状态。\\r\\n'},
+        {type:'text',text:'正在准备    \\n\\n可靠快照，核对所有布局节点的间距是否一致。  '},
+        {type:'tool_use',id:'b',name:'Bash',input:{command:'bun run typecheck'}}
+      ];
+      for(const theme of ['light','dark'])for(const width of [220,760])for(const streaming of [true,false]){
+        document.documentElement.classList.toggle('dark',theme==='dark');root.style.width=width+'px';
+        await api.render({blocks,streaming,results:[{id:'a',text:'文件内容'},{id:'b',text:'检查通过'}]});
+        document.querySelectorAll('[data-process-action-row]').forEach(button=>{if(button.getAttribute('aria-expanded')==='true')button.click()});await api.wait(360);
+        const steps=[...root.querySelectorAll('.process-timeline-step')],rows=[...root.querySelectorAll('.process-timeline-row')];
+        views.push({stepHeights:steps.map(e=>e.getBoundingClientRect().height),rowHeights:rows.map(e=>e.getBoundingClientRect().height),
+          gaps:steps.slice(1).map((e,i)=>e.getBoundingClientRect().top-steps[i].getBoundingClientRect().bottom),
+          hiddenDetails:[...root.querySelectorAll('.process-trace-reveal')].map(e=>e.getBoundingClientRect().height),
+          nodeOffsets:steps.map(e=>{const node=e.querySelector('[data-process-step-indicator]').getBoundingClientRect(),row=e.querySelector('.process-timeline-row').getBoundingClientRect();return node.top+node.height/2-row.top-row.height/2}),
+          overflow:root.scrollWidth>root.clientWidth});
+        if(width===760&&!streaming)await window.traceCapture('compact-'+theme);
+      }
+      return views;
+    `)
+    expect(views).toHaveLength(8)
+    for (const view of views) {
+      expect(view.stepHeights).toEqual(Array(6).fill(32))
+      expect(view.rowHeights).toEqual(Array(6).fill(32))
+      expect(view.gaps).toEqual(Array(5).fill(0))
+      expect(view.hiddenDetails).toEqual([0, 0])
+      expect(view.nodeOffsets).toEqual(Array(6).fill(0))
+      expect(view.overflow).toBe(false)
+    }
+  }, 30_000)
+
+  test('When 单行思考流式增长或可用宽度缩小 Then 重新识别截断且点击仍可展开完整文字', async () => {
+    const view = await renderer.run<{
+      shortExpanded: string; wideExpanded: string; narrowExpanded: string; grownExpanded: string; collapsed: number; original: boolean
+    }>(`
+      const api=window.timeline,root=document.getElementById('root');root.style.width='760px';
+      const render=thinking=>api.render({blocks:[{type:'thinking',thinking}]});
+      const button=()=>document.querySelector('[data-process-text]').closest('button');
+      await render('检查状态');button().click();await api.wait(100);const shortExpanded=button().getAttribute('aria-expanded');
+      const thinking='核对执行链紧凑布局与消息间距，确保全部节点一致';
+      await render(thinking);button().click();await api.wait(100);const wideExpanded=button().getAttribute('aria-expanded');
+      root.style.width='180px';await api.wait(100);button().click();await api.wait(100);
+      const narrowExpanded=button().getAttribute('aria-expanded'),original=document.querySelector('[data-process-text]').textContent===thinking;
+      button().click();await api.wait(100);const collapsed=button().getBoundingClientRect().height;
+      root.style.width='760px';await render('检查状态');await render(thinking.repeat(12));button().click();await api.wait(100);
+      return {shortExpanded,wideExpanded,narrowExpanded,grownExpanded:button().getAttribute('aria-expanded'),collapsed,original};
+    `)
+    expect(view.shortExpanded).toBe('false')
+    expect(view.wideExpanded).toBe('false')
+    expect(view.narrowExpanded).toBe('true')
+    expect(view.grownExpanded).toBe('true')
+    expect(view.collapsed).toBe(32)
+    expect(view.original).toBe(true)
   }, 30_000)
 
   test('When 流式更新替换块对象但旧文字未变化 Then 缓存节点仍使用极简内容', async () => {
