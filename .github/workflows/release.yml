@@ -63,7 +63,7 @@ jobs:
       # 复用项目自定义签名器，明确采用临时签名，不查询正式证书。
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       RELEASE_TAG: ${{ github.ref_name }}
-      electron_config_cache: ${{ runner.temp }}/electron-cache
+      electron_config_cache: ${{ github.workspace }}/apps/electron/.cache/electron-download
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-bun

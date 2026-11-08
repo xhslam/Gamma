@@ -30,7 +30,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     env:
-      electron_config_cache: ${{ runner.temp }}/electron-cache
+      electron_config_cache: ${{ github.workspace }}/apps/electron/.cache/electron-download
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
