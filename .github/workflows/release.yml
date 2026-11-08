@@ -18,9 +18,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
+      - uses: ./.github/actions/setup-bun
       - run: bun install --frozen-lockfile
       - name: 校验标签、版本和仓库
         env:
@@ -28,7 +26,7 @@ jobs:
         run: |
           bun -e 'import { releaseVersion } from "./apps/electron/scripts/release-artifacts"; import pkg from "./apps/electron/package.json"; releaseVersion(process.env.RELEASE_TAG, pkg.version); if (process.env.GITHUB_REPOSITORY !== "xhslam/Gamma") throw new Error("发布仓库不匹配")'
       - name: 发布门禁回归
-        run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts
+        run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts apps/electron/scripts/install-electron.test.ts
       - run: bun run typecheck
       - name: 校验发布脚本类型
         run: bunx --no-install tsc --noEmit --target ESNext --module Preserve --moduleResolution bundler --types bun --skipLibCheck apps/electron/scripts/release-artifacts.ts apps/electron/scripts/publish-release.ts apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts
@@ -65,11 +63,10 @@ jobs:
       # 复用项目自定义签名器，明确采用临时签名，不查询正式证书。
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       RELEASE_TAG: ${{ github.ref_name }}
+      electron_config_cache: ${{ runner.temp }}/electron-cache
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
+      - uses: ./.github/actions/setup-bun
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -90,9 +87,12 @@ jobs:
             ~/Library/Caches/electron-builder
             ~/.cache/electron
             ~/.cache/electron-builder
+            ${{ env.electron_config_cache }}
           key: release-${{ matrix.target }}-${{ hashFiles('bun.lock', 'apps/electron/scripts/prepare-agent-desktop-manifest.ts') }}
       - run: rustup toolchain install 1.89.0 --profile minimal
       - run: bun install --frozen-lockfile
+      - name: 准备 Electron（有限重试）
+        run: bun run apps/electron/scripts/install-electron.ts
       - name: 构建 Electron 应用
         run: bun run electron:build
       - name: 准备运行时依赖
@@ -143,9 +143,7 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
+      - uses: ./.github/actions/setup-bun
       - uses: actions/download-artifact@v4
         with:
           path: release-input

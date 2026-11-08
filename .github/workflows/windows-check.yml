@@ -3,8 +3,18 @@ name: Windows compatibility
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README*.md'
+      - 'docs/**'
+      - 'tutorial/**'
+      - 'release-notes/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'README*.md'
+      - 'docs/**'
+      - 'tutorial/**'
+      - 'release-notes/**'
   workflow_dispatch:
 
 permissions:
@@ -19,14 +29,14 @@ jobs:
     name: Windows x64 测试与安装包冒烟
     runs-on: windows-latest
     timeout-minutes: 35
+    env:
+      electron_config_cache: ${{ runner.temp }}/electron-cache
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
       - name: 安装 Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+        uses: ./.github/actions/setup-bun
 
       - name: 安装 Node.js
         uses: actions/setup-node@v4
@@ -35,6 +45,19 @@ jobs:
 
       - name: 安装依赖
         run: bun install --frozen-lockfile
+
+      - name: 缓存 Electron 与 Rust 构建
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.electron_config_cache }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/electron/.cache/agent-desktop
+          key: windows-x64-${{ hashFiles('bun.lock', 'apps/electron/scripts/prepare-agent-desktop-manifest.ts') }}
+
+      - name: 准备 Electron（有限重试）
+        run: bun run apps/electron/scripts/install-electron.ts
 
       - name: 安装 agent-desktop 固定 Rust 工具链
         shell: pwsh
@@ -46,7 +69,7 @@ jobs:
 
       - name: 校验依赖补丁与源码准备
         working-directory: apps/electron
-        run: bun test ./scripts/pi-retry-patch.test.ts ./scripts/prepare-agent-desktop.test.ts
+        run: bun test ./scripts/pi-retry-patch.test.ts ./scripts/prepare-agent-desktop.test.ts ./scripts/install-electron.test.ts
 
       - name: 类型检查
         run: bun run typecheck
