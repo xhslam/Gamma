@@ -3,6 +3,21 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Plugin } from 'vite'
 
+function normalizeModulePath(value: string): string {
+  const path = value.replaceAll('\\', '/').replace(/[?#].*$/, '')
+  return /^[a-z]:\//i.test(path) ? path.toLowerCase() : path
+}
+
+/** Vite 的 importer 使用正斜杠，Windows 的 Node resolve 使用反斜杠。 */
+export function resolveGenuiHostAdapter(id: string, importer: string | undefined, client: string, adapters: string): string | undefined {
+  if (!importer || !normalizeModulePath(importer).startsWith(`${normalizeModulePath(client).replace(/\/$/, '')}/`)) return undefined
+  const moduleId = normalizeModulePath(id)
+  if (moduleId.endsWith('/primitive-adapter.ts')) return resolve(adapters, 'genui-primitives.tsx')
+  if (moduleId.endsWith('/achievement-store.ts')) return resolve(adapters, 'genui-achievements.ts')
+  if (moduleId.endsWith('/file-link-context.tsx')) return resolve(adapters, 'genui-file-link.tsx')
+  return undefined
+}
+
 /** 只适配官方 embed 的宿主接口，不装载 DSH 插件运行时。 */
 export function genuiPlugin(): Plugin {
   const require = createRequire(import.meta.url)
@@ -17,10 +32,7 @@ export function genuiPlugin(): Plugin {
     enforce: 'pre',
     resolveId(id, importer) {
       if (id === '@gamma/genui-embed') return resolve(client, 'embed.ts')
-      if (!importer?.startsWith(client)) return
-      if (id.endsWith('/primitive-adapter.ts')) return resolve(adapters, 'genui-primitives.tsx')
-      if (id.endsWith('/achievement-store.ts')) return resolve(adapters, 'genui-achievements.ts')
-      if (id.endsWith('/file-link-context.tsx')) return resolve(adapters, 'genui-file-link.tsx')
+      return resolveGenuiHostAdapter(id, importer, client, adapters)
     },
     buildStart() {
       for (const [name, source] of resources) this.emitFile({ type: 'asset', fileName: `genui-assets/${name}`, source })
