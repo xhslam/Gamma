@@ -346,6 +346,7 @@ function UpdaterInitializer(): null {
     }
 
     const versionLabel = version.startsWith('v') ? version : `v${version}`
+    const manualInstallReason = store.get(updateStatusAtom).manualInstallReason
     readyToastIdRef.current = toast.custom((toastId) => (
       <div className="w-[344px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_hsl(var(--shadow-ink)/0.14)] ring-1 ring-border/5 backdrop-blur-xl dark:ring-border/10">
         <div className="flex items-center gap-2.5">
@@ -355,7 +356,7 @@ function UpdaterInitializer(): null {
               <span className="font-semibold tracking-tight">Gamma 更新已下载</span>
               <span className="text-xs text-primary">{versionLabel}</span>
             </div>
-            <p className="text-xs leading-4 text-muted-foreground">所有 Agent 完成后即可自动安装。</p>
+            <p className="text-xs leading-4 text-muted-foreground">{manualInstallReason || '选择空闲更新后，将在所有 Agent 完成时安装。'}</p>
           </div>
         </div>
         <div className="mt-2.5 flex items-center justify-between">
@@ -383,6 +384,11 @@ function UpdaterInitializer(): null {
               onClick={() => {
                 toast.dismiss(toastId)
                 readyToastIdRef.current = null
+                if (manualInstallReason) {
+                  void window.electronAPI.updater?.revealDownloadedUpdate()
+                    .catch(() => toast.error('无法显示更新包，请在关于/更新中重新检查'))
+                  return
+                }
                 void window.electronAPI.updater?.installWhenIdle()
                   .then((scheduled) => {
                     if (!scheduled) {
@@ -424,7 +430,7 @@ function UpdaterInitializer(): null {
                   })
               }}
             >
-              空闲时更新
+              {manualInstallReason ? '显示安装包' : '空闲时更新'}
             </button>
           </div>
         </div>

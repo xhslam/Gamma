@@ -10,7 +10,7 @@ export type UpdateStatus =
   | { status: 'checking' }
   | { status: 'available'; version: string; releaseNotes?: string }
   | { status: 'downloading'; version: string; progress: DownloadProgress }
-  | { status: 'downloaded'; version: string; installScheduled?: boolean }
+  | { status: 'downloaded'; version: string; installScheduled?: boolean; manualInstallReason?: string }
   | { status: 'not-available' }
   | { status: 'error'; error: string }
 
@@ -33,4 +33,5 @@ export const UPDATER_IPC_CHANNELS = {
   ON_STATUS_CHANGED: 'updater:status-changed',
   INSTALL_WHEN_IDLE: 'updater:install-when-idle',
   CANCEL_IDLE_INSTALL: 'updater:cancel-idle-install',
+  REVEAL_DOWNLOADED_UPDATE: 'updater:reveal-downloaded-update',
 } as const

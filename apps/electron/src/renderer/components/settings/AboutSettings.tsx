@@ -29,13 +29,14 @@ declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
 /** 实际发布源仓库；修改会影响用户下载更新，不属于品牌清理范围。 */
-const GITHUB_RELEASES_URL = 'https://github.com/proma-ai/Proma/releases'
+const GITHUB_RELEASES_URL = 'https://github.com/xhslam/Gamma/releases'
 
 /** 更新状态卡片 */
-function UpdateCard(): React.ReactElement | null {
+export function UpdateCard(): React.ReactElement | null {
   const available = useAtomValue(updaterAvailableAtom)
   const status = useAtomValue(updateStatusAtom)
   const [checking, setChecking] = React.useState(false)
+  const [actionError, setActionError] = React.useState<string | null>(null)
   const [showReleaseNotes, setShowReleaseNotes] = React.useState(false)
   const [release, setRelease] = React.useState<import('@gamma/shared').GitHubRelease | null>(null)
 
@@ -58,8 +59,10 @@ function UpdateCard(): React.ReactElement | null {
   }
 
   const handleInstallWhenIdle = (): void => {
+    setActionError(null)
     void window.electronAPI.updater?.installWhenIdle()
-      .catch((error) => console.error('[更新] 安排空闲更新失败:', error))
+      .then(accepted => { if (!accepted) setActionError('当前无法安排原生安装，请使用安装包替换应用。') })
+      .catch((error: unknown) => setActionError(error instanceof Error ? error.message : '安排更新失败'))
   }
 
   const handleCancelIdleInstall = (): void => {
@@ -97,7 +100,18 @@ function UpdateCard(): React.ReactElement | null {
 
           {/* 操作按钮 */}
           {status.status === 'downloaded' ? (
-            status.installScheduled ? (
+            status.manualInstallReason ? (
+              <button
+                onClick={() => {
+                  setActionError(null)
+                  void window.electronAPI.updater?.revealDownloadedUpdate()
+                    .catch((error: unknown) => setActionError(error instanceof Error ? error.message : '无法显示更新包，请重新检查更新'))
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                显示安装包
+              </button>
+            ) : status.installScheduled ? (
               <button
                 onClick={handleCancelIdleInstall}
                 className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
@@ -137,6 +151,10 @@ function UpdateCard(): React.ReactElement | null {
           )}
         </div>
       </SettingsRow>
+
+      {(status.manualInstallReason || actionError) && (
+        <p role={actionError ? 'alert' : 'status'} className="px-4 pb-3 text-xs text-muted-foreground">{actionError || status.manualInstallReason}</p>
+      )}
 
       {/* Release Notes（新版本可用时显示） */}
       {status.status === 'available' && hasReleaseNotes && (
@@ -191,7 +209,7 @@ function StatusText({ status, version, error }: {
       return (
         <span className="text-xs text-primary flex items-center gap-1">
           <CheckCircle2 className="h-3 w-3" />
-          更新 v{version} 已就绪
+          更新 v{version} 已下载
         </span>
       )
     case 'not-available':

@@ -6,8 +6,11 @@
  */
 
 import { autoUpdater } from 'electron-updater'
-import { BrowserWindow, app } from 'electron'
-import { join } from 'node:path'
+import { BrowserWindow, app, shell } from 'electron'
+import { spawnSync } from 'node:child_process'
+import { lstatSync, realpathSync } from 'node:fs'
+import { getMacManualInstallReason } from './mac-update-policy'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { UpdateStatus } from './updater-types'
 import { UPDATER_IPC_CHANNELS } from './updater-types'
 import { createIdleInstallScheduler } from './idle-install-scheduler'
@@ -35,6 +38,9 @@ let downloadedStatusDuringCheck: Extract<UpdateStatus, { status: 'downloaded' }>
 /** 当前主动下载的版本，用于合并 electron-updater 的 error 事件和 Promise rejection。 */
 let activeDownloadVersion: string | null = null
 
+let manualInstallReason: string | undefined
+let downloadedUpdateFile: string | null = null
+
 /** 由 Agent 服务注入，覆盖所有窗口/后台 Agent 的运行状态。 */
 let hasActiveAgents = (): boolean => false
 
@@ -59,6 +65,7 @@ const idleInstallScheduler = createIdleInstallScheduler({
 
 /** 更新状态并推送给渲染进程 */
 function setStatus(status: UpdateStatus): void {
+  if (status.status === 'downloaded' && manualInstallReason) status = { ...status, manualInstallReason, installScheduled: false }
   currentStatus = status
   if (status.status !== 'downloaded') {
     idleInstallScheduler.cancel()
@@ -142,6 +149,10 @@ export async function checkForUpdates(): Promise<void> {
  * @returns 是否已接受请求；仅 downloaded 状态可排队。
  */
 export function installWhenIdle(): boolean {
+  if (manualInstallReason) {
+    console.warn('[更新] 原生安装不可用:', manualInstallReason)
+    return false
+  }
   if (currentStatus.status !== 'downloaded') {
     console.warn('[更新] 跳过空闲安装：当前没有已下载的更新')
     return false
@@ -150,6 +161,18 @@ export function installWhenIdle(): boolean {
   console.log('[更新] 已请求空闲安装，等待所有 Agent 结束')
   setStatus({ ...currentStatus, installScheduled: true })
   idleInstallScheduler.request()
+  return true
+}
+
+/** 仅展示更新器自身下载的文件；不接受 renderer 提供路径，不执行或关闭验签。 */
+export function revealDownloadedUpdate(): boolean {
+  if (currentStatus.status !== 'downloaded' || !downloadedUpdateFile) throw new Error('更新包尚未准备好，请重新检查更新')
+  const file = downloadedUpdateFile
+  const base = realpathSync(join(getDefaultUpdaterBaseCacheDirectory(), 'pending'))
+  const target = realpathSync(file)
+  const child = relative(base, target)
+  if (lstatSync(file).isSymbolicLink() || !lstatSync(file).isFile() || !child || child.startsWith('..') || isAbsolute(child)) throw new Error('更新包路径未通过安全校验')
+  shell.showItemInFolder(target)
   return true
 }
 
@@ -218,6 +241,10 @@ export function cleanupUpdater(): void {
  */
 export function initAutoUpdater(mainWindow: BrowserWindow): void {
   configureUpdater(mainWindow)
+  if (process.platform === 'darwin') {
+    const result = spawnSync('/usr/bin/codesign', ['--display', '--verbose=2', resolve(dirname(process.execPath), '../..')], { encoding: 'utf8', timeout: 5_000 })
+    manualInstallReason = getMacManualInstallReason(process.platform, `${result.stdout ?? ''}\n${result.stderr ?? ''}`, result.status)
+  }
 
   const updateCacheCleanup = createUpdateCacheCleanup({
     stateFilePath: join(app.getPath('userData'), 'updater-cache-state.json'),
@@ -331,6 +358,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.on('update-downloaded', (info) => {
     downloadedStatusDuringCheck = null
     activeDownloadVersion = null
+    downloadedUpdateFile = info.downloadedFile
     updateCacheCleanup.recordDownloadedUpdate(info.version, info.downloadedFile)
     console.log('[更新] 下载完成:', info.version)
     setStatus({

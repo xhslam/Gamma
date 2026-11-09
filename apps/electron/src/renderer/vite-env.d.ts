@@ -26,6 +26,7 @@ interface UpdateStatus {
   releaseNotes?: string
   progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number }
   error?: string
+  manualInstallReason?: string
   installScheduled?: boolean
 }
 
@@ -38,6 +39,7 @@ interface UpdaterAPI {
   installWhenIdle: () => Promise<boolean>
   /** 取消尚未执行的空闲安装请求 */
   cancelIdleInstall: () => Promise<void>
+  revealDownloadedUpdate: () => Promise<boolean>
 }
 
 interface GammaPerformanceDiagnostics {

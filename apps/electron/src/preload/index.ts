@@ -967,6 +967,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
       releaseNotes?: string
       progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number }
       error?: string
+      manualInstallReason?: string
       installScheduled?: boolean
     }>
     onStatusChanged: (callback: (status: {
@@ -975,12 +976,14 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
       releaseNotes?: string
       progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number }
       error?: string
+      manualInstallReason?: string
       installScheduled?: boolean
     }) => void) => () => void
     /** 在所有运行中的 Agent 结束后重启并安装更新 */
     installWhenIdle: () => Promise<boolean>
     /** 取消尚未执行的空闲安装请求 */
     cancelIdleInstall: () => Promise<void>
+    revealDownloadedUpdate: () => Promise<boolean>
   }
 
   // GitHub Release
@@ -2399,6 +2402,7 @@ const electronAPI: ElectronAPI = {
     },
     installWhenIdle: () => ipcRenderer.invoke('updater:install-when-idle'),
     cancelIdleInstall: () => ipcRenderer.invoke('updater:cancel-idle-install'),
+    revealDownloadedUpdate: () => ipcRenderer.invoke('updater:reveal-downloaded-update'),
   },
 
   // GitHub Release
