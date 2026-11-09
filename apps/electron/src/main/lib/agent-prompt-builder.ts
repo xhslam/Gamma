@@ -12,6 +12,7 @@ import { getAgentWorkspaceBySlug, getProjectFilesPath, getWorkspaceMcpConfig, ty
 import { getConfigDirName } from './config-paths'
 import { buildGitAttributionPromptSection, isGitAttributionEnabled } from './agent-git-attribution'
 import { getSettings } from './settings-service'
+import { buildIntelligentUiPromptSection } from './agent-intelligent-ui'
 import { hasRootProjectAgentsInstruction, type ProjectInstructionManifest } from './project-instruction-resolver'
 import { buildLegacyProjectMigrationPrompt as buildLegacyProjectMigrationRequirement } from './project-instruction-migration'
 import type { BrowserUserContextSnapshot } from './browser-controller'
@@ -33,6 +34,8 @@ interface SystemPromptContext {
   sessionWorkbenchLayout?: SessionWorkbenchLayout
   permissionMode: GammaPermissionMode
   collaborationAvailable?: boolean
+  /** 无人值守或外部触发场景不主动生成交互 UI。 */
+  intelligentUiInteractive?: boolean
   currentModelId?: string
   projectInstructions?: ProjectInstructionManifest
   /** Only explicit guided consent enables Agent-initiated AGENTS.md maintenance. */
@@ -189,6 +192,7 @@ ${agentsMaintenanceRequirement}
       : `## 计划模式
 进入计划模式时，将完整计划写入 \`${sessionContextDir}/plan/\`（如 \`${sessionContextDir}/plan/my-plan.md\`），不要写到项目根；调用 \`ExitPlanMode\` 审批时传入该文件的绝对 \`planFile\` 路径，以便在右侧只读预览。`,
     buildGitAttributionPromptSection(isGitAttributionEnabled(getSettings().gitAttributionEnabled)),
+    buildIntelligentUiPromptSection(getSettings().intelligentUiEnabled === true, ctx.intelligentUiInteractive ?? true),
     `## 回复
 - 一切呈现给用户的内容——对话回复、交付文档、代码与提交信息——必须语意连贯、易于阅读：句子完整，前后逻辑衔接，结构清晰可快速扫读。
 - 易于阅读不等于简化内容：保持与用户所需对等的专业度和信息密度，专业术语照常使用，不为追求通俗而稀释、删减或过度概括。

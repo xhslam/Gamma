@@ -264,17 +264,13 @@ export interface ProductivityToolsSettings {
 }
 
 export const DEFAULT_PRODUCTIVITY_TOOLS_SETTINGS: ProductivityToolsSettings = {
-  todosEnabled: true,
-  calendarEnabled: true,
+  todosEnabled: false,
+  calendarEnabled: false,
 }
 
-/** 容错读取旧配置与手写 settings.json，未知或缺失字段默认开启。 */
-export function normalizeProductivityToolsSettings(input: unknown): ProductivityToolsSettings {
-  const raw = input && typeof input === 'object' ? input as Partial<ProductivityToolsSettings> : {}
-  return {
-    todosEnabled: typeof raw.todosEnabled === 'boolean' ? raw.todosEnabled : true,
-    calendarEnabled: typeof raw.calendarEnabled === 'boolean' ? raw.calendarEnabled : true,
-  }
+/** Todo 与日程已移除；保留配置结构兼容旧数据，不允许旧 true 值重新启用。 */
+export function normalizeProductivityToolsSettings(_input: unknown): ProductivityToolsSettings {
+  return { ...DEFAULT_PRODUCTIVITY_TOOLS_SETTINGS }
 }
 
 /** 提升此版本可要求用户重新确认更新后的受管浏览器风险告知。 */
@@ -289,6 +285,8 @@ export function normalizeWorkbenchDensity(input: unknown): WorkbenchDensity {
 
 /** 应用设置 */
 export interface AppSettings {
+  /** 默认关闭；启用助手正文中的声明式交互 UI。 */
+  intelligentUiEnabled?: boolean
   /** 默认紧凑；旧配置与非法值回退到 compact。 */
   workbenchDensity?: WorkbenchDensity
   /** 主题模式 */
@@ -357,7 +355,7 @@ export interface AppSettings {
   feishuSessionMirror?: FeishuSessionMirrorSettings
   /** 已确认的受管浏览器风险告知版本；低于当前版本时首次使用会再次要求确认。 */
   browserRiskDisclaimerVersion?: number
-  /** Todo 与日程的可见性和 Agent 工具注入开关，默认全部开启。 */
+  /** 旧版 Todo 与日程开关；仅为配置兼容保留，始终禁用。 */
   productivityTools: ProductivityToolsSettings
   /** 启动时自动清理临时文件（gamma-preview、gamma-installers），默认 true */
   autoCleanupTempOnStart?: boolean
@@ -416,6 +414,7 @@ export function isSettingsTab(value: unknown): value is SettingsTab {
 /** 设置 IPC 通道 */
 export const SETTINGS_IPC_CHANNELS = {
   GET: 'settings:get',
+  ON_INTELLIGENT_UI_CHANGED: 'settings:intelligent-ui-changed',
   WINDOW_OPEN: 'settings:window-open',
   WINDOW_READY: 'settings:window-ready',
   WINDOW_NAVIGATE: 'settings:window-navigate',

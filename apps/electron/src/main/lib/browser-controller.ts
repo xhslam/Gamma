@@ -1,3 +1,4 @@
+import { createDesignThemeHost } from './design-theme-host'
 import { app, BrowserWindow, WebContentsView, session as electronSession, type DownloadItem, type Session, type WebContents } from 'electron'
 import path from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
@@ -5,6 +6,7 @@ import type { BrowserExecutionSource, BrowserOperationStatus, BrowserSessionClos
 import { AGENT_IPC_CHANNELS } from '@gamma/shared'
 import { assertSafeBrowserDestination, assertSafeBrowserDestinationWithFallback, assertSafeBrowserDownloadUrl, assertSafeBrowserUrl, isSupportedBrowserPopupUrl, isTransientBrowserPopupUrl, USER_NEW_TAB_URL } from './browser-policy'
 import { createAuthorizedPreviewUrl, isAuthorizedPreviewProtocol } from './browser-preview-service'
+import { isBlockedDesignEditorRequest } from './design-browser-policy'
 import { handleGammaFileRequest } from './local-file-protocol'
 import { BrowserCdpTimeoutError, BrowserOperationAbortedError, BROWSER_OBSERVE_TIMEOUT_MS, resolveBrowserObserveAxDepth, throwIfBrowserOperationAborted, withBrowserCdpTimeout } from './browser-cdp'
 import { parseBrowserPressAction } from './browser-key-policy'
@@ -218,6 +220,8 @@ function describeBrowserScriptException(response: CdpResponse): string {
 }
 
 export class BrowserController {
+  private readonly designThemeHost = createDesignThemeHost()
+
   private owner: BrowserWindow | null = null
   private readonly sessions = new Map<string, BrowserSessionRecord>()
   private readonly configurations = new Map<string, BrowserSessionConfiguration>()
@@ -485,6 +489,8 @@ export class BrowserController {
       callback(0)
     })
     browserSession.webRequest.onBeforeRequest((details, callback) => {
+      // 复用唯一 listener，避免 Electron 的新 listener 覆盖已有目标地址校验。
+      if (isBlockedDesignEditorRequest(details)) { callback({ cancel: true }); return }
       let protocol = ''
       try { protocol = new URL(details.url).protocol } catch { callback({ cancel: true }); return }
       if (protocol !== 'http:' && protocol !== 'https:') {
@@ -825,6 +831,14 @@ export class BrowserController {
     }
     this.emit(browserSession)
     return structuredClone(this.buildState(browserSession))
+  }
+
+  /** 由 design 主进程注册表调用，不向网页或通用浏览器 IPC 开放 CSS 注入。 */
+  async setDesignEditorTheme(sessionId: string, tabId: string, editorUrl: string, snapshot: unknown): Promise<void> {
+    const browserSession = this.getSession(sessionId)
+    const tab = browserSession.tabs.get(tabId)
+    if (!tab) throw new Error('design 编辑器标签不存在')
+    await this.designThemeHost.setTheme(tab.view.webContents, editorUrl, snapshot)
   }
 
   getState(sessionId: string): BrowserViewState | null {

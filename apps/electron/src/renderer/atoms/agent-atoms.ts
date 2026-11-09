@@ -722,8 +722,8 @@ export function pruneFileBrowserStateMap<T>(state: Map<string, T>, retainedSessi
  * 工作区级组件：内容归属项目而非单个会话，但在当前会话的右侧工作区中呈现。
  * 同一项目下的打开状态跨会话保留；关闭一个组件不会影响其他项目。
  */
-export type WorkspaceComponentTab = 'todos' | 'calendar' | 'automations' | 'skills' | 'mcp' | 'memory' | 'markdown' | 'agy-terminal'
-export const WORKSPACE_COMPONENT_TABS: readonly WorkspaceComponentTab[] = ['todos', 'calendar', 'automations', 'skills', 'mcp', 'memory', 'markdown', 'agy-terminal']
+export type WorkspaceComponentTab = 'todos' | 'calendar' | 'automations' | 'skills' | 'mcp' | 'memory' | 'markdown' | 'agy-terminal' | 'design'
+export const WORKSPACE_COMPONENT_TABS: readonly WorkspaceComponentTab[] = ['automations', 'skills', 'mcp', 'memory', 'markdown', 'agy-terminal', 'design']
 
 export function isWorkspaceComponentTab(tab: AgentSidePanelTab | string): tab is WorkspaceComponentTab {
   return (WORKSPACE_COMPONENT_TABS as readonly string[]).includes(tab)
@@ -748,8 +748,8 @@ export type AgentSidePanelTab = AgentSidePanelBaseTab | `exploration:${string}` 
 /** 用户主动进入这些项目级能力时，Agent 后续的改动提示不得抢走当前视图。 */
 export function isUserPriorityWorkspaceComponentTab(
   tab: AgentSidePanelTab | 'browser' | 'preview' | undefined,
-): tab is Extract<WorkspaceComponentTab, 'skills' | 'memory' | 'markdown'> {
-  return tab === 'skills' || tab === 'memory' || tab === 'markdown'
+): tab is Extract<WorkspaceComponentTab, 'skills' | 'memory' | 'markdown' | 'design'> {
+  return tab === 'skills' || tab === 'memory' || tab === 'markdown' || tab === 'design'
 }
 
 /** Pi `/tree` 探索分支在右侧工作区的展示信息。 */
@@ -894,6 +894,7 @@ export const skillDetailNavigationAtomFamily = atomFamily((sessionId: string) =>
 export const openWorkspaceComponentAtom = atom(
   null,
   (get, set, component: WorkspaceComponentTab) => {
+    if (!isWorkspaceComponentTab(component)) return
     const sessionId = get(currentAgentSessionIdAtom)
     if (!sessionId) return
     set(activeOnDemandOverlayAtom, null)

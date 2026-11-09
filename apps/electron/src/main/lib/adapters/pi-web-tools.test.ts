@@ -225,13 +225,21 @@ describe('Pi 公开网络查询工具', () => {
       const { buildPiBuiltinTools } = await import(${JSON.stringify(builtinModule)});
       const sdk = { defineTool: (definition) => definition };
       for (const triggeredBy of ['user', 'automation', 'delegation']) {
-        const result = await buildPiBuiltinTools(sdk, {
-          sessionId: 'web-test-' + triggeredBy, channelId: 'channel', triggeredBy,
-          productivityTools: { todosEnabled: false, calendarEnabled: false, obsidianEnabled: false },
-        });
-        const names = result.tools.map((tool) => tool.name);
-        if (!names.includes('WebSearch') || !names.includes('WebFetch')) {
-          throw new Error(triggeredBy + ' 缺少网络查询工具');
+        for (const productivityTools of [undefined, { todosEnabled: false, calendarEnabled: false }, { todosEnabled: true, calendarEnabled: true }]) {
+          const result = await buildPiBuiltinTools(sdk, {
+            sessionId: 'web-test-' + triggeredBy, channelId: 'channel', triggeredBy,
+            productivityTools,
+          });
+          const names = result.tools.map((tool) => tool.name);
+          if (!names.includes('WebSearch') || !names.includes('WebFetch')) {
+            throw new Error(triggeredBy + ' 缺少网络查询工具');
+          }
+          if (names.some((name) => name.startsWith('mcp__planning__'))) {
+            throw new Error(triggeredBy + ' 不应注册已移除的 Todo / 日程工具');
+          }
+          if (!names.includes('mcp__automation__list_automations')) {
+            throw new Error(triggeredBy + ' 必须保留定时任务工具');
+          }
         }
       }
       console.log('公开查询注册完成');

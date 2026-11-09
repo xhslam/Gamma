@@ -39,6 +39,7 @@ export function SettingsToggle({
         )}
       </div>
       <Switch
+        aria-label={label}
         checked={checked}
         onCheckedChange={onCheckedChange}
         disabled={disabled}

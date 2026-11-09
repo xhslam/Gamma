@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, CalendarDays, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw, Info, BookOpen, TerminalSquare } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, Palette, ChevronsDownUp, Blocks, GitBranch, Download, Loader2, RotateCw, Info, BookOpen, TerminalSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UI_LIST_ROW_HEIGHT_PX } from '@/lib/workbench-layout'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -86,7 +86,7 @@ import { hasEnvironmentIssuesAtom } from '@/atoms/environment'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
-import { productivityToolsAtom, sessionHoverPreviewEnabledAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
+import { sessionHoverPreviewEnabledAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
@@ -575,7 +575,6 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   const density = useAtomValue(workbenchDensityAtom)
   const sidebarRowHeight = UI_LIST_ROW_HEIGHT_PX
   const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
-  const productivityTools = useAtomValue(productivityToolsAtom)
 
   // Agent 模式状态
   const [agentSessions, setAgentSessions] = useAtom(agentSessionsAtom)
@@ -873,7 +872,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   }, [refreshAgentSidebarSessions, viewMode])
 
   /** 规划与能力不再替换主内容区，而是作为项目级右侧组件逐项打开。 */
-  const handleOpenPlanningComponent = React.useCallback((component: 'todos' | 'calendar' | 'automations'): void => {
+  const handleOpenPlanningComponent = React.useCallback((component: 'automations'): void => {
     setAutomationForm({ open: false, draft: null })
     // 尚未创建会话时没有右侧宿主，保留原全屏规划视图作为无损兜底。
     if (!currentAgentSessionId) {
@@ -904,15 +903,9 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     openWorkspaceComponent('agy-terminal')
   }, [currentAgentSessionId, openWorkspaceComponent, setActiveView])
 
-  const handleOpenCapabilityComponent = React.useCallback((component: 'skills' | 'mcp' | 'memory'): void => {
-    if (!currentAgentSessionId) {
-      setAgentSkillsTab(component)
-      setActiveView('agent-skills')
-      return
-    }
-    setActiveView('conversations')
-    openWorkspaceComponent(component)
-  }, [currentAgentSessionId, openWorkspaceComponent, setActiveView, setAgentSkillsTab])
+  const handleOpenDesign = React.useCallback((): void => {
+    setActiveView('design')
+  }, [setActiveView])
 
   /** MCP/Skills 为同一低频管理入口；在右侧工作区中一次展开两个独立 Tab，保留 Skills 为当前焦点。 */
   const handleOpenMcpSkillsComponents = React.useCallback((): void => {
@@ -2560,30 +2553,12 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           onClick={handleOpenAgyTerminal}
         />
         <WorkspaceComponentSidebarEntry label="Markdown" icon={<BookOpen size={16} />} active={activeView === 'markdown' || isWorkspaceComponentActive('markdown')} onClick={handleOpenMarkdown} />
-        {productivityTools.todosEnabled && (
-          <WorkspaceComponentSidebarEntry
-            label="Todo"
-            icon={<ListTodo size={16} />}
-            active={isWorkspaceComponentActive('todos')}
-            onClick={() => handleOpenPlanningComponent('todos')}
-          />
-        )}
-        {productivityTools.calendarEnabled && (
-          <WorkspaceComponentSidebarEntry
-            label="日程"
-            icon={<CalendarDays size={16} />}
-            active={isWorkspaceComponentActive('calendar')}
-            onClick={() => handleOpenPlanningComponent('calendar')}
-          />
-        )}
-        {(
-          <WorkspaceComponentSidebarEntry
-            label="项目记忆"
-            icon={<Brain size={16} />}
-            active={isWorkspaceComponentActive('memory')}
-            onClick={() => handleOpenCapabilityComponent('memory')}
-          />
-        )}
+        <WorkspaceComponentSidebarEntry
+          label="design"
+          icon={<Palette size={16} />}
+          active={activeView === 'design' || isWorkspaceComponentActive('design')}
+          onClick={handleOpenDesign}
+        />
         <WorkspaceComponentSidebarEntry
           label="定时任务"
           icon={<Clock size={16} />}

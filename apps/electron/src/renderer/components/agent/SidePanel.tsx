@@ -1,3 +1,4 @@
+import { DesignWorkspaceView } from '@/components/design/DesignWorkspaceView'
 import { AgyActivityPanel, AgyTaskList } from './AgyActivityPanel'
 import { agyOpenTaskIdsAtom, agyTaskViewsAtom, agyTaskKey, openAgyTaskAtom, closeAgyTaskAtom } from '@/atoms/agy-task-atoms'
 import { beginPaneResize } from '@/lib/pane-resize-policy'
@@ -9,7 +10,7 @@ import { beginPaneResize } from '@/lib/pane-resize-policy'
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { X, ExternalLink, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal, Terminal, BookOpen } from 'lucide-react'
+import { X, ExternalLink, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, Palette, ServerCog, SquareTerminal, Terminal, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -883,10 +884,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   const productivityTools = useAtomValue(productivityToolsAtom)
   const automationFormOpen = useAtomValue(automationFormAtom).open
   const isWorkspaceComponentEnabled = React.useCallback((component: WorkspaceComponentTab): boolean => (
-    component !== 'todos' || productivityTools.todosEnabled
-  ) && (
-    component !== 'calendar' || productivityTools.calendarEnabled
-  ), [productivityTools.calendarEnabled, productivityTools.todosEnabled])
+    component !== 'todos' && component !== 'calendar'
+  ), [])
 
   React.useEffect(() => {
     const validTabs = sanitizeWorkspaceComponentTabs(workspaceComponentTabs)
@@ -1275,6 +1274,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     ...(activeTab === 'agy-tasks' || split?.leftTab === 'agy-tasks' || split?.rightTab === 'agy-tasks' ? [{ id: 'agy-tasks' as const, label: '外部任务', icon: <SquareTerminal className="size-3.5" />, closable: true }] : []),
     ...workspaceComponentTabs.map((component) => {
       const meta: Record<WorkspaceComponentTab, { label: string; icon: React.ReactNode }> = {
+        design: { label: 'design', icon: <Palette className="size-3.5" /> },
         todos: { label: 'Todo', icon: <ListTodo className="size-3.5" /> },
         calendar: { label: '日程', icon: <CalendarDays className="size-3.5" /> },
         automations: { label: '定时任务', icon: <Clock className="size-3.5" /> },
@@ -1623,10 +1623,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       >
         <AgentView sessionId={paneDelegationSession.id} embedded />
       </SideAgentSessionContent>
-    ) : paneTab === 'todos' ? (
-      <PlanningView embedded componentTab="todos" />
-    ) : paneTab === 'calendar' ? (
-      <PlanningView embedded componentTab="calendar" />
+    ) : paneTab === 'design' ? (
+      <DesignWorkspaceView embedded workspaceId={currentWorkspaceId ?? undefined} sessionId={sessionId} />
     ) : paneTab === 'automations' ? (
       automationFormOpen ? <AutomationFormView embedded /> : <PlanningView embedded componentTab="automations" />
     ) : paneTab === 'skills' ? (

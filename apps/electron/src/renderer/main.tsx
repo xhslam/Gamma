@@ -47,8 +47,6 @@ import {
 } from './atoms/agent-atoms'
 import { updateStatusAtom, initializeUpdater } from './atoms/updater'
 import { automationsAtom } from './atoms/automation-atoms'
-import { calendarEventsAtom, calendarPlanningGroupsAtom, planningTagsAtom, todoPlanningGroupsAtom, todosAtom } from './atoms/planning-atoms'
-import { mergeTodoSnapshot, upsertTodo } from './lib/todo-state'
 import {
   notificationsEnabledAtom,
   notificationSoundEnabledAtom,
@@ -62,6 +60,7 @@ import {
   productivityToolsAtom,
   initializeUiPreferences,
   workbenchDensityAtom,
+  intelligentUiEnabledAtom,
 } from './atoms/ui-preferences'
 import {
   markdownFontSizeAtom,
@@ -489,70 +488,6 @@ function PlanningShortcutInitializer(): null {
   return null
 }
 
-function PlanningInitializer(): null {
-  const setTodos = useSetAtom(todosAtom)
-  const setCalendarEvents = useSetAtom(calendarEventsAtom)
-  const setTodoGroups = useSetAtom(todoPlanningGroupsAtom)
-  const setCalendarGroups = useSetAtom(calendarPlanningGroupsAtom)
-  const setTags = useSetAtom(planningTagsAtom)
-
-  useEffect(() => {
-    let disposed = false
-    const latestRequest = { todos: 0, calendarEvents: 0, todoGroups: 0, calendarGroups: 0, tags: 0 }
-    const loadTodos = (): void => {
-      const requestId = ++latestRequest.todos
-      void window.electronAPI.listTodos().then((todos) => {
-        if (!disposed && requestId === latestRequest.todos) setTodos((current) => mergeTodoSnapshot(current, todos))
-      }).catch((error: unknown) => console.error('[任务/日程] 加载 Todo 失败:', error))
-    }
-    const loadCalendarEvents = (): void => {
-      const requestId = ++latestRequest.calendarEvents
-      void window.electronAPI.listCalendarEvents().then((events) => {
-        if (!disposed && requestId === latestRequest.calendarEvents) setCalendarEvents(events)
-      }).catch((error: unknown) => console.error('[任务/日程] 加载日程失败:', error))
-    }
-    const loadTodoGroups = (): void => {
-      const requestId = ++latestRequest.todoGroups
-      void window.electronAPI.listPlanningGroups('todo').then((groups) => {
-        if (!disposed && requestId === latestRequest.todoGroups) setTodoGroups(groups)
-      }).catch((error: unknown) => console.error('[任务/日程] 加载 Todo 分组失败:', error))
-    }
-    const loadCalendarGroups = (): void => {
-      const requestId = ++latestRequest.calendarGroups
-      void window.electronAPI.listPlanningGroups('calendar').then((groups) => {
-        if (!disposed && requestId === latestRequest.calendarGroups) setCalendarGroups(groups)
-      }).catch((error: unknown) => console.error('[任务/日程] 加载日程分组失败:', error))
-    }
-    const loadTags = (): void => {
-      const requestId = ++latestRequest.tags
-      void window.electronAPI.listPlanningTags().then((tags) => {
-        if (!disposed && requestId === latestRequest.tags) setTags(tags)
-      }).catch((error: unknown) => console.error('[任务/日程] 加载标签失败:', error))
-    }
-    const load = (resources?: string[]): void => {
-      const includes = (resource: string): boolean => resources === undefined || resources.includes(resource)
-      if (includes('todos')) loadTodos()
-      if (includes('calendar_events')) loadCalendarEvents()
-      if (includes('todo_groups')) loadTodoGroups()
-      if (includes('calendar_groups')) loadCalendarGroups()
-      if (includes('tags')) loadTags()
-    }
-    load()
-    const unsubscribe = window.electronAPI.onPlanningChanged((change) => {
-      const todo = change.todo
-      if (change.resources.includes('todos') && todo) {
-        // 使在途快照过期，避免它在增量事件之后返回并覆盖最新 Todo。
-        latestRequest.todos += 1
-        setTodos((current) => upsertTodo(current, todo))
-      }
-      load(todo ? change.resources.filter((resource) => resource !== 'todos') : change.resources)
-    })
-    return () => { disposed = true; unsubscribe() }
-  }, [setCalendarEvents, setCalendarGroups, setTags, setTodoGroups, setTodos])
-
-  return null
-}
-
 function AutomationInitializer(): null {
   const setAutomations = useSetAtom(automationsAtom)
   const setAgentSessions = useSetAtom(agentSessionsAtom)
@@ -648,17 +583,25 @@ function UiPreferencesInitializer(): null {
   const setRichTextRenderingEnabled = useSetAtom(richTextRenderingEnabledAtom)
   const setSessionHoverPreviewEnabled = useSetAtom(sessionHoverPreviewEnabledAtom)
   const setProductivityTools = useSetAtom(productivityToolsAtom)
+  const setIntelligentUiEnabled = useSetAtom(intelligentUiEnabledAtom)
   const setWorkbenchDensity = useSetAtom(workbenchDensityAtom)
 
   useEffect(() => {
+    let uiChanged = false
+    const unsubscribe = window.electronAPI.onIntelligentUiChanged?.((enabled) => {
+      uiChanged = true
+      setIntelligentUiEnabled(enabled)
+    })
     initializeUiPreferences(
       setLongTextPasteAsAttachmentEnabled,
       setRichTextRenderingEnabled,
       setSessionHoverPreviewEnabled,
       setProductivityTools,
       setWorkbenchDensity,
+      enabled => { if (!uiChanged) setIntelligentUiEnabled(enabled) },
     )
-  }, [setWorkbenchDensity, setLongTextPasteAsAttachmentEnabled, setProductivityTools, setRichTextRenderingEnabled, setSessionHoverPreviewEnabled])
+    return () => { uiChanged = true; unsubscribe?.() }
+  }, [setIntelligentUiEnabled, setWorkbenchDensity, setLongTextPasteAsAttachmentEnabled, setProductivityTools, setRichTextRenderingEnabled, setSessionHoverPreviewEnabled])
 
   return null
 }
@@ -845,6 +788,7 @@ function SettingsWindowSync(): null {
       value => store.set(sessionHoverPreviewEnabledAtom, value),
       value => store.set(productivityToolsAtom, value),
       value => store.set(workbenchDensityAtom, value),
+      value => store.set(intelligentUiEnabledAtom, value),
     )
     initializeMarkdownFontSize(value => store.set(markdownFontSizeAtom, value))
     initializeNotifications(
@@ -975,7 +919,6 @@ if (isQuickTaskWindow) {
       <AgentListenersInitializer />
       <UpdaterInitializer />
       <AutomationInitializer />
-      <PlanningInitializer />
       <FeishuInitializer />
       <TabStatePersistenceInitializer />
       <VoiceDictationApp embedded />

@@ -1,0 +1,36 @@
+/* 上游宿主颜色令牌局部映射到 Gamma 主题，不污染应用全局。 */
+.gamma-intelligent-ui {
+  --dsw-alias-bg-base: hsl(var(--background));
+  --dsw-alias-bg-layer-1: hsl(var(--background));
+  --dsw-alias-bg-layer-2: hsl(var(--muted));
+  --dsw-alias-bg-layer-3: hsl(var(--accent));
+  --dsw-alias-label-primary: hsl(var(--foreground));
+  --dsw-alias-label-secondary: hsl(var(--muted-foreground));
+  --dsw-alias-label-tertiary: hsl(var(--muted-foreground));
+  --dsw-alias-label-caption: hsl(var(--muted-foreground));
+  --dsw-alias-border-l1: hsl(var(--border));
+  --dsw-alias-border-l2: hsl(var(--border));
+  --dsw-alias-fill-hover: hsl(var(--accent));
+  --dsw-alias-markdown-code-block: hsl(var(--muted));
+  --dsw-alias-markdown-hr: hsl(var(--border));
+  --dsw-alias-state-business-primary: hsl(var(--primary));
+  --dsw-alias-state-error-primary: hsl(var(--destructive));
+  --dsw-alias-state-success-primary: #16a34a;
+  --dsw-alias-state-success-secondary: #22c55e;
+  --dsw-alias-state-warn-primary: #b7791f;
+  --dsw-alias-state-warn-secondary: #f59e0b;
+  --dsw-static-deepseek-400: #6366f1;
+  --dsw-static-deepseek-450: #8b5cf6;
+  --dsw-static-deepseek-300: #a5b4fc;
+  --dsw-static-green-400: #22c55e;
+  --dsw-static-amber-400: #f59e0b;
+  --dsw-static-red-400: #ef4444;
+  --dsw-static-blue-450: #3b82f6;
+  --dsw-static-neutral-bluish-400: #64748b;
+  --dsh-content-font-size: var(--md-preview-font-size, 15.5px);
+  min-width: 0;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.gamma-intelligent-ui pre { margin: 0; }
+.gamma-intelligent-ui button:focus-visible, .gamma-intelligent-ui summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }

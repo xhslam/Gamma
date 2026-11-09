@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Blocks, BookOpen, Brain, CalendarDays, Clock, FolderOpen, Globe, ListTodo, Plus, ServerCog, SquareTerminal } from 'lucide-react'
+import { Blocks, BookOpen, Brain, Palette, Clock, FolderOpen, Globe, Plus, ServerCog, SquareTerminal } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { WorkspaceComponentTab } from '@/atoms/agent-atoms'
@@ -20,7 +20,7 @@ export interface RightWorkspaceAddMenuProps {
 export function RightWorkspaceAddMenu({
   workspaceSide = 'right', onOpenBrowser, onOpenFile, onOpenTerminal,
   onOpenAgyTasks, onOpenWorkspaceComponent,
-  productivityTools = { todosEnabled: true, calendarEnabled: true }, onOpenChange,
+  onOpenChange,
 }: RightWorkspaceAddMenuProps): React.ReactElement {
   const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const suppressPointerDismissFocusRestoreRef = React.useRef(false)
@@ -75,18 +75,7 @@ export function RightWorkspaceAddMenu({
         {onOpenWorkspaceComponent && (
           <>
             <DropdownMenuSeparator />
-            {productivityTools.todosEnabled && (
-              <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('todos')}>
-                <ListTodo className="size-3.5" />
-                打开 Todo
-              </DropdownMenuItem>
-            )}
-            {productivityTools.calendarEnabled && (
-              <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('calendar')}>
-                <CalendarDays className="size-3.5" />
-                打开日程
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('design')}><Palette className="size-3.5" />打开 design</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('markdown')}><BookOpen className="size-3.5" />打开 Markdown</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onOpenWorkspaceComponent('skills')}>
               <Blocks className="size-3.5" />

@@ -1,3 +1,4 @@
+import { DesignWorkspaceView } from '@/components/design/DesignWorkspaceView'
 /**
  * MainArea — 主内容区域
  *
@@ -201,6 +202,8 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
             <AgentSkillsView />
           ) : activeView === 'agy-terminal' ? (
             <ProjectAgyTerminalView />
+          ) : activeView === 'design' ? (
+            <DesignWorkspaceView />
           ) : activeView === 'markdown' ? (
             <React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载 Markdown 工作区…</div>}><MarkdownWorkspaceView /></React.Suspense>
           ) : (

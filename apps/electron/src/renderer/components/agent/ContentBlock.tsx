@@ -154,6 +154,8 @@ function SubAgentFooter({
 // ===== ContentBlock Props =====
 
 export interface ContentBlockProps {
+  /** 只有主线助手正文携带可交互消息身份。 */
+  intelligentUiBlockId?: string
   /** 内容块数据 */
   block: SDKContentBlock
   /** 所有消息（用于查找工具结果） */
@@ -654,11 +656,13 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
 
 function StreamingTextBlock({
   text,
+  intelligentUiBlockId,
   isStreaming,
   basePath,
   basePaths,
 }: {
   text: string
+  intelligentUiBlockId?: string
   isStreaming?: boolean
   basePath?: string
   basePaths?: string[]
@@ -668,12 +672,12 @@ function StreamingTextBlock({
     isStreaming: isStreaming ?? false,
   })
 
-  return <MessageResponse basePath={basePath} basePaths={basePaths}>{displayedContent}</MessageResponse>
+  return <MessageResponse basePath={basePath} basePaths={basePaths} intelligentUi={intelligentUiBlockId ? { blockId: intelligentUiBlockId, isStreaming: isStreaming ?? false } : undefined}>{displayedContent}</MessageResponse>
 }
 
 // ===== ContentBlock 主组件 =====
 
-export function ContentBlock({ block, allMessages, basePath, basePaths, animate = false, index = 0, dimmed = false, childBlocks, isStreaming }: ContentBlockProps): React.ReactElement | null {
+export function ContentBlock({ block, allMessages, basePath, basePaths, animate = false, index = 0, dimmed = false, childBlocks, isStreaming, intelligentUiBlockId }: ContentBlockProps): React.ReactElement | null {
   const timelineBlock = React.useContext(ProcessTimelineContext)
   if (timelineBlock !== null) {
     if (block.type === 'tool_use') {
@@ -690,6 +694,7 @@ export function ContentBlock({ block, allMessages, basePath, basePaths, animate 
     if (!textBlock.text) return null
     return (
       <StreamingTextBlock
+        intelligentUiBlockId={intelligentUiBlockId}
         text={textBlock.text}
         isStreaming={isStreaming}
         basePath={basePath}

@@ -9,8 +9,7 @@
  * - phase: idle / running / needs-interaction / completed / error
  * - 显示策略按状态分层：日常 running 不打扰，等待交互才醒目
  *
- * Todo / 日程部分由渲染进程通过已有的 planning IPC 自行拉取与订阅，
- * 本服务只负责 Agent 会话状态，保持职责单一。
+ * Todo / 日程已下线；只保留空规划快照用于原生 helper 协议兼容。
  */
 
 import {
@@ -27,14 +26,11 @@ import type { AgentStreamPayload } from '@gamma/shared'
 import { agentEventBus } from './agent-service'
 import { getAgentSessionMeta, listAgentSessions } from './agent-session-manager'
 import { isMacAgentIslandNativeHostReady, publishMacAgentIslandSnapshot } from './mac-agent-island-native-host'
-import { getAgentIslandTodoAttentionKeys, selectAgentIslandTodos } from './agent-island-planning'
 import { selectAgentIslandCompactPlanQuota } from './agent-island-plan-quota'
 import { getAgentIslandPhasePriority } from './agent-island-priority'
 import { buildVisibilityKey } from './agent-island-visibility'
 import { shouldRetainAgentIslandSession } from './agent-island-session-visibility'
 import { getWindowsAgentIslandSurface } from './windows-agent-island-surface'
-import { listCalendarEvents, listTodos } from './planning-manager'
-import { onPlanningChanged } from './planning-events'
 import { getChannelPlanQuota, listChannels } from './channel-manager'
 
 /** 会话快照保留的最大活动行数 */
@@ -43,8 +39,6 @@ const MAX_ACTIVITY_LINES = 6
 const MAX_PUSHED_ACTIVITY_LINES = 4
 /** 完成/错误后保留 attention（未读）的时间，也作为 terminal 会话在列表中的存活期 */
 const UNREAD_RETAIN_MS = 10 * 60_000
-/** 无 Agent 需接手时，仅在 Todo 截止/日程开始前这一窗口显示。 */
-const PLANNING_ATTENTION_WINDOW_MS = 60 * 60_000
 /** 交互、计划变更等需要即时反馈的推送节流间隔。 */
 const PUSH_THROTTLE_MS = 80
 /** 普通 Agent 流事件只需低频合并；状态页不展示 token / 工具流水。 */
@@ -82,15 +76,11 @@ let scheduledPushAt = 0
 let lastPushAt = 0
 let lastStateJson = ''
 let nativeRevision = 0
-let planningRevision = 0
-let planningRolloverTimer: ReturnType<typeof setTimeout> | null = null
-let planningAttentionTimer: ReturnType<typeof setTimeout> | null = null
 let planQuotaRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let planQuotas: AgentIslandPlanQuotaSnapshot[] = []
 /** 当前被用户主动关闭的提醒指纹；出现新的事项/Agent 状态时自动失效。 */
 let dismissedVisibilityKey: string | null = null
 let currentVisibilityKey = ''
-let disposePlanningListener: (() => void) | null = null
 let serviceDeps: AgentIslandServiceDeps | null = null
 
 // ===== 工具函数 =====
@@ -536,62 +526,13 @@ function buildCompactPlanQuota(state: AgentIslandState): AgentIslandState['compa
   return selectAgentIslandCompactPlanQuota(activeChannelIds, planQuotas)
 }
 
+/** 旧原生协议要求该字段，但不得再读取历史 Todo/日程或触发提醒。 */
 function buildPlanningSnapshot(now: number): AgentIslandPlanningSnapshot {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
-  const dayStart = today.getTime()
-  const dayEnd = dayStart + 24 * 60 * 60_000
-  const allTodayTodos = listTodos({ status: 'open' })
-    .filter((todo) => todo.dueAt !== undefined && todo.dueAt < dayEnd)
-    .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0))
-  // 逾期事项必须优先于未来事项；否则 Island 会在最需要提醒时变成空面板。
-  const todos = selectAgentIslandTodos(listTodos({ status: 'open' }), now)
-  const events = listCalendarEvents({ from: dayStart })
-    // Keep an event visible while it is in progress, not only before its start.
-    // All-day items without an explicit end remain active through their day.
-    .filter((event) => (event.allDay ? dayEnd : (event.endAt ?? event.startAt)) >= now)
-    .sort((a, b) => a.startAt - b.startAt)
-
-  return {
-    dayStart,
-    dayEnd,
-    overdueTodoCount: allTodayTodos.filter((todo) => (todo.dueAt ?? Number.POSITIVE_INFINITY) < now).length,
-    todos: todos.slice(0, 3).map((todo) => ({
-      id: todo.id,
-      title: todo.title,
-      dueAt: todo.dueAt,
-      priority: todo.priority,
-      isOverdue: (todo.dueAt ?? Number.POSITIVE_INFINITY) < now,
-    })),
-    events: events.slice(0, 3).map((event) => ({
-      id: event.id,
-      title: event.title,
-      startAt: event.startAt,
-      endAt: event.endAt,
-      allDay: event.allDay,
-    })),
-  }
-}
-
-function isImminent(timestamp: number | undefined, now: number): boolean {
-  return timestamp !== undefined
-    && timestamp >= now
-    && timestamp <= now + PLANNING_ATTENTION_WINDOW_MS
-}
-
-function getImminentPlanningKeys(now: number): string[] {
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
-  const dayStart = today.getTime()
-  const dayEnd = dayStart + 24 * 60 * 60_000
-  // 不依赖 UI 的前三条投影：多条逾期 Todo 不能遮蔽稍后临近的第四条事项。
-  // 逾期项也必须维持 Island 可见，直到用户明确关闭或完成它。
-  return [
-    ...getAgentIslandTodoAttentionKeys(listTodos({ status: 'open' }), now, PLANNING_ATTENTION_WINDOW_MS),
-    ...listCalendarEvents({ from: dayStart, to: dayEnd })
-      .filter((event) => isImminent(event.startAt, now))
-      .map((event) => `e:${event.id}:${event.startAt}`),
-  ]
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return { dayStart: today.getTime(), dayEnd: tomorrow.getTime(), overdueTodoCount: 0, todos: [], events: [] }
 }
 
 function isIslandVisible(state: AgentIslandState, planningKeys: string[]): boolean {
@@ -618,7 +559,7 @@ function buildNativeSnapshot(state: AgentIslandState, planning: AgentIslandPlann
 function pushState(): void {
   const now = Date.now()
   const planning = buildPlanningSnapshot(now)
-  const planningKeys = getImminentPlanningKeys(now)
+  const planningKeys: string[] = []
   const state = buildState(now)
   state.compactPlanQuota = buildCompactPlanQuota(state)
   // The idle dashboard is a true home surface: it remains visible even for a
@@ -628,8 +569,7 @@ function pushState(): void {
   const enabled = serviceDeps?.enabled?.() !== false
   state.visible = enabled && isIslandVisible(state, planningKeys)
   state.presentation = state.visible ? (isExpanded() ? 'expanded' : 'compact') : 'hidden'
-  // Planning 独立 revision 解决“同一毫秒内 Todo 变更而 Agent state.updatedAt 恰好相同”的漏推边界。
-  const json = JSON.stringify({ state, planning, planQuotas, planningRevision, dismissedVisibilityKey })
+  const json = JSON.stringify({ state, planning, planQuotas, dismissedVisibilityKey })
   // 状态无变化时跳过，避免无谓 IPC 与原生 helper 写入。
   if (json === lastStateJson) return
   lastStateJson = json
@@ -647,19 +587,6 @@ function pushState(): void {
 
 function publishWindowsAgentIslandSnapshot(snapshot: NativeAgentIslandSnapshot): void {
   getWindowsAgentIslandSurface().onSnapshot(snapshot)
-}
-
-/**
- * Todo/日程操作已经在数据库提交后才广播，因此不应再等待 Agent 流的 80ms
- * 合并窗口；直接把最新投影交给原生岛，避免完成/改期后的陈旧信息残留。
- */
-function pushPlanningStateImmediately(): void {
-  if (pushTimer) {
-    clearTimeout(pushTimer)
-    pushTimer = null
-  }
-  lastPushAt = Date.now()
-  pushState()
 }
 
 async function refreshPlanQuotas(): Promise<void> {
@@ -693,44 +620,6 @@ async function refreshPlanQuotas(): Promise<void> {
       planQuotaRefreshTimer = setTimeout(() => void refreshPlanQuotas(), PLAN_QUOTA_REFRESH_MS)
     }
   }
-}
-
-function scheduleNextPlanningRollover(): void {
-  if (planningRolloverTimer) clearTimeout(planningRolloverTimer)
-  const tomorrow = new Date()
-  tomorrow.setHours(24, 0, 0, 150)
-  planningRolloverTimer = setTimeout(() => {
-    planningRolloverTimer = null
-    planningRevision += 1
-    dismissedVisibilityKey = null
-    schedulePush()
-    scheduleNextPlanningRollover()
-    scheduleNextPlanningAttention()
-  }, Math.max(1_000, tomorrow.getTime() - Date.now()))
-}
-
-/** 让未来事项恰好进入“1 小时内”时自动唤起，而不是等待数据库下一次变更。 */
-function scheduleNextPlanningAttention(): void {
-  if (planningAttentionTimer) clearTimeout(planningAttentionTimer)
-  const now = Date.now()
-  const thresholdCandidates = [
-    ...listTodos({ status: 'open' }).map((todo) => todo.dueAt),
-    ...listCalendarEvents({ from: now, to: now + 14 * 24 * 60 * 60_000 }).map((event) => event.startAt),
-  ]
-    .filter((timestamp): timestamp is number => timestamp !== undefined)
-    .flatMap((timestamp) => [
-      timestamp - PLANNING_ATTENTION_WINDOW_MS, // 进入“临近 1 小时”
-      timestamp + 25, // 到点后退出该被动常驻区间
-    ])
-    .filter((threshold) => threshold > now)
-  const next = Math.min(...thresholdCandidates)
-  if (!Number.isFinite(next)) return
-  planningAttentionTimer = setTimeout(() => {
-    planningAttentionTimer = null
-    planningRevision += 1
-    schedulePush()
-    scheduleNextPlanningAttention()
-  }, Math.max(1_000, next - now + 25))
 }
 
 function schedulePush(throttleMs = PUSH_THROTTLE_MS): void {
@@ -786,17 +675,6 @@ export function initAgentIslandService(deps: AgentIslandServiceDeps): void {
   initialized = true
   serviceDeps = deps
 
-  // 原生岛没有 renderer planning IPC，因此复用统一失效广播刷新投影。
-  disposePlanningListener = onPlanningChanged((change) => {
-    if (change.resources.includes('todos') || change.resources.includes('calendar_events')) {
-      planningRevision += 1
-      dismissedVisibilityKey = null
-      pushPlanningStateImmediately()
-      scheduleNextPlanningAttention()
-    }
-  })
-  scheduleNextPlanningRollover()
-  scheduleNextPlanningAttention()
   void refreshPlanQuotas()
 
   // 订阅 Agent 事件流
@@ -923,12 +801,6 @@ export function handleNativeAgentIslandEvent(event: NativeAgentIslandEvent): voi
 export function disposeAgentIslandService(): void {
   disposeEventBus?.()
   disposeEventBus = null
-  disposePlanningListener?.()
-  disposePlanningListener = null
-  if (planningRolloverTimer) clearTimeout(planningRolloverTimer)
-  planningRolloverTimer = null
-  if (planningAttentionTimer) clearTimeout(planningAttentionTimer)
-  planningAttentionTimer = null
   if (planQuotaRefreshTimer) clearTimeout(planQuotaRefreshTimer)
   planQuotaRefreshTimer = null
   dismissedVisibilityKey = null

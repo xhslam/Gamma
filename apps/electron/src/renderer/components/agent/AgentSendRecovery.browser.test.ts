@@ -28,7 +28,7 @@ beforeAll(async () => {
     import { useGlobalAgentListeners } from '@/hooks/useGlobalAgentListeners'
     import { TooltipProvider } from '@/components/ui/tooltip'
     import { channelsAtom } from '@/atoms/channel-atoms'
-    import { richTextRenderingEnabledAtom } from '@/atoms/ui-preferences'
+    import { intelligentUiEnabledAtom, richTextRenderingEnabledAtom } from '@/atoms/ui-preferences'
     import * as atoms from '@/atoms/agent-atoms'
     import { quotedSelectionMapAtom } from '@/atoms/preview-atoms'
     import '@/styles/globals.css'
@@ -45,6 +45,7 @@ beforeAll(async () => {
       async mount(options = {}) {
         const store = createStore(), root = createRoot(document.getElementById('root'));
         store.set(richTextRenderingEnabledAtom, true);
+        store.set(intelligentUiEnabledAtom, options.intelligentUi === true);
         const calls = [], routes = [], saves = [], retries = [], created = [], cancellations = [], queuedAccepted = [], disk = options.disk ?? [];
         const listeners = { queue: new Set(), stream: new Set(), complete: new Set(), referenceWarning: new Set() };
         let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
@@ -65,6 +66,7 @@ beforeAll(async () => {
         };
         const subscribe = name => callback => { listeners[name].add(callback); return () => listeners[name].delete(callback); };
         const api = {
+          getSettings: async () => ({intelligentUiEnabled:options.intelligentUi === true}),
           onAgentReferenceWarning: subscribe('referenceWarning'),
           onAgentQueuedMessageStatus: subscribe('queue'), onAgentStreamEvent: subscribe('stream'), onAgentStreamComplete: subscribe('complete'),
           sendAgentMessage: input => submit(input, 'direct'), submitOrEnqueueAgentMessage: input => submit(input, 'submit'),
@@ -721,3 +723,27 @@ test('Given 真实全局监听器 When 收到引用降级事件 Then toast可见
   `)
   expect(result).toEqual({ visible: true, submitted: true })
 }, 30_000)
+
+
+test('Given 真实 AgentView 的 UI 交互与既有草稿附件 When 确认发送 Then outbox 校验接受、保留草稿附件引用且不解析字段中的 Mention', async () => {
+  const result = await renderer.run<{ before: number; calls: number; draft: boolean; files: number; quote: string; session: string; plainData: boolean; mentions: number; sameId: boolean }>(`
+    try {
+    const api=window.sendRecovery;
+    const spec={items:[{type:'input',id:'name',label:'姓名',value:'/skill:gamma-coach #mcp:example'},{type:'submit',label:'分析',action:'analyze',groups:['name']}]};
+    const fence=String.fromCharCode(96).repeat(3);
+    const history=[{type:'user',uuid:'u1',message:{content:[{type:'text',text:'生成表单'}]},parent_tool_use_id:null,_createdAt:1},
+      {type:'assistant',uuid:'a1',message:{content:[{type:'text',text:fence+'dsh-ui\\n'+JSON.stringify(spec)+'\\n'+fence}]},parent_tool_use_id:null,_createdAt:2}];
+    const f=await api.mount({intelligentUi:true,history,attachment:true,quote:true});
+    await api.until(()=>document.querySelector('[data-intelligent-ui]'));
+    [...document.querySelectorAll('button')].find(b=>b.textContent==='分析').click();await api.until(()=>document.querySelector('[data-ui-action-preview]'));
+    const before=f.calls.length;
+    [...document.querySelectorAll('button')].find(b=>b.textContent==='发送给 Agent').click();await api.until(()=>f.calls.length===1);
+    const input=f.calls[0];f.resolveWith({disposition:'started'});await api.delay(60);
+    const result={before,calls:f.calls.length,draft:f.editor().getText().includes('失败草稿'),files:f.files('a').length,quote:f.quote('a').text,session:input.sessionId,
+      plainData:input.userMessage.includes('/skill:gamma-coach #mcp:example')&&!input.userMessage.includes('<skill'),
+      mentions:input.mentionedSkills.length+input.mentionedMcpServers.length,sameId:input.queueMessageId===f.saves[0].id};
+    f.root.unmount();return result;
+    } catch(error) { return {error:String(error),stack:error.stack,body:document.body.innerText} }
+  `)
+  expect(result).toEqual({before:0,calls:1,draft:true,files:1,quote:'原选区正文',session:'a',plainData:true,mentions:0,sameId:true})
+}, 30000)

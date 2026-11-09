@@ -1,6 +1,6 @@
 {
   "name": "@gamma/electron",
-  "version": "0.19.254",
+  "version": "0.19.258",
   "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
@@ -87,6 +87,7 @@
     "typebox": "1.1.38"
   },
   "devDependencies": {
+    "@changfenhuang/dsh-genui": "0.15.0",
     "@electron/rebuild": "^4.2.0",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
@@ -182,7 +183,7 @@
     "use-stick-to-bottom": "^1.1.2",
     "vite": "^6.0.3",
     "ws": "8.19.0",
-    "zod": "^4.0.0"
+    "zod": "4.3.6"
   },
   "electronmon": {
     "patterns": [

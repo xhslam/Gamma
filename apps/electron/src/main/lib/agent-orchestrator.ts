@@ -1,3 +1,4 @@
+import { getDesignAgentContext } from './design-agent-context'
 import type { AgentContextRef } from '@gamma/shared'
 import { captureReferenceSnapshotOrEmpty } from './conversation-reference/send-snapshot'
 /**
@@ -1058,12 +1059,13 @@ export class AgentOrchestrator {
 
       // 必须与 runtime 接收的附加目录保持一致；视觉助手据此限制允许外发的图片路径。
       const productivityTools = appSettings.productivityTools
+      const designContext = await getDesignAgentContext(sessionId)
       const attachedDirectories = collectAttachedDirectories({
         extraDirs: additionalDirectories,
         sessionMeta,
         workspaceSlug,
       })
-      const allAdditionalDirectories = [...new Set(attachedDirectories.map((dir) => dir.trim()).filter(Boolean))]
+      const allAdditionalDirectories = [...new Set([...attachedDirectories, ...(designContext?.additionalDirectories ?? [])].map((dir) => dir.trim()).filter(Boolean))]
       const browserAllowedRoots = [...new Set([
         workspaceId ? agentCwd : undefined,
         workspaceSlug ? getProjectFilesPath(workspaceSlug) : undefined,
@@ -1577,6 +1579,7 @@ export class AgentOrchestrator {
         sessionWorkbenchLayout: getSessionWorkbenchLayout(sessionMeta),
         permissionMode: initialPermissionMode,
         collaborationAvailable,
+        intelligentUiInteractive: !automationContext && !input.triggeredBy,
         currentModelId: selectedModelId,
         projectInstructions,
         projectKnowledgeMaintenanceApproved,
@@ -1664,7 +1667,7 @@ export class AgentOrchestrator {
         ...(maxTurns != null && { maxTurns }),
         permissionMode: initialPermissionMode,
         canUseTool,
-        systemPrompt: systemPromptAppend + buildPiAdditionalDirectoriesPrompt(allAdditionalDirectories),
+        systemPrompt: systemPromptAppend + buildPiAdditionalDirectoriesPrompt(allAdditionalDirectories) + (designContext?.prompt ?? ''),
         ...(instructionFiles.length > 0 && { projectInstructionFiles: instructionFiles }),
         ...(projectInstructions && {
           projectInstructionScope: {

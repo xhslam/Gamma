@@ -9,6 +9,9 @@ import { DEFAULT_PRODUCTIVITY_TOOLS_SETTINGS, normalizeWorkbenchDensity, type Wo
 
 // ===== Jotai Atoms =====
 
+/** 默认关闭，只有助手正文允许激活。 */
+export const intelligentUiEnabledAtom = atom(false)
+
 /** 工作台布局默认为紧凑，与主题独立。 */
 export const workbenchDensityAtom = atom<WorkbenchDensity>('compact')
 
@@ -35,6 +38,7 @@ export async function initializeUiPreferences(
   setSessionHoverPreviewEnabled?: (enabled: boolean) => void,
   setProductivityTools?: (settings: ProductivityToolsSettings) => void,
   setWorkbenchDensity?: (density: WorkbenchDensity) => void,
+  setIntelligentUiEnabled?: (enabled: boolean) => void,
 ): Promise<void> {
   try {
     const settings = await window.electronAPI.getSettings()
@@ -43,6 +47,7 @@ export async function initializeUiPreferences(
     setSessionHoverPreviewEnabled?.(settings.sessionHoverPreviewEnabled ?? false)
     setProductivityTools?.(settings.productivityTools)
     setWorkbenchDensity?.(normalizeWorkbenchDensity(settings.workbenchDensity))
+    setIntelligentUiEnabled?.(settings.intelligentUiEnabled === true)
   } catch (error) {
     console.error('[UI偏好] 初始化失败:', error)
   }
@@ -96,4 +101,9 @@ export async function updateProductivityTools(settings: ProductivityToolsSetting
 /** 保存成功后由调用方更新 atom；失败保持现状并展示错误。 */
 export async function updateWorkbenchDensity(density: WorkbenchDensity): Promise<void> {
   await window.electronAPI.updateSettings({ workbenchDensity: normalizeWorkbenchDensity(density) })
+}
+
+/** 保存成功后再更新 atom，失败交由设置页反馈。 */
+export async function updateIntelligentUiEnabled(enabled: boolean): Promise<void> {
+  await window.electronAPI.updateSettings({ intelligentUiEnabled: enabled })
 }

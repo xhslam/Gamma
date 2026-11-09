@@ -16,6 +16,9 @@ import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { useOpenSession } from './useOpenSession'
 
 interface CreateSessionOptions {
+  /** 为项目级工作区显式固定归属，避免异步操作跟随全局选择。 */
+  workspaceId?: string
+
   /** 标记为草稿会话（不在侧边栏显示，发送首条消息后自动取消） */
   draft?: boolean
   /** 是否创建后立即打开会话标签页，默认 true */
@@ -47,7 +50,7 @@ export function useCreateSession(): CreateSessionActions {
       const meta = await window.electronAPI.createAgentSession(
         undefined,
         options?.channelId ?? agentChannelId ?? undefined,
-        currentWorkspaceId || undefined,
+        options?.workspaceId ?? (currentWorkspaceId || undefined),
         options?.modelId ?? agentModelId ?? undefined,
         options?.draft,
       )

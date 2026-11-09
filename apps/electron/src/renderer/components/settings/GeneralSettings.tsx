@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import { toast } from 'sonner'
 import { useAtom } from 'jotai'
 import { Camera, Check, ExternalLink, ImagePlus, Play, Volume2 } from 'lucide-react'
 import Picker from '@emoji-mart/react'
@@ -43,8 +44,8 @@ import {
   longTextPasteAsAttachmentEnabledAtom,
   richTextRenderingEnabledAtom,
   sessionHoverPreviewEnabledAtom,
-  productivityToolsAtom,
-  updateProductivityTools,
+  intelligentUiEnabledAtom,
+  updateIntelligentUiEnabled,
   updateLongTextPasteAsAttachmentEnabled,
   updateRichTextRenderingEnabled,
   updateSessionHoverPreviewEnabled,
@@ -52,7 +53,7 @@ import {
 import { cn } from '@/lib/utils'
 import { detectIsMac, detectIsWindows } from '@/lib/platform'
 import { getEffectiveSoundPackId } from '@/lib/notification-sound-selection'
-import type { NotificationSoundId, NotificationSoundType, NotificationSoundSettings, ProductivityToolsSettings } from '@/types/settings'
+import type { NotificationSoundId, NotificationSoundType, NotificationSoundSettings } from '@/types/settings'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 /** emoji-mart 选择回调的 emoji 对象类型 */
@@ -73,7 +74,9 @@ export function GeneralSettings(): React.ReactElement {
   const [longTextPasteAsAttachmentEnabled, setLongTextPasteAsAttachmentEnabled] = useAtom(longTextPasteAsAttachmentEnabledAtom)
   const [richTextRenderingEnabled, setRichTextRenderingEnabled] = useAtom(richTextRenderingEnabledAtom)
   const [sessionHoverPreviewEnabled, setSessionHoverPreviewEnabled] = useAtom(sessionHoverPreviewEnabledAtom)
-  const [productivityTools, setProductivityTools] = useAtom(productivityToolsAtom)
+  const [intelligentUiEnabled, setIntelligentUiEnabled] = useAtom(intelligentUiEnabledAtom)
+  const [savingIntelligentUi, setSavingIntelligentUi] = React.useState(false)
+  const savingIntelligentUiRef = React.useRef(false)
   const [isEditingName, setIsEditingName] = React.useState(false)
   const [nameInput, setNameInput] = React.useState(userProfile.userName)
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
@@ -93,18 +96,6 @@ export function GeneralSettings(): React.ReactElement {
       setAgentIslandEnabled(settings.agentIsland?.enabled ?? true)
     }).catch(console.error)
   }, [])
-
-  /** 更新生产力工具开关；失败时回滚，避免界面和持久化设置不一致。 */
-  const handleProductivityToolsChange = async (updates: Partial<ProductivityToolsSettings>): Promise<void> => {
-    const previous = productivityTools
-    const next = { ...previous, ...updates }
-    setProductivityTools(next)
-    try {
-      await updateProductivityTools(next)
-    } catch {
-      setProductivityTools(previous)
-    }
-  }
 
   /** 更新 Git/PR 推广标识开关 */
   const handleGitAttributionChange = async (checked: boolean): Promise<void> => {
@@ -298,20 +289,28 @@ export function GeneralSettings(): React.ReactElement {
           >
             <span className="text-[13px] text-foreground/40">简体中文</span>
           </SettingsRow>
+          <SettingsToggle
+            label="Intelligent UI"
+            description="在 Agent 回复中显示交互式图表、表格和表单"
+            checked={intelligentUiEnabled}
+            disabled={savingIntelligentUi}
+            onCheckedChange={async (checked) => {
+              if (savingIntelligentUiRef.current) return
+              savingIntelligentUiRef.current = true
+              setSavingIntelligentUi(true)
+              try {
+                await updateIntelligentUiEnabled(checked)
+                setIntelligentUiEnabled(checked)
+              } catch {
+                toast.error('Intelligent UI 设置保存失败')
+              } finally {
+                savingIntelligentUiRef.current = false
+                setSavingIntelligentUi(false)
+              }
+            }}
+          />
           <ComputerRiskPolicySetting />
           <ComputerAuthorizationSetting />
-          <SettingsToggle
-            label="Todo"
-            description="显示 Todo 入口，并允许 Agent 使用 Todo 相关工具"
-            checked={productivityTools.todosEnabled}
-            onCheckedChange={(checked) => { void handleProductivityToolsChange({ todosEnabled: checked }) }}
-          />
-          <SettingsToggle
-            label="日程"
-            description="显示日程入口，并允许 Agent 使用日程相关工具"
-            checked={productivityTools.calendarEnabled}
-            onCheckedChange={(checked) => { void handleProductivityToolsChange({ calendarEnabled: checked }) }}
-          />
           <SettingsToggle
             label="桌面通知"
             description="Agent 完成任务或需要操作时发送通知"

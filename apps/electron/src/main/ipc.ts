@@ -1,3 +1,7 @@
+import { registerDesignWorkbenchHandlers } from './lib/design-workbench-ipc'
+import { DESIGN_IPC_CHANNELS } from '@gamma/shared'
+import type { InstallDesignInput } from '@gamma/shared'
+import { getDesignStatus, installWorkspaceDesign } from './lib/design-service'
 import { closeSettingsWindow, openSettingsWindow, readySettingsWindow } from './lib/settings-window'
 import { resolvePiBudgetContextWindow } from './lib/adapters/pi-model-registry'
 import { registerReferenceWarningListener } from './lib/conversation-reference/send-snapshot'
@@ -14,7 +18,7 @@ import { existsSync, realpathSync, readFileSync, writeFileSync, mkdirSync, statS
 import { realpath, stat, writeFile, readdir, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
 import type { GlobalMemoryEntry } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS, TRAY_IPC_CHANNELS } from '../types'
 import { setAppIconVariant } from './lib/app-icon-service'
@@ -125,34 +129,6 @@ import type {
   Automation,
   CreateAutomationInput,
   UpdateAutomationInput,
-  Todo,
-  TodoListQuery,
-  CalendarEvent,
-  CalendarEventListQuery,
-  PlanningGroup,
-  PlanningGroupScope,
-  PlanningTag,
-  PlanningReminder,
-  ActivePlanningReminder,
-  CreateTodoInput,
-  StartTodoAgentInput,
-  StartTodoAgentResult,
-  UpdateTodoInput,
-  CreateCalendarEventInput,
-  UpdateCalendarEventInput,
-  CreatePlanningGroupInput,
-  UpdatePlanningGroupInput,
-  SnoozePlanningReminderInput,
-  PlanningNativeSyncEntity,
-  PlanningNativeSyncStatus,
-  PlanningNativeSyncPermissionResult,
-  PlanningNativeSyncTarget,
-  PlanningNativeConnection,
-  PlanningNativeSyncConflict,
-  ConnectPlanningNativeConnectionInput,
-  ResolvePlanningNativeSyncConflictInput,
-  PlanningSyncProfile,
-  SavePlanningSyncProfileInput,
   BrowserViewState,
   BrowserViewLayout,
   BrowserNavigateInput,
@@ -222,40 +198,7 @@ import {
   deleteAutomation,
 } from './lib/automation-manager'
 import { runAutomationNow, broadcastChanged as broadcastAutomationsChanged } from './lib/automation-scheduler'
-import {
-  listTodos,
-  getTodo,
-  createTodo,
-  updateTodo,
-  deleteTodo,
-  listCalendarEvents,
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
-  listPlanningGroups,
-  createPlanningGroup,
-  updatePlanningGroup,
-  deletePlanningGroup,
-  listPlanningTags,
-  listActivePlanningReminders,
-  acknowledgePlanningReminder,
-  snoozePlanningReminder,
-  listPlanningSyncProfiles,
-  listPlanningNativeConnections,
-  connectPlanningNativeConnection,
-  disconnectPlanningNativeConnection,
-  listPlanningNativeSyncConflicts,
-  resolvePlanningNativeSyncConflict,
-  savePlanningSyncProfile,
-} from './lib/planning-manager'
-import { broadcastPlanningChanged } from './lib/planning-events'
-import {
-  getPlanningNativeSyncStatus,
-  listPlanningNativeSyncTargets,
-  listPlanningNativeConnectionTargets,
-  requestPlanningNativeSyncAccess,
-} from './lib/planning-native-sync-service'
-import { runPlanningNativeSync } from './lib/planning-native-sync-coordinator'
+import { registerRemovedPlanningHandlers } from './lib/planning-ipc-retirement'
 import {
   listAgentSessions,
   listActiveAgentSessions,
@@ -1355,6 +1298,9 @@ async function withOAuthDeviceCodeQr<T extends CodexOAuthDeviceCode | GithubCopi
 let cleanupReferenceWarnings: (() => void) | undefined
 
 export function registerIpcHandlers(): void {
+  ipcMain.handle(DESIGN_IPC_CHANNELS.GET_STATUS, (_, workspaceId: string) => getDesignStatus(workspaceId))
+  ipcMain.handle(DESIGN_IPC_CHANNELS.INSTALL, (_, input: InstallDesignInput) => installWorkspaceDesign(input))
+
   cleanupReferenceWarnings?.()
   cleanupReferenceWarnings = registerReferenceWarningListener((notice) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -1383,6 +1329,8 @@ export function registerIpcHandlers(): void {
       throw new Error('仅主窗口可以操作本地终端。')
     }
   }
+  registerDesignWorkbenchHandlers(ipcMain, assertMainTerminalRenderer)
+
   // 外部任务不向 renderer 暴露启动接口；历史/停止仅允许主窗口与所属会话。
   ipcMain.handle(AGY_IPC_CHANNELS.LIST, (event, sessionId: string) => {
     assertMainTerminalRenderer(event.sender.id)
@@ -2052,6 +2000,11 @@ export function registerIpcHandlers(): void {
     SETTINGS_IPC_CHANNELS.UPDATE,
     async (event, updates: UpdateAppSettings): Promise<AppSettings> => {
       const result = await updateSettings(updates)
+      if (updates.intelligentUiEnabled !== undefined) {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send(SETTINGS_IPC_CHANNELS.ON_INTELLIGENT_UI_CHANGED, result.intelligentUiEnabled === true)
+        }
+      }
 
       if (updates.feishuSessionMirror !== undefined) {
         syncFeishuSyncSleepBlocker(result)
@@ -5592,222 +5545,8 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // ===== 任务 / 日程（Planning）=====
-
-  const isPlanningTitle = (value: unknown): value is string =>
-    typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 500
-  const isPlanningTimestamp = (value: unknown): value is number =>
-    typeof value === 'number' && Number.isFinite(value) && value > 0
-  const isTodoPriority = (value: unknown): value is 'low' | 'medium' | 'high' =>
-    value === 'low' || value === 'medium' || value === 'high'
-  const isTodoStatus = (value: unknown): value is 'open' | 'completed' =>
-    value === 'open' || value === 'completed'
-  const parseTodoListQuery = (input: unknown): TodoListQuery => {
-    if (input === undefined) return {}
-    if (!input || typeof input !== 'object') throw new Error('Todo 查询参数非法')
-    const query = input as TodoListQuery
-    if (query.status !== undefined && !isTodoStatus(query.status)) throw new Error('Todo status 非法')
-    if (query.dueBefore !== undefined && !isPlanningTimestamp(query.dueBefore)) throw new Error('Todo dueBefore 非法')
-    if (query.limit !== undefined && (!Number.isInteger(query.limit) || query.limit < 1)) throw new Error('Todo limit 非法')
-    return query
-  }
-  const parseCalendarEventListQuery = (input: unknown): CalendarEventListQuery => {
-    if (input === undefined) return {}
-    if (!input || typeof input !== 'object') throw new Error('日程查询参数非法')
-    const query = input as CalendarEventListQuery
-    if (query.from !== undefined && !isPlanningTimestamp(query.from)) throw new Error('日程 from 非法')
-    if (query.to !== undefined && !isPlanningTimestamp(query.to)) throw new Error('日程 to 非法')
-    if (query.from !== undefined && query.to !== undefined && query.from > query.to) throw new Error('日程范围非法')
-    if (query.limit !== undefined && (!Number.isInteger(query.limit) || query.limit < 1)) throw new Error('日程 limit 非法')
-    return query
-  }
-
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_TODOS, async (_, input?: unknown): Promise<Todo[]> => listTodos(parseTodoListQuery(input)))
-  ipcMain.handle(PLANNING_IPC_CHANNELS.CREATE_TODO, async (_, input: CreateTodoInput): Promise<Todo> => {
-    if (!input || !isPlanningTitle(input.title)) throw new Error('Todo 标题不能为空且不能超过 500 字')
-    if (input.priority !== undefined && !isTodoPriority(input.priority)) throw new Error('Todo priority 非法')
-    if (input.dueAt !== undefined && !isPlanningTimestamp(input.dueAt)) throw new Error('Todo dueAt 非法')
-    if (input.sessionId !== undefined && (typeof input.sessionId !== 'string' || !input.sessionId.trim())) throw new Error('Todo sessionId 非法')
-    const todo = createTodo(input)
-    broadcastPlanningChanged(['todos', 'reminders'])
-    return todo
-  })
-  // Todo 项目归属更新与 Agent 会话创建必须在一次主进程同步处理内完成，
-  // 避免项目选择、Todo 更新与会话创建之间出现状态竞争。
-  ipcMain.handle(PLANNING_IPC_CHANNELS.START_TODO_AGENT, (_, input: StartTodoAgentInput): StartTodoAgentResult => {
-    if (!input || typeof input.todoId !== 'string' || !input.todoId.trim()) throw new Error('Todo id 必填')
-    if (typeof input.workspaceId !== 'string' || !input.workspaceId.trim()) throw new Error('项目 id 必填')
-    if (!isPlanningTimestamp(input.expectedUpdatedAt)) throw new Error('Todo expectedUpdatedAt 非法')
-    if (typeof input.channelId !== 'string' || !input.channelId.trim()) throw new Error('Agent 渠道必填')
-    if (input.modelId !== undefined && (typeof input.modelId !== 'string' || !input.modelId.trim())) throw new Error('Agent 模型非法')
-    if (!getAgentWorkspace(input.workspaceId)) throw new Error('所选项目已不可用，请重新选择')
-
-    const existing = getTodo(input.todoId)
-    if (!existing) throw new Error('Todo 不存在')
-    if (existing.updatedAt !== input.expectedUpdatedAt) throw new Error(PLANNING_CONFLICT_ERROR)
-
-    const todo = existing.workspaceId === input.workspaceId
-      ? existing
-      : updateTodo({
-        id: existing.id,
-        workspaceId: input.workspaceId,
-        expectedUpdatedAt: existing.updatedAt,
-      })
-    if (!todo) throw new Error('Todo 不存在')
-    if (todo !== existing) broadcastPlanningChanged(['todos', 'reminders'], { todo })
-
-    const session = createAgentSession(
-      `处理：${todo.title}`,
-      input.channelId,
-      input.workspaceId,
-      input.modelId,
-    )
-    // 对齐普通 Agent 会话创建入口；镜像初始化异步执行，不打断上面的原子状态转换。
-    feishuBridgeManager.ensureSessionMirror(session).catch((error) => {
-      console.error('[飞书 Session 镜像] Todo 启动会话建群失败:', error)
-    })
-
-    return { todo, session }
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.UPDATE_TODO, async (_, input: UpdateTodoInput): Promise<Todo | undefined> => {
-    if (!input || typeof input.id !== 'string' || !input.id) throw new Error('Todo id 必填')
-    if (input.title !== undefined && !isPlanningTitle(input.title)) throw new Error('Todo 标题不能为空且不能超过 500 字')
-    if (input.priority !== undefined && !isTodoPriority(input.priority)) throw new Error('Todo priority 非法')
-    if (input.status !== undefined && !isTodoStatus(input.status)) throw new Error('Todo status 非法')
-    if (input.dueAt !== undefined && input.dueAt !== null && !isPlanningTimestamp(input.dueAt)) throw new Error('Todo dueAt 非法')
-    if (input.expectedUpdatedAt !== undefined && !isPlanningTimestamp(input.expectedUpdatedAt)) throw new Error('Todo expectedUpdatedAt 非法')
-    const todo = updateTodo(input)
-    if (todo) broadcastPlanningChanged(['todos', 'reminders'], { todo })
-    return todo
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.DELETE_TODO, async (_, id: string): Promise<boolean> => {
-    if (!id || typeof id !== 'string') throw new Error('Todo id 必填')
-    const deleted = deleteTodo(id)
-    // calendar_events.todo_id uses ON DELETE SET NULL, so linked events must refresh too.
-    if (deleted) broadcastPlanningChanged(['todos', 'calendar_events', 'reminders'])
-    return deleted
-  })
-
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_CALENDAR_EVENTS, async (_, input?: unknown): Promise<CalendarEvent[]> => listCalendarEvents(parseCalendarEventListQuery(input)))
-  ipcMain.handle(PLANNING_IPC_CHANNELS.CREATE_CALENDAR_EVENT, async (_, input: CreateCalendarEventInput): Promise<CalendarEvent> => {
-    if (!input || !isPlanningTitle(input.title) || !isPlanningTimestamp(input.startAt)) throw new Error('日程标题和 startAt 必填')
-    if (input.endAt !== undefined && (!isPlanningTimestamp(input.endAt) || input.endAt < input.startAt)) throw new Error('日程 endAt 非法')
-    const event = createCalendarEvent(input)
-    broadcastPlanningChanged(['calendar_events', 'reminders'])
-    return event
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.UPDATE_CALENDAR_EVENT, async (_, input: UpdateCalendarEventInput): Promise<CalendarEvent | undefined> => {
-    if (!input || typeof input.id !== 'string' || !input.id) throw new Error('日程 id 必填')
-    if (input.title !== undefined && !isPlanningTitle(input.title)) throw new Error('日程标题不能为空且不能超过 500 字')
-    if (input.startAt !== undefined && !isPlanningTimestamp(input.startAt)) throw new Error('日程 startAt 非法')
-    if (input.endAt !== undefined && input.endAt !== null && !isPlanningTimestamp(input.endAt)) throw new Error('日程 endAt 非法')
-    if (input.expectedUpdatedAt !== undefined && !isPlanningTimestamp(input.expectedUpdatedAt)) throw new Error('日程 expectedUpdatedAt 非法')
-    const event = updateCalendarEvent(input)
-    if (event) broadcastPlanningChanged(['calendar_events', 'reminders'])
-    return event
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.DELETE_CALENDAR_EVENT, async (_, id: string): Promise<boolean> => {
-    if (!id || typeof id !== 'string') throw new Error('日程 id 必填')
-    const deleted = deleteCalendarEvent(id)
-    if (deleted) broadcastPlanningChanged(['calendar_events', 'reminders'])
-    return deleted
-  })
-
-
-  const isPlanningShortName = (value: unknown): value is string =>
-    typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 100
-  const isPlanningGroupScope = (value: unknown): value is PlanningGroupScope => value === 'todo' || value === 'calendar'
-  const isOptionalColor = (value: unknown): boolean => value === undefined || value === null || typeof value === 'string'
-
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_GROUPS, async (_, scope: PlanningGroupScope): Promise<PlanningGroup[]> => {
-    if (!isPlanningGroupScope(scope)) throw new Error('分组范围非法')
-    return listPlanningGroups(scope)
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.CREATE_GROUP, async (_, input: CreatePlanningGroupInput): Promise<PlanningGroup> => {
-    if (!input || !isPlanningGroupScope(input.scope) || !isPlanningShortName(input.name) || !isOptionalColor(input.color)) throw new Error('分组参数非法')
-    const group = createPlanningGroup(input); broadcastPlanningChanged(input.scope === 'todo' ? ['todo_groups', 'todos', 'reminders'] : ['calendar_groups', 'calendar_events', 'reminders']); return group
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.UPDATE_GROUP, async (_, input: UpdatePlanningGroupInput): Promise<PlanningGroup | undefined> => {
-    if (!input || !isPlanningGroupScope(input.scope) || typeof input.id !== 'string' || (input.name !== undefined && !isPlanningShortName(input.name)) || !isOptionalColor(input.color)) throw new Error('分组参数非法')
-    const group = updatePlanningGroup(input); if (group) broadcastPlanningChanged(input.scope === 'todo' ? ['todo_groups', 'todos', 'reminders'] : ['calendar_groups', 'calendar_events', 'reminders']); return group
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.DELETE_GROUP, async (_, scope: PlanningGroupScope, id: string): Promise<boolean> => {
-    if (!isPlanningGroupScope(scope) || !id || typeof id !== 'string') throw new Error('分组参数非法')
-    const deleted = deletePlanningGroup(scope, id); if (deleted) broadcastPlanningChanged(scope === 'todo' ? ['todo_groups', 'todos', 'reminders'] : ['calendar_groups', 'calendar_events', 'reminders']); return deleted
-  })
-
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_TAGS, async (): Promise<PlanningTag[]> => listPlanningTags())
-
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_ACTIVE_REMINDERS, async (): Promise<ActivePlanningReminder[]> => listActivePlanningReminders())
-  ipcMain.handle(PLANNING_IPC_CHANNELS.ACKNOWLEDGE_REMINDER, async (_, id: string): Promise<PlanningReminder | undefined> => {
-    if (!id || typeof id !== 'string') throw new Error('提醒 id 必填')
-    const reminder = acknowledgePlanningReminder(id); if (reminder) broadcastPlanningChanged(['todos', 'calendar_events', 'reminders']); return reminder
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.SNOOZE_REMINDER, async (_, input: SnoozePlanningReminderInput): Promise<PlanningReminder | undefined> => {
-    if (!input || typeof input.id !== 'string' || !Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 10080) throw new Error('推迟分钟数非法')
-    const reminder = snoozePlanningReminder(input.id, input.minutes); if (reminder) broadcastPlanningChanged(['todos', 'calendar_events', 'reminders']); return reminder
-  })
-
-  // ===== macOS Calendar / Reminders 同步（授权、受管目标与单向发布） =====
-  const isPlanningNativeSyncEntity = (value: unknown): value is PlanningNativeSyncEntity => value === 'calendar' || value === 'reminder'
-  ipcMain.handle(PLANNING_IPC_CHANNELS.GET_NATIVE_SYNC_STATUS, async (): Promise<PlanningNativeSyncStatus> => getPlanningNativeSyncStatus())
-  ipcMain.handle(PLANNING_IPC_CHANNELS.REQUEST_NATIVE_SYNC_ACCESS, async (_, entity: unknown): Promise<PlanningNativeSyncPermissionResult> => {
-    if (!isPlanningNativeSyncEntity(entity)) throw new Error('同步实体类型非法')
-    return requestPlanningNativeSyncAccess(entity)
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.OPEN_NATIVE_SYNC_PRIVACY_SETTINGS, async (_, entity: unknown): Promise<void> => {
-    if (!isPlanningNativeSyncEntity(entity)) throw new Error('同步实体类型非法')
-    if (process.platform !== 'darwin') return
-    await shell.openExternal(entity === 'calendar'
-      ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars'
-      : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders')
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_NATIVE_SYNC_TARGETS, async (_, entity: unknown): Promise<PlanningNativeSyncTarget[]> => {
-    if (!isPlanningNativeSyncEntity(entity)) throw new Error('同步实体类型非法')
-    return listPlanningNativeSyncTargets(entity)
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_NATIVE_CONNECTION_TARGETS, async (_, entity: unknown): Promise<PlanningNativeSyncTarget[]> => {
-    if (!isPlanningNativeSyncEntity(entity)) throw new Error('同步实体类型非法')
-    return listPlanningNativeConnectionTargets(entity)
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_NATIVE_CONNECTIONS, async (_, entity?: unknown): Promise<PlanningNativeConnection[]> => {
-    if (entity !== undefined && !isPlanningNativeSyncEntity(entity)) throw new Error('同步实体类型非法')
-    return listPlanningNativeConnections(entity)
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.CONNECT_NATIVE_CONNECTION, async (_, input: ConnectPlanningNativeConnectionInput): Promise<PlanningNativeConnection> => {
-    if (!input || !isPlanningNativeSyncEntity(input.entity) || !input.target || typeof input.target.id !== 'string') throw new Error('连接参数非法')
-    // renderer 不可信：用 EventKit 当前返回的完整目标覆盖传入元数据。
-    const target = (await listPlanningNativeConnectionTargets(input.entity)).find((item) => item.id === input.target.id)
-    if (!target) throw new Error('系统集合不存在或尚未授权')
-    const connection = connectPlanningNativeConnection({ entity: input.entity, target })
-    // 用户刚确认连接时必须立刻回流，不能被全局定期同步 cooldown 延后。
-    void runPlanningNativeSync(true)
-    return connection
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.DISCONNECT_NATIVE_CONNECTION, async (_, id: unknown): Promise<boolean> => {
-    if (typeof id !== 'string' || !id) throw new Error('连接 id 非法')
-    const disconnected = disconnectPlanningNativeConnection(id)
-    if (disconnected) broadcastPlanningChanged(['todos', 'calendar_events'])
-    return disconnected
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_NATIVE_SYNC_CONFLICTS, async (): Promise<PlanningNativeSyncConflict[]> => listPlanningNativeSyncConflicts())
-  ipcMain.handle(PLANNING_IPC_CHANNELS.RESOLVE_NATIVE_SYNC_CONFLICT, async (_, input: ResolvePlanningNativeSyncConflictInput): Promise<boolean> => {
-    if (!input || typeof input.id !== 'string' || !['keep_gamma', 'keep_system'].includes(input.resolution)) throw new Error('冲突解决参数非法')
-    const resolved = resolvePlanningNativeSyncConflict(input)
-    if (resolved) { broadcastPlanningChanged(['todos', 'calendar_events']); void runPlanningNativeSync(true) }
-    return resolved
-  })
-  ipcMain.handle(PLANNING_IPC_CHANNELS.LIST_SYNC_PROFILES, async (): Promise<PlanningSyncProfile[]> => listPlanningSyncProfiles())
-  ipcMain.handle(PLANNING_IPC_CHANNELS.SAVE_SYNC_PROFILE, async (_, input: SavePlanningSyncProfileInput): Promise<PlanningSyncProfile> => {
-    if (!input || !isPlanningNativeSyncEntity(input.entity) || !input.target || typeof input.target.id !== 'string' || typeof input.target.title !== 'string' || typeof input.target.sourceTitle !== 'string' || (input.enabled !== undefined && typeof input.enabled !== 'boolean')) throw new Error('同步目标参数非法')
-    // renderer 不可信：必须由主进程重新确认目标仍存在且可写，不能接受伪造的 Calendar/List 标识。
-    const target = (await listPlanningNativeSyncTargets(input.entity)).find((item) => item.id === input.target.id)
-    if (!target) throw new Error('同步目标不存在、不可写或尚未授权')
-    const profile = savePlanningSyncProfile({ ...input, target })
-    // 受管 Calendar 的系统存量也必须立即回流；不能被 30 秒 reconcile 冷却窗口延后。
-    void runPlanningNativeSync(true)
-    return profile
-  })
+  // 保留旧 preload/shared 契约，但在进入数据层或系统权限调用前统一拒绝。
+  registerRemovedPlanningHandlers(ipcMain)
 
   // ===== 定时任务（Automation）=====
 

@@ -21,7 +21,7 @@ import { activeTabAtom, sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
-import { productivityToolsAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
+import { workbenchDensityAtom } from '@/atoms/ui-preferences'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { WorkspaceMemoryChangeObserver } from '@/components/agent-skills/WorkspaceMemoryChangeObserver'
 import { TerminalLifecycleObserver } from '@/components/tabs/TerminalLifecycleObserver'
@@ -91,13 +91,9 @@ export function AppShell(): React.ReactElement {
   }, [settingsRequest, setSettingsOpen])
 
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
-  const [activeView, setActiveView] = useAtom(activeViewAtom)
-  const productivityTools = useAtomValue(productivityToolsAtom)
+  const activeView = useAtomValue(activeViewAtom)
   React.useEffect(() => {
-    const isEnabled = (tab: string): boolean => (
-      (tab !== 'todos' || productivityTools.todosEnabled)
-      && (tab !== 'calendar' || productivityTools.calendarEnabled)
-    )
+    const isEnabled = (tab: string): boolean => tab !== 'todos' && tab !== 'calendar'
     setAgentSessionComponentOpenMap((previous) => {
       let changed = false
       const next = Object.fromEntries(Object.entries(previous).map(([sessionId, tabs]) => {
@@ -118,7 +114,7 @@ export function AppShell(): React.ReactElement {
       }
       return changed ? next : previous
     })
-  }, [activeView, productivityTools.calendarEnabled, productivityTools.todosEnabled, setActiveView, setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
+  }, [setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
   const showRightPanel = !!currentSessionId && !(automationForm.open && activeView !== 'conversations') && activeView !== 'planning' && activeView !== 'agent-skills' && activeView !== 'markdown' && activeView !== 'agy-terminal'
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 

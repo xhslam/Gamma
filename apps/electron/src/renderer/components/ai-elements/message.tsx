@@ -1,3 +1,7 @@
+import { useAtomValue } from 'jotai'
+import { intelligentUiEnabledAtom } from '@/atoms/ui-preferences'
+import { IntelligentUiMessageContext, useIntelligentUiSession } from '@/components/intelligent-ui/IntelligentUiContext'
+import { IntelligentUiFence } from '@/components/intelligent-ui/IntelligentUiFence'
 /**
  * AI Elements - 消息组件原语
  *
@@ -524,6 +528,8 @@ export function TurnFileMapProvider({ map, children }: { map?: Map<string, strin
 }
 
 interface MessageResponseProps {
+  /** 仅助手正文显式提供；公共 Markdown 默认不启用 UI。 */
+  intelligentUi?: { blockId: string; isStreaming: boolean }
   /** Markdown 内容 */
   children: string
   className?: string
@@ -669,7 +675,11 @@ function extractText(node: React.ReactNode): string {
 /** 代码块 / Mermaid 渲染器 */
 const MarkdownPre = React.memo(function MarkdownPre({
   children: preChildren,
-}: { children?: React.ReactNode }): React.ReactElement {
+  node,
+}: { children?: React.ReactNode; node?: { position?: { start: { offset?: number }; end: { offset?: number } } } }): React.ReactElement {
+  const intelligentUiEnabled = useAtomValue(intelligentUiEnabledAtom)
+  const uiMessage = React.useContext(IntelligentUiMessageContext)
+  const uiSession = useIntelligentUiSession()
   // react-markdown v10 把 <code> 替换成自定义组件后，type 不再是字符串 'code'，
   // 但 pre 的 code child 要么是原生 'code'（v9 及之前），要么是自定义函数/对象组件（v10+）。
   // 通过 type 形态过滤掉意外混入的其他原生 HTML 元素（如 span/div），降低未来 react-markdown
@@ -686,6 +696,16 @@ const MarkdownPre = React.memo(function MarkdownPre({
     const codeProps = codeChild.props as { className?: string; children?: React.ReactNode }
     const className = codeProps.className ?? ''
     const hasExplicitLang = /\blanguage-\S+/.test(className)
+    if (className === 'language-dsh-ui' && intelligentUiEnabled && uiMessage && uiSession) {
+      const start = node?.position?.start.offset ?? 0
+      const end = node?.position?.end.offset ?? uiMessage.markdown.length
+      const fenced = uiMessage.markdown.slice(start, end).trimEnd()
+      const opening = fenced.match(/^ {0,3}(`{3,}|~{3,})dsh-ui[^\n]*\n/)
+      const closing = fenced.match(/\n {0,3}(`{3,}|~{3,})[ \t]*$/)
+      const complete = !!opening && !!closing && opening[1]![0] === closing[1]![0] && closing[1]!.length >= opening[1]!.length
+      const source = extractText(codeProps.children).replace(/\n$/, '')
+      return <IntelligentUiFence source={source} blockId={`${uiMessage.blockId}:fence:${start}`} isStreaming={uiMessage.isStreaming} complete={complete} />
+    }
 
     // 先用共享 mermaid 识别（覆盖 language-mermaid/mmd 以及未标语言但内容像 Mermaid 的情况）
     if (shouldInspectMermaidCodeBlock(className)) {
@@ -791,7 +811,7 @@ const MarkdownInlineCode = React.memo(function MarkdownInlineCode({
 
 /** 使用 react-markdown 渲染 assistant 消息内容，代码块使用 Shiki 语法高亮 */
 export const MessageResponse = React.memo(
-  function MessageResponse({ children, className, basePath, basePaths, remarkPlugins }: MessageResponseProps): React.ReactElement {
+  function MessageResponse({ children, className, basePath, basePaths, remarkPlugins, intelligentUi }: MessageResponseProps): React.ReactElement {
     // 合并内置 + 外部 remark 插件（保持引用稳定）
     const mergedRemarkPlugins = React.useMemo(
       () => remarkPlugins ? [...REMARK_PLUGINS, ...remarkPlugins] : REMARK_PLUGINS,
@@ -823,6 +843,7 @@ export const MessageResponse = React.memo(
           className
         )}
       >
+        <IntelligentUiMessageContext.Provider value={intelligentUi ? { ...intelligentUi, markdown: renderedMarkdown } : null}>
         <Markdown
           remarkPlugins={mergedRemarkPlugins}
           rehypePlugins={REHYPE_PLUGINS}
@@ -831,6 +852,7 @@ export const MessageResponse = React.memo(
         >
           {normalizeLatexDelimiters(normalizeMalformedStrongDelimiters(renderedMarkdown))}
         </Markdown>
+        </IntelligentUiMessageContext.Provider>
       </div>
     )
   },
@@ -838,7 +860,9 @@ export const MessageResponse = React.memo(
     prevProps.children === nextProps.children &&
     prevProps.basePath === nextProps.basePath &&
     prevProps.basePaths === nextProps.basePaths &&
-    prevProps.remarkPlugins === nextProps.remarkPlugins
+    prevProps.remarkPlugins === nextProps.remarkPlugins &&
+    prevProps.intelligentUi?.blockId === nextProps.intelligentUi?.blockId &&
+    prevProps.intelligentUi?.isStreaming === nextProps.intelligentUi?.isStreaming
 )
 
 // ===== UserMessageContent 可折叠用户消息 =====

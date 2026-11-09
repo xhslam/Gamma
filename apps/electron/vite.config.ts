@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { genuiPlugin } from './scripts/genui-vite-plugin'
 import { resolve } from 'path'
 import { createRequire } from 'node:module'
 import pkg from './package.json' with { type: 'json' }
@@ -7,7 +8,7 @@ import pkg from './package.json' with { type: 'json' }
 const require = createRequire(import.meta.url)
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [genuiPlugin(), react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

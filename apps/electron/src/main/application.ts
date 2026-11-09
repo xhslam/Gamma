@@ -1,3 +1,5 @@
+import { stopDesignEditors } from './lib/design-artifacts'
+import { stopAllDesignComments } from './lib/design-comments-service'
 import { app, BrowserWindow, dialog, Menu, nativeTheme, protocol, screen, shell } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -57,8 +59,8 @@ import {
   stopBridgeSelfHealing,
 } from './lib/bridge-registry'
 import { startScheduler, stopScheduler } from './lib/automation-scheduler'
-import { startPlanningReminderScheduler, stopPlanningReminderScheduler } from './lib/planning-reminder-scheduler'
-import { startPlanningNativeSyncCoordinator, stopPlanningNativeSyncCoordinator } from './lib/planning-native-sync-coordinator'
+import { stopPlanningReminderScheduler } from './lib/planning-reminder-scheduler'
+import { stopPlanningNativeSyncCoordinator } from './lib/planning-native-sync-coordinator'
 import { feishuBridgeManager } from './lib/feishu-bridge-manager'
 import { getFeishuMultiBotConfig } from './lib/feishu-config'
 import { stopFeishuSyncSleepBlocker, syncFeishuSyncSleepBlocker } from './lib/feishu-sleep-blocker'
@@ -770,8 +772,6 @@ async function bootstrap(): Promise<void> {
 
   // 启动定时任务调度器（恢复持久化的 active 任务）
   safeRun('startScheduler', startScheduler)
-  safeRun('startPlanningReminderScheduler', startPlanningReminderScheduler)
-  safeRun('startPlanningNativeSyncCoordinator', startPlanningNativeSyncCoordinator)
 
   app.on('activate', () => {
     if (shouldSuppressVoiceDictationActivate()) {
@@ -846,7 +846,17 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
+let designShutdownFinished = false
+app.on('before-quit', (event) => {
+  if (!designShutdownFinished) {
+    event.preventDefault()
+    stopAllDesignComments()
+    void stopDesignEditors().catch((error: unknown) => console.error('[design] 清理编辑器失败:', error)).finally(() => {
+      designShutdownFinished = true
+      app.quit()
+    })
+    return
+  }
   void computerController.stop('应用正在退出')
   // 标记正在退出，让 close 事件不再阻止关闭
   setQuitting()

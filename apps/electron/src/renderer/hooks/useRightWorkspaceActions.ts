@@ -58,7 +58,7 @@ export function useRightWorkspaceActions(sessionId: string) {
     activate(getTerminalSidePanelTab(terminalId))
   }, [activate, sessionId, store])
   const onOpenWorkspaceComponent = React.useCallback((component: WorkspaceComponentTab) => {
-    if ((component === 'todos' && !productivityTools.todosEnabled) || (component === 'calendar' && !productivityTools.calendarEnabled)) return
+    if (component === 'todos' || component === 'calendar') return
     store.set(agentSessionComponentTabsAtomFamily(sessionId), previous => previous.includes(component) ? previous : [...previous, component])
     activate(component)
   }, [activate, productivityTools, sessionId, store])

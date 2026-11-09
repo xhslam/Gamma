@@ -66,3 +66,8 @@ export * from './agent-island'
 
 export * from './markdown-workspace'
 export * from './external-agent'
+
+export * from './design'
+export * from './design-workbench'
+export * from './design-host'
+export * from './design-theme'

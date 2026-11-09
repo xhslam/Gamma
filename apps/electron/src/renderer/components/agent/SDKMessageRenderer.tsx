@@ -440,6 +440,7 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
   }
 
   const enrichedBlocks: EnrichedBlock[] = []
+  const intelligentUiBlockIds = new Map<SDKContentBlock, string>()
   let hasError = false
   let errorContent: SDKAssistantMessage | null = null
 
@@ -458,9 +459,12 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     }
     const blocks = aMsg.message?.content
     if (Array.isArray(blocks)) {
+      let uiBlockIndex = 0
       for (const block of blocks) {
         for (const normalizedBlock of normalizeThinkTagsInContentBlocks([block])) {
           enrichedBlocks.push({ block: normalizedBlock, parentToolUseId: aMsg.parent_tool_use_id })
+          if (aMsg.uuid && !aMsg.parent_tool_use_id) intelligentUiBlockIds.set(normalizedBlock, `${aMsg.uuid}:${uiBlockIndex}`)
+          uiBlockIndex += 1
         }
       }
     }
@@ -553,6 +557,7 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     return (
       <ContentBlock
         key={i}
+        intelligentUiBlockId={intelligentUiBlockIds.get(block)}
         block={block}
         allMessages={allMessages}
         basePath={basePath}
@@ -744,6 +749,7 @@ export function SDKMessageRenderer({
             {blocks.map((block, i) => (
               <ContentBlock
                 key={i}
+                intelligentUiBlockId={aMsg.uuid && !aMsg.parent_tool_use_id ? `${aMsg.uuid}:${i}` : undefined}
                 block={block}
                 allMessages={allMessages}
                 basePath={basePath}

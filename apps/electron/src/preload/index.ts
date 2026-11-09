@@ -1,3 +1,7 @@
+import { DESIGN_WORKBENCH_IPC } from '@gamma/shared'
+import type { DesignWorkbenchAPI } from '@gamma/shared'
+import { DESIGN_IPC_CHANNELS } from '@gamma/shared'
+import type { DesignIntegrationStatus, InstallDesignInput } from '@gamma/shared'
 import type { SettingsTab } from '../types/settings'
 /**
  * Preload 脚本
@@ -195,7 +199,7 @@ import { QUICK_TASK_IPC_CHANNELS, TRAY_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNEL
 /**
  * 暴露给渲染进程的 API 接口定义
  */
-export interface ElectronAPI {
+export interface ElectronAPI extends DesignWorkbenchAPI {
   markdownWorkspace: (request: import('@gamma/shared').MarkdownWorkspaceRequest) => Promise<import('@gamma/shared').MarkdownWorkspaceResult>
 
   // ===== 运行时相关 =====
@@ -425,6 +429,7 @@ export interface ElectronAPI {
   onSystemThemeChanged: (callback: (isDark: boolean) => void) => () => void
 
   /** 订阅用户手动切换主题事件（跨窗口同步，返回清理函数） */
+  onIntelligentUiChanged: (callback: (enabled: boolean) => void) => () => void
   onThemeSettingsChanged: (callback: (payload: { themeMode: string; themeStyle: string }) => void) => () => void
 
   // ===== Scratch Pad =====
@@ -619,6 +624,8 @@ export interface ElectronAPI {
   // ===== 工作区能力（MCP + Skill） =====
 
   /** 获取工作区能力摘要 */
+  getDesignStatus: (workspaceId: string) => Promise<DesignIntegrationStatus>
+  installDesign: (input: InstallDesignInput) => Promise<DesignIntegrationStatus>
   getWorkspaceCapabilities: (workspaceSlug: string) => Promise<WorkspaceCapabilities>
 
   /** 获取工作区 MCP 配置 */
@@ -1614,6 +1621,12 @@ const electronAPI: ElectronAPI = {
     return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.ON_THEME_SETTINGS_CHANGED, listener) }
   },
 
+  onIntelligentUiChanged: (callback) => {
+    const listener = (_: unknown, enabled: boolean): void => callback(enabled === true)
+    ipcRenderer.on(SETTINGS_IPC_CHANNELS.ON_INTELLIGENT_UI_CHANGED, listener)
+    return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.ON_INTELLIGENT_UI_CHANGED, listener) }
+  },
+
   // Scratch Pad 持久化
   loadScratchPad: () => {
     return ipcRenderer.invoke(SCRATCH_PAD_IPC_CHANNELS.LOAD)
@@ -1860,6 +1873,15 @@ const electronAPI: ElectronAPI = {
   },
 
   // 工作区能力（MCP + Skill）
+  getDesignBundleStatus: () => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.STATUS),
+  installDesignBundle: (acceptedThirdPartyCode: boolean) => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.INSTALL, acceptedThirdPartyCode),
+  listDesignArtifacts: (workspaceId: string) => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.LIST, workspaceId),
+  createDesignArtifact: (input) => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.CREATE, input),
+  openDesignArtifact: (workspaceId, artifactId, theme) => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.OPEN, workspaceId, artifactId, theme),
+  updateDesignTheme: (artifactId, theme) => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.THEME, artifactId, theme),
+  closeDesignArtifact: (artifactId: string) => ipcRenderer.invoke(DESIGN_WORKBENCH_IPC.CLOSE, artifactId),
+  getDesignStatus: (workspaceId: string) => ipcRenderer.invoke(DESIGN_IPC_CHANNELS.GET_STATUS, workspaceId),
+  installDesign: (input: InstallDesignInput) => ipcRenderer.invoke(DESIGN_IPC_CHANNELS.INSTALL, input),
   getWorkspaceCapabilities: (workspaceSlug: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_CAPABILITIES, workspaceSlug)
   },

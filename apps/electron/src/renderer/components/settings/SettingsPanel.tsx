@@ -30,7 +30,7 @@ interface SettingsCategory {
 }
 
 const categories: Record<SettingsTab, SettingsCategory> = {
-  general: { label: '通用设置', icon: Settings, page: GeneralSettings, keywords: '账号 个人资料 用户名 头像 通知 声音 输入 归档 灵动岛 生产力 Git PR 日程 定时任务' },
+  general: { label: '通用设置', icon: Settings, page: GeneralSettings, keywords: 'Intelligent UI 交互 图表 表格 表单 账号 个人资料 用户名 头像 通知 声音 输入 归档 灵动岛 生产力 Git PR 日程 定时任务' },
   channels: { label: '模型配置', icon: Radio, page: ChannelSettings, keywords: '渠道 提供商 服务商 API Key 模型 Copilot OpenAI 端点' },
   memory: { label: '长期记忆', icon: Brain, page: GlobalMemorySettings, keywords: '全局记忆 文件 MEMORY' },
   appearance: { label: '外观设置', icon: Palette, page: AppearanceSettings, keywords: '主题 深色 浅色 跟随系统 颜色 字号 背景 密度 图标' },

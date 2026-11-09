@@ -127,7 +127,10 @@ import {
 } from '@/atoms/agent-atoms'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import { openSettingsToTabAtom } from '@/atoms/settings-tab'
-import { longTextPasteAsAttachmentEnabledAtom } from '@/atoms/ui-preferences'
+import { intelligentUiEnabledAtom, longTextPasteAsAttachmentEnabledAtom } from '@/atoms/ui-preferences'
+import { IntelligentUiSessionProvider } from '@/components/intelligent-ui/IntelligentUiContext'
+import type { IntelligentUiAction } from '@/components/intelligent-ui/intelligent-ui-policy'
+import { buildIntelligentUiActionMessage } from '@/components/intelligent-ui/intelligent-ui-policy'
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/channel-atoms'
 import { todoPlanningGroupsAtom } from '@/atoms/planning-atoms'
 import { useOpenSession } from '@/hooks/useOpenSession'
@@ -3445,7 +3448,50 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     [pendingImageFiles, handleAttachmentEditComplete]
   )
 
+  const intelligentUiEnabled = useAtomValue(intelligentUiEnabledAtom)
+  const uiCanSend = intelligentUiEnabled && messagesLoaded && !isLegacyTranscript && !isStopping
+    && !isUpdatingRefs && !messagesRefreshing && !streaming && !!agentChannelId && hasAvailableModel
+  const uiCurrentScope = React.useRef({ sessionId, workspaceId: currentWorkspaceId, canSend: uiCanSend })
+  uiCurrentScope.current = { sessionId, workspaceId: currentWorkspaceId, canSend: uiCanSend }
+  const sendUiAction = React.useCallback(async (blockId: string, event: IntelligentUiAction): Promise<void> => {
+    const current = uiCurrentScope.current
+    if (current.sessionId !== sessionId || current.workspaceId !== currentWorkspaceId || !current.canSend
+      || !store.get(intelligentUiEnabledAtom) || updateRefsPendingRef.current > 0 || messagesRefreshingRef.current) {
+      throw new Error('当前会话暂不可发送交互，请等待运行或同步完成')
+    }
+    const requestId = sendGuardRef.current.begin(sessionId)
+    if (!requestId) throw new Error('正在提交另一条消息，请稍候')
+    try {
+      // 复核持久设置，防止设置窗口刚关闭开关而广播尚未送达。
+      if (!(await window.electronAPI.getSettings()).intelligentUiEnabled) throw new Error('Intelligent UI 已关闭')
+      if (uiCurrentScope.current !== current) {
+        const latest = uiCurrentScope.current
+        if (latest.sessionId !== sessionId || latest.workspaceId !== currentWorkspaceId || !latest.canSend) throw new Error('会话状态已改变，请重新确认')
+      }
+      const text = buildIntelligentUiActionMessage(blockId, event)
+      const message = createAgentQueuedMessage(text, crypto.randomUUID(), Date.now(), null, { additionalDirectories: [...createBaseAdditionalDirectories()] })
+      await sendPlainTextAgentMessage(message, async input => {
+        // UI 字段是数据，不得让其中的 Mention 标记添加 Skill、MCP 或会话引用。
+        input.userMessage = text
+        input.rawUserMessage = text
+        input.mentionedSkills = []
+        input.mentionedMcpServers = []
+        input.mentionedSessionIds = []
+        input.mentionedTodoIds = []
+        input.mentionedCalendarEventIds = []
+        await window.electronAPI.saveAgentSendOutbox({
+          id: message.id, sessionId, createdAt: message.createdAt, status: 'pending',
+          draft: { text, html: queuedTextToParagraphHtml(text), attachments: [] }, input,
+        })
+      }, 'after_current')
+    } finally { sendGuardRef.current.finish(sessionId, requestId) }
+  }, [sessionId, currentWorkspaceId, store, createBaseAdditionalDirectories, sendPlainTextAgentMessage])
+  const intelligentUiSession = React.useMemo(() => ({
+    sessionId, workspaceId: currentWorkspaceId ?? '', canSend: uiCanSend, sendAction: sendUiAction,
+  }), [sessionId, currentWorkspaceId, uiCanSend, sendUiAction])
+
   return (
+    <IntelligentUiSessionProvider key={`${currentWorkspaceId}:${sessionId}`} value={intelligentUiSession}>
     <SkillMentionNamesProvider workspaceSlug={workspaceSlug}>
       <div
         ref={setBackgroundContainer}
@@ -3729,5 +3775,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     </AlertDialog>
 
     </SkillMentionNamesProvider>
+    </IntelligentUiSessionProvider>
   )
 }

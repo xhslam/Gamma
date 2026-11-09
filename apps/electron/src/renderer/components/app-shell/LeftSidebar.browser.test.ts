@@ -63,6 +63,14 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     `)).toEqual({ view: 'conversations', workspace: 'project-a', agent: 'parent', workspaceTab: 'agy-terminal', componentTabs: ['agy-terminal'], current: 'page' })
   }, 30_000)
 
+  test('When 点击 design Then 打开完整主工作台而非草稿或重复右侧会话', async () => {
+    expect(await renderer.run<{ view: string; agent: string; workspace: string }>(`
+      const api=window.leftSidebarRegression,fixture=await api.mount();fixture.button('design').click();
+      await api.until(()=>fixture.state().view==='design');const state=fixture.state();fixture.root.unmount();
+      return {view:state.view,agent:state.agent,workspace:state.workspace};
+    `)).toEqual({view:'design',agent:'parent',workspace:'project-a'})
+  }, 30_000)
+
   test('When 未悬浮会话行且没有归档历史 Then 归档操作和已归档入口仍然可见可点击', async () => {
     const result = await renderer.run<{ actionVisible: boolean; entryVisible: boolean; opened: boolean; returned: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ width: 240 });
@@ -249,7 +257,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const titleFits = title.clientWidth > 0 && title.scrollWidth <= title.clientWidth;
       const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
       const states = [];
-      for (const [label, tab] of [['Markdown','markdown'],['Todo','todos'],['日程','calendar'],['项目记忆','memory'],['定时任务','automations'],['MCP/Skills','skills']]) {
+      for (const [label, tab] of [['Markdown','markdown'],['定时任务','automations'],['MCP/Skills','skills']]) {
         fixture.button(label).click();
         await api.until(() => fixture.state().workspaceTab === tab && fixture.button(label).getAttribute('aria-current') === 'page');
         states.push({ label, tab: fixture.state().workspaceTab, current: fixture.button(label).getAttribute('aria-current') });
@@ -259,13 +267,12 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return { brand, titleFits, labels, states, components: state.componentTabs, session: state.agent, project: state.workspace, view: state.view, hasLegacyPromotion };
     `)
     expect(result).toEqual({
-      brand: 'Gamma', titleFits: true, labels: ['AGY', 'Markdown', 'Todo', '日程', '项目记忆', '定时任务', 'MCP/Skills'],
+      brand: 'Gamma', titleFits: true, labels: ['AGY', 'Markdown', 'design', '定时任务', 'MCP/Skills'],
       states: [
-        { label: 'Markdown', tab: 'markdown', current: 'page' }, { label: 'Todo', tab: 'todos', current: 'page' },
-        { label: '日程', tab: 'calendar', current: 'page' }, { label: '项目记忆', tab: 'memory', current: 'page' },
+        { label: 'Markdown', tab: 'markdown', current: 'page' },
         { label: '定时任务', tab: 'automations', current: 'page' }, { label: 'MCP/Skills', tab: 'skills', current: 'page' },
       ],
-      components: ['markdown', 'todos', 'calendar', 'memory', 'automations', 'mcp', 'skills'],
+      components: ['markdown', 'automations', 'mcp', 'skills'],
       session: 'parent', project: 'project-a', view: 'conversations', hasLegacyPromotion: false,
     })
   }, 30_000)
@@ -320,13 +327,13 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       await api.until(() => fixture.button('收起侧边栏'));
       await api.until(() => Math.round(document.querySelector('.gamma-sidebar')?.getBoundingClientRect().width ?? 0) === 256);
       const expanded = !fixture.state().collapsed && Math.round(document.querySelector('.gamma-sidebar').getBoundingClientRect().width) === 256;
-      fixture.button('Todo').click(); await api.until(() => fixture.state().workspaceTab === 'todos');
-      const tab = fixture.state().workspaceTab;
+      fixture.button('design').click(); await api.until(() => fixture.state().view === 'design');
+      const tab = fixture.state().view;
       fixture.button('打开设置').click(); await api.until(() => fixture.state().settings); const settings = fixture.state().settings;
       fixture.closeSettings(); fixture.button('搜索').click(); await api.until(() => fixture.state().search); const search = fixture.state().search;
       fixture.root.unmount(); return { absent, contentLeft, top, expanded, tab, settings, search };
     `)
-    expect(result).toEqual({ absent: true, contentLeft: 0, top: true, expanded: true, tab: 'todos', settings: true, search: true })
+    expect(result).toEqual({ absent: true, contentLeft: 0, top: true, expanded: true, tab: 'design', settings: true, search: true })
   }, 30_000)
 
   test('When 空会话或长标题在浅深色下收起 Then 顶栏单行不溢出且展开入口可聚焦', async () => {
