@@ -76,11 +76,6 @@ extraResources:
     to: officecli
     filter:
       - "**/*"
-  # agent-desktop 原生自动化引擎；由 prepare:agent-desktop 从固定源码提交构建并记录 SHA-256。
-  - from: resources/agent-desktop
-    to: agent-desktop
-    filter:
-      - "**/*"
   # 默认 Skills 模板（首次启动时同步到 ~/.gamma/default-skills/）
   - from: default-skills
     to: default-skills
@@ -113,8 +108,6 @@ mac:
     - Contents/Resources/agent-island/macos-agent-island-helper
     - Contents/Resources/eventkit/macos-eventkit.node
     - Contents/Resources/officecli/officecli
-    - Contents/Resources/agent-desktop/agent-desktop
-    - Contents/Resources/agent-desktop/agent-desktop-macos-helper
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
@@ -147,6 +140,11 @@ dmg:
 # Windows 配置
 # ============================================
 win:
+  extraResources:
+    - from: resources/agent-desktop
+      to: agent-desktop
+      filter:
+        - "**/*"
   icon: resources/icon.ico
   target:
     - target: nsis
@@ -164,6 +162,11 @@ nsis:
 # Linux 配置（Ubuntu/Debian x86_64）
 # ============================================
 linux:
+  extraResources:
+    - from: resources/agent-desktop
+      to: agent-desktop
+      filter:
+        - "**/*"
   icon: resources/icon.png
   executableName: gamma
   desktop:

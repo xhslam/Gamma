@@ -16,6 +16,7 @@ import {
   Check,
   FolderGit2,
   Loader2,
+  Camera,
 } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
@@ -373,9 +374,9 @@ export function ConversationReferenceDialog({
           {currentRef && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label={`切换引用模式：${session.title || '无标题对话'}`} onClick={(event) => toggleMode(session.id, event)}
+                <button type="button" aria-label={`切换引用模式：${session.title || '无标题对话'}`} aria-pressed={currentRef.mode === 'live'} onClick={(event) => toggleMode(session.id, event)}
                   className="rounded-md border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-                  {currentRef.mode === 'live' ? '实时' : '快照'}
+                  {currentRef.mode === 'live' ? '实时' : <Camera className="size-3.5" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent>{currentRef.mode === 'live' ? '每轮读取最新消息' : '冻结在当前消息，内容保持稳定'}{detail?.estTokens ? ` · 约 ${detail.estTokens} tokens` : ''}</TooltipContent>

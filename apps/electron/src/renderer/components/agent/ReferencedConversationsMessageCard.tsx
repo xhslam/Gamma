@@ -24,7 +24,7 @@ export function ReferencedConversationsMessageCard({
       {refs.map((ref) => {
         const deleted = !sessions.some((session) => session.id === ref.sourceConversationId)
         const title = ref.titleAtAttach || '无标题会话'
-        const mode = ref.mode === 'live' ? '实时' : '快照'
+        const mode = ref.mode === 'live' ? ' · 实时' : ''
         return (
           <button
             key={ref.refId}
@@ -32,11 +32,13 @@ export function ReferencedConversationsMessageCard({
             disabled={deleted}
             onClick={() => openSession('agent', ref.sourceConversationId, title)}
             className={messageAttachmentClassName}
-            title={`${title} · ${mode}${ref.estTokens ? ` · 约 ${ref.estTokens} tokens` : ''}${deleted ? ' · 源对话已删除' : ' · 打开源对话'}`}
+            title={`${title}${mode}${ref.estTokens ? ` · 约 ${ref.estTokens} tokens` : ''}${deleted ? ' · 源对话已删除' : ' · 打开源对话'}`}
           >
             <MessageSquareText className="size-3.5 shrink-0" />
             <FadeTitle className="truncate max-w-[200px]">{title}</FadeTitle>
-            <span className="shrink-0 text-[10px] opacity-60">{deleted ? '源对话已删除' : mode}</span>
+            {(deleted || ref.mode === 'live') && (
+              <span className="shrink-0 text-[10px] opacity-60">{deleted ? '源对话已删除' : '实时'}</span>
+            )}
           </button>
         )
       })}

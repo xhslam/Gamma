@@ -10,7 +10,7 @@ beforeAll(async () => {
     import{updateStatusAtom,updaterAvailableAtom}from'@/atoms/updater';import'@/styles/globals.css';
     const store=createStore(),root=createRoot(document.getElementById('root')),calls=[];
     window.electronAPI={updater:{installWhenIdle:async()=>{calls.push('install');store.set(updateStatusAtom,s=>({...s,installScheduled:true}));return true},cancelIdleInstall:async()=>{calls.push('cancel');store.set(updateStatusAtom,s=>({...s,installScheduled:false}))},revealDownloadedUpdate:async()=>{calls.push('reveal');return true}},listReleases:async()=>{throw new Error(\"Error invoking remote method 'github-release:list': Error: GitHub API 请求过于频繁，请稍后再试\")}};
-    window.updateTest={calls,store,
+    window.updateTest={calls,store,statusAtom:updateStatusAtom,
       mount(reason,history=false){store.set(updateStatusAtom,{status:'downloaded',version:'0.19.260',manualInstallReason:reason});root.render(React.createElement(Provider,{store},React.createElement(history?VersionHistory:UpdateCard)))},
       async until(fn){for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,10))}throw new Error(document.body.innerText)}
     };
@@ -45,6 +45,33 @@ describe('Given 已下载更新的真实设置界面', () => {
       await t.until(()=>document.querySelector('[role=alert]'));return document.querySelector('[role=alert]').textContent;
     `)
     expect(result).toContain('更新包不存在')
+  }, 30_000)
+  test('When 检查成功且无更高版本 Then 显示已是最新版本而不是检查失败', async () => {
+    const result = await renderer.run<string>(`
+      const t=window.updateTest;t.mount();t.store.set(t.statusAtom,{status:'not-available'});
+      await t.until(()=>document.body.innerText.includes('已是最新版本'));return document.body.innerText;
+    `)
+    expect(result).toContain('已是最新版本')
+    expect(result).not.toContain('检查失败')
+  }, 30_000)
+  test('When 更新请求真正失败 Then 直接展示具体原因，不误报最新版本', async () => {
+    const result = await renderer.run<string>(`
+      const t=window.updateTest;t.mount();t.store.set(t.statusAtom,{status:'error',error:'无法连接更新服务器，请检查网络'});
+      await t.until(()=>document.querySelector('[role=alert]'));return document.body.innerText;
+    `)
+    expect(result).toContain('检查失败')
+    expect(result).toContain('无法连接更新服务器')
+    expect(result).not.toContain('已是最新版本')
+  }, 30_000)
+  test('When 手动检查 IPC 异常 Then 捕获异常并显示可重试的错误', async () => {
+    const result = await renderer.run<string>(`
+      const t=window.updateTest;t.mount();t.store.set(t.statusAtom,{status:'idle'});
+      window.electronAPI.updater.checkForUpdates=async()=>{throw new Error('更新服务暂时不可用')};
+      await t.until(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.includes('检查更新')));
+      [...document.querySelectorAll('button')].find(b=>b.textContent.includes('检查更新')).click();
+      await t.until(()=>document.querySelector('[role=alert]'));return document.querySelector('[role=alert]').textContent;
+    `)
+    expect(result).toContain('更新服务暂时不可用')
   }, 30_000)
   test('When 版本历史 IPC 通道包含冒号 Then 只显示中文错误，不泄漏 Electron 包装前缀', async () => {
     const result = await renderer.run<string>(`

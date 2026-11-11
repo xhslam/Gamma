@@ -46,7 +46,8 @@ beforeAll(async () => {
         const store = createStore(), root = createRoot(document.getElementById('root'));
         store.set(richTextRenderingEnabledAtom, true);
         store.set(intelligentUiEnabledAtom, options.intelligentUi === true);
-        const calls = [], routes = [], saves = [], retries = [], created = [], cancellations = [], queuedAccepted = [], disk = options.disk ?? [];
+        const calls = [], routes = [], saves = [], retries = [], created = [], cancellations = [], refUpdates = [], queuedAccepted = [], disk = options.disk ?? [];
+        const reference = {refId:'ref_original',sourceConversationId:'b',sourceProjectId:'workspace',titleAtAttach:'引用资料',mode:'snapshot',snapshotUpToMessageId:'m1'};
         const listeners = { queue: new Set(), stream: new Set(), complete: new Set(), referenceWarning: new Set() };
         let rejectSend, resolveSend, rejectSave, resolveSave, resolveRetry;
         const pendingSubmissions = [];
@@ -67,6 +68,8 @@ beforeAll(async () => {
         const subscribe = name => callback => { listeners[name].add(callback); return () => listeners[name].delete(callback); };
         const api = {
           getSettings: async () => ({intelligentUiEnabled:options.intelligentUi === true}),
+          getContextRefs: async () => ({refs:store.get(atoms.agentSessionsAtom).find(s=>s.id==='a')?.contextRefs??[],summaryStatuses:{ref_original:'ready'}}),
+          updateContextRefs: async ({sessionId,refs}) => {refUpdates.push(structuredClone(refs));return {refs}},
           onAgentReferenceWarning: subscribe('referenceWarning'),
           onAgentQueuedMessageStatus: subscribe('queue'), onAgentStreamEvent: subscribe('stream'), onAgentStreamComplete: subscribe('complete'),
           sendAgentMessage: input => submit(input, 'direct'), submitOrEnqueueAgentMessage: input => submit(input, 'submit'),
@@ -114,7 +117,7 @@ beforeAll(async () => {
         };
         window.electronAPI = new Proxy(api, { get: (target, name) => target[name] ?? (String(name).startsWith('on') ? () => () => {} : async () => []) });
         const session = id => ({ id, title: id, workspaceId: 'workspace', channelId: 'channel', modelId: 'model', createdAt: 1, updatedAt: 1 });
-        store.set(atoms.agentSessionsAtom, [session('a'), session('b')]);
+        store.set(atoms.agentSessionsAtom, [{...session('a'),...(options.reference?{contextRefs:[reference]}:{})}, session('b')]);
         store.set(atoms.agentWorkspacesAtom, [{ id: 'workspace', slug: 'fixture', name: 'fixture', projectRootPath: '/fixture' }]);
         store.set(atoms.currentAgentSessionIdAtom, 'a');
         store.set(atoms.currentAgentWorkspaceIdAtom, 'workspace');
@@ -137,7 +140,9 @@ beforeAll(async () => {
         const editor = () => document.querySelector('.tiptap').editor;
         const key = () => document.querySelector('.tiptap').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
         if (options.initialText !== '') editor().commands.insertContent(options.initialText ?? '<p>失败草稿<strong>保留格式</strong></p>');
-        return { store, root, calls, routes, saves, retries, created, disk, cancellations, queuedAccepted, editor, key, resolveRetry: () => resolveRetry(),
+        return { store, root, calls, routes, saves, retries, created, disk, cancellations, refUpdates, queuedAccepted, editor, key, resolveRetry: () => resolveRetry(),
+          refs: () => store.get(atoms.agentSessionsAtom).find(s=>s.id==='a')?.contextRefs??[],
+          changeRefs: mode => store.set(atoms.agentSessionsAtom,prev=>prev.map(s=>s.id==='a'?{...s,contextRefs:mode==='append'?[reference,{...reference,refId:'ref_new',titleAtAttach:'新引用'}]:[{...reference,mode:'live'}]}:s)),
           resolve: () => resolveSend({ disposition: 'queued' }),
           resolveDuplicate: () => resolveSend({ disposition: 'accepted' }),
           resolveWith: result => resolveSend(result),
@@ -747,3 +752,41 @@ test('Given 真实 AgentView 的 UI 交互与既有草稿附件 When 确认发�
   `)
   expect(result).toEqual({before:0,calls:1,draft:true,files:1,quote:'原选区正文',session:'a',plainData:true,mentions:0,sameId:true})
 }, 30000)
+
+describe('Given 输入框包含本次消息的对话引用', () => {
+  test('When 普通发送成功 Then 输入框移除引用且已发送消息正文上方保留引用卡片', async () => {
+    const result = await renderer.run<{ cleared: boolean; retained: boolean; ids: string[] }>(`
+      const t=await window.sendRecovery.mount({reference:true});t.key();await window.sendRecovery.until(()=>t.calls.length===1);
+      t.resolveWith({disposition:'started'});await window.sendRecovery.until(()=>t.refs().length===0);
+      await window.sendRecovery.until(()=>document.querySelector('[aria-label="引用对话附件"]'));
+      return {cleared:!document.querySelector('[data-conversation-attachments]'),retained:t.messages('a').some(m=>m.contextRefs?.[0]?.refId==='ref_original'),ids:t.calls[0].contextRefIds};
+    `)
+    expect(result).toEqual({cleared:true,retained:true,ids:['ref_original']})
+  }, 30_000)
+  test('When 发送失败 Then 保留输入框引用以供重试', async () => {
+    const result = await renderer.run<string[]>(`
+      const t=await window.sendRecovery.mount({reference:true});t.key();await window.sendRecovery.until(()=>t.calls.length===1);t.reject();
+      await window.sendRecovery.until(()=>document.body.innerText.includes('消息发送失败'));return t.refs().map(r=>r.refId);
+    `)
+    expect(result).toEqual(['ref_original'])
+  }, 30_000)
+  for (const streaming of [true, false]) {
+    test(`When ${streaming?'运行中':'空闲'}消息入队 Then 携带本次引用并清理输入框`, async () => {
+      const result = await renderer.run<{ ids: string[]; remaining: number }>(`
+        const t=await window.sendRecovery.mount({reference:true,streaming:${streaming}});t.key();await window.sendRecovery.until(()=>t.calls.length===1);
+        t.resolve();await window.sendRecovery.until(()=>t.refs().length===0);return {ids:t.calls[0].contextRefIds,remaining:t.refs().length};
+      `)
+      expect(result).toEqual({ids:['ref_original'],remaining:0})
+    }, 30_000)
+  }
+  for (const mode of ['append','edit']) {
+    test(`When 接收回执前${mode==='append'?'新增引用':'修改引用模式'} Then 不清除下一条消息的引用`, async () => {
+      const result = await renderer.run<Array<{id:string;mode:string}>>(`
+        const t=await window.sendRecovery.mount({reference:true});t.key();await window.sendRecovery.until(()=>t.calls.length===1);
+        t.changeRefs('${mode}');await window.sendRecovery.delay(30);t.resolveWith({disposition:'started'});
+        await window.sendRecovery.delay(100);return t.refs().map(r=>({id:r.refId,mode:r.mode}));
+      `)
+      expect(result).toEqual(mode==='append'?[{id:'ref_new',mode:'snapshot'}]:[{id:'ref_original',mode:'live'}])
+    }, 30_000)
+  }
+})

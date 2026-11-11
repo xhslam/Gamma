@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { AgentDesktopHost } from './agent-desktop-host'
+import { createGammaComputerUseCommand, GAMMA_COMPUTER_USE_EXECUTABLE } from './gamma-computer-use-command'
 import { writeTextFileAtomic } from './safe-file'
 
 interface DiagnosticsApp {
@@ -29,6 +30,7 @@ export interface ComputerUseDiagnosticsOptions {
   parentAccessibility(): boolean
   resourcesPath: string
   argv?: readonly string[]
+  platform?: NodeJS.Platform
   /** 仅用于离线测试替换进程通道；命令行不接受可执行文件或输出路径。 */
   createHost?(executable: string): DiagnosticsHost
 }
@@ -45,6 +47,7 @@ export interface ComputerUseDiagnosticsReport {
   /** 只比较实际AX状态；false/false不能证明已授权时的责任继承。 */
   identitiesMatch: boolean | null
   inheritanceVerified: boolean
+  permissionOwner: 'gammaComputerUse' | 'Gamma'
   readOnly: true
   errors: string[]
 }
@@ -79,6 +82,7 @@ async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOpti
     kind: 'gamma-computer-use-diagnostics', pid: process.pid, createdAt: new Date().toISOString(),
     packaged: app.isPackaged, version: '', parentExecutable: '', helperExecutable: '',
     parentAX: null, helperPermissions: null, identitiesMatch: null, inheritanceVerified: false,
+    permissionOwner: (options.platform ?? process.platform) === 'darwin' ? 'gammaComputerUse' : 'Gamma',
     readOnly: true, errors: [],
   }
   let profile: string | undefined
@@ -96,7 +100,8 @@ async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOpti
     await app.whenReady()
     report.version = String(app.getVersion()).slice(0, 64)
     report.parentExecutable = app.getPath('exe')
-    report.helperExecutable = app.isPackaged
+    const independent = report.permissionOwner === 'gammaComputerUse'
+    report.helperExecutable = independent ? GAMMA_COMPUTER_USE_EXECUTABLE : app.isPackaged
       ? join(options.resourcesPath, 'agent-desktop', 'agent-desktop')
       : join(app.getAppPath(), 'resources', 'agent-desktop', 'agent-desktop')
     try { report.parentAX = options.parentAccessibility() }
@@ -104,25 +109,25 @@ async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOpti
     if (!existsSync(report.helperExecutable) && !options.createHost) {
       report.errors.push('native-helper-unavailable')
     } else {
-      host = options.createHost?.(report.helperExecutable) ?? {
-        async call(method: 'status', _params: Record<string, unknown>, timeoutMs: number) {
-          const res = await new AgentDesktopHost(() => ({ executable: report.helperExecutable })).execute(
-            `diag-${process.pid}`,
-            ['status'],
-            undefined,
-            timeoutMs,
-          )
-          if (!res.ok) throw new Error(res.error?.message || 'status-failed')
-          return res.data
-        },
-        async terminate() {},
+      if (options.createHost) host = options.createHost(report.helperExecutable)
+      else {
+        const native = new AgentDesktopHost(() => independent ? createGammaComputerUseCommand() : { executable: report.helperExecutable })
+        host = {
+          async call(_method: 'status', _params: Record<string, unknown>, timeoutMs: number) {
+            const res = await native.execute(`diag-${process.pid}`, ['status'], undefined, timeoutMs)
+            if (!res.ok) throw new Error(res.error?.message || 'status-failed')
+            return res.data
+          },
+          async terminate() { await native.terminate() },
+        }
       }
       try { report.helperPermissions = permissionsFromStatus(await host.call('status', {}, 5000)) }
       catch { report.errors.push('native-status-failed') }
     }
     if (report.parentAX !== null && report.helperPermissions !== null) {
       report.identitiesMatch = report.parentAX === report.helperPermissions.accessibility
-      report.inheritanceVerified = report.parentAX && report.helperPermissions.accessibility
+      // 独立组件不继承 Gamma 权限；状态恰好相同不能证明身份相同。
+      report.inheritanceVerified = !independent && report.parentAX && report.helperPermissions.accessibility
     }
   } catch {
     report.errors.push('diagnostics-initialization-failed')

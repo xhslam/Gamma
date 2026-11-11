@@ -3,9 +3,11 @@ import type { ComputerPermission, ComputerPermissions, ComputerUsePreferences } 
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { SettingsRow } from '@/components/settings/primitives/SettingsRow'
+import { detectIsMac } from '@/lib/platform'
 
 /** 授权决定可以在本地撤销；读取失败时绝不覆盖既有偏好。 */
 export function ComputerAuthorizationSetting(): React.ReactElement {
+  const permissionOwner = detectIsMac() ? 'gammaComputerUse' : 'Gamma'
   const [preferences, setPreferences] = React.useState<ComputerUsePreferences | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -60,10 +62,10 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
       if (!mounted.current) return
       setPermissions(state.permissions)
       setPermissionMessage(permission === 'accessibility'
-        ? state.permissions?.accessibility ? 'Gamma 辅助功能已授权。' : '请在 macOS 辅助功能中开启 Gamma，然后返回继续。'
+        ? state.permissions?.accessibility ? `${permissionOwner} 辅助功能已授权。` : `请在系统辅助功能中开启 ${permissionOwner}，然后返回继续。`
         : state.permissions?.screen ? '画面预览已可用。' : '录屏尚未开启，辅助功能操作仍可继续。')
     } catch {
-      if (mounted.current) setPermissionMessage('未能完成系统授权，请重试。基础操作只需要 Gamma 的辅助功能授权。')
+      if (mounted.current) setPermissionMessage(`未能完成系统授权，请检查 ${permissionOwner} 是否已安装并开启辅助功能。`)
     } finally {
       permissionInFlight.current = false
       if (mounted.current) setPermissionBusy(null)
@@ -76,10 +78,10 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
         <p role="status" className="text-xs text-muted-foreground">{error ? '授权尚未读取' : '正在读取授权…'}</p>
         {error && <Button size="sm" variant="ghost" onClick={() => { void load() }}>重试读取</Button>}
       </> : <>
-        <p className="text-xs text-muted-foreground">原生引擎：agent-desktop{backendVersion ? ` ${backendVersion}` : ''}</p>
+        <p className="text-xs text-muted-foreground">{permissionOwner === 'gammaComputerUse' ? 'gammaComputerUse · ' : ''}agent-desktop{backendVersion ? ` ${backendVersion}` : ''}</p>
         <div className="space-y-2 border-b border-border/50 pb-3">
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" disabled={busy || permissionBusy !== null || permissions?.accessibility === true} onClick={() => { void requestPermission('accessibility') }}>{permissionBusy === 'accessibility' ? '正在请求辅助功能…' : permissions?.accessibility ? '辅助功能已授权' : '授权 Gamma 辅助功能'}</Button>
+            <Button size="sm" variant="outline" disabled={busy || permissionBusy !== null || permissions?.accessibility === true} onClick={() => { void requestPermission('accessibility') }}>{permissionBusy === 'accessibility' ? '正在请求辅助功能…' : permissions?.accessibility ? '辅助功能已授权' : `授权 ${permissionOwner} 辅助功能`}</Button>
             <Button size="sm" variant="ghost" disabled={busy || permissionBusy !== null || permissions?.screen === true} onClick={() => { void requestPermission('screen') }}>{permissionBusy === 'screen' ? '正在请求录屏…' : permissions?.screen ? '画面预览已启用' : '开启可选画面预览'}</Button>
           </div>
           {permissionMessage && <p role="status" className="text-xs leading-relaxed text-muted-foreground">{permissionMessage}</p>}

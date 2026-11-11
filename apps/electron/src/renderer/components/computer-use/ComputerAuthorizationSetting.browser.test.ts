@@ -76,12 +76,12 @@ test('Given 应用授权弹窗 When 按Escape关闭 Then IPC发送cancelled而�
   expect(result).toEqual([{ id: 'cancel-case', decision: 'cancelled' }])
 }, 20_000)
 
-test('Given 用户只有基础权限需求 When 授权Gamma辅助功能 Then 不请求录屏且不写入应用偏好', async () => {
+test('Given 用户只有基础权限需求 When 授权独立组件辅助功能 Then 不请求录屏且不写入应用偏好', async () => {
   const result = await renderer.run(`
     window.mount()
-    await window.until(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='授权 Gamma 辅助功能'))
-    Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='授权 Gamma 辅助功能').click()
-    await window.until(()=>document.body.textContent.includes('Gamma 辅助功能已授权。'))
+    await window.until(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='授权 '+(/mac/i.test(navigator.platform)?'gammaComputerUse':'Gamma')+' 辅助功能'))
+    Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='授权 '+(/mac/i.test(navigator.platform)?'gammaComputerUse':'Gamma')+' 辅助功能').click()
+    await window.until(()=>document.body.textContent.includes((/mac/i.test(navigator.platform)?'gammaComputerUse':'Gamma')+' 辅助功能已授权。'))
     return {requests:window.permissionRequests,writes:window.writes,text:document.body.textContent}
   `)
   expect(result).toMatchObject({ requests: ['accessibility'], writes: [] })

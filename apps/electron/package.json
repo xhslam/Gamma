@@ -1,6 +1,6 @@
 {
   "name": "@gamma/electron",
-  "version": "0.19.260",
+  "version": "0.19.264",
   "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
@@ -28,6 +28,8 @@
     "build:agent-island-native": "bun run scripts/build-agent-island-native.ts",
     "build:eventkit-native": "bun run scripts/build-eventkit-native.ts",
     "prepare:agent-desktop": "bun run scripts/prepare-agent-desktop.ts",
+    "build:computer-use": "bun run scripts/build-gamma-computer-use.ts",
+    "install:computer-use": "bun run scripts/build-gamma-computer-use.ts --install",
     "build:native-helpers": "bun run build:agent-island-native && bun run build:eventkit-native",
     "build:cli": "bun run scripts/build-cli.ts",
     "prepare:officecli": "bun run scripts/prepare-officecli.ts",

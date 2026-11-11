@@ -3,7 +3,7 @@
  *
  * 展示当前会话已附加的引用会话 Chips：
  * - 标题 + 估算 tokens
- * - 模式标签（快照 / 实时），支持单击快速切换
+ * - 用图标表示固定内容模式，实时模式保留标签，支持单击切换
  * - 单独 x 按钮移除
  * - 源对话被删除时显示灰度警告态与提示
  * - 源对话被重命名时实时展示最新标题，并在 Tooltip 中展示原标题
@@ -136,6 +136,7 @@ export function ConversationReferenceChips({
                   onClick={() => onToggleMode(ref.refId)}
                   disabled={isDeleted}
                   aria-label={`切换引用模式：${displayTitle}`}
+                  aria-pressed={isLive}
                   className={cn(
                     'flex items-center gap-0.5 text-[10px] px-1 rounded transition-colors',
                     isDeleted
@@ -153,10 +154,7 @@ export function ConversationReferenceChips({
                       <span>实时</span>
                     </>
                   ) : (
-                    <>
-                      <Camera className="size-2.5" />
-                      <span>快照</span>
-                    </>
+                    <Camera className="size-2.5" />
                   )}
                 </button>
               </TooltipTrigger>
@@ -165,8 +163,8 @@ export function ConversationReferenceChips({
                   {isDeleted
                     ? '源对话已删除。本次发送将提示该引用不可用，可手动移除。'
                     : isLive
-                      ? '实时模式：每轮读取源会话最新消息（点击切换为快照）'
-                      : '快照模式：冻结在引用时的消息状态（点击切换为实时）'}
+                      ? '实时模式：每轮读取源会话最新消息（点击固定内容）'
+                      : '内容固定在引用时的消息状态（点击切换为实时）'}
                 </p>
               </TooltipContent>
             </Tooltip>

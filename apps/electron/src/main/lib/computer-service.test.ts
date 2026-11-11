@@ -39,6 +39,7 @@ function createServiceFixture(packaged: boolean, exists = true, platform = 'darw
       },
       'node:path': { join },
       'node:os': { release: () => '24.0.0' },
+      './gamma-computer-use-command': { createGammaComputerUseCommand: () => ({ executable: '/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse', argsPrefix: ['--client'] }) },
       './computer-platform': { isComputerPlatformSupported: () => true },
       './computer-controller': { ComputerController: MockController },
       './agent-desktop-host': { AgentDesktopHost: MockHost },
@@ -69,22 +70,22 @@ function createServiceFixture(packaged: boolean, exists = true, platform = 'darw
 }
 
 describe('Given agent-desktop 路径解析与服务初始化', () => {
-  test('When 正式安装包解析 CLI Then 从 Gamma Resources/agent-desktop 目录查找', () => {
+  test('When macOS 正式安装包解析 CLI Then 使用独立 gammaComputerUse 应用', () => {
     const fixture = createServiceFixture(true)
     expect(fixture.commandResolver()).toEqual({
-      executable:
-        '/Applications/Gamma.app/Contents/Resources/agent-desktop/agent-desktop',
+      executable: '/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse', argsPrefix: ['--client'],
     })
-    expect(fixture.checked).toContain(
-      '/Applications/Gamma.app/Contents/Resources/agent-desktop/agent-desktop',
-    )
+    expect(fixture.checked).toEqual([])
   })
 
-  test('When 开发态解析 CLI Then 使用仓库 resources/agent-desktop 路径', () => {
+  test('When macOS 开发态解析 CLI Then 仍使用独立组件、不继承开发应用权限', () => {
     const fixture = createServiceFixture(false)
-    expect(fixture.commandResolver()).toEqual({
-      executable: '/repo/apps/electron/resources/agent-desktop/agent-desktop',
-    })
+    expect(fixture.commandResolver().executable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
+  })
+
+  test('When Linux 开发态解析 CLI Then 保留 resources 引擎路径', () => {
+    const fixture = createServiceFixture(false, true, 'linux')
+    expect(fixture.commandResolver()).toEqual({ executable: '/repo/apps/electron/resources/agent-desktop/agent-desktop' })
   })
 
   test('When Windows 平台 Then 自动附加 .exe 后缀', () => {
@@ -96,7 +97,7 @@ describe('Given agent-desktop 路径解析与服务初始化', () => {
   })
 
   test('When 可执行文件缺失 Then 明确报错引导用户准备资源', () => {
-    const missing = createServiceFixture(true, false)
+    const missing = createServiceFixture(true, false, 'linux')
     expect(() => missing.commandResolver()).toThrow('agent-desktop 可执行文件不存在')
   })
 

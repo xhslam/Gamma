@@ -45,8 +45,11 @@ export function UpdateCard(): React.ReactElement | null {
 
   const handleCheck = async (): Promise<void> => {
     setChecking(true)
+    setActionError(null)
     try {
       await checkForUpdates()
+    } catch (error: unknown) {
+      setActionError(error instanceof Error ? error.message : '无法检查更新，请稍后重试')
     } finally {
       // 状态由 atom 订阅自动更新，延迟重置 checking 避免按钮闪烁
       setTimeout(() => setChecking(false), 1000)
@@ -152,8 +155,8 @@ export function UpdateCard(): React.ReactElement | null {
         </div>
       </SettingsRow>
 
-      {(status.manualInstallReason || actionError) && (
-        <p role={actionError ? 'alert' : 'status'} className="px-4 pb-3 text-xs text-muted-foreground">{actionError || status.manualInstallReason}</p>
+      {(status.manualInstallReason || actionError || status.error) && (
+        <p role={actionError || status.error ? 'alert' : 'status'} className="px-4 pb-3 text-xs text-muted-foreground">{actionError || status.error || status.manualInstallReason}</p>
       )}
 
       {/* Release Notes（新版本可用时显示） */}

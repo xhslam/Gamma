@@ -15,6 +15,7 @@ import type { UpdateStatus } from './updater-types'
 import { UPDATER_IPC_CHANNELS } from './updater-types'
 import { createIdleInstallScheduler } from './idle-install-scheduler'
 import { isNewerVersion } from './version'
+import { resolveUpdateConfigPath } from './update-config'
 import { createUpdateCacheCleanup, getDefaultUpdaterBaseCacheDirectory, shouldDeferUpdateCacheCleanup } from './update-cache-cleanup'
 
 /** 当前更新状态 */
@@ -127,6 +128,9 @@ export async function checkForUpdates(): Promise<void> {
     // 已有下载完成的更新时保持它在界面中可见，也保留用户已安排的空闲安装。
     if (!downloadedStatusDuringCheck) {
       setStatus({ status: 'checking' })
+    }
+    if (app.isPackaged) {
+      autoUpdater.updateConfigPath = resolveUpdateConfigPath(process.resourcesPath, app.getPath('userData'))
     }
     await autoUpdater.checkForUpdates()
   } catch (err) {

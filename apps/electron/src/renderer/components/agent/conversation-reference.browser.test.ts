@@ -83,6 +83,21 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     `);
     expect(result).toEqual({sameRow:true,sameBackground:true,sameRadius:true,samePadding:true,direct:true,sameMessageStyle:true,toggled:true});
   }, 30_000)
+  test('When 引用使用固定内容模式 Then 输入卡片、消息与选择器均不显示冗余模式文字且仍可切换', async () => {
+    const result = await renderer.run<{hidden:boolean;selectorHidden:boolean;toggled:boolean}>(`
+      window.fixture.setOpen(false);
+      window.fixture.setRefs([{refId:'r1',sourceConversationId:'source-1',sourceProjectId:'project-a',titleAtAttach:'背景资料',mode:'snapshot'}]);
+      await window.wait(100);
+      const chip=document.querySelector('[data-conversation-attachments]'),message=document.querySelector('[aria-label="引用对话附件"]');
+      const hidden=![chip.textContent,message.textContent,message.querySelector('button').title].some(text=>text.includes('快照'));
+      const button=chip.querySelector('[aria-label^="切换引用模式"]');button.click();await window.wait(30);
+      const toggled=chip.querySelector('button').getAttribute('aria-pressed')==='true';
+      window.fixture.setOpen(true);await window.wait(100);
+      const selectorHidden=!document.querySelector('[role="dialog"]').textContent.includes('快照');
+      return {hidden,selectorHidden,toggled};
+    `)
+    expect(result).toEqual({hidden:true,selectorHidden:true,toggled:true})
+  }, 30_000)
   test('When 打开引用选择器 Then 弹层锚定输入区域且没有模态遮罩', async () => {
     const result = await visual.run(`
       await window.wait(250);

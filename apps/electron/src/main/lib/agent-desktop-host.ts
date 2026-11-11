@@ -13,6 +13,20 @@ import { parseAgentDesktopEnvelope, type AgentDesktopEnvelope } from './agent-de
 const exec = promisify(execFile)
 const MAX_OUTPUT = 24 * 1024 * 1024 // 24 MB
 
+export interface AgentDesktopRunIdentity {
+  root: string
+  sessionId: string
+}
+
+/** 独立权限持有组件必须提供停止确认，不能把本地代理的退出当成真实执行者已退出。 */
+export interface AgentDesktopCommand {
+  executable: string
+  argsPrefix?: string[]
+  requireSuccessfulExit?: boolean
+  prepare?(): Promise<void>
+  stop?(identity: AgentDesktopRunIdentity): Promise<void>
+}
+
 interface ProcessRow {
   pid: number
   parent: number
@@ -70,7 +84,7 @@ export class AgentDesktopHost {
   private headedQueue: Promise<void> = Promise.resolve()
 
   constructor(
-    private readonly command: () => { executable: string },
+    private readonly command: () => AgentDesktopCommand,
     private readonly platform: NodeJS.Platform = process.platform,
     private readonly processControl: Partial<ProcessControl> = {},
   ) {}
@@ -134,11 +148,11 @@ export class AgentDesktopHost {
     validate?.()
     let run = this.runs.get(namespace)
     if (!run) {
-      run = new RunHost(this.command().executable, namespace, this.platform, { ...defaultProcessControl, ...this.processControl })
+      run = new RunHost(this.command(), namespace, this.platform, { ...defaultProcessControl, ...this.processControl })
       this.runs.set(namespace, run)
     }
 
-    return await run.execute(args, signal, timeoutMs)
+    return await run.execute(args, signal, timeoutMs, validate)
   }
 
   async terminate(namespace?: string): Promise<void> {
@@ -168,11 +182,12 @@ class RunHost {
   private inFlight = false
   private closed = false
   private stopping?: Promise<void>
+  private dispatched = false
   private childClosed?: Promise<void>
   private owned = new Set<number>()
 
   constructor(
-    private executable: string,
+    private command: AgentDesktopCommand,
     namespace: string,
     private platform: NodeJS.Platform,
     private readonly processControl: ProcessControl,
@@ -197,6 +212,7 @@ class RunHost {
     args: string[],
     signal: AbortSignal | undefined,
     timeoutMs: number,
+    validate?: () => void,
   ): Promise<AgentDesktopEnvelope> {
     if (this.closed || signal?.aborted) {
       throw new Error('桌面执行者已停止')
@@ -209,6 +225,9 @@ class RunHost {
     const boundedTimeout = Math.max(100, Math.min(timeoutMs, 120_000))
 
     try {
+      if (this.command.prepare) await this.command.prepare()
+      if (this.closed || signal?.aborted) throw new Error('桌面执行者已停止；未投递命令')
+      validate?.()
       return await new Promise<AgentDesktopEnvelope>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined
         let stdout = ''
@@ -245,7 +264,8 @@ class RunHost {
           return
         }
 
-        const child = spawn(this.executable, args, {
+        this.dispatched = true
+        const child = spawn(this.command.executable, [...(this.command.argsPrefix ?? []), ...args], {
           shell: false,
           detached: this.platform !== 'win32',
           cwd: this.root,
@@ -296,6 +316,10 @@ class RunHost {
 
         child.once('close', (code) => {
           if (completed) return
+          if (this.command.requireSuccessfulExit && code !== 0) {
+            stopAndReject('独立桌面代理未确认完成；投递状态未知，不得重试')
+            return
+          }
           completed = true
           if (!this.closed) this.owned.clear()
           cleanUp()
@@ -328,6 +352,8 @@ class RunHost {
     this.closed = true
 
     this.stopping = (async () => {
+      // 服务端并非代理的后代进程。先取得真实执行者的停止 ACK，再回收本地代理和私有引用目录。
+      if (this.dispatched) await this.command.stop?.({ root: this.root, sessionId: this.desktopSessionId })
       const child = this.currentChild
       if (this.platform === 'win32') {
         const pid = child?.pid ?? this.owned.values().next().value

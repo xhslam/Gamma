@@ -2191,6 +2191,23 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const originalQuote = store.get(quotedSelectionMapAtom).get(sessionId) ?? null
     let quoteConsumed = false
     let recoveryApplied = false
+    let submittedRefsConsumed = false
+    const consumeSubmittedContextRefs = (): void => {
+      if (submittedRefsConsumed || currentContextRefs.length === 0) return
+      submittedRefsConsumed = true
+      const latestRefs = store.get(agentSessionsAtom).find((session) => session.id === sessionId)?.contextRefs ?? []
+      // 只消费本次已接收的引用；发送期间新增或修改的引用属于下一条草稿。
+      const remainingRefs = latestRefs.filter((ref) => !currentContextRefs.some((submitted) =>
+        submitted.refId === ref.refId
+        && Object.keys({ ...submitted, ...ref }).every((key) => submitted[key as keyof AgentContextRef] === ref[key as keyof AgentContextRef])
+      ))
+      if (remainingRefs.length === latestRefs.length) return
+      // Main 已冻结本次消息引用，此时清理输入选区不会改变当前 turn 的工具权限。
+      // 清理失败仍是已发送状态，不能触发消息重发或失败草稿恢复。
+      void handleUpdateContextRefs(remainingRefs).catch((error: unknown) => {
+        console.error('[AgentView] 清理已发送引用失败:', error)
+      })
+    }
     const persistBeforeSubmit = async (input: AgentSubmitOrEnqueueInput): Promise<void> => {
       const quoteMarker = originalQuote ? serializeQuotedSelectionMention(originalQuote) || buildQuotedSelectionBlock(originalQuote) : ''
       const draftText = quoteMarker ? `${effectiveText}\n\n${quoteMarker}` : effectiveText
@@ -2294,6 +2311,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     // 启动事件可能早于接收回执；旧请求 finally 不能解锁新提交。
     const confirmAccepted = (started = false): void => {
       accepted = true
+      consumeSubmittedContextRefs()
       messageStarted ||= started
       sendGuardRef.current.finish(sessionId, requestId)
     }
@@ -2331,6 +2349,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           : ''
         const payload = buildQueuedMessageSendPayload(message, quotedSelectionBlock)
         const queuedInput: AgentDeferredQueueMessageInput & { dispatch: 'after_current' } = {
+          contextRefIds: currentContextRefs.map((ref) => ref.refId),
           queueMessageId: message.id,
           userMessageUuid: message.id,
           sessionId,
@@ -2576,6 +2595,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           : {}),
       })
     } finally {
+      if (accepted) consumeSubmittedContextRefs()
       unsubscribeQueue()
       unsubscribeStream()
       sendGuardRef.current.finish(sessionId, requestId)
@@ -2587,7 +2607,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       }
       await refreshOutbox()
     }
-  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping, isUpdatingRefs, currentContextRefs])
+  }, [readOutboxDraftContext, recoveryState, refreshOutbox, setInputHtmlContent, setMessagesCache, appendOptimisticPersistedMessage, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, setDraftSessionIds, setAgentSessions, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, isLegacyTranscript, isStopping, isUpdatingRefs, currentContextRefs, handleUpdateContextRefs])
 
   const handleRestoreOutbox = React.useCallback((entry: AgentSendOutboxEntry): void => {
     if (sendGuardRef.current.isPending(sessionId) || entry.sessionId !== sessionId) return

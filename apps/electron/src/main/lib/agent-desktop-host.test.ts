@@ -297,3 +297,65 @@ it('Given 当前 run 的私有原生 ref store When 查询归属 Then 不能跨 
     await expect(host.resolveRefTarget('ref-owner', '@snapshot:e1')).rejects.toThrow('当前有效')
   } finally { await host.terminate() }
 })
+
+describe('Given 独立执行者与本地代理分离', () => {
+  it('When 准备期间撤销授权 Then 最终门禁拒绝且不投递命令', async () => {
+    let release!: () => void
+    let valid = true
+    let stopped = false
+    const host = new AgentDesktopHost(() => ({
+      executable: process.execPath,
+      prepare: () => new Promise<void>(resolve => { release = resolve }),
+      async stop() { stopped = true },
+    }))
+    const result = host.execute('prepare-gate', ['-e', 'throw Error("不得执行")'], undefined, undefined, () => {
+      if (!valid) throw new Error('授权已撤销')
+    })
+    valid = false; release()
+    await expect(result).rejects.toThrow('授权已撤销')
+    await host.terminate()
+    expect(stopped).toBe(false)
+  })
+
+  it('When 真实执行者停止确认失败 Then 保留运行目录、禁止重放并允许重试停止', async () => {
+    let root = ''
+    let fail = true
+    const host = new AgentDesktopHost(() => ({
+      executable: process.execPath,
+      async stop(identity) {
+        root = identity.root
+        expect(identity.sessionId).toMatch(/^[a-f0-9]{64}$/)
+        if (fail) throw new Error('独立执行者停止未确认')
+      },
+    }))
+    await host.execute('remote-stop', ['-e', "process.stdout.write(JSON.stringify({version:'2.5',ok:true,command:'test'}))"])
+    await expect(host.terminate('remote-stop')).rejects.toThrow('独立执行者停止未确认')
+    expect(existsSync(root)).toBe(true)
+    await expect(host.execute('remote-stop', [])).rejects.toThrow('不得重放')
+    fail = false
+    await host.terminate('remote-stop')
+    expect(existsSync(root)).toBe(false)
+  })
+
+  it('When 连接准备失败 Then 未投递的 run 仍能安全清理而不要求远端停止确认', async () => {
+    const host = new AgentDesktopHost(() => ({
+      executable: process.execPath,
+      async prepare() { throw new Error('组件未运行') },
+      async stop() { throw new Error('未投递不能调用远端') },
+    }))
+    await expect(host.execute('no-dispatch', [])).rejects.toThrow('组件未运行')
+    await host.terminate('no-dispatch')
+  })
+})
+
+it('Given 独立代理输出成功 envelope 但未成功退出 When 读取结果 Then 不把不完整 transport 当作操作成功', async () => {
+  let stopped = false
+  const host = new AgentDesktopHost(() => ({
+    executable: process.execPath, requireSuccessfulExit: true,
+    async stop() { stopped = true },
+  }))
+  const task = host.execute('proxy-failed', ['-e', "process.stdout.write(JSON.stringify({version:'2.5',ok:true,command:'click'}));process.exit(70)"])
+  await expect(task).rejects.toThrow('投递状态未知，不得重试')
+  expect(stopped).toBe(true)
+  await host.terminate()
+})

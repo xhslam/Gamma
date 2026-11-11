@@ -16,7 +16,7 @@ function fixture(parentAX = true, helperAX = true) {
   const paths: string[] = []
   const listeners: Array<() => void> = []
   const options: ComputerUseDiagnosticsOptions = {
-    argv: ['Gamma', '--computer-use-diagnostics'], resourcesPath: '/Applications/Gamma.app/Contents/Resources',
+    platform: 'darwin', argv: ['Gamma', '--computer-use-diagnostics'], resourcesPath: '/Applications/Gamma.app/Contents/Resources',
     app: {
       isPackaged: true,
       setName: name => { events.push(`name:${name}`) },
@@ -74,10 +74,11 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
     expect(report.parentAX).toBe(true)
     expect(report.helperPermissions).toEqual({ accessibility: true, screen: false, listen: false, post: false })
     expect(report.identitiesMatch).toBe(true)
-    expect(report.inheritanceVerified).toBe(true)
+    expect(report.inheritanceVerified).toBe(false)
+    expect(report.permissionOwner).toBe('gammaComputerUse')
     expect(report.readOnly).toBe(true)
     expect(report.errors).toEqual([])
-    expect(report.helperExecutable).toBe('/Applications/Gamma.app/Contents/Resources/agent-desktop/agent-desktop')
+    expect(report.helperExecutable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
     expect(readFileSync(reportPath, 'utf8')).not.toContain('SECRET_AX_CANARY')
     expect(statSync(reportPath).mode & 0o777).toBe(0o600)
     expect(metadata).toEqual({ diagnosticsReportPath: reportPath, reportWritten: true })
@@ -119,10 +120,10 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
     expect(lstatSync(reportPath).isSymbolicLink()).toBe(false)
   })
 
-  test('When开发态诊断 Then选择app目录内相同裸CLI且不导入业务service', async () => {
+  test('When开发态诊断 Then仍使用独立权限组件而不导入业务service', async () => {
     const { options } = fixture()
     options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Gamma/apps/electron' }
     const { report } = await collect(options)
-    expect(report.helperExecutable).toBe('/workspace/Gamma/apps/electron/resources/agent-desktop/agent-desktop')
+    expect(report.helperExecutable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
   })
 })

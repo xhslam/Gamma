@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { release } from 'node:os'
 import { isComputerPlatformSupported } from './computer-platform'
 import { ComputerController } from './computer-controller'
-import { AgentDesktopHost } from './agent-desktop-host'
+import { AgentDesktopHost, type AgentDesktopCommand } from './agent-desktop-host'
+import { createGammaComputerUseCommand } from './gamma-computer-use-command'
 import { installComputerExecutionGuard } from './computer-execution-gate'
 import { getMainWindow } from './main-window-store'
 import { COMPUTER_IPC_CHANNELS } from '@gamma/shared'
@@ -12,7 +13,8 @@ import { computerAuthorizationManager } from './computer-authorization-manager'
 
 export { computerAuthorizationManager }
 
-export function agentDesktopCommand(): { executable: string } {
+export function agentDesktopCommand(): AgentDesktopCommand {
+  if (process.platform === 'darwin') return createGammaComputerUseCommand()
   const filename = process.platform === 'win32' ? 'agent-desktop.exe' : 'agent-desktop'
   const executable = app.isPackaged
     ? join(process.resourcesPath, 'agent-desktop', filename)
