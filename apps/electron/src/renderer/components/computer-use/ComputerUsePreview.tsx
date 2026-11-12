@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { atom, useAtom } from 'jotai'
 import { Circle, Loader2, Monitor, Square, X } from 'lucide-react'
 import type { ComputerPreview } from '@gamma/shared'
@@ -57,6 +58,30 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
   const retry = React.useRef<() => void>(() => {})
   const mounted = React.useRef(false)
   const screenRequest = React.useRef(false)
+  const panel = React.useRef<HTMLElement>(null)
+  const drag = React.useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const [position, setPosition] = React.useState<{ left: number; top: number } | null>(null)
+
+  const movePanel = (left: number, top: number): void => {
+    const rect = panel.current?.getBoundingClientRect()
+    if (!rect) return
+    setPosition({ left: Math.max(0, Math.min(left, Math.max(0, window.innerWidth - rect.width))),
+      top: Math.max(0, Math.min(top, Math.max(0, window.innerHeight - rect.height))) })
+  }
+
+  React.useEffect(() => {
+    const keepVisible = (): void => {
+      const rect = panel.current?.getBoundingClientRect()
+      if (rect) movePanel(rect.left, rect.top)
+    }
+    window.addEventListener('resize', keepVisible)
+    return () => window.removeEventListener('resize', keepVisible)
+  }, [])
+
+  React.useLayoutEffect(() => {
+    const rect = panel.current?.getBoundingClientRect()
+    if (rect && (rect.right > window.innerWidth || rect.bottom > window.innerHeight)) movePanel(rect.left, rect.top)
+  }, [view.preview, view.expanded, view.error])
 
   React.useEffect(() => {
     mounted.current = true
@@ -96,7 +121,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
     }
     retry.current = () => { void read() }
     const unsubscribe = window.electronAPI.onComputerStateChanged(state => {
-      if (state.sessionId !== sessionId || !['active', 'authorizing'].includes(state.phase)) clear()
+      if (state.sessionId !== sessionId || !['armed', 'active', 'authorizing'].includes(state.phase)) clear()
       else {
         if (state.permissions?.accessibility && state.permissions.screen === false && current.current.preview) {
           revision.current += 1
@@ -162,16 +187,33 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
   const running = latest?.status === 'running'
   const accessibilityOnly = preview?.mode === 'accessibility'
   const label = latest ? actionNames[latest.action] ?? '执行电脑操作' : '等待下一步'
-  return (
-    <section aria-label="Computer Use 操作预览" className="my-4 w-full max-w-[560px] overflow-hidden rounded-2xl border border-border/60 bg-background shadow-sm">
+  return createPortal(
+    <section ref={panel} aria-label="Computer Use 操作预览" style={position ? { left: position.left, top: position.top, right: 'auto' } : undefined} className="fixed right-6 top-24 z-40 max-h-[calc(100vh-2rem)] w-[min(560px,calc(100vw-3rem))] overflow-auto rounded-2xl border border-border/60 bg-background shadow-xl">
       <div className="flex items-center gap-3 px-4 py-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><Monitor className="size-4 text-foreground/70" aria-hidden="true" /></div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">Computer Use</div>
-          <div className="truncate text-xs text-muted-foreground">{preview?.appName || '你的电脑'}</div>
+        <div role="button" tabIndex={0} aria-label="移动操作预览，使用方向键调整位置" title="拖动移动预览" className="flex min-w-0 flex-1 touch-none cursor-move items-center gap-3 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onPointerDown={event => {
+            if (event.button !== 0) return
+            const rect = panel.current?.getBoundingClientRect()
+            if (!rect) return
+            drag.current = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top }
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }}
+          onPointerMove={event => { if (drag.current) movePanel(drag.current.left + event.clientX - drag.current.x, drag.current.top + event.clientY - drag.current.y) }}
+          onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }}
+          onKeyDown={event => {
+            const delta: Record<string, [number, number]> = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] }
+            const offset = delta[event.key]
+            const rect = panel.current?.getBoundingClientRect()
+            if (offset && rect) { event.preventDefault(); movePanel(rect.left + offset[0], rect.top + offset[1]) }
+          }}>
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><Monitor className="size-4 text-foreground/70" aria-hidden="true" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">Computer Use</div>
+            <div className="truncate text-xs text-muted-foreground">{preview?.appName || '你的电脑'}</div>
+          </div>
         </div>
         {preview && <Button variant="outline" size="sm" onClick={() => { void stop() }} disabled={view.stopping} aria-label="停止当前电脑操作" className="gap-2 rounded-full">
-          {view.stopping ? <Loader2 className="size-3 animate-spin" /> : <Square className="size-3 fill-current" />}停止
+          {view.stopping ? <Loader2 className="size-3 animate-spin" /> : <Square className="size-3 fill-current" />}接管
         </Button>}
         <Button data-disclosure-trigger="" variant="ghost" size="icon" className="size-8 rounded-full" aria-label={view.expanded ? '收起操作画面' : '展开操作画面'} aria-expanded={view.expanded} onClick={toggle}>
           <DisclosureChevron expanded={view.expanded} size={16} className="size-4" />
@@ -203,6 +245,7 @@ export function ComputerUsePreview({ sessionId }: { sessionId: string }): React.
         </div>
       </>}
       {view.error && <div role="alert" className="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-warning dark:text-warning"><span className="flex-1">{view.error}</span><Button variant="ghost" size="sm" onClick={() => retry.current()}>重试</Button></div>}
-    </section>
+    </section>,
+    document.body,
   )
 }

@@ -6,6 +6,17 @@ function videoFrame(frameId = 'video-1') {
 }
 const request = { sessionId: 'computer-test', live: true }
 
+test('Given 前一轮电脑操作结束 When 新一轮开始 Then 预览步骤只属于当前运行', async () => {
+  const f = createComputerFixture()
+  await f.controller.execute(f.binding, { command: 'screenshot' })
+  await f.controller.finishRun(f.binding)
+  const next = { ...f.binding, runId: 'run-2' }
+  f.controller.beginRun(next, 'user', true)
+  await f.controller.execute(next, { command: 'list-apps' })
+  expect((await f.controller.getPreview(request))?.activities.map(activity => activity.action)).toEqual(['list-apps'])
+  await f.controller.finishRun(next)
+})
+
 test('Given 工具观察不变 When 连续读取视频 Then 画面独立更新、不读取AX、不新增observe且坐标观察仍有效', async () => {
   let next = 'video-1'
   const f = createComputerFixture({ call: async method => method === 'previewFrame' ? videoFrame(next) : undefined })

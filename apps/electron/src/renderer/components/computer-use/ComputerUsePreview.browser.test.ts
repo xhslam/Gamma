@@ -5,6 +5,47 @@ let renderer: ElectronRendererHarness
 beforeAll(async () => { renderer = await createElectronRendererHarness(computerPreviewFixture) }, 30_000)
 afterAll(async () => { await renderer?.dispose() })
 
+test('Given 悬浮预览 When 用方向键移动 Then 小窗移动且仍处于可见范围', async () => {
+  const result = await renderer.run(`
+    await window.mount()
+    const panel=document.querySelector('section')
+    const handle=document.querySelector('[aria-label^="移动操作预览"]')
+    const before=panel.getBoundingClientRect()
+    handle.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))
+    await window.until(()=>panel.getBoundingClientRect().left<before.left)
+    const after=panel.getBoundingClientRect()
+    return {moved:after.left<before.left,visible:after.left>=0&&after.right<=innerWidth}
+  `)
+  expect(result).toEqual({ moved: true, visible: true })
+}, 30_000)
+
+test('Given 悬浮预览 When 拖动顶部区域 Then 小窗跟随指针并限制在窗口内', async () => {
+  const result = await renderer.run(`
+    await window.mount()
+    const panel=document.querySelector('section')
+    const handle=document.querySelector('[aria-label^="移动操作预览"]')
+    const before=panel.getBoundingClientRect()
+    handle.setPointerCapture=()=>{}
+    handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:1,button:0,clientX:before.left+20,clientY:before.top+20,bubbles:true}))
+    handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:1,clientX:before.left-80,clientY:before.top+40,bubbles:true}))
+    await window.until(()=>panel.getBoundingClientRect().left<before.left)
+    handle.dispatchEvent(new PointerEvent('pointerup',{pointerId:1,bubbles:true}))
+    const after=panel.getBoundingClientRect()
+    return {left:Math.round(before.left-after.left),top:Math.round(after.top-before.top),visible:after.left>=0&&after.top>=0}
+  `)
+  expect(result).toEqual({ left: 100, top: 20, visible: true })
+}, 30_000)
+
+test('Given 操作间等待下一步 When 状态回到 armed Then 预览和停止入口保持可用', async () => {
+  const result = await renderer.run(`
+    await window.mount()
+    window.listeners.forEach(fn=>fn({sessionId:'s1',phase:'armed'}))
+    await new Promise(r=>setTimeout(r,50))
+    return {image:!!document.querySelector('img'),stop:!!document.querySelector('[aria-label="停止当前电脑操作"]')}
+  `)
+  expect(result).toEqual({ image: true, stop: true })
+}, 30_000)
+
 test('Given 当前工具观察 When 展示、折叠并停止 Then 有时间、步骤和绑定当前run的停止入口', async () => {
   const result = await renderer.run(`
     await window.mount()

@@ -101,7 +101,7 @@ export class ComputerController {
   private revocations = new Set<{ binding: ComputerBinding; listener: () => void }>()
   private readonly now: () => number
   private lastStopReason = new Map<string, string>()
-  private previewActivities: ComputerPreview['activities'] = []
+  private previewActivities = new Map<string, ComputerPreview['activities']>()
   private activeAction?: string
   readonly authManager: ComputerAuthorizationManager
 
@@ -272,6 +272,7 @@ export class ComputerController {
   }
 
   async finishRun(binding: ComputerBinding): Promise<void> {
+    this.previewActivities.delete(binding.runId)
     this.authManager.cancelPending()
     this.activeRuns.delete(binding.runId)
     this.desktopRuns.delete(binding.runId)
@@ -503,7 +504,7 @@ export class ComputerController {
       permissions: this.state.permissions,
       message: this.state.message,
       frame,
-      activities: this.previewActivities,
+      activities: this.previewActivities.get(active.runId) ?? [],
     }
   }
 
@@ -574,9 +575,11 @@ export class ComputerController {
       status: 'running',
       startedAt: this.now(),
     }
-    this.previewActivities.push(activity)
-    if (this.previewActivities.length > 20) {
-      this.previewActivities.shift()
+    const activities = this.previewActivities.get(binding.runId) ?? []
+    this.previewActivities.set(binding.runId, activities)
+    activities.push(activity)
+    if (activities.length > 20) {
+      activities.shift()
     }
 
     this.activeAction = input.command
