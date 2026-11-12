@@ -1,17 +1,18 @@
 import * as React from 'react'
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { atomFamily } from 'jotai-family'
-import { ArrowLeft, ArrowUpRight, ChartNoAxesCombined, Film, FolderOpen, Grid2X2, Layers, List, Loader2, MessageSquare, Monitor, Palette, Presentation, RefreshCw, Search, SquarePen } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, ChartNoAxesCombined, Download, Film, FolderOpen, Grid2X2, Layers, List, Loader2, Palette, Paperclip, Presentation, RefreshCw, Search, SquarePen } from 'lucide-react'
 import type { DesignArtifact, DesignArtifactKind, DesignBundleStatus, DesignWorkbenchOpenResult } from '@gamma/shared'
 import { DESIGN_SOURCE_URL } from '@gamma/shared'
 import {
   agentSessionsAtom, agentWorkspacesAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom,
+  agentDiffPanelTabAtom, agentSidePanelOpenAtomFamily, getBrowserSidePanelTab,
 } from '@/atoms/agent-atoms'
+import { addDesignHandoffToConversationAtom } from '@/atoms/design-handoff'
 import { activeViewAtom } from '@/atoms/active-view'
-import { browserPendingNavigationMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
+import { browserFocusRequestMapAtom, browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserPendingNavigationMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { BrowserPanel } from '@/components/browser/BrowserPanel'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { cn } from '@/lib/utils'
@@ -87,10 +88,21 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
       else next.delete(result.session.id)
       return next
     })
+    // 浏览器只由全局侧栏挂载；会话、展开状态和画板标签必须一起切换。
+    store.set(currentAgentWorkspaceIdAtom, workspaceId)
+    store.set(currentAgentSessionIdAtom, result.session.id)
+    store.set(browserPanelOpenMapAtom, (previous) => new Map(previous).set(result.session.id, true))
+    store.set(browserPanelMinimizedMapAtom, (previous) => {
+      const next = new Map(previous)
+      next.delete(result.session.id)
+      return next
+    })
+    store.set(agentSidePanelOpenAtomFamily(result.session.id), true)
+    store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(result.session.id, getBrowserSidePanelTab(result.browser.activeTabId)))
+    store.set(browserFocusRequestMapAtom, (previous) => new Map(previous).set(result.session.id, result.browser.activeTabId))
     setActive(result)
     // 右侧添加入口与左侧 design 统一进入主工作台，不同时重复渲染同一聊天。
     if (embedded) {
-      store.set(currentAgentWorkspaceIdAtom, workspaceId)
       setActiveView('design')
     }
   }
@@ -145,12 +157,12 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
           <Button variant="ghost" size="icon" aria-label="刷新作品库" disabled={loading || busy} onClick={() => { void refresh() }}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></Button>
         </header>
         {!loading && status && !status.installed && <p role="status" className="mb-4 text-xs text-destructive">内置设计编辑器资源不完整，请检查 Gamma 构建产物。</p>}
-        {status?.installed && !status.supportsSqlite && <p role="status" className="mb-4 text-xs text-amber-600 dark:text-amber-400">当前 Node 环境不支持 SQLite，看板和动画编辑器暂不可用。</p>}
+        {status?.installed && !status.supportsSqlite && <p role="status" className="mb-4 text-xs text-warning">当前 Node 环境不支持 SQLite，看板和动画编辑器暂不可用。</p>}
         {error && <p role="alert" className="mb-4 break-words text-xs leading-relaxed text-destructive">{error}</p>}
-        <div className="mb-8 grid grid-cols-1 gap-2 @[420px]:grid-cols-2 @[820px]:grid-cols-3 @[1100px]:grid-cols-6">{DESIGN_ARTIFACT_TYPES.map((type) => {
+        <div className="mb-8 grid grid-cols-2 gap-2">{DESIGN_ARTIFACT_TYPES.map((type) => {
           const Icon = TYPE_ICONS[type.kind]
           const unsupported = (type.kind === 'dashboard' || type.kind === 'motion') && !status?.supportsSqlite
-          return <button key={type.kind} type="button" disabled={!status?.installed || busy || unsupported} onClick={() => { setCreatingKind(type.kind); setTitle('') }} className="group rounded-xl border border-border bg-background/40 px-4 py-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"><Icon size={19} strokeWidth={1.5} className="mb-4 text-foreground/65" /><span className="block text-sm font-medium">{type.label}</span><span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">{type.hint}</span></button>
+          return <button key={type.kind} type="button" disabled={!status?.installed || busy || unsupported} onClick={() => { setCreatingKind(type.kind); setTitle('') }} className="group min-w-0 break-words rounded-xl border border-border bg-background/40 px-4 py-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"><Icon size={19} strokeWidth={1.5} className="mb-4 text-foreground/65" /><span className="block text-sm font-medium">{type.label}</span><span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">{type.hint}</span></button>
         })}</div>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative min-w-36 flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input aria-label="搜索设计作品" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索作品" className="h-8 pl-8 text-xs" /></div>
@@ -173,28 +185,44 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
 }
 
 function DesignEditorWorkbench({ entry, onBack, busy, error }: { entry: DesignWorkbenchOpenResult; onBack: () => void; busy: boolean; error: string }): React.ReactElement {
-  const ref = React.useRef<HTMLElement>(null)
-  const [compact, setCompact] = React.useState(false)
-  const [pane, setPane] = React.useState<'chat' | 'editor'>('editor')
+  const store = useStore()
+  const [deliveryBusy, setDeliveryBusy] = React.useState(false)
+  const deliveryOperation = React.useRef(false)
+  const [deliveryError, setDeliveryError] = React.useState('')
+  const [deliveryNotice, setDeliveryNotice] = React.useState('')
+  const mounted = React.useRef(true)
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const deliver = async (mode: 'download' | 'handoff'): Promise<void> => {
+    if (deliveryOperation.current || busy) return
+    deliveryOperation.current = true
+    setDeliveryBusy(true); setDeliveryError(''); setDeliveryNotice('')
+    try {
+      if (mode === 'download') {
+        const result = await window.electronAPI.exportDesignArtifact(entry.artifact.workspaceId, entry.artifact.id)
+        if (mounted.current && !result.canceled) setDeliveryNotice(`已保存完整设计稿：${result.filePath}`)
+      } else {
+        const result = await window.electronAPI.prepareDesignHandoff(entry.artifact.workspaceId, entry.artifact.id)
+        if (!mounted.current) return
+        if (result.sessionId !== entry.session.id || result.artifactId !== entry.artifact.id) throw new Error('设计稿与当前会话不一致')
+        store.set(addDesignHandoffToConversationAtom, result)
+        setDeliveryNotice('完整设计稿和实施要求已添加到对话，确认后发送即可。')
+      }
+    } catch (cause) { if (mounted.current) setDeliveryError(cause instanceof Error ? cause.message : '设计稿操作失败') }
+    finally { deliveryOperation.current = false; if (mounted.current) setDeliveryBusy(false) }
+  }
   const browserStates = useAtomValue(browserStateMapAtom)
   const browser = browserStates.get(entry.session.id) ?? entry.browser
   // 显示的是本作品绑定的标签，不跟随 Agent 浏览器工作标签或用户其他标签跳动。
   const initialTabId = entry.browser.activeTabId
   const tabId = browser.tabs.some((tab) => tab.tabId === initialTabId) ? initialTabId : browser.activeTabId
   useDesignEditorTheme(entry.artifact.id, browser.tabs.find((tab) => tab.tabId === tabId)?.url)
-  React.useLayoutEffect(() => {
-    const element = ref.current
-    if (!element) return
-    const observer = new ResizeObserver(() => setCompact(element.clientWidth < 800))
-    observer.observe(element); setCompact(element.clientWidth < 800)
-    return () => observer.disconnect()
-  }, [])
-  return <section ref={ref} aria-label="design 创作工作台" className="flex h-full min-h-0 min-w-0 flex-col bg-content-area titlebar-no-drag">
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3"><Button variant="ghost" size="icon" className="size-7" aria-label="返回设计作品库" disabled={busy} onClick={onBack}><ArrowLeft size={15} /></Button><h1 className="min-w-0 flex-1 truncate text-sm font-medium">{entry.artifact.title}</h1><span className="text-[11px] text-muted-foreground">{DESIGN_ARTIFACT_TYPES.find((item) => item.kind === entry.artifact.kind)?.label}</span>{compact && <><Button variant={pane === 'chat' ? 'secondary' : 'ghost'} size="sm" onClick={() => setPane('chat')}><MessageSquare size={13} className="mr-1" />对话</Button><Button variant={pane === 'editor' ? 'secondary' : 'ghost'} size="sm" onClick={() => setPane('editor')}><Monitor size={13} className="mr-1" />编辑器</Button></>}</header>
+  return <section aria-label="design 创作工作台" className="flex h-full min-h-0 min-w-0 flex-col bg-content-area titlebar-no-drag">
+    <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3"><Button variant="ghost" size="icon" className="size-7" aria-label="返回设计作品库" disabled={busy || deliveryBusy} onClick={onBack}><ArrowLeft size={15} /></Button><h1 className="min-w-0 flex-1 truncate text-sm font-medium">{entry.artifact.title}</h1><span className="hidden shrink-0 text-[11px] text-muted-foreground @[420px]:inline">{DESIGN_ARTIFACT_TYPES.find((item) => item.kind === entry.artifact.kind)?.label}</span><Button variant="ghost" size="icon" className="size-7 shrink-0" aria-label="下载完整设计稿" title="下载完整设计稿" disabled={busy || deliveryBusy} onClick={() => { void deliver('download') }}><Download size={15} /></Button><Button variant="ghost" size="icon" className="size-7 shrink-0" aria-label="添加完整设计稿到对话" title="添加到对话并准备实施" disabled={busy || deliveryBusy} onClick={() => { void deliver('handoff') }}>{deliveryBusy ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15} />}</Button></header>
+    {deliveryError && <p role="alert" className="shrink-0 break-words px-4 py-2 text-xs text-destructive">{deliveryError}</p>}
+    {deliveryNotice && <p role="status" className="shrink-0 break-words px-4 py-2 text-xs text-muted-foreground">{deliveryNotice}</p>}
     {error && <p role="alert" className="shrink-0 break-words px-4 py-2 text-xs text-destructive">{error}</p>}
-    <div className="flex min-h-0 flex-1 overflow-hidden">
-      {(!compact || pane === 'chat') && <div className={cn('flex min-h-0 min-w-0 flex-col border-r border-border', compact ? 'flex-1' : 'w-[38%] min-w-[300px] max-w-[520px]')}><React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载设计对话…</div>}><AgentView sessionId={entry.session.id} embedded /></React.Suspense></div>}
-      {(!compact || pane === 'editor') && <div className="flex min-h-0 min-w-0 flex-1 flex-col"><BrowserPanel sessionId={entry.session.id} tabId={tabId} state={browser} /></div>}
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载设计对话…</div>}><AgentView sessionId={entry.session.id} embedded /></React.Suspense>
     </div>
   </section>
 }

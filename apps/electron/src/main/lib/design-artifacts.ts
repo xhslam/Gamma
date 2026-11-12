@@ -233,6 +233,20 @@ export function createDesignArtifactService(deps: DesignArtifactDependencies) {
       return artifact
     })
   }
+  /** 下载与交接必须重新核验索引、会话归属和整个文件树，不能信任 renderer 缓存的路径。 */
+  async function getDesignArtifact(workspaceId: string, id: string): Promise<DesignArtifact> {
+    if (typeof id !== 'string' || !ID.test(id)) throw new Error('无效作品 ID')
+    return locked(workspaceId, async () => {
+      const ctx = await context(workspaceId)
+      const artifact = readIndex(ctx).find((item) => item.id === id)
+      if (!artifact) throw new Error('作品不存在或不属于当前项目')
+      await session(artifact)
+      safePath(ctx.root, artifact.rootPath)
+      safeTree(artifact.rootPath)
+      assertLocalOnlyState(artifact.rootPath)
+      return summarizeArtifact(artifact)
+    })
+  }
   async function openDesignArtifact(workspaceId: string, id: string): Promise<DesignOpenArtifactResult> {
     if (typeof id !== 'string' || !ID.test(id)) throw new Error('无效作品 ID')
     return locked(workspaceId, async () => {
@@ -300,7 +314,7 @@ export function createDesignArtifactService(deps: DesignArtifactDependencies) {
     stopOperation = stopOwnedEditors().finally(() => { stopOperation = undefined })
     return stopOperation
   }
-  return { listDesignArtifacts, createDesignArtifact, openDesignArtifact, stopDesignEditors }
+  return { listDesignArtifacts, createDesignArtifact, getDesignArtifact, openDesignArtifact, stopDesignEditors }
 }
 
 const service = createDesignArtifactService({
@@ -313,4 +327,4 @@ const service = createDesignArtifactService({
     try { const response = await fetch(loopback(url), { redirect: 'error', signal: AbortSignal.timeout(2500) }); await response.body?.cancel(); return response.ok } catch { return false }
   },
 })
-export const { listDesignArtifacts, createDesignArtifact, openDesignArtifact, stopDesignEditors } = service
+export const { listDesignArtifacts, createDesignArtifact, getDesignArtifact, openDesignArtifact, stopDesignEditors } = service

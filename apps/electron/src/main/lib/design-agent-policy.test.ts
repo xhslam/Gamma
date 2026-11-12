@@ -15,6 +15,8 @@ describe('Given 绑定到聊天会话的 design 工作台', () => {
     expect(prompt).toContain('不要再次启动')
     expect(prompt).toContain('comment-reply')
     expect(prompt).toContain('禁止自动启用 LAN/share')
+    expect(prompt).toContain('根据完整设计稿实施应用代码')
+    expect(prompt).toContain('以下默认设计编辑约束不覆盖该明确实施要求')
   })
   test('When 主 Agent 发送新一轮设计需求 Then 从主进程注入上下文，认证仍在既有编排层处理', () => {
     const source = readFileSync(new URL('./agent-orchestrator.ts', import.meta.url), 'utf8')

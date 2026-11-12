@@ -1,4 +1,7 @@
+import { flushDesignEditor } from './design-editor-flush'
+import { DesignSaveTracker } from './design-save-tracker'
 import { createDesignThemeHost } from './design-theme-host'
+import { createDesignLocaleHost } from './design-locale-host'
 import { app, BrowserWindow, WebContentsView, session as electronSession, type DownloadItem, type Session, type WebContents } from 'electron'
 import path from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
@@ -6,7 +9,7 @@ import type { BrowserExecutionSource, BrowserOperationStatus, BrowserSessionClos
 import { AGENT_IPC_CHANNELS } from '@gamma/shared'
 import { assertSafeBrowserDestination, assertSafeBrowserDestinationWithFallback, assertSafeBrowserDownloadUrl, assertSafeBrowserUrl, isSupportedBrowserPopupUrl, isTransientBrowserPopupUrl, USER_NEW_TAB_URL } from './browser-policy'
 import { createAuthorizedPreviewUrl, isAuthorizedPreviewProtocol } from './browser-preview-service'
-import { isBlockedDesignEditorRequest } from './design-browser-policy'
+import { isBlockedDesignEditorRequest, isRegisteredDesignEditorUrl, isDesignEditorWriteRequest } from './design-browser-policy'
 import { handleGammaFileRequest } from './local-file-protocol'
 import { BrowserCdpTimeoutError, BrowserOperationAbortedError, BROWSER_OBSERVE_TIMEOUT_MS, resolveBrowserObserveAxDepth, throwIfBrowserOperationAborted, withBrowserCdpTimeout } from './browser-cdp'
 import { parseBrowserPressAction } from './browser-key-policy'
@@ -221,12 +224,14 @@ function describeBrowserScriptException(response: CdpResponse): string {
 
 export class BrowserController {
   private readonly designThemeHost = createDesignThemeHost()
+  private readonly designLocaleHost = createDesignLocaleHost()
 
   private owner: BrowserWindow | null = null
   private readonly sessions = new Map<string, BrowserSessionRecord>()
   private readonly configurations = new Map<string, BrowserSessionConfiguration>()
   /** Electron persistent partition 生命周期长于 Agent session；同一 Session 只安装一次网络 guard。 */
   private readonly guardedSessions = new WeakSet<Session>()
+  private readonly designSaveTrackers = new WeakMap<Session, DesignSaveTracker>()
   /** 下载事件属于 Electron Session，不能随 Gamma 会话重复注册或闭包捕获已关闭的会话。 */
   private readonly downloadGuardedSessions = new WeakSet<Session>()
   /** 自定义 partition 不继承 default session 的协议处理器，必须单独注册本地预览协议。 */
@@ -482,6 +487,10 @@ export class BrowserController {
   private installSessionGuards(browserSession: Session): void {
     if (this.guardedSessions.has(browserSession)) return
     this.guardedSessions.add(browserSession)
+    const saves = new DesignSaveTracker()
+    this.designSaveTrackers.set(browserSession, saves)
+    browserSession.webRequest.onCompleted(details => saves.finished(details.id, details.statusCode < 400))
+    browserSession.webRequest.onErrorOccurred(details => saves.finished(details.id, false))
     browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     browserSession.setCertificateVerifyProc((_request, callback) => {
       // 受管浏览器面向用户明确打开的网页；内网自签名证书和企业 CA 由用户自行负责，
@@ -498,7 +507,10 @@ export class BrowserController {
         return
       }
       void assertSafeBrowserDestination(details.url)
-        .then(() => callback({ cancel: false }))
+        .then(() => {
+          if (details.webContentsId !== undefined && isDesignEditorWriteRequest(details)) saves.started(details.id, details.webContentsId)
+          callback({ cancel: false })
+        })
         .catch(() => callback({ cancel: true }))
     })
   }
@@ -523,23 +535,29 @@ export class BrowserController {
   }
 
   /**
-   * 将受管浏览器里的下载固定保存到系统「下载」目录。
-   * Electron 会在 will-download 回调返回后立即决定是否显示 Save As，因此必须同步
-   * setSavePath；随后暂停下载进行异步 DNS 校验，安全后才 resume，失败则 cancel。
+   * Design 显示原生保存对话框；普通网页沿用系统「下载」目录。
+   * Electron 会在 will-download 回调返回后决定是否显示 Save As，需同步配置；
+   * 随后暂停下载进行异步 DNS 校验，安全后才 resume，失败则 cancel。
    */
   private handleDownload(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, item: DownloadItem): void {
     const url = item.getURL()
     const filename = sanitizeDownloadFilename(item.getFilename())
-    item.setSavePath(path.join(app.getPath('downloads'), filename))
+    if (isRegisteredDesignEditorUrl(tab.view.webContents.getURL())) {
+      // Design 成稿由用户明确选择落盘位置；不再静默保存到一个找不到的默认路径，
+      // 同名文件也交给原生对话框确认。必须在 will-download 同步回调内设置选项。
+      item.setSaveDialogOptions({ title: '保存设计稿', defaultPath: path.join(app.getPath('downloads'), filename), properties: ['showOverwriteConfirmation'] })
+    } else {
+      item.setSavePath(path.join(app.getPath('downloads'), filename))
+    }
     item.pause()
     item.once('done', (_event, state) => {
       if (!this.isManagedTabCurrent(browserSession, tab)) return
-      if (state === 'completed') this.trace(browserSession, tab, 'download', `已下载 ${filename}`, 'verified')
+      if (state === 'completed') this.trace(browserSession, tab, 'download', `已保存 ${item.getSavePath() || filename}`, 'verified')
       else this.trace(browserSession, tab, 'download', `下载 ${filename} 未完成（${state}）`, 'failed')
     })
     void assertSafeBrowserDownloadUrl(url)
       .then(() => {
-        if (this.isManagedTabCurrent(browserSession, tab)) this.trace(browserSession, tab, 'download', `下载 ${filename} 到「下载」目录`, 'dispatched')
+        if (this.isManagedTabCurrent(browserSession, tab)) this.trace(browserSession, tab, 'download', `正在保存 ${filename}`, 'dispatched')
         // 已通过校验的下载在来源 tab 被关闭后仍可继续，符合浏览器的常规下载行为。
         item.resume()
       })
@@ -704,7 +722,10 @@ export class BrowserController {
     })
     view.webContents.on('did-stop-loading', () => this.updateNavigationState(browserSession, tab))
     view.webContents.on('page-title-updated', () => this.updateNavigationState(browserSession, tab))
+    const designContentsId = view.webContents.id
+    view.webContents.on('destroyed', () => this.designSaveTrackers.get(browserSession.browserSession)?.clear(designContentsId))
     view.webContents.on('did-navigate', () => {
+      this.designSaveTrackers.get(browserSession.browserSession)?.clear(designContentsId)
       // 只在主框架真正完成跨文档导航时清理旧站点图标；新页面随后会通过 page-favicon-updated 重新发布。
       tab.favicon = null
       tab.popupInitialNavigationPending = false
@@ -838,7 +859,24 @@ export class BrowserController {
     const browserSession = this.getSession(sessionId)
     const tab = browserSession.tabs.get(tabId)
     if (!tab) throw new Error('design 编辑器标签不存在')
+    await this.setDesignEditorLocale(sessionId, tabId, editorUrl)
     await this.designThemeHost.setTheme(tab.view.webContents, editorUrl, snapshot)
+  }
+
+  async setDesignEditorLocale(sessionId: string, tabId: string, editorUrl: string): Promise<void> {
+    const browserSession = this.getSession(sessionId)
+    const tab = browserSession.tabs.get(tabId)
+    if (!tab) throw new Error('design 编辑器标签不存在')
+    await this.designLocaleHost.setLocale(tab.view.webContents, editorUrl, app.getPreferredSystemLanguages())
+  }
+
+  async flushDesignEditor(sessionId: string, tabId: string, editorUrl: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    const tab = session.tabs.get(tabId)
+    if (!tab) throw new Error('design 编辑器标签不存在')
+    const saves = this.designSaveTrackers.get(session.browserSession)
+    if (!saves) throw new Error('设计稿保存跟踪尚未初始化')
+    await this.enqueueTab(tab, () => flushDesignEditor(tab.view.webContents, editorUrl, () => saves.wait(tab.view.webContents.id)))
   }
 
   getState(sessionId: string): BrowserViewState | null {

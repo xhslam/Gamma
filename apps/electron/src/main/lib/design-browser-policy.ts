@@ -54,9 +54,25 @@ export function createDesignBrowserPolicy() {
   function isBlockedDesignEditorRequest(request: DesignBrowserRequest): boolean {
     return shouldBlockDesignBrowserRequest(request, scopes.values())
   }
-  return { registerDesignEditorOrigin, isBlockedDesignEditorRequest }
+  function isRegisteredDesignEditorUrl(value: string): boolean {
+    let url: URL
+    try { url = new URL(value) } catch { return false }
+    return [...scopes.values()].some((scope) => url.origin === scope.origin && url.pathname === scope.pathname)
+  }
+  function isDesignEditorWriteRequest(request: DesignBrowserRequest): boolean {
+    if (READ_METHODS.has(request.method.toUpperCase())) return false
+    let url: URL
+    try { url = new URL(request.url) } catch { return false }
+    // 分享/导出不参与内容保存屏障；只观察已登记本机编辑器的其他写入。
+    if (url.pathname.includes('/__share') || url.pathname === '/__hub') return false
+    return [...scopes.values()].some(scope => url.origin === scope.origin)
+  }
+  return { registerDesignEditorOrigin, isBlockedDesignEditorRequest, isRegisteredDesignEditorUrl, isDesignEditorWriteRequest }
 }
 
 const policy = createDesignBrowserPolicy()
 export const registerDesignEditorOrigin = policy.registerDesignEditorOrigin
 export const isBlockedDesignEditorRequest = policy.isBlockedDesignEditorRequest
+
+export const isRegisteredDesignEditorUrl = policy.isRegisteredDesignEditorUrl
+export const isDesignEditorWriteRequest = policy.isDesignEditorWriteRequest

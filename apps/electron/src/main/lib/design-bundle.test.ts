@@ -20,7 +20,7 @@ async function fixture(): Promise<void> {
     await writeFile(join(skill, 'SKILL.md'), `---\nname: ${name}\n---\n`)
     if (name.startsWith('claude-')) {
       await writeFile(join(skill, 'scripts', 'artifact.mjs'), 'console.log(JSON.stringify({args:process.argv.slice(2),node:process.versions.node,key:!!process.env.GAMMA_DESIGN_TEST_SECRET,options:!!process.env.NODE_OPTIONS}));')
-      await writeFile(join(skill, 'scripts', 'editor', 'index.html'), '<html></html>')
+      await writeFile(join(skill, 'scripts', 'editor', 'index.html'), '<html><head></head><body></body></html>')
       await writeFile(join(skill, 'scripts', 'editor', 'third-party-licenses.txt'), 'original licenses')
     }
   }

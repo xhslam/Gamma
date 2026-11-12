@@ -1,10 +1,16 @@
+import { app, BrowserWindow, dialog } from 'electron'
+import { join } from 'node:path'
+import { createDesignDeliveryService, saveDesignArchive } from './design-delivery'
+import { getAgentWorkspace } from './agent-workspace-manager'
+import { resolveAgentWorkbenchDir } from './agent-session-manager'
+import { getDesignBundleSkillPath, runDesignArtifactCommand } from './design-bundle'
 import { parseDesignTheme, matchesDesignEditorThemeUrl } from './design-theme-policy'
 import type { DesignThemeSnapshot } from '@gamma/shared'
 import type { IpcMain } from 'electron'
 import { DESIGN_WORKBENCH_IPC } from '@gamma/shared'
 import type { BrowserViewState, DesignArtifact, DesignCreateArtifactInput, DesignWorkbenchOpenResult } from '@gamma/shared'
 import { getDesignBundleStatus, installDesignBundle } from './design-bundle'
-import { createDesignArtifact, listDesignArtifacts, openDesignArtifact } from './design-artifacts'
+import { createDesignArtifact, getDesignArtifact, listDesignArtifacts, openDesignArtifact } from './design-artifacts'
 import { bindDesignAgentContext, unbindDesignAgentContext } from './design-agent-context'
 import { startDesignComments, stopDesignComments } from './design-comments-service'
 import { getAgentSessionMeta } from './agent-session-manager'
@@ -16,6 +22,24 @@ import { registerDesignEditorOrigin } from './design-browser-policy'
 
 const registeredEditorUrls = new Set<string>()
 const editorTabs = new Map<string, { sessionId: string; tabId: string; artifact: DesignArtifact; url: string }>()
+
+const delivery = createDesignDeliveryService({
+  getArtifact: getDesignArtifact,
+  getWorkbench: async (artifact) => {
+    const root = resolveAgentWorkbenchDir(getAgentWorkspace(artifact.workspaceId), artifact.sessionId)
+    if (!root) throw new Error('设计会话工作台不可用')
+    return root
+  },
+  getSkillPath: (artifact) => getDesignBundleSkillPath(artifact.kind),
+  flush: async (artifact) => {
+    const entry = editorTabs.get(artifact.id)
+    if (!entry || entry.sessionId !== artifact.sessionId) throw new Error('请先打开设计作品，再下载或添加到对话')
+    await browserController.flushDesignEditor(entry.sessionId, entry.tabId, entry.url)
+  },
+  archive: async (artifact, root, output) => {
+    await runDesignArtifactCommand(artifact.kind, ['archive', root, '--out', output], { timeoutMs: 120_000 })
+  },
+})
 
 /** 只有 Gamma 主 renderer 可以打开工作台；编辑器自身没有此 preload。 */
 export function registerDesignWorkbenchHandlers(ipc: IpcMain, assertTrustedSender: (senderId: number) => void): void {
@@ -59,8 +83,9 @@ export function registerDesignWorkbenchHandlers(ipc: IpcMain, assertTrustedSende
       browser = await browserController.createDisplayTab(session.id, result.url)
     }
     editorTabs.set(artifactId, { sessionId: session.id, tabId: browser.activeTabId, artifact: result.artifact, url: result.url })
-    if (theme && matchesDesignEditorThemeUrl(result.url, browser.tabs.find((tab) => tab.tabId === browser.activeTabId)?.url ?? '')) {
-      await browserController.setDesignEditorTheme(session.id, browser.activeTabId, result.url, theme)
+    if (matchesDesignEditorThemeUrl(result.url, browser.tabs.find((tab) => tab.tabId === browser.activeTabId)?.url ?? '')) {
+      await browserController.setDesignEditorLocale(session.id, browser.activeTabId, result.url)
+      if (theme) await browserController.setDesignEditorTheme(session.id, browser.activeTabId, result.url, theme)
     }
     startDesignComments(result.artifact, event.sender)
     return { ...result, session, browser }
@@ -79,6 +104,22 @@ export function registerDesignWorkbenchHandlers(ipc: IpcMain, assertTrustedSende
     if (!tab) return
     entry.tabId = tab.tabId
     await browserController.setDesignEditorTheme(entry.sessionId, tab.tabId, entry.url, theme)
+  })
+  ipc.handle(DESIGN_WORKBENCH_IPC.HANDOFF, async (event, workspaceId: string, artifactId: string) => {
+    assertTrustedSender(event.sender.id)
+    return delivery.prepare(workspaceId, artifactId)
+  })
+  ipc.handle(DESIGN_WORKBENCH_IPC.EXPORT, async (event, workspaceId: string, artifactId: string) => {
+    assertTrustedSender(event.sender.id)
+    const artifact = await getDesignArtifact(workspaceId, artifactId)
+    const filename = artifact.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/[. ]+$/, '').slice(0, 100) || 'design'
+    const options = { title: '下载完整设计稿', defaultPath: join(app.getPath('downloads'), `${filename}.zip`), filters: [{ name: '完整设计稿 ZIP', extensions: ['zip'] }], properties: ['showOverwriteConfirmation'] as Array<'showOverwriteConfirmation'> }
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const selected = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
+    if (selected.canceled || !selected.filePath) return { canceled: true }
+    const result = await delivery.prepare(workspaceId, artifactId)
+    await saveDesignArchive(result.archivePath, selected.filePath)
+    return { canceled: false, filePath: selected.filePath }
   })
   ipc.handle(DESIGN_WORKBENCH_IPC.CLOSE, async (event, artifactId: string) => {
     assertTrustedSender(event.sender.id)

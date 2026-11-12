@@ -35,8 +35,8 @@ describe('Given 使用指定暖色板与深蓝背景交互色的全局设计令�
       for (const entry of readdirSync(directory, { withFileTypes: true })) {
         const path = resolve(directory, entry.name)
         if (entry.isDirectory()) { if (entry.name !== 'vmark') inspect(path); continue }
-        // 遮罩中的黑色只编码 alpha，不是可见 UI 色；用户资源/图片也不重着色。
-        if (!/\.(?:ts|tsx|css)$/.test(entry.name) || /\.(?:test|spec)\./.test(entry.name) || ['design-tokens.css', 'scroll-fade-policy.ts'].includes(entry.name)) continue
+        // 遮罩中的黑色只编码 alpha，不是可见 UI 色；用户资源/图片也不重着色；智能 UI 局部映射上游静态宿主令牌。
+        if (!/\.(?:ts|tsx|css)$/.test(entry.name) || /\.(?:test|spec)\./.test(entry.name) || ['design-tokens.css', 'scroll-fade-policy.ts', 'intelligent-ui.css'].includes(entry.name)) continue
         const code = readFileSync(path, 'utf8').split('\n').filter(line => !/^\s*(?:\/\/|\*|\/\*)/.test(line)).join('\n')
         if (/(?:['"`]|:\s*)#[\da-f]{3,8}\b|(?:rgba?|hsla?)\(\s*\d|(?:text|bg|border|ring|fill|stroke)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+|(?:stroke|fill)=["'](?:white|black)["']/i.test(code)) violations.push(path)
       }

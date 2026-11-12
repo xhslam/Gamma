@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /** 构建期准备固定快照；使用时直接读取随应用分发的资源，不下载或安装。 */
 import { resolve } from 'node:path'
+import { prepareDesignLocaleBundle } from '../src/main/lib/design-locale-bundle'
 import { createDesignBundleService } from '../src/main/lib/design-bundle'
 import type { DesignBundleDependencies, DesignBundleStatus } from '../src/main/lib/design-bundle'
 
@@ -14,6 +15,7 @@ export async function prepareDesignBundle(
   })
   const result = await service.installDesignBundle(true)
   if (!result.installed || !result.bundlePath) throw new Error('内置 design 资源准备失败')
+  await prepareDesignLocaleBundle(result.bundlePath)
   return result
 }
 

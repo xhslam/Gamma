@@ -109,7 +109,11 @@ test('Given BrowserController 现有 session guard When 注册 design 并请求�
   const session = {
     setPermissionRequestHandler: () => {},
     setCertificateVerifyProc: () => {},
-    webRequest: { onBeforeRequest: (listener: typeof handler) => { installed++; handler = listener } },
+    webRequest: {
+      onBeforeRequest: (listener: typeof handler) => { installed++; handler = listener },
+      onCompleted: () => {},
+      onErrorOccurred: () => {},
+    },
   } as unknown as Session
   const controller = new BrowserController()
   controller.installSessionGuards(session)
