@@ -9,7 +9,7 @@ export interface DesignBrowserRequest {
   readonly method: string
 }
 
-const EDITOR_PATH = /^\/(?:slides|design|design-system|dashboard|motion)\/[A-Za-z0-9_-]+\/$/
+const EDITOR_PATH = /^\/(?:slides|design|design-system|dashboard|motion|whiteboard)\/[A-Za-z0-9_-]+\/$/
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 /** 不接受整站、相似域名、凭据、query 或路径前缀，避免扩大拦截范围。 */
@@ -24,7 +24,7 @@ export function parseDesignEditorScope(value: string): DesignEditorScope {
 }
 
 /**
- * 固定 revision 的五种编辑器都通过 POST /__share 的 action:lan 打开 LAN；
+ * 固定 revision 的六种编辑器都通过 POST /__share 的 action:lan 打开 LAN；
  * hub 会剥掉 /<kind>/<token>/ 前缀，也会按 Referer 转交根路径 /__share。
  * POST /__hub 的 mount 可携带 lan:true，因此一并封锁该 origin 的全局控制入口。
  * 不读取正文，也没有页面可用的“已经同意”开关。未来共享授权须由 Gamma 独立实现。

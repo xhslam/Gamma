@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { DesignArtifact, DesignArtifactKind, DesignCreateArtifactInput, DesignOpenArtifactResult } from '../../../../../packages/shared/src/types/design-workbench'
 import { readJsonFileSafe, writeTextFileAtomic } from './safe-file'
 
-const KINDS: readonly DesignArtifactKind[] = ['slides', 'canvas', 'system', 'dashboard', 'motion']
+const KINDS: readonly DesignArtifactKind[] = ['slides', 'canvas', 'system', 'dashboard', 'motion', 'whiteboard']
 const ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 interface Workspace { id: string; slug: string; projectRootPath?: string }
 interface Session { workspaceId?: string }
@@ -92,12 +92,15 @@ function readIndex(ctx: Context): DesignArtifact[] {
     if (!record(item) || typeof item.id !== 'string' || !ID.test(item.id) || ids.has(item.id)
       || item.workspaceId !== ctx.workspace.id || typeof item.sessionId !== 'string' || !item.sessionId
       || typeof item.title !== 'string' || !item.title.trim() || !kind(item.kind)
-      || item.rootPath !== join(ctx.root, item.id) || typeof item.createdAt !== 'number' || !Number.isFinite(item.createdAt)
+      || typeof item.rootPath !== 'string' || !isAbsolute(item.rootPath)
+      || basename(item.rootPath) !== item.id || basename(dirname(item.rootPath)) !== 'designs'
+      || typeof item.createdAt !== 'number' || !Number.isFinite(item.createdAt)
       || typeof item.updatedAt !== 'number' || !Number.isFinite(item.updatedAt)
       || (item.lastOpenedAt !== undefined && (typeof item.lastOpenedAt !== 'number' || !Number.isFinite(item.lastOpenedAt)))) throw new Error('作品索引包含非法记录或越界路径')
     ids.add(item.id)
     return { id: item.id, workspaceId: ctx.workspace.id, sessionId: item.sessionId, title: item.title,
-      kind: item.kind, rootPath: item.rootPath, createdAt: item.createdAt, updatedAt: item.updatedAt,
+      // 项目改名/迁移后只使用当前授权根，不访问索引里的旧目录。
+      kind: item.kind, rootPath: join(ctx.root, item.id), createdAt: item.createdAt, updatedAt: item.updatedAt,
       ...(typeof item.lastOpenedAt === 'number' ? { lastOpenedAt: item.lastOpenedAt } : {}) }
   })
 }
@@ -133,6 +136,8 @@ function seed(artifact: DesignArtifact): void {
   } else if (type === 'dashboard') {
     json(join(root, 'db/dash/meta.json'), { title })
     json(join(root, 'db/files/index.html.json'), { text: `<!doctype html><html><head><title>${heading}</title><style>body{margin:0;font-family:sans-serif;background:#fafafa;color:#18181b}main{padding:48px}</style></head><body><main><h1>${heading}</h1></main></body></html>` })
+  } else if (type === 'whiteboard') {
+    json(join(root, 'db/board/meta.json'), { v: 1, title, order: [] })
   } else {
     json(join(root, 'db/film/meta.json'), { v: 1, title, updatedAt: createdOnFiles.at })
     json(join(root, 'db/modules/scenes.json.json'), { kind: 'json', text: JSON.stringify({ v: 1, stage: 'rough', width: 1280, height: 720, fps: 30, background: '#fafafa', scenes: [{ id: 'intro', name: '空白画面', dur: 5, desc: '待创作' }] }) })
@@ -144,7 +149,7 @@ function seed(artifact: DesignArtifact): void {
 function summarizeArtifact(artifact: DesignArtifact): DesignArtifact {
   const paths: Record<DesignArtifactKind, string> = {
     slides: 'project/deck.json', canvas: 'project/canvas.json', system: 'project/design-system.json',
-    dashboard: 'db/dash/meta.json', motion: 'db/film/meta.json',
+    dashboard: 'db/dash/meta.json', motion: 'db/film/meta.json', whiteboard: 'db/board/meta.json',
   }
   try {
     const path = join(artifact.rootPath, paths[artifact.kind])

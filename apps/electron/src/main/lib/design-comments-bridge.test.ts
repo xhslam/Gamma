@@ -78,6 +78,22 @@ describe('设计评论 Send to Agent 桥接', () => {
     } finally { h.bridge.stopAll() }
   })
 
+  test('Given 白板选区和视图 When Send to Agent Then 保留定位数据且视图变化不触发重复投递', async () => {
+    const h = harness()
+    try {
+      h.bridge.start({ ...artifact, kind: 'whiteboard' }, new Target())
+      await until(() => h.calls.length === 1)
+      const request = { id: 'r-board', text: '把这个改成蓝色', selection: ['e1'], sentAt: 'now' }
+      h.deliver(0, { requests: [request], context: { selected: ['e1'], claim: 'abcd1234' } })
+      await until(() => h.calls.length === 2)
+      expect(h.sends[0]!.userMessage).toContain('abcd1234')
+      expect(h.sends[0]!.userMessage).toContain('"selection": [')
+      h.deliver(1, { requests: [request], context: { selected: ['e2'], claim: 'other123' } })
+      await until(() => h.calls.length === 3)
+      expect(h.sends).toHaveLength(1)
+    } finally { h.bridge.stopAll() }
+  })
+
   test('Given 会话空闲且提交 Gate 等待中切换模型 When 队列立即启动 Then 使用真正提交时的选择', async () => {
     const gateEntered = deferred<void>()
     const releaseGate = deferred<void>()

@@ -43,15 +43,20 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 完整 design 作品库和创作工作台', () => {
-  test('When 首次安装 Then 经明确确认下载完整包，不显示独立 API Key 配置', async () => {
+  test('When 首次打开 Then 六类内置编辑器直接可用，不显示下载、安装或 API Key 配置', async () => {
     const result = await renderer.run(`
-      const t=window.designTest;await t.mount({installed:false});t.button('安装完整运行包').click();await t.until(()=>document.querySelector('[role="alertdialog"]'));
-      const before=t.calls.filter(call=>call[0]==='install').length,notice=document.querySelector('[role="alertdialog"]').textContent.includes('未公开授权');
-      t.button('取消').click();await t.until(()=>!document.querySelector('[role="alertdialog"]'));t.button('安装完整运行包').click();await t.until(()=>t.button('确认安装'));t.button('确认安装').click();
-      await t.until(()=>!t.button('安装完整运行包'));
-      return {before,notice,installed:t.calls.filter(call=>call[0]==='install'),noKey:!document.querySelector('input[type="password"]'),types:['设计画布','幻灯片','设计系统','数据看板','动画'].every(label=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes(label)))};
+      const t=window.designTest;await t.mount();
+      const types=['设计画布','白板','幻灯片','设计系统','数据看板','动画'];
+      return {installed:t.calls.filter(call=>call[0]==='install'),noDownload:!document.body.innerText.includes('安装完整运行包'),noDialog:!document.querySelector('[role="alertdialog"]'),noKey:!document.querySelector('input[type="password"]'),ready:types.every(label=>[...document.querySelectorAll('button')].some(button=>button.textContent.startsWith(label)&&!button.disabled))};
     `)
-    expect(result).toEqual({ before: 0, notice: true, installed: [['install', true]], noKey: true, types: true })
+    expect(result).toEqual({ installed: [], noDownload: true, noDialog: true, noKey: true, ready: true })
+  }, 30_000)
+  test('When 内置资源不完整 Then 显示资源错误且不提供运行时下载流程', async () => {
+    const result = await renderer.run(`
+      const t=window.designTest;await t.mount({installed:false});
+      return {notice:document.body.innerText.includes('内置设计编辑器资源不完整'),download:!!t.button('安装完整运行包'),blocked:[...document.querySelectorAll('button')].find(button=>button.textContent.startsWith('设计画布')).disabled,installs:t.calls.filter(call=>call[0]==='install').length};
+    `)
+    expect(result).toEqual({notice:true,download:false,blocked:true,installs:0})
   }, 30_000)
   test('When 创建画布 Then 直接打开原版编辑器与既有聊天会话，不新建不同模型会话', async () => {
     const result = await renderer.run(`
@@ -61,6 +66,15 @@ describe('Given 完整 design 作品库和创作工作台', () => {
       return {created:t.calls.find(call=>call[0]==='create')[1],agent:document.querySelector('[data-testid="design-agent"]').dataset.session,editor:document.querySelector('[data-testid="design-editor"]').dataset.session,model:t.sessions().find(item=>item.id==='session-a').modelId,newSession:t.calls.some(call=>call[0]==='session')};
     `)
     expect(result).toEqual({ created: { workspaceId: 'a', sessionId: 'session-a', title: '阅读应用', kind: 'canvas' }, agent: 'session-a', editor: 'session-a', model: 'my-chat-model', newSession: false })
+  }, 30_000)
+  test('When 创建白板 Then 传入白板作品类型并复用 Gamma 聊天和编辑器', async () => {
+    const result = await renderer.run(`
+      const t=window.designTest;await t.mount();[...document.querySelectorAll('button')].find(button=>button.textContent.startsWith('白板')).click();
+      await t.until(()=>document.querySelector('input[id^="design-name"]'));t.fill('input[id^="design-name"]','架构白板');await new Promise(r=>setTimeout(r,20));t.button('创建并打开').click();
+      await t.until(()=>document.querySelector('[data-testid="design-agent"]')&&document.querySelector('[data-testid="design-editor"]'));
+      return {created:t.calls.find(call=>call[0]==='create')[1],session:document.querySelector('[data-testid="design-agent"]').dataset.session,editor:!!document.querySelector('[data-testid="design-editor"]')};
+    `)
+    expect(result).toEqual({ created: { workspaceId: 'a', sessionId: 'session-a', title: '架构白板', kind: 'whiteboard' }, session: 'session-a', editor: true })
   }, 30_000)
   test('When 搜索并打开历史作品后返回 Then 恢复关联会话，停止该作品评论监听', async () => {
     const result = await renderer.run(`
@@ -106,7 +120,7 @@ describe('Given 完整 design 作品库和创作工作台', () => {
     const result = await renderer.run(`
       const t=window.designTest;await t.mount();document.getElementById('root').style.width='300px';const fits=[];
       for(const dark of [false,true]){document.documentElement.classList.toggle('dark',dark);await new Promise(r=>setTimeout(r,30));const section=document.querySelector('[aria-label="design 作品库"]');fits.push(section.scrollWidth<=section.clientWidth+1)}
-      await t.mount({fail:true});return {fits,error:document.querySelector('[role="alert"]').textContent,blocked:t.button('安装完整运行包').disabled};
+      await t.mount({fail:true});return {fits,error:document.querySelector('[role="alert"]').textContent,blocked:[...document.querySelectorAll('button')].find(button=>button.textContent.startsWith('设计画布')).disabled};
     `)
     expect(result).toEqual({ fits: [true, true], error: '读取状态失败', blocked: true })
   }, 30_000)

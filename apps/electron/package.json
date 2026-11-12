@@ -1,6 +1,6 @@
 {
   "name": "@gamma/electron",
-  "version": "0.19.264",
+  "version": "0.19.268",
   "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
@@ -14,7 +14,7 @@
     "dev:split": "bash scripts/dev-split.sh",
     "dev:vite": "vite dev",
     "dev:kill": "bun run scripts/dev-kill.ts",
-    "dev:electron": "bun run dev:kill && bun run sync:runtime-deps:dev && bun run rebuild:node-pty && bun run build:native-helpers && bun run prepare:officecli && bun run prepare:agent-desktop && bun run build:resources && bun run scripts/dev-bundle-readiness.ts --prepare && concurrently -k -n main,agent-runtime,terminal-runtime,preload,app -c yellow,red,blue,magenta,cyan \"bun run watch:main\" \"bun run watch:agent-runtime\" \"bun run watch:terminal-runtime\" \"bun run watch:preload\" \"bun run scripts/dev-bundle-readiness.ts --wait && bunx electronmon .\"",
+    "dev:electron": "bun run dev:kill && bun run sync:runtime-deps:dev && bun run rebuild:node-pty && bun run build:native-helpers && bun run prepare:officecli && bun run prepare:agent-desktop && bun run prepare:design && bun run build:resources && bun run scripts/dev-bundle-readiness.ts --prepare && concurrently -k -n main,agent-runtime,terminal-runtime,preload,app -c yellow,red,blue,magenta,cyan \"bun run watch:main\" \"bun run watch:agent-runtime\" \"bun run watch:terminal-runtime\" \"bun run watch:preload\" \"bun run scripts/dev-bundle-readiness.ts --wait && bunx electronmon .\"",
     "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist/main.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp",
     "build:agent-runtime": "esbuild src/utility/agent-runtime.ts --bundle --platform=node --format=cjs --outfile=dist/agent-runtime.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp",
     "build:terminal-runtime": "esbuild src/utility/terminal-runtime.ts --bundle --platform=node --format=cjs --outfile=dist/terminal-runtime.cjs --external:electron --external:node-pty",
@@ -28,6 +28,7 @@
     "build:agent-island-native": "bun run scripts/build-agent-island-native.ts",
     "build:eventkit-native": "bun run scripts/build-eventkit-native.ts",
     "prepare:agent-desktop": "bun run scripts/prepare-agent-desktop.ts",
+    "prepare:design": "bun run scripts/prepare-design-bundle.ts",
     "build:computer-use": "bun run scripts/build-gamma-computer-use.ts",
     "install:computer-use": "bun run scripts/build-gamma-computer-use.ts --install",
     "build:native-helpers": "bun run build:agent-island-native && bun run build:eventkit-native",
@@ -35,7 +36,7 @@
     "prepare:officecli": "bun run scripts/prepare-officecli.ts",
     "sync:runtime-deps": "bun run scripts/sync-runtime-deps.ts",
     "sync:runtime-deps:dev": "bun run scripts/sync-runtime-deps.ts --no-clean",
-    "build": "bun run prepare:officecli && bun run prepare:agent-desktop && bun run build:main && bun run build:agent-runtime && bun run build:terminal-runtime && bun run build:preload && bun run build:renderer && bun run build:cli && bun run build:native-helpers && bun run build:resources",
+    "build": "bun run prepare:officecli && bun run prepare:agent-desktop && bun run prepare:design && bun run build:main && bun run build:agent-runtime && bun run build:terminal-runtime && bun run build:preload && bun run build:renderer && bun run build:cli && bun run build:native-helpers && bun run build:resources",
     "rebuild:node-pty": "electron-rebuild -f -w node-pty && bun run ensure:node-pty-helper",
     "ensure:node-pty-helper": "bun run scripts/ensure-node-pty-helper-executable.ts",
     "start": "bun run build && bunx electron .",

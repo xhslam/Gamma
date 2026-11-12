@@ -2,14 +2,15 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { DESIGN_SOURCE_REVISION, DESIGN_SOURCE_URL } from '@gamma/shared'
+import type { DesignArtifactKind } from '@gamma/shared'
+import { DESIGN_BUNDLE_REVISION, DESIGN_SOURCE_REVISION, DESIGN_SOURCE_URL, WHITEBOARD_SOURCE_REVISION } from '@gamma/shared'
 import { getConfigDir } from './config-paths'
 
 const execFileAsync = promisify(execFile)
-export type DesignBundleKind = 'slides' | 'canvas' | 'system' | 'dashboard' | 'motion'
+export type DesignBundleKind = DesignArtifactKind
 const SKILLS: Record<DesignBundleKind, string> = {
   slides: 'claude-slides', canvas: 'claude-design', system: 'claude-design-system',
-  dashboard: 'claude-dashboard', motion: 'claude-motion',
+  dashboard: 'claude-dashboard', motion: 'claude-motion', whiteboard: 'claude-whiteboard',
 }
 const ALL_SKILLS = [...Object.values(SKILLS), 'dataviz', 'motion-director']
 const MARKER = '.gamma-design-revision'
@@ -34,6 +35,8 @@ export interface DesignExecutionOptions {
 export interface DesignBundleDependencies {
   /** 测试和独立宿主可指定缓存根，不触碰真实 Gamma 配置或用户 Skills。 */
   installRoot?: string
+  /** 应用随包资源；只读使用，不复制到用户缓存，也不在运行时下载。 */
+  bundledRoot?: string | (() => string)
   fetchSource?: (directory: string) => Promise<string>
   runtimePath?: string
   execute?: (executable: string, args: string[], options: DesignExecutionOptions) => Promise<DesignCommandResult>
@@ -90,7 +93,7 @@ async function assertRegularTree(root: string, budget = { bytes: 0, count: 0 }):
   await visit(root, 0)
 }
 
-/** 仅下载固定提交的七个技能与宿主参考 lib，不下载 archive，不运行安装 hooks。 */
+/** 仅下载固定提交的八个技能与宿主参考 lib，不下载 archive，不运行安装 hooks。 */
 export async function fetchDesignBundleSource(directory: string): Promise<string> {
   const repo = join(directory, 'source')
   const env = { ...runtimeEnvironment(), GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null' }
@@ -103,9 +106,16 @@ export async function fetchDesignBundleSource(directory: string): Promise<string
   }
   await git(['remote', 'add', 'origin', `${DESIGN_SOURCE_URL}.git`])
   await git(['fetch', '--depth=1', '--filter=blob:none', 'origin', DESIGN_SOURCE_REVISION])
-  await git(['sparse-checkout', 'set', ...ALL_SKILLS.map((name) => `skills/${name}`), 'dsh-plugins/dsh-claude-artifacts/lib'])
+  await git(['sparse-checkout', 'set', ...ALL_SKILLS.filter((name) => name !== 'claude-whiteboard').map((name) => `skills/${name}`), 'dsh-plugins/dsh-claude-artifacts/lib'])
   await git(['checkout', '--detach', 'FETCH_HEAD'])
   if (await git(['rev-parse', 'HEAD']) !== DESIGN_SOURCE_REVISION) throw new Error('design 下载 revision 不匹配')
+  // 只追加白板快照；不升级旧编辑器、宿主 lib 或根许可文件。
+  await git(['fetch', '--depth=1', '--filter=blob:none', 'origin', WHITEBOARD_SOURCE_REVISION])
+  await git(['restore', `--source=${WHITEBOARD_SOURCE_REVISION}`, '--worktree', '--ignore-skip-worktree-bits', '--', 'skills/claude-whiteboard'])
+  await assertRegularTree(join(repo, 'skills', 'claude-whiteboard'))
+  for (const name of ['LICENSE', 'NOTICE.md']) {
+    await writeFile(join(repo, 'skills/claude-whiteboard', `UPSTREAM-${name}`), await git(['show', `${WHITEBOARD_SOURCE_REVISION}:${name}`]), { flag: 'wx' })
+  }
   return repo
 }
 
@@ -131,7 +141,7 @@ const FLAGS: Record<string, Record<string, boolean>> = {
   open: { port: true, host: true }, stop: {}, check: {},
   upload: { group: true, name: true }, comments: { all: false, wait: false, timeout: true },
   'comment-reply': { resolve: false }, 'comment-resolve': { reopen: false }, archive: { out: true },
-  help: {}, list: {}, 'ds-sync': { check: false, from: true },
+  help: {}, context: {}, list: {}, 'ds-sync': { check: false, from: true },
   'write-db': {}, 'read-db': { text: false }, 'delete-asset': {},
 }
 
@@ -142,7 +152,8 @@ function validateCommand(kind: DesignBundleKind, args: string[]): string | undef
   const allowed = [...COMMON_COMMANDS]
   if (kind === 'slides' || kind === 'canvas' || kind === 'system' || kind === 'motion') allowed.push('list')
   if (kind === 'slides' || kind === 'canvas') allowed.push('ds-sync')
-  if (kind === 'dashboard' || kind === 'motion') allowed.push('read-db', 'write-db', 'delete-asset')
+  if (kind === 'dashboard' || kind === 'motion' || kind === 'whiteboard') allowed.push('read-db', 'write-db', 'delete-asset')
+  if (kind === 'whiteboard') allowed.push('context')
   if (!command || !allowed.includes(command)) throw new Error(`不允许的 design 命令: ${command ?? ''}`)
   if (args.length > 100 || args.some((arg) => typeof arg !== 'string' || arg.includes('\0') || arg.length > 128_000)) throw new Error('design 命令参数超出限制')
   const positional: string[] = []
@@ -169,7 +180,7 @@ function validateCommand(kind: DesignBundleKind, args: string[]): string | undef
 export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
   const run = deps.execute ?? execute
   const root = () => deps.installRoot ?? join(getConfigDir(), 'cache', 'design-bundles')
-  const target = () => join(root(), DESIGN_SOURCE_REVISION)
+  const target = () => join(root(), DESIGN_BUNDLE_REVISION)
   let installing: Promise<DesignBundleStatus> | undefined
   let runtimeProbe: Promise<{ nodeVersion: string; supportsSqlite: boolean; executable?: string }> | undefined
   const probeRuntime = () => runtimeProbe ??= (async () => {
@@ -185,16 +196,22 @@ export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
   async function getDesignBundleStatus(): Promise<DesignBundleStatus> {
     const runtime = await probeRuntime()
     let installed = false
-    if (await exists(target())) {
+    const bundled = typeof deps.bundledRoot === 'function' ? deps.bundledRoot() : deps.bundledRoot
+    const candidates = [...(bundled ? [bundled] : []), target()]
+    let bundlePath: string | undefined
+    for (const candidate of candidates) {
+      if (!await exists(candidate)) continue
       try {
-        const stat = await lstat(target())
+        const stat = await lstat(candidate)
         if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('design 运行包目录无效')
-        if ((await readFile(join(target(), MARKER), 'utf8')).trim() !== DESIGN_SOURCE_REVISION) throw new Error('design revision 不匹配')
-        await assertBundleFiles(target())
+        if ((await readFile(join(candidate, MARKER), 'utf8')).trim() !== DESIGN_BUNDLE_REVISION) throw new Error('design revision 不匹配')
+        await assertBundleFiles(candidate)
         installed = true
+        bundlePath = candidate
+        break
       } catch { /* 损坏缓存不视为已安装，也不会静默覆盖。 */ }
     }
-    return { installed, revision: DESIGN_SOURCE_REVISION, ...(installed ? { bundlePath: target() } : {}), nodeVersion: runtime.nodeVersion, supportsSqlite: runtime.supportsSqlite }
+    return { installed, revision: DESIGN_BUNDLE_REVISION, ...(bundlePath ? { bundlePath } : {}), nodeVersion: runtime.nodeVersion, supportsSqlite: runtime.supportsSqlite }
   }
   async function install(accepted: boolean): Promise<DesignBundleStatus> {
     if (accepted !== true) throw new Error('安装前必须确认第三方混合许可与运行第三方代码')
@@ -202,7 +219,7 @@ export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
     if (status.installed) return status
     if (!status.supportsSqlite) throw new Error(`design 需要支持 node:sqlite 的 Node 22+，当前: ${status.nodeVersion}`)
     await mkdir(root(), { recursive: true })
-    const lock = join(root(), `.${DESIGN_SOURCE_REVISION}.lock`)
+    const lock = join(root(), `.${DESIGN_BUNDLE_REVISION}.lock`)
     try { await mkdir(lock) } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') throw new Error('design 运行包正在安装，或上次进程中断留下安装锁；请稍后重试/检查锁')
       throw error
@@ -232,7 +249,7 @@ export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
       await assertRegularTree(prepared)
       await assertBundleFiles(prepared)
       // 非 JSON 的提交标记随整个目录原子发布，不产生半安装运行包。
-      await writeFile(join(prepared, MARKER), `${DESIGN_SOURCE_REVISION}\n`, { flag: 'wx' })
+      await writeFile(join(prepared, MARKER), `${DESIGN_BUNDLE_REVISION}\n`, { flag: 'wx' })
       if (await exists(target())) throw new Error('design 安装目标已存在，不会覆盖')
       await rename(prepared, target())
       return await getDesignBundleStatus()
@@ -250,7 +267,7 @@ export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
   async function getDesignBundleSkillPath(kind: DesignBundleKind): Promise<string> {
     if (!Object.hasOwn(SKILLS, kind)) throw new Error('不支持的 design 类型')
     const status = await getDesignBundleStatus()
-    if (!status.installed || !status.bundlePath) throw new Error('完整 design 运行包尚未安装')
+    if (!status.installed || !status.bundlePath) throw new Error('内置 design 资源缺失或不完整，请检查 Gamma 构建产物')
     return join(status.bundlePath, 'skills', SKILLS[kind])
   }
   async function runDesignArtifactCommand(kind: DesignBundleKind, args: string[], options: DesignCommandOptions = {}): Promise<DesignCommandResult> {
@@ -263,13 +280,18 @@ export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
     if (!runtime.executable || !runtime.supportsSqlite) throw new Error('design 需要支持 node:sqlite 的 Node 22+')
     return run(runtime.executable, [join(skill, 'scripts', 'artifact.mjs'), ...args], {
       // 上游 write-db 的 file_path 等相对路径应以已授权作品根解析。
-      env: runtimeEnvironment(), cwd: artifactRoot ?? target(), timeout, maxBuffer: 8 * 1024 * 1024, signal: options.signal,
+      env: runtimeEnvironment(), cwd: artifactRoot ?? join(skill, '..', '..'), timeout, maxBuffer: 8 * 1024 * 1024, signal: options.signal,
     })
   }
   return { getDesignBundleStatus, installDesignBundle, getDesignBundleSkillPath, runDesignArtifactCommand }
 }
 
-const defaultService = createDesignBundleService()
+function getBundledDesignRoot(): string {
+  const { app } = require('electron') as { app: { isPackaged: boolean } }
+  return join(app.isPackaged ? process.resourcesPath : join(__dirname, 'resources'), 'design-bundle', DESIGN_BUNDLE_REVISION)
+}
+
+const defaultService = createDesignBundleService({ bundledRoot: getBundledDesignRoot })
 export const getDesignBundleStatus = defaultService.getDesignBundleStatus
 export const installDesignBundle = defaultService.installDesignBundle
 export const getDesignBundleSkillPath = defaultService.getDesignBundleSkillPath

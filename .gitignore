@@ -23,6 +23,8 @@ apps/electron/resources/eventkit/
 apps/electron/resources/officecli/
 # agent-desktop 由固定源码构建，产物及 receipt 不入仓。
 apps/electron/resources/agent-desktop/
+# 设计编辑器固定快照在构建期准备，随应用分发。
+apps/electron/resources/design-bundle/
 # bun build --compile 的临时中间产物
 *.bun-build
 

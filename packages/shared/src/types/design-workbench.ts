@@ -1,5 +1,5 @@
-/** 原版 baoyu-design 的五种作品；值不直接用作命令或文件路径。 */
-export type DesignArtifactKind = 'slides' | 'canvas' | 'system' | 'dashboard' | 'motion'
+/** 原版 baoyu-design 的六种作品；值不直接用作命令或文件路径。 */
+export type DesignArtifactKind = 'slides' | 'canvas' | 'system' | 'dashboard' | 'motion' | 'whiteboard'
 
 export interface DesignArtifact {
   id: string

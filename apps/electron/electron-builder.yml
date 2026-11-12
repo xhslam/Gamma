@@ -64,6 +64,12 @@ files:
 
 # 通用额外资源
 extraResources:
+  # 六类设计编辑器与 Skill，放在 ASAR 外供 Electron Node 直接执行。
+  - from: resources/design-bundle
+    to: design-bundle
+    filter:
+      - "**/*"
+      - "**/.gamma-design-revision"
   # gamma CLI 自包含二进制（build:cli 用 bun build --compile 产出到 resources/bin/）。
   # 运行时由主进程注入 GAMMA_CLI 环境变量，暴露给 skill / Agent 调用。
   - from: resources/bin

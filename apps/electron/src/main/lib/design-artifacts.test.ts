@@ -41,7 +41,7 @@ function fixture(external = true) {
 }
 const files: Record<DesignArtifactKind, string> = {
   slides: 'project/deck.json', canvas: 'project/canvas.json', system: 'project/design-system.json',
-  dashboard: 'db/files/index.html.json', motion: 'db/film/script.json',
+  dashboard: 'db/files/index.html.json', motion: 'db/film/script.json', whiteboard: 'db/board/meta.json',
 }
 
 describe('Given 经授权的 Gamma 项目与作品会话', () => {
@@ -56,6 +56,17 @@ describe('Given 经授权的 Gamma 项目与作品会话', () => {
       if (type === 'motion') expect(JSON.parse(readFileSync(join(artifact.rootPath, 'db/modules/scene-intro.js.json'), 'utf8')).text).toContain('init(kit)')
     })
   }
+  test('When 新建白板并在编辑器改名 Then 原生标题与层级可读取，重启作品库保留白板', async () => {
+    const f = fixture()
+    const artifact = await f.create('whiteboard')
+    const meta = join(artifact.rootPath, 'db/board/meta.json')
+    expect(JSON.parse(readFileSync(meta, 'utf8'))).toEqual({ v: 1, title: '测试 <作品>', order: [] })
+    writeFileSync(meta, JSON.stringify({ v: 1, title: '修改后的白板', order: [] }))
+    const restored = createDesignArtifactService(f.deps)
+    expect(await restored.listDesignArtifacts('w1')).toEqual([expect.objectContaining({ id: artifact.id, kind: 'whiteboard', title: '修改后的白板' })])
+    await restored.openDesignArtifact('w1', artifact.id)
+    expect(f.calls[0]).toEqual(['open', artifact.rootPath, '--port', '0', '--host', '127.0.0.1'])
+  })
   test('When 没有外部项目 Then 仅写 workspace-files/designs', async () => {
     const f = fixture(false)
     const artifact = await f.create()
@@ -114,6 +125,27 @@ describe('Given 经授权的 Gamma 项目与作品会话', () => {
     data.artifacts[0]!.rootPath = artifact.rootPath; data.artifacts[0]!.kind = 'shell'
     writeFileSync(index, JSON.stringify({ version: 1, ...data }))
     await expect(f.service.openDesignArtifact('w1', artifact.id)).rejects.toThrow('非法记录')
+  })
+  test('When 项目改名导致索引保留旧绝对路径 Then 使用当前项目作品并在打开后保存新路径', async () => {
+    const f = fixture()
+    const artifact = await f.create()
+    const index = join(f.storage, 'design-artifacts.json')
+    const previous = { ...artifact, rootPath: join(f.base, 'previous-project', 'designs', artifact.id) }
+    writeFileSync(index, JSON.stringify({ version: 1, artifacts: [previous] }))
+    expect((await f.service.listDesignArtifacts('w1'))[0]?.rootPath).toBe(artifact.rootPath)
+    await f.service.openDesignArtifact('w1', artifact.id)
+    expect(f.calls[0]?.[1]).toBe(artifact.rootPath)
+    expect(JSON.parse(readFileSync(index, 'utf8')).artifacts[0].rootPath).toBe(artifact.rootPath)
+  })
+  test('When 旧路径对应作品没有随项目移动 Then 保留不可用记录且不访问旧目录', async () => {
+    const f = fixture()
+    const artifact = await f.create()
+    const previous = { ...artifact, rootPath: join(f.base, 'previous-project', 'designs', artifact.id) }
+    writeFileSync(join(f.storage, 'design-artifacts.json'), JSON.stringify({ version: 1, artifacts: [previous] }))
+    rmSync(artifact.rootPath, { recursive: true })
+    expect((await f.service.listDesignArtifacts('w1'))[0]?.unavailableReason).toBeTruthy()
+    await expect(f.service.openDesignArtifact('w1', artifact.id)).rejects.toThrow('作品路径不可用')
+    expect(f.calls).toHaveLength(0)
   })
   test('When 并发重复打开 Then 只启动一次且使用随机 loopback 端口', async () => {
     const f = fixture()

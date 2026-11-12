@@ -11,8 +11,8 @@ const scope = parseDesignEditorScope(EDITOR)
 const blocked = (url: string, method = 'POST') => shouldBlockDesignBrowserRequest({ url, method }, [scope])
 
 describe('design 页面分享权限边界', () => {
-  test('Given 已登记的五类编辑器 When 修改嵌套 __share Then 阻止页面自行更改 LAN/链接/角色权限', () => {
-    for (const kind of ['slides', 'design', 'design-system', 'dashboard', 'motion']) {
+  test('Given 已登记的六类编辑器 When 修改嵌套 __share Then 阻止页面自行更改 LAN/链接/角色权限', () => {
+    for (const kind of ['slides', 'design', 'design-system', 'dashboard', 'motion', 'whiteboard']) {
       const url = `http://127.0.0.1:43210/${kind}/artifact-token/`
       const policy = createDesignBrowserPolicy()
       policy.registerDesignEditorOrigin(url)

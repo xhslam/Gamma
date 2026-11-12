@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { atomFamily } from 'jotai-family'
-import { ArrowLeft, ArrowUpRight, ChartNoAxesCombined, Download, Film, FolderOpen, Grid2X2, Layers, List, Loader2, MessageSquare, Monitor, Palette, Presentation, RefreshCw, Search } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, ChartNoAxesCombined, Film, FolderOpen, Grid2X2, Layers, List, Loader2, MessageSquare, Monitor, Palette, Presentation, RefreshCw, Search, SquarePen } from 'lucide-react'
 import type { DesignArtifact, DesignArtifactKind, DesignBundleStatus, DesignWorkbenchOpenResult } from '@gamma/shared'
 import { DESIGN_SOURCE_URL } from '@gamma/shared'
 import {
@@ -12,10 +12,6 @@ import { browserPendingNavigationMapAtom, browserStateMapAtom } from '@/atoms/br
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BrowserPanel } from '@/components/browser/BrowserPanel'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { cn } from '@/lib/utils'
@@ -25,7 +21,7 @@ import { readGammaDesignTheme, useDesignEditorTheme } from './design-theme'
 
 const AgentView = React.lazy(() => import('@/components/agent/AgentView').then((module) => ({ default: module.AgentView })))
 const activeDesignAtomFamily = atomFamily((_workspaceId: string) => atom<DesignWorkbenchOpenResult | null>(null))
-const TYPE_ICONS = { canvas: Palette, slides: Presentation, system: Layers, dashboard: ChartNoAxesCombined, motion: Film }
+const TYPE_ICONS = { canvas: Palette, slides: Presentation, system: Layers, dashboard: ChartNoAxesCombined, motion: Film, whiteboard: SquarePen }
 
 export interface DesignWorkspaceViewProps { embedded?: boolean; workspaceId?: string; sessionId?: string }
 
@@ -50,7 +46,6 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
-  const [confirmInstall, setConfirmInstall] = React.useState(false)
   const [creatingKind, setCreatingKind] = React.useState<DesignArtifactKind | null>(null)
   const [title, setTitle] = React.useState('')
   const [query, setQuery] = React.useState('')
@@ -67,8 +62,13 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
     setLoading(true)
     setError('')
     try {
-      const [bundle, entries] = await Promise.all([window.electronAPI.getDesignBundleStatus(), window.electronAPI.listDesignArtifacts(workspaceId)])
-      if (mounted.current) { setStatus(bundle); setArtifacts(entries) }
+      const [bundle, entries] = await Promise.allSettled([window.electronAPI.getDesignBundleStatus(), window.electronAPI.listDesignArtifacts(workspaceId)])
+      if (!mounted.current) return
+      if (bundle.status === 'fulfilled') setStatus(bundle.value)
+      else setStatus(null)
+      if (entries.status === 'fulfilled') setArtifacts(entries.value)
+      const failed = [bundle, entries].find((result) => result.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
     } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : '无法读取设计作品') }
     finally { if (mounted.current) setLoading(false) }
   }, [workspaceId])
@@ -100,10 +100,6 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
     try { await action() } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : 'design 操作失败') }
     finally { operation.current = false; if (mounted.current) setBusy(false) }
   }
-  const install = (): void => { void perform(async () => {
-    const bundle = await window.electronAPI.installDesignBundle(true)
-    if (mounted.current) setStatus(bundle)
-  }) }
   const create = (): void => { void perform(async () => {
     if (!creatingKind || !title.trim()) return
     const candidateId = sourceSessionId ?? store.get(currentAgentSessionIdAtom)
@@ -148,10 +144,10 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
           <a href={DESIGN_SOURCE_URL} target="_blank" rel="noreferrer" aria-label="baoyu-design 源码" className="rounded p-2 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><ArrowUpRight size={15} /></a>
           <Button variant="ghost" size="icon" aria-label="刷新作品库" disabled={loading || busy} onClick={() => { void refresh() }}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></Button>
         </header>
-        {!loading && !status?.installed && <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border p-4"><div className="min-w-0 flex-1"><p className="text-sm font-medium">连接完整 baoyu-design</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">五类本地编辑器，共用 Gamma 聊天模型，无需另配 API。</p></div><Button size="sm" disabled={busy || !status} onClick={() => setConfirmInstall(true)}>{busy ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}安装完整运行包</Button></div>}
+        {!loading && status && !status.installed && <p role="status" className="mb-4 text-xs text-destructive">内置设计编辑器资源不完整，请检查 Gamma 构建产物。</p>}
         {status?.installed && !status.supportsSqlite && <p role="status" className="mb-4 text-xs text-amber-600 dark:text-amber-400">当前 Node 环境不支持 SQLite，看板和动画编辑器暂不可用。</p>}
         {error && <p role="alert" className="mb-4 break-words text-xs leading-relaxed text-destructive">{error}</p>}
-        <div className="mb-8 grid grid-cols-1 gap-2 @[420px]:grid-cols-2 @[820px]:grid-cols-5">{DESIGN_ARTIFACT_TYPES.map((type) => {
+        <div className="mb-8 grid grid-cols-1 gap-2 @[420px]:grid-cols-2 @[820px]:grid-cols-3 @[1100px]:grid-cols-6">{DESIGN_ARTIFACT_TYPES.map((type) => {
           const Icon = TYPE_ICONS[type.kind]
           const unsupported = (type.kind === 'dashboard' || type.kind === 'motion') && !status?.supportsSqlite
           return <button key={type.kind} type="button" disabled={!status?.installed || busy || unsupported} onClick={() => { setCreatingKind(type.kind); setTitle('') }} className="group rounded-xl border border-border bg-background/40 px-4 py-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"><Icon size={19} strokeWidth={1.5} className="mb-4 text-foreground/65" /><span className="block text-sm font-medium">{type.label}</span><span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">{type.hint}</span></button>
@@ -171,7 +167,6 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
           })}
         </div>}
       </div>
-      <AlertDialog open={confirmInstall} onOpenChange={setConfirmInstall}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>安装完整 baoyu-design？</AlertDialogTitle><AlertDialogDescription>下载固定版本的五类编辑器和七个 Skill，在本机运行。模型继续使用 Gamma 聊天配置，API Key 不会交给编辑器。上游为混合许可：本地工具为 MIT，部分编辑器、素材来自 Anthropic，未公开授权；本次用于本机加载，不代表获得再分发授权。打开作品时会运行第三方本地代码，服务仅监听本机，不自动开启局域网分享。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={install}>确认安装</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <Dialog open={creatingKind !== null} onOpenChange={(value) => { if (!busy && !value) setCreatingKind(null) }}><DialogContent><DialogHeader><DialogTitle>新建{DESIGN_ARTIFACT_TYPES.find((item) => item.kind === creatingKind)?.label}</DialogTitle></DialogHeader><form onSubmit={(event) => { event.preventDefault(); create() }}><label htmlFor={`design-name-${workspaceId}`} className="mb-2 block text-xs font-medium">作品名称</label><Input id={`design-name-${workspaceId}`} autoFocus required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给作品起个名字" /><DialogFooter className="mt-5"><Button type="submit" disabled={busy || !title.trim()}>{busy && <Loader2 size={14} className="mr-2 animate-spin" />}创建并打开</Button></DialogFooter></form></DialogContent></Dialog>
     </section>
   )

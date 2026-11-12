@@ -1,7 +1,8 @@
-# 标签触发并行构建；全部产物与远端附件校验后才公开 Release。
+# 手动触发仅构建；标签触发在全部产物与远端附件校验后公开 Release。
 name: Release
 
 on:
+  workflow_dispatch: {}
   push:
     tags:
       - 'v*'
@@ -16,15 +17,18 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-22.04
+    outputs:
+      release_tag: ${{ steps.version.outputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-bun
       - run: bun install --frozen-lockfile
       - name: 校验标签、版本和仓库
+        id: version
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
-          bun -e 'import { releaseVersion } from "./apps/electron/scripts/release-artifacts"; import pkg from "./apps/electron/package.json"; releaseVersion(process.env.RELEASE_TAG, pkg.version); if (process.env.GITHUB_REPOSITORY !== "xhslam/Gamma") throw new Error("发布仓库不匹配")'
+          bun -e 'import { appendFileSync } from "node:fs"; import { releaseVersion } from "./apps/electron/scripts/release-artifacts"; import pkg from "./apps/electron/package.json"; const tag = process.env.RELEASE_TAG || `v${pkg.version}`; releaseVersion(tag, pkg.version); if (process.env.GITHUB_REPOSITORY !== "xhslam/Gamma") throw new Error("发布仓库不匹配"); appendFileSync(process.env.GITHUB_OUTPUT!, `release_tag=${tag}\n`)'
       - name: 发布门禁回归
         run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts apps/electron/scripts/install-electron.test.ts apps/electron/scripts/fetch-with-retry.test.ts apps/electron/scripts/prepare-officecli.test.ts apps/electron/scripts/genui-vite-plugin.test.ts apps/electron/src/main/lib/github-release-client.test.ts apps/electron/src/main/lib/updater/mac-update-policy.test.ts
       - run: bun run typecheck
@@ -62,7 +66,7 @@ jobs:
     env:
       # 复用项目自定义签名器，明确采用临时签名，不查询正式证书。
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ needs.check.outputs.release_tag }}
       electron_config_cache: ${{ github.workspace }}/apps/electron/.cache/electron-download
     steps:
       - uses: actions/checkout@v4
@@ -131,6 +135,7 @@ jobs:
             apps/electron/out/latest*.yml
 
   publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-22.04
     permissions:

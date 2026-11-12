@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import sharp from 'sharp'
 import { APP_ICON_VARIANTS } from '../src/types/app-icons'
+import { generateTrayIcons } from './generate-tray-icons'
 
 interface IconConversionResult {
   error?: string
@@ -68,7 +69,8 @@ try {
     copyFileSync(iconPath, join(resourcesDir, `icon.${format}`))
   }
 
-  console.log('[图标] 已导出十三款像素 γ 透明圆角 PNG，及默认米白蓝绿 ICNS / ICO 图标')
+  await generateTrayIcons()
+  console.log('[图标] 已导出十三款像素 γ 透明圆角 PNG、默认 ICNS / ICO 及菜单栏模板图标')
 } finally {
   rmSync(tempDir, { recursive: true, force: true })
 }
