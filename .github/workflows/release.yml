@@ -32,6 +32,8 @@ jobs:
       - name: 发布门禁回归
         run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts apps/electron/scripts/install-electron.test.ts apps/electron/scripts/fetch-with-retry.test.ts apps/electron/scripts/prepare-officecli.test.ts apps/electron/scripts/genui-vite-plugin.test.ts apps/electron/src/main/lib/github-release-client.test.ts apps/electron/src/main/lib/updater/mac-update-policy.test.ts
       - run: bun run typecheck
+      - name: 验证打包后的终端工作台 IPC
+        run: bun test apps/electron/src/main/lib/terminal-workbench/terminal-workbench-ipc.test.ts
       - name: 校验发布脚本类型
         run: bunx --no-install tsc --noEmit --target ESNext --module Preserve --moduleResolution bundler --types bun --skipLibCheck apps/electron/scripts/release-artifacts.ts apps/electron/scripts/publish-release.ts apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts
 

@@ -2,25 +2,22 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { TERMINAL_WORKBENCH_IPC_CHANNELS, type DesktopTerminalSessionInput } from '@gamma/shared'
-import { createRequire } from 'node:module'
-
-const require = createRequire(import.meta.url)
-const { createTerminalSessionManager } = require('./terminal-session-manager.cjs')
-const { createTerminalProjectDirectories, TERMINAL_FOCUS_SCOPE } = require('./terminal-project-directories.cjs')
-const { createTerminalSessionCatalog } = require('./terminal-session-catalog.cjs')
-const { createTerminalSessionRecoveryStore } = require('./terminal-session-recovery-store.cjs')
-const { createTerminalAgentStatusService } = require('./terminal-agent-status-service.cjs')
-const { createTerminalTranscriptService } = require('./terminal-transcript-service.cjs')
+import { createTerminalSessionManager } from './terminal-session-manager.cjs'
+import { createTerminalProjectDirectories, TERMINAL_FOCUS_SCOPE } from './terminal-project-directories.cjs'
+import { createTerminalSessionCatalog } from './terminal-session-catalog.cjs'
+import { createTerminalSessionRecoveryStore } from './terminal-session-recovery-store.cjs'
+import { createTerminalAgentStatusService } from './terminal-agent-status-service.cjs'
+import { createTerminalTranscriptService } from './terminal-transcript-service.cjs'
 
 interface TerminalWorkbenchIpcHost {
   mainWindow: () => BrowserWindow | null
 }
 
-let terminalSessionManager: any = null
-let terminalSessionCatalog: any = null
-let terminalProjectDirectories: any = null
-let terminalTranscriptService: any = null
-let terminalAgentStatusService: any = null
+let terminalSessionManager: ReturnType<typeof createTerminalSessionManager> | null = null
+let terminalSessionCatalog: ReturnType<typeof createTerminalSessionCatalog> | null = null
+let terminalProjectDirectories: ReturnType<typeof createTerminalProjectDirectories> | null = null
+let terminalTranscriptService: ReturnType<typeof createTerminalTranscriptService> | null = null
+let terminalAgentStatusService: ReturnType<typeof createTerminalAgentStatusService> | null = null
 let terminalVisibleSessionIds = new Set<string>()
 let terminalActiveSessionId: string | null = null
 
@@ -171,7 +168,7 @@ export function registerTerminalWorkbenchIpc(host: TerminalWorkbenchIpcHost): vo
   ipcMain.handle(TERMINAL_WORKBENCH_IPC_CHANNELS.RESUME, async (_event, input: DesktopTerminalSessionInput) => {
     const id = requireSessionId(input?.id || input?.sessionId)
     const manager = getSessionManager()
-    const existing = manager.listSessions().find((s: any) => s.id === id)
+    const existing = manager.listSessions().find((session) => session.id === id)
     if (existing) return existing
     const session = manager.createSession({
       ...input,
@@ -199,7 +196,7 @@ export function registerTerminalWorkbenchIpc(host: TerminalWorkbenchIpcHost): vo
   ipcMain.handle(TERMINAL_WORKBENCH_IPC_CHANNELS.RENAME, async (_event, sessionId: string, title: string | null) => {
     const id = requireSessionId(sessionId)
     const catalog = getSessionCatalog()
-    const record = catalog.list().find((item: any) => item.id === id) ?? getSessionManager().getEndedSession(id)
+    const record = catalog.list().find((item) => item.id === id) ?? getSessionManager().getEndedSession(id)
     if (!record || record.workspaceInstanceId !== TERMINAL_FOCUS_SCOPE) {
       throw new Error('此终端会话不支持重命名。')
     }
@@ -216,7 +213,7 @@ export function registerTerminalWorkbenchIpc(host: TerminalWorkbenchIpcHost): vo
 
   ipcMain.handle(TERMINAL_WORKBENCH_IPC_CHANNELS.KILL, async (_event, sessionId: string) => {
     const id = requireSessionId(sessionId)
-    if (getSessionManager().listSessions().some((record: any) => record.id === id)) {
+    if (getSessionManager().listSessions().some((record) => record.id === id)) {
       getSessionManager().kill(id)
     } else {
       getSessionCatalog().remove(id)
@@ -229,7 +226,7 @@ export function registerTerminalWorkbenchIpc(host: TerminalWorkbenchIpcHost): vo
     getSessionManager().clearUnread(id)
   })
 
-  ipcMain.handle(TERMINAL_WORKBENCH_IPC_CHANNELS.VISIBLE_PANES, async (_event, payload: any) => {
+  ipcMain.handle(TERMINAL_WORKBENCH_IPC_CHANNELS.VISIBLE_PANES, async (_event, payload?: { activeSessionId?: unknown; visibleSessionIds?: unknown }) => {
     terminalActiveSessionId = typeof payload?.activeSessionId === 'string' ? payload.activeSessionId : null
     terminalVisibleSessionIds = new Set(
       Array.isArray(payload?.visibleSessionIds)
