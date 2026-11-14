@@ -87,6 +87,7 @@ import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { sessionHoverPreviewEnabledAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
+import { markdownSidebarOpenAtom } from '@/atoms/markdown-workspace-atoms'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
@@ -529,6 +530,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   const setPlanningTab = useSetAtom(planningTabAtom)
   const setAgentSkillsTab = useSetAtom(agentSkillsTabAtom)
   const openWorkspaceComponent = useSetAtom(openWorkspaceComponentAtom)
+  const setMarkdownSidebarOpen = useSetAtom(markdownSidebarOpenAtom)
   const automations = useAtomValue(automationsAtom)
   const setAutomations = useSetAtom(automationsAtom)
   const automationCount = automations.length
@@ -885,13 +887,14 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
   }, [currentAgentSessionId, openWorkspaceComponent, setAutomationForm, setActiveView, setPlanningTab])
 
   const handleOpenMarkdown = React.useCallback((): void => {
+    setMarkdownSidebarOpen(false)
     if (!currentAgentSessionId) {
       setActiveView('markdown')
       return
     }
     setActiveView('conversations')
     openWorkspaceComponent('markdown')
-  }, [currentAgentSessionId, openWorkspaceComponent, setActiveView])
+  }, [currentAgentSessionId, openWorkspaceComponent, setActiveView, setMarkdownSidebarOpen])
 
   /** 与 Markdown 一致：优先作为右侧可拖动栏目打开；无会话时保留全屏兜底。 */
   const handleOpenAgyTerminal = React.useCallback((): void => {
@@ -2547,7 +2550,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       {/* 项目级组件：每一行直接打开对应的右侧工作区 Tab。 */}
       <nav aria-label="工作区" className="shrink-0 pt-1">
         <WorkspaceComponentSidebarEntry
-          label="AGY"
+          label="终端工作台"
           icon={<TerminalSquare size={16} />}
           active={activeView === 'agy-terminal' || isWorkspaceComponentActive('agy-terminal')}
           onClick={handleOpenAgyTerminal}

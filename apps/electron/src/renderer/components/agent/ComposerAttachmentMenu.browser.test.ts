@@ -98,4 +98,16 @@ describe('Given 输入框下方的真实附件菜单', () => {
     `)
     expect(result).toEqual({ cancelled: true, menuGone: true, calls: 0 })
   }, 30_000)
+
+  test('When 使用标准 click 事件点击按钮 Then 正确打开菜单并可触发选择文件', async () => {
+    const result = await renderer.run(`
+      const trigger = document.querySelector('[aria-label="添加附件或引用对话"]');
+      trigger.click();
+      await window.until(() => document.querySelector('[role="menuitem"]'));
+      document.querySelector('[role="menuitem"]').click();
+      await window.until(() => window.calls.length === 1 && document.querySelector('#files').textContent.includes('测试附件.txt'));
+      return { calls: window.calls, files: document.querySelector('#files').textContent };
+    `)
+    expect(result).toEqual({ calls: [{ menuGone: true, unblocked: true }], files: '测试附件.txt' })
+  }, 30_000)
 })

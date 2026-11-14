@@ -298,17 +298,29 @@ function readDialogFiles(
  *
  * @returns 选中的文件列表
  */
-export async function openFileDialog(): Promise<FileDialogResult> {
-  // macOS 上必须传入父窗口，否则对话框可能出现在应用窗口后面
-  const parentWindow = BrowserWindow.getFocusedWindow()
+export async function openFileDialog(sourceWindow?: BrowserWindow | null): Promise<FileDialogResult> {
+  // macOS 上优先传入父窗口，避免对话框出现在应用窗口后方
+  const parentWindow = sourceWindow && !sourceWindow.isDestroyed()
+    ? sourceWindow
+    : BrowserWindow.getFocusedWindow()
   const dialogOptions: Electron.OpenDialogOptions = {
     properties: ['openFile', 'multiSelections'],
     filters: FILE_FILTERS,
   }
 
-  const result = parentWindow
-    ? await dialog.showOpenDialog(parentWindow, dialogOptions)
-    : await dialog.showOpenDialog(dialogOptions)
+  let result: Electron.OpenDialogReturnValue
+  try {
+    result = parentWindow
+      ? await dialog.showOpenDialog(parentWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+  } catch (error) {
+    if (parentWindow) {
+      console.warn('[附件服务] 附着父窗口打开文件对话框失败，尝试无父窗口打开:', error)
+      result = await dialog.showOpenDialog(dialogOptions)
+    } else {
+      throw error
+    }
+  }
 
   if (result.canceled || result.filePaths.length === 0) {
     return { files: [] }
@@ -355,9 +367,19 @@ export async function openFileOrFolderDialog(sourceWindow?: BrowserWindow | null
     }
   }
 
-  const result = parentWindow
-    ? await dialog.showOpenDialog(parentWindow, dialogOptions)
-    : await dialog.showOpenDialog(dialogOptions)
+  let result: Electron.OpenDialogReturnValue
+  try {
+    result = parentWindow
+      ? await dialog.showOpenDialog(parentWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+  } catch (error) {
+    if (parentWindow) {
+      console.warn('[附件服务] 附着父窗口打开混合对话框失败，尝试无父窗口打开:', error)
+      result = await dialog.showOpenDialog(dialogOptions)
+    } else {
+      throw error
+    }
+  }
 
   if (result.canceled || result.filePaths.length === 0) {
     return { files: [], directories: [] }

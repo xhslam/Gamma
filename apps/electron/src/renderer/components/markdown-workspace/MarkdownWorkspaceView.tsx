@@ -1,12 +1,13 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { BookOpen, FileText, Search, Save, PanelLeft, FolderTree, ListTree, Loader2, MoreHorizontal, Lock, Unlock, Type, Code2, Columns2, X, SlidersHorizontal, Plus, FilePlus, FolderOpen } from 'lucide-react'
-import type { MarkdownWorkspaceContext, MarkdownWorkspaceOperation } from '@gamma/shared'
+import type { MarkdownWorkspaceContext, MarkdownWorkspaceOperation, MarkdownWorkspaceResult, MarkdownWorkspaceEntry } from '@gamma/shared'
 import { currentAgentWorkspaceIdAtom } from '../../atoms/agent-atoms'
 import {
   markdownWorkspaceStateAtomFamily,
   markdownSidebarOpenAtom,
   markdownSidebarViewModeAtom,
+  markdownRecentVaultNoteAtom,
 } from '../../atoms/markdown-workspace-atoms'
 import { markdownEditorPreferencesAtom, loadMarkdownEditorPreferencesAtom, updateMarkdownEditorPreferencesAtom } from '../../atoms/markdown-editor-preferences'
 import { MarkdownEditorSettingsDialog } from '../settings/MarkdownEditorSettings'
@@ -43,6 +44,29 @@ import { FadeTitle } from '@/components/ui/fade-title'
 interface Props { workspaceId?: string; sessionId?: string }
 interface Confirmation { kind: 'format' | 'close' | 'reload'; documentId: string; formatted?: string; original?: string }
 const modes: { value: MarkdownWorkspaceMode; label: string }[] = [{ value: 'read', label: '阅读' }, { value: 'rich', label: '富文本' }, { value: 'source', label: '源码' }, { value: 'split', label: '分屏' }]
+
+async function findFirstMarkdownFile(
+  request: (input: MarkdownWorkspaceOperation) => Promise<MarkdownWorkspaceResult>,
+  sourceId: string,
+  dirPath = '',
+  maxDepth = 2,
+): Promise<string | null> {
+  if (maxDepth < 0) return null
+  try {
+    const res = await request({ action: 'list', sourceId, path: dirPath })
+    if (res.status !== 'entries') return null
+    const file = res.entries.find(e => e.kind === 'file')
+    if (file) return file.path
+    for (const dir of res.entries.filter(e => e.kind === 'directory')) {
+      const sub = await findFirstMarkdownFile(request, sourceId, dir.path, maxDepth - 1)
+      if (sub) return sub
+    }
+  } catch {
+    // 忽略目录扫描错误
+  }
+  return null
+}
+
 
 export function MarkdownWorkspaceView(props: Props): React.ReactElement {
   const currentWorkspaceId = useAtomValue(currentAgentWorkspaceIdAtom)
@@ -98,7 +122,74 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
   const active = state.activeId ? state.documents[state.activeId] : undefined
   const request = React.useCallback((input: MarkdownWorkspaceOperation) => window.electronAPI.markdownWorkspace({ ...input, ...context }), [scope, context])
 
-  // 挂载时自动恢复持久化的来源目录
+  const scopeKey = context.workspaceId || 'global'
+  const setRecentVaultNote = useSetAtom(markdownRecentVaultNoteAtom)
+  const hasAutoOpenedRef = React.useRef(false)
+
+  const saveRecentVaultNote = React.useCallback((vaultName: string, notePath: string, scrollTop?: number) => {
+    setRecentVaultNote(prev => {
+      const currentWorkspaceState = prev[scopeKey] ?? { vaults: {} }
+      const existingVault = currentWorkspaceState.vaults[vaultName]
+      return {
+        ...prev,
+        [scopeKey]: {
+          lastVaultName: vaultName,
+          vaults: {
+            ...currentWorkspaceState.vaults,
+            [vaultName]: {
+              ...existingVault,
+              lastNotePath: notePath,
+              ...(scrollTop !== undefined ? { scrollTop } : {}),
+              lastOpenedAt: Date.now(),
+            },
+          },
+        },
+      }
+    })
+  }, [scopeKey, setRecentVaultNote])
+
+  const canCommand = () => !composing.current && Date.now() - compositionEndedAt.current > 50
+  const patch = (id: string, fields: Partial<MarkdownDocumentDraft>) => setState(current => { const document = current.documents[id]; return document ? { ...current, documents: { ...current.documents, [id]: { ...document, ...fields } } } : current })
+
+  const openDocument = React.useCallback(async (sourceId: string, path: string, discard = false, initialScrollTop?: number): Promise<boolean> => {
+    const key = sourceId + ':' + path + ':' + crypto.randomUUID()
+    setError(''); setState(current => beginDocumentLoad(current, key))
+    try {
+      const result = await request({ action: 'read', sourceId, path })
+      if (result.status === 'document') {
+        await waitForPreferences()
+        const defaultMode = store.get(markdownEditorPreferencesAtom).defaultMode
+        setState(current => {
+          const documents = { ...current.documents }; if (discard) delete documents[result.document.id]
+          const updated = acceptLoadedDocument({ ...current, documents }, key, result.document, defaultMode)
+          if (initialScrollTop !== undefined && updated.documents[result.document.id]) {
+            updated.documents[result.document.id] = {
+              ...updated.documents[result.document.id]!,
+              scrollTop: initialScrollTop,
+            }
+          }
+          return updated
+        })
+        const source = stateRef.current.sources.find(s => s.id === sourceId)
+        if (source && source.kind === 'directory') {
+          saveRecentVaultNote(source.name, path, initialScrollTop)
+        }
+        return true
+      }
+      else if (result.status === 'error') {
+        setError(result.message)
+        setState(current => current.loadingKey === key ? { ...current, loadingKey: null } : current)
+        return false
+      }
+    } catch {
+      setError('文件读取失败。')
+      setState(current => current.loadingKey === key ? { ...current, loadingKey: null } : current)
+      return false
+    }
+    return false
+  }, [request, saveRecentVaultNote, setState, store, waitForPreferences])
+
+  // 挂载时自动恢复持久化的来源目录，并直接显示最近打开的 vault 的笔记（不默认打开侧栏）
   React.useEffect(() => {
     let cancelled = false
     const restoreSources = async () => {
@@ -110,8 +201,31 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
             const remaining = current.sources.filter(s => !existingIds.has(s.id))
             return setWorkspaceSources(current, [...result.sources, ...remaining])
           })
-          if (result.sources.some(s => s.kind === 'directory')) {
-            setSidebarOpen(true)
+
+          // 直接显示最近打开的 vault 的打开的笔记
+          if (!stateRef.current.activeId && !hasAutoOpenedRef.current) {
+            hasAutoOpenedRef.current = true
+            const directorySources = result.sources.filter(s => s.kind === 'directory')
+            const recentMap = store.get(markdownRecentVaultNoteAtom)
+            const recentState = recentMap[scopeKey]
+            const targetVault = directorySources.find(s => s.name === recentState?.lastVaultName)
+              ?? directorySources.at(-1)
+              ?? result.sources[0]
+
+            if (targetVault && !cancelled) {
+              const recordedNote = recentState?.vaults[targetVault.name]?.lastNotePath
+              const recordedScrollTop = recentState?.vaults[targetVault.name]?.scrollTop
+              let opened = false
+              if (recordedNote) {
+                opened = await openDocument(targetVault.id, recordedNote, false, recordedScrollTop)
+              }
+              if (!opened && targetVault.kind === 'directory' && !cancelled) {
+                const firstNote = await findFirstMarkdownFile(request, targetVault.id)
+                if (firstNote && !cancelled) {
+                  await openDocument(targetVault.id, firstNote)
+                }
+              }
+            }
           }
         }
       } catch {
@@ -120,27 +234,7 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
     }
     void restoreSources()
     return () => { cancelled = true }
-  }, [request, scope, setState])
-
-  const canCommand = () => !composing.current && Date.now() - compositionEndedAt.current > 50
-  const patch = (id: string, fields: Partial<MarkdownDocumentDraft>) => setState(current => { const document = current.documents[id]; return document ? { ...current, documents: { ...current.documents, [id]: { ...document, ...fields } } } : current })
-
-  const openDocument = async (sourceId: string, path: string, discard = false) => {
-    const key = sourceId + ':' + path + ':' + crypto.randomUUID()
-    setError(''); setState(current => beginDocumentLoad(current, key))
-    try {
-      const result = await request({ action: 'read', sourceId, path })
-      if (result.status === 'document') {
-        await waitForPreferences()
-        const defaultMode = store.get(markdownEditorPreferencesAtom).defaultMode
-        setState(current => {
-          const documents = { ...current.documents }; if (discard) delete documents[result.document.id]
-          return acceptLoadedDocument({ ...current, documents }, key, result.document, defaultMode)
-        })
-      }
-      else if (result.status === 'error') { setError(result.message); setState(current => current.loadingKey === key ? { ...current, loadingKey: null } : current) }
-    } catch { setError('文件读取失败。'); setState(current => current.loadingKey === key ? { ...current, loadingKey: null } : current) }
-  }
+  }, [openDocument, request, scopeKey, setState, store])
 
   const choose = async (kind: 'file' | 'directory' | 'project') => {
     if (opening) return
@@ -180,6 +274,10 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
         const defaultMode = store.get(markdownEditorPreferencesAtom).defaultMode
         const key = sourceId + ':' + result.document.path + ':' + crypto.randomUUID()
         setState(current => acceptLoadedDocument(current, key, result.document, defaultMode))
+        const src = stateRef.current.sources.find(s => s.id === sourceId)
+        if (src && src.kind === 'directory') {
+          saveRecentVaultNote(src.name, result.document.path)
+        }
       } else if (result.status === 'error') {
         setError(result.message)
       }
@@ -223,7 +321,21 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
     patch(active.id, { editing: !active.editing, mode: active.mode === 'read' ? 'rich' : active.mode })
   }
 
-  const closeTab = (id: string) => setState(current => closeDocumentTab(current, id))
+  const closeTab = (id: string) => {
+    setState(current => {
+      const next = closeDocumentTab(current, id)
+      if (next.activeId) {
+        const nextDoc = next.documents[next.activeId]
+        if (nextDoc?.sourceId) {
+          const src = next.sources.find(s => s.id === nextDoc.sourceId)
+          if (src && src.kind === 'directory') {
+            saveRecentVaultNote(src.name, nextDoc.path, nextDoc.scrollTop)
+          }
+        }
+      }
+      return next
+    })
+  }
 
   const format = () => {
     if (!active || !active.editing || !canCommand()) return
@@ -439,7 +551,15 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
                   title={item.name}
                   aria-label={item.name}
                   aria-pressed={isActive}
-                  onClick={() => setState(current => ({ ...current, activeId: id, loadingKey: null }))}
+                  onClick={() => {
+                    setState(current => ({ ...current, activeId: id, loadingKey: null }))
+                    if (item.sourceId) {
+                      const src = state.sources.find(s => s.id === item.sourceId)
+                      if (src && src.kind === 'directory') {
+                        saveRecentVaultNote(src.name, item.path, item.scrollTop)
+                      }
+                    }
+                  }}
                 >
                   <FadeTitle className="truncate">{item.name}</FadeTitle>
                   {dirty && <span className="tab-dirty-dot markdown-document-dirty" aria-label="未保存">•</span>}

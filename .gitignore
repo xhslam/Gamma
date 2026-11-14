@@ -74,3 +74,4 @@ pnpm-workspace.yaml
 .context/
 .bitfun/
 designs/
+.superpowers/

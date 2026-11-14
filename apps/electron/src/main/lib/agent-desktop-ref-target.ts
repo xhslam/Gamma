@@ -22,7 +22,7 @@ export function readAgentDesktopRefTarget(root: string, sessionId: string, ref: 
   }
   const file = join(path, 'refmap.json')
   if (!lstatSync(file).isFile() || lstatSync(file).isSymbolicLink()) throw new Error('原生引用文件不可信')
-  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW)
+  const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const metadata = fstatSync(fd)
     if (!metadata.isFile() || metadata.size > 1_048_576) throw new Error('原生引用存储超出有界契约')

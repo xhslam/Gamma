@@ -1,5 +1,6 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { AgentDesktopHost } from './agent-desktop-host'
 import { createGammaComputerUseCommand, GAMMA_COMPUTER_USE_EXECUTABLE } from './gamma-computer-use-command'
 import { writeTextFileAtomic } from './safe-file'
@@ -60,9 +61,11 @@ function permissionsFromStatus(status: unknown): DiagnosticPermissions {
   const ax = typeof value.accessibility === 'boolean'
     ? value.accessibility
     : (value.accessibility as { state?: string } | undefined)?.state === 'granted'
+      || (value.accessibility as { state?: string } | undefined)?.state === 'not_required'
   const screen = typeof value.screen === 'boolean'
     ? value.screen
     : (value.screen_recording as { state?: string } | undefined)?.state === 'granted'
+      || (value.screen_recording as { state?: string } | undefined)?.state === 'not_required'
   const listen = typeof value.listen === 'boolean' ? value.listen : ax
   const post = typeof value.post === 'boolean' ? value.post : ax
   if (typeof ax !== 'boolean' || typeof screen !== 'boolean') throw new Error('invalid-status')
@@ -77,7 +80,7 @@ export function runComputerUseDiagnostics(options: ComputerUseDiagnosticsOptions
 
 async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOptions): Promise<void> {
   const { app } = options
-  const reportPath = `/tmp/gamma-computer-use-diagnostics-${process.pid}.json`
+  const reportPath = join(tmpdir(), `gamma-computer-use-diagnostics-${process.pid}.json`)
   const report: ComputerUseDiagnosticsReport = {
     kind: 'gamma-computer-use-diagnostics', pid: process.pid, createdAt: new Date().toISOString(),
     packaged: app.isPackaged, version: '', parentExecutable: '', helperExecutable: '',
@@ -93,7 +96,7 @@ async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOpti
   }
   try {
     app.setName('Gamma')
-    profile = mkdtempSync('/tmp/gamma-computer-use-diagnostics-profile-')
+    profile = mkdtempSync(join(tmpdir(), 'gamma-computer-use-diagnostics-profile-'))
     app.setPath('userData', profile)
     app.setPath('sessionData', profile)
     app.on('will-quit', cleanup)
@@ -101,9 +104,11 @@ async function collectComputerUseDiagnostics(options: ComputerUseDiagnosticsOpti
     report.version = String(app.getVersion()).slice(0, 64)
     report.parentExecutable = app.getPath('exe')
     const independent = report.permissionOwner === 'gammaComputerUse'
+    const isWin = (options.platform ?? process.platform) === 'win32'
+    const helperName = isWin ? 'agent-desktop.exe' : 'agent-desktop'
     report.helperExecutable = independent ? GAMMA_COMPUTER_USE_EXECUTABLE : app.isPackaged
-      ? join(options.resourcesPath, 'agent-desktop', 'agent-desktop')
-      : join(app.getAppPath(), 'resources', 'agent-desktop', 'agent-desktop')
+      ? join(options.resourcesPath, 'agent-desktop', helperName)
+      : join(app.getAppPath(), 'resources', 'agent-desktop', helperName)
     try { report.parentAX = options.parentAccessibility() }
     catch { report.errors.push('parent-accessibility-check-failed') }
     if (!existsSync(report.helperExecutable) && !options.createHost) {

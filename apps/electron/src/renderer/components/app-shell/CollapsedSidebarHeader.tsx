@@ -21,7 +21,7 @@ export function CollapsedSidebarHeader(): React.ReactElement {
     : undefined
   const title = activeView === 'planning' ? '规划'
     : activeView === 'agent-skills' ? 'MCP / Skills'
-      : activeView === 'agy-terminal' ? 'AGY 终端'
+      : activeView === 'agy-terminal' ? '终端工作台'
       : activeView === 'markdown' ? 'Markdown'
         : session?.title || activeTab?.title || 'Gamma'
 

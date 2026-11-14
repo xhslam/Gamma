@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { runComputerUseDiagnostics } from './computer-use-diagnostics'
 import type { ComputerUseDiagnosticsOptions, ComputerUseDiagnosticsReport } from './computer-use-diagnostics'
 
-const reportPath = `/tmp/gamma-computer-use-diagnostics-${process.pid}.json`
+const reportPath = join(tmpdir(), `gamma-computer-use-diagnostics-${process.pid}.json`)
 const roots: string[] = []
 afterEach(() => {
   rmSync(reportPath, { force: true })
@@ -69,7 +70,7 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
     expect(events.indexOf('ready')).toBeLessThan(events.indexOf('parentAX'))
     expect(events.indexOf('terminate')).toBeLessThan(events.indexOf('quit'))
     expect(paths[0]).toBe(paths[1])
-    expect(paths[0]?.startsWith('/tmp/gamma-computer-use-diagnostics-profile-')).toBe(true)
+    expect(paths[0]?.startsWith(join(tmpdir(), 'gamma-computer-use-diagnostics-profile-'))).toBe(true)
     expect(paths.every(path => !existsSync(path))).toBe(true)
     expect(report.parentAX).toBe(true)
     expect(report.helperPermissions).toEqual({ accessibility: true, screen: false, listen: false, post: false })
@@ -125,5 +126,21 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
     options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Gamma/apps/electron' }
     const { report } = await collect(options)
     expect(report.helperExecutable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
+  })
+
+  test('When Windows 平台诊断 Then 正确指向 agent-desktop.exe 并处理 not_required 状态', async () => {
+    const { options } = fixture()
+    options.platform = 'win32'
+    options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Gamma/apps/electron' }
+    options.createHost = executable => ({
+      call: async () => ({
+        permissions: { accessibility: { state: 'not_required' }, screen_recording: { state: 'not_required' } },
+      }),
+      terminate: async () => {},
+    })
+    const { report } = await collect(options)
+    expect(report.permissionOwner).toBe('Gamma')
+    expect(report.helperExecutable).toBe('/workspace/Gamma/apps/electron/resources/agent-desktop/agent-desktop.exe')
+    expect(report.helperPermissions).toEqual({ accessibility: true, screen: true, listen: true, post: true })
   })
 })

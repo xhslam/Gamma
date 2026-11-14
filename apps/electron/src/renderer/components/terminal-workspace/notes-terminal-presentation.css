@@ -1,0 +1,325 @@
+/* Adapted from VMark v0.9.94 terminal-panel.css / TerminalTabBar.css,
+   commit 00ad428592dc5e80aab5afc8878a3f8c3bd27930 (ISC).
+   Also ports theme/themes/* bg.primary and text.primary for terminal reading.
+   Keep Auris selectors, scoped overrides and the Electron resize controller.
+   Terminal surface: 4px top, 16px sides; one 40px session bar, no nested card. */
+/* Actual VMark reading surfaces, not just its ANSI slots. Terminal ink is
+   separate from the editor's stronger ink; the existing minimal canvas already
+   shares --notes-terminal-bg, so no new card or mismatched border is added. */
+.desktop-app-frame .notes-v2--minimal[data-notes-theme="white"] {
+  --notes-terminal-bg: #FFFFFF;
+  --notes-terminal-fg: #1a1a1a;
+}
+.desktop-app-frame .notes-v2--minimal[data-notes-theme="paper"] {
+  --notes-terminal-bg: #EEEDED;
+  --notes-terminal-fg: #1a1a1a;
+}
+.desktop-app-frame .notes-v2--minimal[data-notes-theme="mint"] {
+  --notes-terminal-bg: #CCE6D0;
+  --notes-terminal-fg: #2d3a35;
+}
+.desktop-app-frame .notes-v2--minimal[data-notes-theme="sepia"] {
+  --notes-terminal-bg: #F9F0DB;
+  --notes-terminal-fg: #5c4b37;
+}
+.desktop-app-frame .notes-v2--minimal[data-notes-theme="night"] {
+  --notes-terminal-bg: #23262b;
+  --notes-terminal-fg: #d6d9de;
+}
+.desktop-app-frame .notes-v2--minimal[data-notes-theme="solarized"] {
+  --notes-terminal-bg: #002b36;
+  --notes-terminal-fg: #93a1a1;
+}
+
+.desktop-app-frame .notes-v2--minimal[data-terminal-open="true"] .notes-v2__minimal-workspace {
+  gap: 0;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane {
+  flex: 0 1 var(--notes-terminal-width, 620px);
+  min-width: 0;
+  max-width: calc(100% - min(320px, 45%));
+  padding: 0;
+  background: var(--notes-terminal-bg);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-splitter {
+  flex-basis: 4px;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-splitter::before {
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  background: var(--notes-line);
+  opacity: 1;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane .notes-v2__terminal-mode,
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane .notes-v2__terminal-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  gap: 0;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane .notes-v2__terminal-surface {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--notes-terminal-bg);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane .notes-v2__terminal-host {
+  --notes-terminal-right-gutter: 0px;
+  box-sizing: border-box;
+  padding: 4px 16px 0;
+  min-width: 0;
+  background: var(--notes-terminal-bg);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-xterm,
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-xterm .xterm {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: var(--notes-terminal-bg);
+}
+
+/* xterm v6 owns a DOM scrollbar; the old webkit viewport rules don't style it. */
+.desktop-app-frame .notes-v2__terminal-xterm .xterm-scrollable-element > .scrollbar > .slider {
+  border-radius: 3px;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock {
+  flex: 0 0 40px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 40px;
+  height: 40px;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--notes-terminal-bg);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock button {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--notes-muted);
+  box-shadow: none;
+  transform: none;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock button:hover,
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock button[aria-expanded="true"],
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock button[data-active="true"] {
+  background: color-mix(in srgb, var(--notes-text) 8%, transparent);
+  color: var(--notes-text);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock button:focus-visible {
+  outline: 2px solid var(--notes-accent-strong, var(--notes-text));
+  outline-offset: 2px;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock button[disabled] {
+  opacity: 0.4;
+}
+
+.desktop-app-frame .notes-v2__terminal-degraded {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--notes-line);
+  color: var(--notes-text);
+  background: var(--notes-surface);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane .notes-v2__terminal-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 16px;
+  color: var(--notes-text);
+  font-size: 12px;
+  opacity: 1;
+}
+
+/* VMark keeps 20px number/title tabs and 24px action targets. */
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-dock .notes-v2__terminal-tab {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  font-size: 11px;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-tabs,
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-session-actions {
+  gap: 2px;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__minimal-terminal-pane .notes-v2__terminal-search {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 8px;
+  background: var(--notes-terminal-bg);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__terminal-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The editor footer shares one space budget. Independent absolute clusters
+   overlap when a side pane leaves only a narrow writing column. Keep each
+   cluster relative so its existing popovers retain the same local anchor. */
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer {
+  position: absolute;
+  z-index: 30;
+  bottom: 0;
+  left: calc(var(--sidebar-rail-left, 8px) + var(--sidebar-rail-width, 30px) + 16px);
+  right: 23px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 40px;
+  pointer-events: none;
+}
+
+.desktop-app-frame .notes-v2--minimal[data-terminal-open="true"] .notes-v2__status-footer {
+  right: calc(var(--notes-terminal-width, 620px) + 23px);
+}
+
+.desktop-app-frame .notes-v2--minimal[data-browser-pane-open="true"] .notes-v2__status-footer {
+  right: calc(var(--notes-browser-pane-width, 520px) + 23px);
+}
+
+/* Next's extracted CSS can place the legacy redesign sheet after this file.
+   Outrank its terminal offset rule instead of depending on import order. */
+.desktop-app-frame .notes-v2.notes-v2--minimal .notes-v2__status-footer > .notes-v2__corner-cluster {
+  position: relative;
+  inset: auto !important;
+  min-width: 0;
+  max-width: 100%;
+  gap: 4px !important;
+  color: var(--notes-muted);
+  pointer-events: auto;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer > .notes-v2__corner-cluster--left {
+  flex: 1 1 140px;
+  min-width: 128px;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer > .notes-v2__corner-cluster--right {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-height: 40px;
+  height: auto !important;
+  margin-left: auto;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer .notes-v2__active-note-pill {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(260px, 100%);
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__active-note-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer .notes-v2__corner-icon {
+  flex: 0 0 auto;
+}
+
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer .notes-v2__corner-stat {
+  color: inherit;
+}
+
+/* The legacy <=900px rule hides every stat, including actionable review. */
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer [data-save-state],
+.desktop-app-frame .notes-v2--minimal .notes-v2__status-footer button[data-attention="true"] {
+  display: inline-flex;
+  align-items: center;
+}
+
+.desktop-app-frame .notes-v2--minimal[data-terminal-open="true"] .notes-v2__status-footer [data-footer-detail],
+.desktop-app-frame .notes-v2--minimal[data-browser-pane-open="true"] .notes-v2__status-footer [data-footer-detail] {
+  display: none;
+}
+
+/* A 40px title row plus a wrapped 58px save/review/action cluster needs 98px.
+   Keep a small gap above that measured narrow-column footer. */
+.desktop-app-frame .notes-v2.notes-v2--minimal[data-terminal-open="true"] .notes-v2__editor-pane,
+.desktop-app-frame .notes-v2.notes-v2--minimal[data-browser-pane-open="true"] .notes-v2__editor-pane {
+  padding-bottom: 104px !important;
+}
+
+/* VMark v0.9.99 terminal-panel.css, f2bf1b3fc (ISC; see vmark-port notice).
+   Mirror only: input remains owned by xterm. Theme colors come from xterm. */
+.notes-v2 .notes-terminal-floating-prompt {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--notes-border);
+  box-shadow: 0 -1px 2px color-mix(in srgb, var(--notes-text) 6%, transparent),
+    0 -4px 12px color-mix(in srgb, var(--notes-text) 8%, transparent);
+  z-index: 2;
+  cursor: default;
+}
+.notes-v2 .notes-terminal-floating-prompt[hidden] { display: none; }
+.notes-terminal-floating-prompt-rows { flex: 1; min-width: 0; overflow: hidden; }
+.notes-terminal-floating-prompt-row { white-space: pre; overflow: hidden; }
+.notes-terminal-floating-prompt-cursor { outline: 1px solid currentColor; outline-offset: -1px; }
+.desktop-app-frame .notes-v2 .notes-terminal-floating-prompt button.notes-terminal-floating-prompt-jump {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent !important;
+  color: inherit;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+.desktop-app-frame .notes-v2 .notes-terminal-floating-prompt button.notes-terminal-floating-prompt-jump:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent) !important;
+}
+.desktop-app-frame .notes-v2 .notes-terminal-floating-prompt button.notes-terminal-floating-prompt-jump:focus-visible {
+  outline: 2px solid var(--notes-accent);
+  outline-offset: -2px;
+}

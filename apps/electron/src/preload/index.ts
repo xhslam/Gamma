@@ -11,7 +11,8 @@ import type { SettingsTab } from '../types/settings'
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
+import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS, TERMINAL_WORKBENCH_IPC_CHANNELS } from '@gamma/shared'
+import type { DesktopTerminalBridge } from '@gamma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   AgentReferenceWarningNotice,
@@ -223,6 +224,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   onAgyTaskUpdate: (callback: (update: AgyTaskUpdate) => void) => () => void
 
   // ===== 本地终端 =====
+  terminalWorkbench: DesktopTerminalBridge
   openProjectAgyTerminal: (input: import('@gamma/shared').ProjectAgyTerminalInput) => Promise<import('@gamma/shared').ProjectAgyTerminalState>
   createTerminal: (input: TerminalCreateInput) => Promise<TerminalState>
   writeTerminal: (input: TerminalInput) => Promise<void>
@@ -1272,10 +1274,53 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   hoverMouseLeave: () => void
 }
 
+const terminalWorkbenchBridge: DesktopTerminalBridge = {
+  pickFile: (options) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.PICK_FILE, options),
+  rename: (sessionId: string, title: string | null) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.RENAME, sessionId, title),
+  listProjectDirectories: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.PROJECTS_LIST),
+  pickProjectDirectory: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.PROJECTS_PICK),
+  transcriptStatus: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.TRANSCRIPT_STATUS),
+  configureTranscript: (enabled: boolean) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.TRANSCRIPT_CONFIGURE, enabled),
+  readTranscript: (sessionId: string, revision?: string) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.TRANSCRIPT_READ, sessionId, revision),
+  create: (input) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.CREATE, input),
+  kill: (sessionId: string) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.KILL, sessionId),
+  list: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.LIST),
+  resume: (input) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.RESUME, input),
+  onData: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: any): void => listener(payload)
+    ipcRenderer.on(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_DATA, handler)
+    return () => { ipcRenderer.removeListener(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_DATA, handler) }
+  },
+  onExit: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: any): void => listener(payload)
+    ipcRenderer.on(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_EXIT, handler)
+    return () => { ipcRenderer.removeListener(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_EXIT, handler) }
+  },
+  onAgentState: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: any): void => listener(payload)
+    ipcRenderer.on(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_AGENT_STATE, handler)
+    return () => { ipcRenderer.removeListener(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_AGENT_STATE, handler) }
+  },
+  onActivateSession: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: any): void => listener(payload)
+    ipcRenderer.on(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_ACTIVATE_SESSION, handler)
+    return () => { ipcRenderer.removeListener(TERMINAL_WORKBENCH_IPC_CHANNELS.EVENT_ACTIVATE_SESSION, handler) }
+  },
+  clearUnread: (sessionId: string) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.CLEAR_UNREAD, sessionId),
+  reportVisiblePanes: (payload) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.VISIBLE_PANES, payload),
+  getNotificationsEnabled: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.NOTIFICATIONS_GET),
+  setNotificationsEnabled: (enabled: boolean) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.NOTIFICATIONS_SET, enabled),
+  resize: (sessionId: string, size) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.RESIZE, sessionId, size),
+  write: (sessionId: string, data: string) => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.WRITE, sessionId, data),
+  getDaemonStatus: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.DAEMON_STATUS),
+  upgradeDaemon: () => ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.DAEMON_UPGRADE),
+}
+
 /**
  * 实现 ElectronAPI 接口
  */
 const electronAPI: ElectronAPI = {
+  terminalWorkbench: terminalWorkbenchBridge,
   // 运行时
   getRuntimeStatus: () => {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_RUNTIME_STATUS)
@@ -2911,10 +2956,23 @@ const electronAPI: ElectronAPI = {
 
 // 将 API 暴露到渲染进程的 window 对象上
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
+contextBridge.exposeInMainWorld('shadowingDesktop', {
+  terminal: terminalWorkbenchBridge,
+  system: {
+    pickFile: (options?: { title?: string; multiple?: boolean }) =>
+      ipcRenderer.invoke(TERMINAL_WORKBENCH_IPC_CHANNELS.PICK_FILE, options),
+  },
+})
 
 // 扩展 Window 接口的类型定义
 declare global {
   interface Window {
     electronAPI: ElectronAPI
+    shadowingDesktop?: {
+      terminal: DesktopTerminalBridge
+      system?: {
+        pickFile: (options?: { title?: string; multiple?: boolean }) => Promise<string | string[] | null>
+      }
+    }
   }
 }

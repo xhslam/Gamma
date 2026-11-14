@@ -359,3 +359,21 @@ it('Given 独立代理输出成功 envelope 但未成功退出 When 读取结果
   expect(stopped).toBe(true)
   await host.terminate()
 })
+
+describe('Given AgentDesktopHost 在 Windows 平台的特性', () => {
+  it('When Windows 平台执行命令 Then 传递完整的 Windows 环境变量', async () => {
+    const host = new AgentDesktopHost(
+      () => ({ executable: process.execPath }),
+      'win32',
+    )
+    const result = await host.execute('win-env', [
+      '-e',
+      'console.log(JSON.stringify({ version: "2.5", command: "status", ok: true, data: { temp: process.env.TEMP, systemDrive: process.env.SystemDrive } }))',
+    ])
+    expect(result.ok).toBe(true)
+    const data = result.data as { temp?: string; systemDrive?: string }
+    expect(data.systemDrive).toBeDefined()
+    expect(data.temp).toBeDefined()
+    await host.terminate('win-env')
+  })
+})

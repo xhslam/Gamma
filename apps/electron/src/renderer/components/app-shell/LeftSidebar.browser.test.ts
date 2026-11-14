@@ -51,11 +51,11 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result.separated).toBe(true)
   }, 30_000)
 
-  test('When 点击 AGY 入口 Then 与 Markdown 一样作为右侧工作区栏目打开且不改选会话', async () => {
+  test('When 点击终端工作台入口 Then 与 Markdown 一样作为右侧工作区栏目打开且不改选会话', async () => {
     expect(await renderer.run<{ view: string; workspace: string; agent: string; workspaceTab: string; componentTabs: string[]; current: string }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      const button = [...document.querySelectorAll('button')].find(item => item.textContent.trim() === 'AGY');
-      if (!button) throw new Error('侧栏缺少 AGY 入口');
+      const button = [...document.querySelectorAll('button')].find(item => item.textContent.trim() === '终端工作台' || item.textContent.trim() === 'AGY');
+      if (!button) throw new Error('侧栏缺少终端工作台入口');
       button.click(); await api.until(() => fixture.state().workspaceTab === 'agy-terminal');
       const state = fixture.state(), current = button.getAttribute('aria-current');
       fixture.root.unmount();
@@ -267,7 +267,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return { brand, titleFits, labels, states, components: state.componentTabs, session: state.agent, project: state.workspace, view: state.view, hasLegacyPromotion };
     `)
     expect(result).toEqual({
-      brand: 'Gamma', titleFits: true, labels: ['AGY', 'Markdown', 'design', '定时任务', 'MCP/Skills'],
+      brand: 'Gamma', titleFits: true, labels: ['终端工作台', 'Markdown', 'design', '定时任务', 'MCP/Skills'],
       states: [
         { label: 'Markdown', tab: 'markdown', current: 'page' },
         { label: '定时任务', tab: 'automations', current: 'page' }, { label: 'MCP/Skills', tab: 'skills', current: 'page' },

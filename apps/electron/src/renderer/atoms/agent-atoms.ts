@@ -17,6 +17,7 @@ import type { SessionFileChange } from '@/lib/session-file-changes'
 import type { RightWorkspaceSplitState } from '@/lib/right-workspace-split'
 import { migrateRightPanelOpenState } from '@/lib/right-panel-migration'
 import { activeOnDemandOverlayAtom } from './on-demand-base-atoms'
+import { markdownSidebarOpenAtom } from './markdown-workspace-atoms'
 
 /** 活动状态 */
 export type ActivityStatus = 'pending' | 'running' | 'completed' | 'error' | 'backgrounded'
@@ -898,6 +899,9 @@ export const openWorkspaceComponentAtom = atom(
     const sessionId = get(currentAgentSessionIdAtom)
     if (!sessionId) return
     set(activeOnDemandOverlayAtom, null)
+    if (component === 'markdown') {
+      set(markdownSidebarOpenAtom, false)
+    }
     set(agentSessionComponentTabsAtomFamily(sessionId), (previous) => (
       previous.includes(component) ? previous : [...previous, component]
     ))

@@ -56,4 +56,30 @@ describe('Given Composer 的原生文件选择器', () => {
     `)
     expect(result).toEqual({ message: '选择器失败', parents: [null, null], response: { files: [], directories: [] } })
   })
+
+  test('When 附着父窗口打开失败 Then 优雅回退到无父窗口打开并返回结果', async () => {
+    const result = await runDialogScenario(`
+      let first = true;
+      mock.module('electron', () => ({
+        BrowserWindow: { getFocusedWindow: () => focused },
+        dialog: {
+          showOpenDialog: async (...args) => {
+            calls.push({ parent: args.length === 2 ? args[0].id : null, options: args.at(-1) });
+            if (first && args.length === 2) {
+              first = false;
+              throw new Error('Sheet presentation failed');
+            }
+            return result;
+          },
+          showMessageBox: async () => ({ response: 0 })
+        }
+      }));
+      const file = join(directory, 'fallback.txt');
+      writeFileSync(file, 'ok');
+      result = { canceled: false, filePaths: [file] };
+      const response = await openFileOrFolderDialog({ id: 'parent-error', isDestroyed: () => false });
+      return { parents: calls.map(c => c.parent), fileNames: response.files.map(f => f.filename) };
+    `)
+    expect(result).toEqual({ parents: ['parent-error', null], fileNames: ['fallback.txt'] })
+  })
 })

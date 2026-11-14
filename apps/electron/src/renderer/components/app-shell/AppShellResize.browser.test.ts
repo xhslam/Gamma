@@ -27,12 +27,14 @@ beforeAll(async () => {
     import {sidebarCollapsedAtom} from '@/atoms/tab-atoms';
     import '@/styles/globals.css';
     const delay=(ms=30)=>new Promise(r=>setTimeout(r,ms));
-    window.resizeFixture={async mount(side='right',wide=true,collapsed=true){
+    window.resizeFixture={async mount(side='right',wide=true,collapsed=true,options={}){
       const store=createStore(),root=createRoot(document.getElementById('root'));
+      const freshWide = options.freshWide ?? false;
+      const customTab = options.customTab ?? null;
       store.set(currentAgentSessionIdAtom,'resize');
       store.set(agentSessionsAtom,[{id:'resize',title:'调宽',createdAt:1,updatedAt:1}]);
-      store.set(agentSidePanelLayoutMapAtom,{resize:{width:300,hasOpenedWideWorkspace:wide,widePanelWidthOverride:wide?400:null,workspaceSide:side}});
-      store.set(agentDiffPanelTabAtom,new Map([['resize',wide?'delegation':'files']]));
+      store.set(agentSidePanelLayoutMapAtom,{resize:{width:300,hasOpenedWideWorkspace:freshWide?false:wide,widePanelWidthOverride:freshWide?null:(wide?400:null),workspaceSide:side}});
+      store.set(agentDiffPanelTabAtom,new Map([['resize',customTab??(wide?'delegation':'files')]]));
       store.set(currentSessionSidePanelOpenAtom,true);
       store.set(sidebarCollapsedAtom,collapsed);
       root.render(React.createElement(Provider,{store},React.createElement(AppShell)));
@@ -115,6 +117,31 @@ describe('Given 真实 AppShell 宽度预览与持久化', () => {
         expect(result.final).toBe(result.preview)
         expect(result.stored).toBe(result.preview)
       }
+    }
+  }, 30_000)
+
+  test('When 新会话首次打开扩展工作区或 AGY 终端拖动后松手 Then 最终宽度保留且不再回弹', async () => {
+    for (const customTab of ['delegation', 'agy:task-1', 'agy-terminal']) {
+      const result = await renderer.run<{ before: number; preview: number; final: number; stored: number; hasOpenedWide: boolean }>(`
+        const f=await window.resizeFixture.mount('right',true,true,{freshWide:true,customTab:'${customTab}'});
+        const handle=document.querySelector('[role="separator"]');if(!handle)throw new Error(document.body.innerHTML);
+        const box=handle.getBoundingClientRect(),x=Math.round(box.x+box.width/2),y=200;
+        const before=Number(handle.getAttribute('aria-valuenow'));
+        const delta=-60;
+        await window.shellResizeInput({type:'mouseMove',x,y});
+        await window.shellResizeInput({type:'mouseDown',x,y,button:'left',clickCount:1});
+        await window.shellResizeInput({type:'mouseMove',x:x+delta,y,button:'left'});
+        await f.delay();const preview=Number(handle.getAttribute('aria-valuenow'));
+        await window.shellResizeInput({type:'mouseUp',x:x+delta,y,button:'left',clickCount:1});
+        await f.delay(400);
+        const layout=f.layout();
+        const result={before,preview,final:Number(handle.getAttribute('aria-valuenow')),stored:layout.widePanelWidthOverride,hasOpenedWide:layout.hasOpenedWideWorkspace};
+        f.root.unmount();return result;
+      `)
+      expect(result.preview).toBe(result.before + 60)
+      expect(result.final).toBe(result.preview)
+      expect(result.stored).toBe(result.preview)
+      expect(result.hasOpenedWide).toBe(true)
     }
   }, 30_000)
 })

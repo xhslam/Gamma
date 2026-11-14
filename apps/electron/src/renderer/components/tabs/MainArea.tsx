@@ -24,6 +24,7 @@ import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
 const MarkdownWorkspaceView = React.lazy(() => import('@/components/markdown-workspace/MarkdownWorkspaceView'))
+const TerminalWorkspaceView = React.lazy(() => import('@/components/terminal-workspace/TerminalWorkspaceView'))
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { registerShortcut } from '@/lib/shortcut-registry'
@@ -201,7 +202,9 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
           ) : activeView === 'agent-skills' ? (
             <AgentSkillsView />
           ) : activeView === 'agy-terminal' ? (
-            <ProjectAgyTerminalView />
+            <React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载终端工作台…</div>}>
+              <TerminalWorkspaceView />
+            </React.Suspense>
           ) : activeView === 'design' ? (
             <DesignWorkspaceView />
           ) : activeView === 'markdown' ? (

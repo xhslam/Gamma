@@ -32,7 +32,6 @@ export function QuickTaskApp(): React.ReactElement {
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 设置透明背景
   useEffect(() => {
@@ -210,12 +209,61 @@ export function QuickTaskApp(): React.ReactElement {
     if (files.length > 0) addFiles(files)
   }, [addFiles])
 
-  // 文件选择
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    if (files.length > 0) addFiles(files)
-    e.target.value = '' // 允许重复选择同一文件
-  }, [addFiles])
+  // 打开原生文件选择器
+  const handleSelectAttachments = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.openFileDialog()
+      const files = result.files ?? []
+      const largeFiles = result.largeFiles ?? []
+      const skippedFiles = result.skippedFiles ?? []
+
+      if (files.length === 0 && largeFiles.length === 0 && skippedFiles.length === 0) {
+        return
+      }
+
+      const newAttachments: QuickAttachment[] = []
+      const pathBackedFiles: string[] = []
+
+      for (const f of files) {
+        const previewUrl = f.mediaType.startsWith('image/')
+          ? `data:${f.mediaType};base64,${f.data}`
+          : undefined
+        newAttachments.push({
+          id: crypto.randomUUID(),
+          filename: f.filename,
+          mediaType: f.mediaType,
+          base64: f.data,
+          size: f.size,
+          previewUrl,
+        })
+      }
+
+      for (const lf of largeFiles) {
+        newAttachments.push({
+          id: crypto.randomUUID(),
+          filename: lf.filename,
+          mediaType: lf.mediaType,
+          sourcePath: lf.path,
+          size: lf.size,
+          previewUrl: undefined,
+        })
+        pathBackedFiles.push(lf.filename)
+      }
+
+      if (pathBackedFiles.length > 0) {
+        toast.success(`已将大文件作为附加文件引用：${formatFileNames(pathBackedFiles)}`)
+      }
+      if (skippedFiles.length > 0) {
+        toast.warning(`以下文件无法读取，已跳过：${formatFileNames(skippedFiles.map((item) => item.filename))}`)
+      }
+      if (newAttachments.length > 0) {
+        setAttachments((prev) => [...prev, ...newAttachments])
+      }
+    } catch (err) {
+      console.error('[快速任务] 打开文件选择对话框失败:', err)
+      toast.error('选择附件失败')
+    }
+  }, [])
 
   // 提交任务
   const handleSubmit = useCallback(async () => {
@@ -311,7 +359,7 @@ export function QuickTaskApp(): React.ReactElement {
             {/* 附件按钮 */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handleSelectAttachments}
               className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
               title="添加附件"
             >
@@ -320,13 +368,6 @@ export function QuickTaskApp(): React.ReactElement {
               </svg>
               附件
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-            />
 
             {/* 拖拽/粘贴提示 */}
             <span className="text-[10px] text-muted-foreground/30 ml-1">

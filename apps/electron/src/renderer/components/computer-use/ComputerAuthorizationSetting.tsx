@@ -85,6 +85,7 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
             <Button size="sm" variant="ghost" disabled={busy || permissionBusy !== null || permissions?.screen === true} onClick={() => { void requestPermission('screen') }}>{permissionBusy === 'screen' ? '正在请求录屏…' : permissions?.screen ? '画面预览已启用' : '开启可选画面预览'}</Button>
           </div>
           {permissionMessage && <p role="status" className="text-xs leading-relaxed text-muted-foreground">{permissionMessage}</p>}
+          {!detectIsMac() && <p className="text-xs text-muted-foreground">Windows 平台已原生支持辅助功能与画面采集，无需在系统设置中单独配置权限。</p>}
         </div>
         <div className="space-y-2 border-b border-border/50 pb-3">
           <div className="flex items-center justify-between gap-3">

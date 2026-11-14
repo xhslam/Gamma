@@ -93,3 +93,21 @@ test('Given Safari 尚未运行且 Notes 被拒绝 When 安装身份可信 Then 
     await f.controller.finishRun(f.binding)
   }
 })
+
+test('Given Windows 平台应用尚未运行 When launch 目标应用 Then 无需 bundle ID 即可通过应用授权并启动', async () => {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+  try {
+    const f = createComputerFixture({
+      policy: 'standard',
+      call: async (method) => (method === 'list-apps' ? { apps: [] } : undefined),
+    })
+    f.auth.recordAppDecision('notepad', 'always')
+    await expect(f.controller.execute(f.binding, { command: 'launch', app: 'notepad' })).resolves.toMatchObject({ ok: true })
+    expect(f.calls.at(-1)?.params.args).toContain('launch')
+    expect(f.calls.at(-1)?.params.args).toContain('notepad')
+    await f.controller.finishRun(f.binding)
+  } finally {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  }
+})

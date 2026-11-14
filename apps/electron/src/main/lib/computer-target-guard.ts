@@ -91,7 +91,12 @@ export async function authorizeComputerTarget(
   if (input.command === 'launch' && requestedApp && apps.length === 0) {
     const installed = await host.resolveInstalledApp?.(requestedApp)
     unchanged()
-    if (!installed) throw unresolved()
+    if (!installed) {
+      if (process.platform === 'win32') {
+        return authorize(input, [{ name: requestedApp }])
+      }
+      throw unresolved()
+    }
     return authorize({ ...input, app: installed.bundleId }, [{ name: installed.appName, bundleId: installed.bundleId }])
   }
   const targets: NativeApp[] = []

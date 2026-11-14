@@ -55,6 +55,8 @@ function isExpandedWorkspaceTab(tab: string | undefined): boolean {
       || tab.startsWith('terminal:')
       || tab.startsWith('exploration:')
       || tab === 'delegation'
+      || tab.startsWith('agy:')
+      || tab === 'agy-tasks'
     ),
   )
 }
@@ -141,7 +143,7 @@ export function AppShell(): React.ReactElement {
   // 普通宽度必须独立计算：分屏的临时 720px 下限不能被 effect 写回 Session 的普通 width。
   const ordinaryRightPanelMinimumWidth = getRightPanelMinWidth(
     activeRightPanelSplit === null && activeRightPanelTab === 'todos',
-    rightPanelLayout.hasOpenedWideWorkspace || (activeRightPanelSplit === null && isExpandedRightWorkspace),
+    rightPanelLayout.hasOpenedWideWorkspace || isExpandedRightWorkspace || activeRightPanelSplit !== null,
   )
   const rightPanelMinimumWidth = activeRightPanelSplit
     ? MIN_SPLIT_PANEL_WIDTH
@@ -176,7 +178,7 @@ export function AppShell(): React.ReactElement {
     )
   // 打开任一扩展工作区后，当前会话保持该宽度，避免在右侧 Tab 间切换时反复缩放。
   // 并排仅临时借用宽布局；退出后自动回到 Session 先前的普通/宽工作区宽度。
-  const usesWidePanelLayout = rightPanelLayout.hasOpenedWideWorkspace || activeRightPanelSplit !== null
+  const usesWidePanelLayout = rightPanelLayout.hasOpenedWideWorkspace || isExpandedRightWorkspace || activeRightPanelSplit !== null
   const persistedRightPanelWidth = usesWidePanelLayout ? effectiveWidePanelWidth : clampedRightPanelWidth
   const displayedRightPanelWidth = draggedRightPanelWidth ?? persistedRightPanelWidth
 
@@ -262,7 +264,12 @@ export function AppShell(): React.ReactElement {
         commitPaneResize(() => {
           if (currentSessionIdRef.current === dragSessionId) {
             setRightPanelLayout(previous => isWideWorkspace
-              ? { ...previous, widePanelWidthOverride: latestWidth }
+              ? {
+                ...previous,
+                widePanelWidthOverride: latestWidth,
+                hasOpenedWideWorkspace: true,
+                width: isExpandedRightWorkspace ? previous.width : latestWidth,
+              }
               : { ...previous, width: latestWidth })
           }
         }, () => setDraggedRightPanelWidth(null))
@@ -281,8 +288,13 @@ export function AppShell(): React.ReactElement {
         ? rightPanelMaximumWidth
         : getWorkspaceResizeWidth(displayedRightPanelWidth, 0, event.key === 'ArrowLeft' ? -step : step, workspaceSide)
     const width = clampRightPanelWidth(requestedWidth, viewportWidth, rightPanelMinimumWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
-    setRightPanelLayout(previous => usesWidePanelLayout || isExpandedRightWorkspace
-      ? { ...previous, widePanelWidthOverride: width }
+    setRightPanelLayout(previous => (usesWidePanelLayout || isExpandedRightWorkspace)
+      ? {
+        ...previous,
+        widePanelWidthOverride: width,
+        hasOpenedWideWorkspace: true,
+        width: isExpandedRightWorkspace ? previous.width : width,
+      }
       : { ...previous, width })
   }, [canUseCollapsedSidebarSpace, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelMaximumWidth, rightPanelMinimumWidth, setRightPanelLayout, usesWidePanelLayout, viewportWidth, workspaceSide])
 

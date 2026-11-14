@@ -117,12 +117,16 @@ export class ComputerController {
     this.authManager = options.authManager ?? computerAuthorizationManager
     this.now = options.now ?? Date.now
 
+    const isWin = process.platform === 'win32'
     this.state = {
       backend: 'agent-desktop',
       backendVersion: AGENT_DESKTOP_VERSION,
       headedAllowed: this.authManager.getPreferences().headedAllowed ?? false,
       supported,
       phase: supported ? 'disabled' : 'unsupported',
+      ...(isWin && supported
+        ? { permissions: { accessibility: true, screen: true, listen: false, post: false } }
+        : {}),
     }
 
     this.authManager.onPreferencesChanged((preferences) => {
@@ -199,20 +203,43 @@ export class ComputerController {
     if (!probeRes.ok) {
       throw new Error(probeRes.error?.message || '无法读取原生权限状态')
     }
+    const isWin = process.platform === 'win32'
     if (probeRes.data && typeof probeRes.data === 'object') {
       const raw = probeRes.data as {
         permissions?: {
-          accessibility?: { state?: string }
-          screen_recording?: { state?: string }
+          accessibility?: { state?: string } | boolean
+          screen_recording?: { state?: string } | boolean
+          screen?: { state?: string } | boolean
         }
       }
+      const rawAx = raw.permissions?.accessibility
+      const rawScreen = raw.permissions?.screen_recording ?? raw.permissions?.screen
+      const axState = typeof rawAx === 'object' && rawAx !== null ? rawAx.state : undefined
+      const screenState = typeof rawScreen === 'object' && rawScreen !== null ? rawScreen.state : undefined
+
+      const axGranted =
+        typeof rawAx === 'boolean'
+          ? rawAx
+          : axState === 'granted' ||
+            axState === 'not_required' ||
+            (isWin && axState !== 'denied')
+
+      const screenGranted =
+        typeof rawScreen === 'boolean'
+          ? rawScreen
+          : screenState === 'granted' ||
+            screenState === 'not_required' ||
+            (isWin && screenState !== 'denied')
+
       const perms: ComputerPermissions = {
-        accessibility: raw.permissions?.accessibility?.state === 'granted',
-        screen: raw.permissions?.screen_recording?.state === 'granted',
+        accessibility: axGranted ?? isWin,
+        screen: screenGranted ?? isWin,
         listen: false,
         post: false,
       }
       this.publish({ permissions: perms })
+    } else if (isWin) {
+      this.publish({ permissions: { accessibility: true, screen: true, listen: false, post: false } })
     }
     return this.getState(sessionId)
   }
@@ -435,6 +462,9 @@ export class ComputerController {
   async requestPermission(permission: ComputerPermission): Promise<ComputerState> {
     if (this.permissionInFlight || this.stopping) {
       throw new Error('请在没有在途操作时设置系统权限')
+    }
+    if (process.platform === 'win32') {
+      return await this.refreshState()
     }
     this.permissionInFlight = true
     try {

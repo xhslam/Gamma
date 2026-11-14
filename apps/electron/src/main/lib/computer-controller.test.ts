@@ -122,6 +122,65 @@ describe('Given 正在等待本地确认', () => {
   })
 })
 
+describe('Given Windows 平台的桌面权限与执行', () => {
+  test('When agent-desktop status 上报 not_required Then 权限映射为全部已就绪', async () => {
+    const f = createComputerFixture({
+      call: async (method) => {
+        if (method === 'status') {
+          return {
+            version: '2.5',
+            command: 'status',
+            ok: true,
+            data: {
+              permissions: {
+                accessibility: { state: 'not_required' },
+                screen_recording: { state: 'not_required' },
+              },
+            },
+          }
+        }
+        return undefined
+      },
+    })
+    const state = await f.controller.refreshState('computer-test')
+    expect(state.permissions?.accessibility).toBe(true)
+    expect(state.permissions?.screen).toBe(true)
+    await f.controller.finishRun(f.binding)
+  })
+
+  test('When Windows 平台调用 requestPermission Then 刷新状态且不向原生投递 --guide', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    try {
+      const f = createComputerFixture({
+        call: async (method) => {
+          if (method === 'status') {
+            return {
+              version: '2.5',
+              command: 'status',
+              ok: true,
+              data: {
+                permissions: {
+                  accessibility: { state: 'not_required' },
+                  screen_recording: { state: 'not_required' },
+                },
+              },
+            }
+          }
+          return undefined
+        },
+      })
+      const state = await f.controller.requestPermission('screen')
+      expect(state.permissions?.screen).toBe(true)
+      const guideCalls = f.calls.filter((c) => (c.params.args as string[])?.includes('--guide'))
+      expect(guideCalls).toHaveLength(0)
+      await f.controller.finishRun(f.binding)
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+})
+
 test('Given 会话停止时原生退出缓慢 When 迟到应用批准到达 Then 在等待退出之前已失效', async () => {
   const answer = deferred<'always'>()
   const entered = deferred<void>()

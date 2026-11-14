@@ -60,7 +60,24 @@ const defaultProcessControl: ProcessControl = {
   listProcesses: processRows,
   signal: signalPid,
   async terminateWindows(pid) {
-    await exec('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { timeout: 5000 })
+    const taskkill = process.env.SystemRoot
+      ? join(process.env.SystemRoot, 'System32', 'taskkill.exe')
+      : 'taskkill.exe'
+    try {
+      await exec(taskkill, ['/PID', String(pid), '/T', '/F'], { timeout: 5000 })
+    } catch (error: unknown) {
+      const err = error as { code?: number | string; stderr?: string; message?: string }
+      if (
+        err.code === 128 ||
+        err.stderr?.includes('not found') ||
+        err.stderr?.includes('没有找到') ||
+        err.message?.includes('not found') ||
+        err.message?.includes('没有找到')
+      ) {
+        return
+      }
+      throw error
+    }
   },
 }
 
@@ -265,21 +282,34 @@ class RunHost {
         }
 
         this.dispatched = true
+        const isWin = this.platform === 'win32'
+        const env: NodeJS.ProcessEnv = {
+          PATH: process.env.PATH,
+          HOME: process.env.HOME,
+          USERPROFILE: process.env.USERPROFILE,
+          SystemRoot: process.env.SystemRoot,
+          LANG: 'en_US.UTF-8',
+          TMPDIR: process.env.TMPDIR || tmpdir(),
+          AGENT_DESKTOP_HOME: join(this.root, 'state'),
+          AGENT_DESKTOP_SESSION: this.desktopSessionId,
+          AGENT_DESKTOP_NO_UPDATE_NOTIFIER: '1',
+          ...(isWin
+            ? {
+                SystemDrive: process.env.SystemDrive || 'C:',
+                TEMP: process.env.TEMP || tmpdir(),
+                TMP: process.env.TMP || tmpdir(),
+                APPDATA: process.env.APPDATA,
+                LOCALAPPDATA: process.env.LOCALAPPDATA,
+                COMSPEC: process.env.COMSPEC,
+                windir: process.env.windir || process.env.SystemRoot,
+              }
+            : {}),
+        }
         const child = spawn(this.command.executable, [...(this.command.argsPrefix ?? []), ...args], {
           shell: false,
-          detached: this.platform !== 'win32',
+          detached: !isWin,
           cwd: this.root,
-          env: {
-            PATH: process.env.PATH,
-            HOME: process.env.HOME,
-            USERPROFILE: process.env.USERPROFILE,
-            SystemRoot: process.env.SystemRoot,
-            LANG: 'en_US.UTF-8',
-            TMPDIR: process.env.TMPDIR || tmpdir(),
-            AGENT_DESKTOP_HOME: join(this.root, 'state'),
-            AGENT_DESKTOP_SESSION: this.desktopSessionId,
-            AGENT_DESKTOP_NO_UPDATE_NOTIFIER: '1',
-          },
+          env,
           stdio: ['ignore', 'pipe', 'pipe'],
         })
 

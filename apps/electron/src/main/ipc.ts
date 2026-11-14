@@ -1,4 +1,5 @@
 import { registerDesignWorkbenchHandlers } from './lib/design-workbench-ipc'
+import { registerTerminalWorkbenchIpc } from './lib/terminal-workbench/terminal-workbench-ipc'
 import { DESIGN_IPC_CHANNELS } from '@gamma/shared'
 import type { InstallDesignInput } from '@gamma/shared'
 import { getDesignStatus, installWorkspaceDesign } from './lib/design-service'
@@ -1330,6 +1331,7 @@ export function registerIpcHandlers(): void {
     }
   }
   registerDesignWorkbenchHandlers(ipcMain, assertMainTerminalRenderer)
+  registerTerminalWorkbenchIpc({ mainWindow: () => getMainWindow() })
 
   // 外部任务不向 renderer 暴露启动接口；历史/停止仅允许主窗口与所属会话。
   ipcMain.handle(AGY_IPC_CHANNELS.LIST, (event, sessionId: string) => {
@@ -1955,8 +1957,23 @@ export function registerIpcHandlers(): void {
   // 打开文件选择对话框
   ipcMain.handle(
     ATTACHMENT_IPC_CHANNELS.OPEN_FILE_DIALOG,
-    async (): Promise<FileDialogResult> => {
-      return openFileDialog()
+    async (event): Promise<FileDialogResult> => {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const { getQuickTaskWindow, setQuickTaskDialogActive } = await import('./lib/quick-task-window')
+      const isQuickTask = window != null && window === getQuickTaskWindow()
+      if (isQuickTask) {
+        setQuickTaskDialogActive(true)
+      }
+      try {
+        return await openFileDialog(window)
+      } finally {
+        if (isQuickTask) {
+          setQuickTaskDialogActive(false)
+          if (window && !window.isDestroyed() && window.isVisible()) {
+            window.focus()
+          }
+        }
+      }
     }
   )
 
@@ -3778,7 +3795,22 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     ATTACHMENT_IPC_CHANNELS.OPEN_FILE_OR_FOLDER_DIALOG,
     async (event): Promise<FileOrFolderDialogResult> => {
-      return openFileOrFolderDialog(BrowserWindow.fromWebContents(event.sender))
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const { getQuickTaskWindow, setQuickTaskDialogActive } = await import('./lib/quick-task-window')
+      const isQuickTask = window != null && window === getQuickTaskWindow()
+      if (isQuickTask) {
+        setQuickTaskDialogActive(true)
+      }
+      try {
+        return await openFileOrFolderDialog(window)
+      } finally {
+        if (isQuickTask) {
+          setQuickTaskDialogActive(false)
+          if (window && !window.isDestroyed() && window.isVisible()) {
+            window.focus()
+          }
+        }
+      }
     }
   )
 

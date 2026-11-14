@@ -33,6 +33,7 @@ import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { AgentView } from '@/components/agent/AgentView'
 const MarkdownWorkspaceView = React.lazy(() => import('@/components/markdown-workspace/MarkdownWorkspaceView'))
+const TerminalWorkspaceView = React.lazy(() => import('@/components/terminal-workspace/TerminalWorkspaceView'))
 const ProjectAgyTerminalView = React.lazy(() => import('@/components/tabs/ProjectAgyTerminalView').then(module => ({ default: module.ProjectAgyTerminalView })))
 import {
   currentSessionSidePanelOpenAtom,
@@ -1282,7 +1283,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
         mcp: { label: 'MCP', icon: <ServerCog className="size-3.5" /> },
         memory: { label: '项目记忆', icon: <Brain className="size-3.5" /> },
         markdown: { label: 'Markdown', icon: <BookOpen className="size-3.5" /> },
-        'agy-terminal': { label: 'AGY', icon: <SquareTerminal className="size-3.5" /> },
+        'agy-terminal': { label: '终端工作台', icon: <SquareTerminal className="size-3.5" /> },
       }
       return { id: component, ...meta[component], closable: true }
     }),
@@ -1641,13 +1642,9 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       )
     ) : paneTab === 'agy-terminal' ? (
       <div className="min-h-0 flex-1 overflow-hidden">
-        <TabErrorBoundary key={`project-agy:${currentWorkspaceId}`} sessionId={sessionId}>
-          <React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载 AGY 终端…</div>}>
-            <ProjectAgyTerminalView
-              workspaceId={currentWorkspaceId}
-              active={isOpen && (!split || getFocusedRightWorkspaceTab(split) === 'agy-terminal')}
-              embedded
-            />
+        <TabErrorBoundary key={`terminal-workbench:${currentWorkspaceId}`} sessionId={sessionId}>
+          <React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载终端工作台…</div>}>
+            <TerminalWorkspaceView />
           </React.Suspense>
         </TabErrorBoundary>
       </div>

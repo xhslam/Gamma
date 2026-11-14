@@ -11,6 +11,17 @@ import { app } from 'electron'
 
 /** 快速任务窗口单例 */
 let quickTaskWindow: BrowserWindow | null = null
+let quickTaskDialogActive = false
+
+/** 设置快速任务窗口是否正处于系统对话框激活态 */
+export function setQuickTaskDialogActive(active: boolean): void {
+  quickTaskDialogActive = active
+}
+
+/** 查询快速任务窗口是否正处于系统对话框激活态 */
+export function isQuickTaskDialogActive(): boolean {
+  return quickTaskDialogActive
+}
 
 /** 窗口宽高 */
 const WINDOW_WIDTH = 680
@@ -55,8 +66,9 @@ export function createQuickTaskWindow(): void {
     })
   }
 
-  // 失焦自动隐藏
+  // 失焦自动隐藏（系统对话框展示时不隐藏）
   quickTaskWindow.on('blur', () => {
+    if (quickTaskDialogActive) return
     if (quickTaskWindow && !quickTaskWindow.isDestroyed()) {
       quickTaskWindow.hide()
     }
