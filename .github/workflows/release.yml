@@ -68,6 +68,7 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       RELEASE_TAG: ${{ needs.check.outputs.release_tag }}
       electron_config_cache: ${{ github.workspace }}/apps/electron/.cache/electron-download
+      NODE_OPTIONS: '--max-old-space-size=6144'
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-bun

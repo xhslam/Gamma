@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { CaretDown, CaretRight, Eye, Folder, PencilSimple, Plus, TerminalWindow, Check, X } from "@phosphor-icons/react";
+import { ChevronDown as CaretDown, ChevronRight as CaretRight, Eye, Folder, Pencil as PencilSimple, Plus, Terminal as TerminalWindow, Check, X } from "lucide-react";
 import type { DesktopTerminalBridge, DesktopTerminalProjectDirectory } from "./desktop-bridge";
 import type { NotesTerminalSession } from "./use-notes-terminal-sessions";
 import {

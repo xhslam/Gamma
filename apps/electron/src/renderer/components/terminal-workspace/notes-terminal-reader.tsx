@@ -10,7 +10,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { ArrowLeft, Check, Copy, Image as ImageIcon } from "@phosphor-icons/react";
+import { ArrowLeft, Check, Copy, Image as ImageIcon } from "lucide-react";
 import type { DesktopTerminalBridge } from "./desktop-bridge";
 export type DesktopTerminalAgentState = "idle" | "working" | "waiting" | "done" | "error";
 import { parseNotesMarkdownAst } from "./markdown-parser";

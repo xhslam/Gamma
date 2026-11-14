@@ -11,7 +11,21 @@ import {
   type ReactNode,
   type PointerEvent,
 } from "react";
-import { ArrowClockwise, ArrowsIn, ArrowsOut, BookOpenText, ClockCounterClockwise, Copy, MagnifyingGlass, SidebarSimple, TerminalWindow, Trash, X, ClipboardText, FilePlus } from "@phosphor-icons/react";
+import {
+  RotateCw as ArrowClockwise,
+  Minimize2 as ArrowsIn,
+  Maximize2 as ArrowsOut,
+  BookOpen as BookOpenText,
+  History as ClockCounterClockwise,
+  Copy,
+  Search as MagnifyingGlass,
+  PanelLeft as SidebarSimple,
+  Terminal as TerminalWindow,
+  Trash2 as Trash,
+  X,
+  Clipboard as ClipboardText,
+  FilePlus,
+} from "lucide-react";
 import { useHydratedDesktopBridge, type DesktopTerminalBridge } from "./desktop-bridge";
 import { useAppTheme } from "./use-app-theme";
 import { DEFAULT_NOTES_TYPOGRAPHY, loadNotesTypography, NOTES_TYPOGRAPHY_EVENT, notesTypographyCssVars } from "./notes-typography";

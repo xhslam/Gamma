@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { FolderOpen, X } from "@phosphor-icons/react";
+import { FolderOpen, X } from "lucide-react";
 import type { DesktopTerminalBridge, DesktopTerminalProjectDirectory } from "./desktop-bridge";
 
 export function TerminalProjectDialog({ bridge, onCreate, onClose }: {

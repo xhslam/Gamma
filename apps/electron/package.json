@@ -1,6 +1,6 @@
 {
   "name": "@gamma/electron",
-  "version": "0.19.276",
+  "version": "0.19.277",
   "description": "Gamma，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
@@ -64,7 +64,6 @@
     "@fontsource/noto-serif-sc": "5.3.1",
     "@fontsource/source-serif-4": "5.3.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@phosphor-icons/react": "^2.1.10",
     "@pierre/diffs": "^1.1.20",
     "@slack/bolt": "^5.1.0",
     "@slack/web-api": "^8.1.1",
