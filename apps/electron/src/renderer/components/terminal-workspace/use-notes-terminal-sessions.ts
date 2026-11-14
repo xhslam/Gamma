@@ -5,10 +5,6 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { Terminal } from "@xterm/xterm";
-import {
-  DEFAULT_APP_THEME,
-  isAppThemeId,
-} from "./app-theme";
 import { buildNotesTerminalTheme } from "./notes-terminal-theme";
 import { verifiedMonoStack } from "./verified-terminal-mono-stack";
 import { createPtyInputQueue, type PtyInputQueue } from "./pty-input-queue";
@@ -134,80 +130,11 @@ function readThemeToken(
   return rootValue || fallback;
 }
 
-// xterm.js renders into a canvas, and a canvas with "transparent" (or any
-// non-opaque) background paints as solid black because there is nothing
-// underneath the canvas to composite with. The notes UI legitimately sets
-// --notes-pane to "transparent" in minimal mode so the surrounding CSS lets
-// the page show through. That value, however, makes the terminal unreadable.
-// readOpaqueThemeColor wraps readThemeToken and discards any value that is
-// empty, "transparent", or a fully-transparent rgba(...) so the caller can
-// keep walking down the fallback chain to a solid color.
-function isOpaqueColor(value: string) {
-  if (!value) {
-    return false;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || normalized === "transparent" || normalized === "none") {
-    return false;
-  }
-
-  // rgba(...) / hsla(...) with explicit zero alpha.
-  const alphaMatch = normalized.match(/^(?:rgba|hsla)\([^)]*?,\s*([0-9.]+)\s*\)$/);
-  if (alphaMatch && Number.parseFloat(alphaMatch[1] ?? "1") === 0) {
-    return false;
-  }
-
-  // 8-digit hex with zero alpha (#rrggbb00 / #rgb0).
-  if (/^#[0-9a-f]{6}00$/i.test(normalized) || /^#[0-9a-f]{3}0$/i.test(normalized)) {
-    return false;
-  }
-
-  return true;
-}
-
-function readOpaqueThemeColor(
-  variableNames: readonly string[],
-  fallback: string,
-  scopeElement?: Element | null,
-) {
-  for (const name of variableNames) {
-    const value = readThemeToken(name, "", scopeElement);
-    if (isOpaqueColor(value)) {
-      return value;
-    }
-  }
-
-  return fallback;
-}
-
-function getTerminalThemeId(scopeElement?: Element | null) {
-  const scope = getThemeScope(scopeElement);
-  const id = scope?.getAttribute("data-notes-theme") ??
-    scope?.closest("[data-app-theme]")?.getAttribute("data-app-theme");
-  return isAppThemeId(id) ? id : DEFAULT_APP_THEME;
-}
-
-function getTerminalTheme(scopeElement?: Element | null) {
-  // The terminal needs solid colors. We walk a small chain of variables so the
-  // theme stays in sync with the notes pane wherever possible, but reject any
-  // value that would render as black on the xterm canvas (transparent / zero
-  // alpha / missing) and fall back to the light notes palette.
-  const NOTES_PANE_FALLBACK = "#f4f7f1";
-  const NOTES_TEXT_FALLBACK = "#233229";
-
-  const background = readOpaqueThemeColor(
-    ["--notes-terminal-bg", "--notes-pane", "--notes-surface", "--notes-bg"],
-    NOTES_PANE_FALLBACK,
-    scopeElement,
-  );
-  const foreground = readOpaqueThemeColor(
-    ["--notes-terminal-fg", "--notes-text"],
-    NOTES_TEXT_FALLBACK,
-    scopeElement,
-  );
-
-  return buildNotesTerminalTheme(getTerminalThemeId(scopeElement), background, foreground);
+function getTerminalTheme(scopeElement: Element) {
+  const scope = getThemeScope(scopeElement) ?? document.documentElement;
+  const colors = getComputedStyle(scope);
+  const palette = document.documentElement.classList.contains("dark") ? "night" : "paper";
+  return buildNotesTerminalTheme(palette, colors.backgroundColor, colors.color);
 }
 
 function getTerminalFontFamily(scopeElement?: Element | null) {
@@ -794,8 +721,6 @@ export function useNotesTerminalSessions({
             }
           }
         }
-        entry.terminal.options.drawBoldTextInBrightColors =
-          getTerminalThemeId(entry.container) !== "solarized";
         if (isSessionDisplayed(id)) fitSession(id);
       }
     };
@@ -803,7 +728,7 @@ export function useNotesTerminalSessions({
     for (let element: Element | null = getThemeScope(host); element; element = element.parentElement) {
       observer.observe(element, {
         attributes: true,
-        attributeFilter: ["data-notes-theme", "data-app-theme", "class", "style"],
+        attributeFilter: ["class", "style", "data-scene-theme"],
       });
     }
     window.addEventListener("auris:notes-typography", syncPresentation);
@@ -988,7 +913,6 @@ export function useNotesTerminalSessions({
           cursorStyle: "bar",
           macOptionIsMeta: true,
           minimumContrastRatio: 4.5,
-          drawBoldTextInBrightColors: getTerminalThemeId(container) !== "solarized",
           fontFamily: getTerminalFontFamily(container),
           fontSize: fontSizeRef.current,
           fontWeight: "normal",

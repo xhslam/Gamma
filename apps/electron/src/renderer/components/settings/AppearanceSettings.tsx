@@ -1,131 +1,40 @@
 /**
  * AppearanceSettings - 外观设置页
  *
- * 特殊风格选择 + 主题模式切换（浅色/深色/跟随系统/特殊风格）。
+ * 应用配色、聊天壁纸和工作台显示偏好。
  * 通过 Jotai atom 管理状态，持久化到 ~/.gamma/settings.json。
  */
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { Check } from 'lucide-react'
-import { circleRevealStateAtom } from '@/atoms/theme-picker'
+import { WallpaperChoices } from '@/components/ascii-wallpaper/ThemeFloatingDock'
 import {
   SettingsSection,
   SettingsCard,
   SettingsRow,
   SettingsSegmentedControl,
 } from './primitives'
-import {
-  themeModeAtom,
-  themeStyleAtom,
-  systemIsDarkAtom,
-  updateThemeMode,
-  updateThemeStyle,
-  applyThemeToDOM,
-} from '@/atoms/theme'
+import { themeModeAtom, saveThemeModeAtom } from '@/atoms/theme'
 import {
   markdownFontSizeAtom,
   updateMarkdownFontSize,
 } from '@/atoms/markdown-font-size'
 import { workbenchDensityAtom, updateWorkbenchDensity } from '@/atoms/ui-preferences'
 import { normalizeWorkbenchDensity } from '../../../types/settings'
-import { cn } from '@/lib/utils'
-import type { ThemeMode, ThemeStyle, MarkdownFontSize } from '../../../types'
+import type { ThemeMode, MarkdownFontSize } from '../../../types'
 
 import { AppIconPicker } from './AppIconPicker'
 
-// ===== 主题预览图片导入 =====
-import themeClaudeCode from '@/assets/theme-previews/theme-claude-code.webp'
-import themeCloudDrift from '@/assets/theme-previews/theme-cloud-drift.webp'
-import themeHonuLagoon from '@/assets/theme-previews/theme-honu-lagoon.webp'
-import themeKoiPond from '@/assets/theme-previews/theme-koi-pond.webp'
-import themeJellyfish from '@/assets/theme-previews/theme-jellyfish.webp'
-import themePaperBoats from '@/assets/theme-previews/theme-paper-boats.webp'
-import themeFireflies from '@/assets/theme-previews/theme-fireflies.webp'
-import themeMoonlit from '@/assets/theme-previews/theme-moonlit.webp'
-
-/** 主题选项 */
 const THEME_OPTIONS = [
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
   { value: 'system', label: '跟随系统' },
-  { value: 'special', label: '特殊风格' },
 ]
 
-/** Markdown 字号选项 */
 const MARKDOWN_FONT_SIZE_OPTIONS = [
   { value: 'small', label: '小' },
   { value: 'medium', label: '中' },
   { value: 'large', label: '大' },
-]
-
-/** 特殊风格 ID（排除 default） */
-type SpecialStyleId = Exclude<ThemeStyle, 'default'>
-
-/** 特殊风格定义 */
-interface SpecialStyle {
-  id: SpecialStyleId
-  name: string
-  variant: 'light' | 'dark'
-  /** 主题预览图 */
-  image: string
-  /** 图片裁剪位置（默认居中） */
-  objectPosition?: string
-  /** 图片缩放比例（默认 1） */
-  imageScale?: number
-  /** Tooltip 提示 */
-  tooltip?: string
-}
-
-const SPECIAL_STYLES: readonly SpecialStyle[] = [
-  {
-    id: 'claude-code',
-    name: 'Claude Code',
-    variant: 'dark',
-    image: themeClaudeCode,
-  },
-  {
-    id: 'cloud-drift',
-    name: '云朵舞者',
-    variant: 'light',
-    image: themeCloudDrift,
-  },
-  {
-    id: 'honu-lagoon',
-    name: '碧海绿龟',
-    variant: 'dark',
-    image: themeHonuLagoon,
-  },
-  {
-    id: 'koi-pond',
-    name: '锦鲤碧潭',
-    variant: 'dark',
-    image: themeKoiPond,
-  },
-  {
-    id: 'jellyfish',
-    name: '深海水母',
-    variant: 'dark',
-    image: themeJellyfish,
-  },
-  {
-    id: 'paper-boats',
-    name: '青波纸船',
-    variant: 'dark',
-    image: themePaperBoats,
-  },
-  {
-    id: 'fireflies',
-    name: '夏夜萤火',
-    variant: 'dark',
-    image: themeFireflies,
-  },
-  {
-    id: 'moonlit',
-    name: '皓月繁星',
-    variant: 'dark',
-    image: themeMoonlit,
-  },
 ]
 
 /** 根据平台返回缩放快捷键提示 */
@@ -152,42 +61,24 @@ export function AppearanceSettings(): React.ReactElement {
       setDensitySaving(false)
     }
   }
-  const [themeMode, setThemeMode] = useAtom(themeModeAtom)
-  const [themeStyle, setThemeStyle] = useAtom(themeStyleAtom)
-  const systemIsDark = useAtomValue(systemIsDarkAtom)
-  const setCircleReveal = useSetAtom(circleRevealStateAtom)
+  const themeMode = useAtomValue(themeModeAtom)
+  const saveThemeMode = useSetAtom(saveThemeModeAtom)
+  const [themeSaving, setThemeSaving] = React.useState(false)
+  const [themeError, setThemeError] = React.useState(false)
   const [markdownFontSize, setMarkdownFontSize] = useAtom(markdownFontSizeAtom)
 
-  /** 切换主题模式 */
-  const handleThemeChange = React.useCallback((value: string) => {
-    const mode = value as ThemeMode
-    setThemeMode(mode)
-    updateThemeMode(mode)
-    // 切换回普通模式时，重置特殊风格
-    if (mode !== 'special') {
-      setThemeStyle('default')
-      updateThemeStyle('default')
-      applyThemeToDOM(mode, 'default', systemIsDark)
+  const handleThemeChange = async (value: string): Promise<void> => {
+    if (themeSaving || value === themeMode) return
+    setThemeSaving(true)
+    setThemeError(false)
+    try {
+      await saveThemeMode(value as ThemeMode)
+    } catch {
+      setThemeError(true)
+    } finally {
+      setThemeSaving(false)
     }
-  }, [setThemeMode, setThemeStyle, systemIsDark])
-
-  /** 选择特殊风格 */
-  const handleStyleSelect = React.useCallback((style: ThemeStyle, e?: React.MouseEvent) => {
-    if (e) {
-      setCircleReveal({
-        active: true,
-        originX: e.clientX,
-        originY: e.clientY,
-        targetStyle: style,
-      })
-    }
-    // 同时切换到特殊风格模式
-    setThemeMode('special')
-    setThemeStyle(style)
-    void updateThemeMode('special')
-    void updateThemeStyle(style)
-    applyThemeToDOM('special', style, systemIsDark)
-  }, [setThemeMode, setThemeStyle, systemIsDark, setCircleReveal])
+  }
 
   /** 切换 Markdown 字号 */
   const handleMarkdownFontSizeChange = React.useCallback((value: string) => {
@@ -203,6 +94,20 @@ export function AppearanceSettings(): React.ReactElement {
         description="自定义应用的视觉风格"
       >
         <SettingsCard>
+          <fieldset disabled={themeSaving} aria-busy={themeSaving}>
+            <SettingsSegmentedControl
+              label="默认配色"
+              description="关闭场景主题后使用此配色。"
+              value={themeMode}
+              onValueChange={(value) => { void handleThemeChange(value) }}
+              options={THEME_OPTIONS}
+            />
+          </fieldset>
+          {themeError && <p role="alert" className="px-4 pb-3 text-sm text-destructive">应用配色保存失败，请重试。</p>}
+          <div data-wallpaper-settings className="px-4 py-3">
+            <WallpaperChoices />
+          </div>
+
           <fieldset disabled={densitySaving} aria-busy={densitySaving}>
             <SettingsSegmentedControl
               label="工作台密度"
@@ -213,30 +118,6 @@ export function AppearanceSettings(): React.ReactElement {
             />
           </fieldset>
           {densityError && <p role="alert" className="px-4 pb-3 text-sm text-destructive">{densityError}</p>}
-          {/* 主题模式 - 最上面 */}
-          <SettingsSegmentedControl
-            label="主题模式"
-            description="选择应用的配色方案"
-            value={themeMode}
-            onValueChange={handleThemeChange}
-            options={THEME_OPTIONS}
-          />
-
-          {/* 特殊风格 - 标签在上，卡片在下 */}
-          <div className="px-4 py-3 space-y-2">
-            <div className="text-sm font-medium text-foreground">特殊风格</div>
-            <div className="grid grid-cols-4 gap-x-3 gap-y-4 min-[720px]:grid-cols-8">
-              {SPECIAL_STYLES.map((style) => (
-                <StyleCard
-                  key={style.id}
-                  style={style}
-                  isSelected={themeMode === 'special' && themeStyle === style.id}
-                  onSelect={(e) => handleStyleSelect(style.id, e)}
-                />
-              ))}
-            </div>
-          </div>
-
           <SettingsRow
             label="界面缩放"
             description={ZOOM_HINT}
@@ -255,65 +136,5 @@ export function AppearanceSettings(): React.ReactElement {
 
       <AppIconPicker />
     </div>
-  )
-}
-
-/** 特殊风格卡片 - 竖长条图片预览 + 名字放在卡片下方 */
-function StyleCard({
-  style,
-  isSelected,
-  onSelect,
-}: {
-  style: SpecialStyle
-  isSelected: boolean
-  onSelect: (e: React.MouseEvent) => void
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      title={style.tooltip}
-      aria-pressed={isSelected}
-      className="group flex min-w-0 flex-col items-center gap-2 focus-visible:outline-none"
-    >
-      {/* 图片卡片本体 */}
-      <div
-        className={cn(
-          'relative rounded-lg overflow-hidden aspect-[4/3] w-full max-w-[88px] transition-all duration-150',
-          isSelected
-            ? 'ring-2 ring-primary shadow-lg shadow-primary/20'
-            : 'ring-1 ring-border/50 group-hover:ring-border group-focus-visible:ring-2 group-focus-visible:ring-primary group-focus-visible:ring-offset-1'
-        )}
-      >
-        <div
-          className="w-full h-full"
-          style={style.imageScale ? { transform: `scale(${style.imageScale})` } : undefined}
-        >
-          <img
-            src={style.image}
-            alt={style.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-            style={style.objectPosition ? { objectPosition: style.objectPosition } : undefined}
-            draggable={false}
-          />
-        </div>
-        {isSelected && (
-          <div className="absolute top-1 right-1 size-4 rounded-full bg-primary flex items-center justify-center z-10">
-            <Check className="size-2.5 text-primary-foreground" />
-          </div>
-        )}
-      </div>
-      {/* 名字放在卡片下方，吃 token，自动跟主题切色 */}
-      <span
-        className={cn(
-          'text-xs font-medium transition-colors',
-          isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'
-        )}
-      >
-        {style.name}
-      </span>
-    </button>
   )
 }

@@ -240,24 +240,25 @@ export const THEME_STYLES = [
 /** 特殊风格主题 */
 export type ThemeStyle = (typeof THEME_STYLES)[number]
 
-/** 历史主题平滑映射表 */
-const LEGACY_THEME_STYLE_MAP: Record<string, ThemeStyle> = {
-  'ocean-light': 'cloud-drift',
-  'ocean-dark': 'honu-lagoon',
-  'forest-light': 'cloud-drift',
-  'forest-dark': 'fireflies',
-  'slate-light': 'cloud-drift',
-  'slate-dark': 'moonlit',
-  'terminal-dark': 'claude-code',
+/** 当前可选的聊天壁纸。default 表示关闭壁纸。 */
+export function normalizeThemeStyle(raw: unknown): ThemeStyle {
+  return THEME_STYLES.find(style => style === raw) ?? 'default'
 }
 
-/** 归一化并校验特殊风格，老配置安全映射至对应新主题 */
-export function normalizeThemeStyle(raw: unknown): ThemeStyle {
-  if (typeof raw !== 'string') return 'default'
-  if ((THEME_STYLES as readonly string[]).includes(raw)) {
-    return raw as ThemeStyle
+export type ThemeAppearance = Pick<AppSettings, 'themeMode' | 'themeStyle' | 'chatWallpaper'>
+
+/** 将旧版「特殊风格」拆为基础配色和独立壁纸。 */
+export function normalizeThemeAppearance(settings: { themeMode?: unknown; themeStyle?: unknown; chatWallpaper?: unknown }): ThemeAppearance {
+  const { themeMode, themeStyle, chatWallpaper } = settings
+  const legacyWallpaper = normalizeThemeStyle(themeStyle)
+  const wasSpecial = themeMode === 'special'
+  return {
+    themeMode: wasSpecial
+      ? (themeStyle === 'cloud-drift' || typeof themeStyle === 'string' && themeStyle.endsWith('-light') ? 'light' : 'dark')
+      : (themeMode === 'light' || themeMode === 'system' ? themeMode : 'dark'),
+    themeStyle: 'default',
+    chatWallpaper: normalizeThemeStyle(chatWallpaper ?? (wasSpecial ? legacyWallpaper : undefined)),
   }
-  return LEGACY_THEME_STYLE_MAP[raw] ?? 'default'
 }
 
 /** 默认主题模式 */
@@ -312,8 +313,10 @@ export interface AppSettings {
   workbenchDensity?: WorkbenchDensity
   /** 主题模式 */
   themeMode: ThemeMode
-  /** 特殊风格主题 */
+  /** 旧版特殊风格，仅用于迁移。 */
   themeStyle?: ThemeStyle
+  /** 聊天壁纸，与应用配色独立。 */
+  chatWallpaper?: ThemeStyle
   /** Agent 默认渠道 ID（由当前 Agent Core 解释） — 当前选中的渠道 */
   agentChannelId?: string
   /** Agent 默认模型 ID */

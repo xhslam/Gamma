@@ -52,9 +52,10 @@ import {
 import { preventHoverPopoverFocusRestore } from '@/components/ai-elements/input-toolbar-popover-focus'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ThemeFloatingDock } from '@/components/ascii-wallpaper/ThemeFloatingDock'
+import { ThemeFloatingDock, ThemeDockTrigger } from '@/components/ascii-wallpaper/ThemeFloatingDock'
+import { ChatWallpaper } from '@/components/ascii-wallpaper/AsciiWallpaperCanvas'
 import { CircleRevealTransition } from '@/components/ascii-wallpaper/CircleRevealTransition'
-import { themePickerOpenAtom, circleRevealStateAtom } from '@/atoms/theme-picker'
+import type { CircleRevealState } from '@/components/ascii-wallpaper/CircleRevealTransition'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -449,7 +450,6 @@ interface AgentViewProps {
 }
 
 export function AgentView({ sessionId, embedded = false }: AgentViewProps): React.ReactElement {
-  const [backgroundContainer, setBackgroundContainer] = React.useState<HTMLDivElement | null>(null)
   const store = useStore()
   const stopShortcutTarget = React.useMemo(() => ({ kind: 'agent' as const, sessionId }), [sessionId])
   const markStopShortcutTarget = React.useCallback(() => {
@@ -479,8 +479,10 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   // 点击停止后，底层 Pi query 仍需一个很短的收尾窗口。该窗口内不可发起/排队新消息，
   // 否则旧 run 与新 run 会交错，导致同一用户消息被重复展示或持久化。
   const [isStopping, setIsStopping] = React.useState(false)
-  const [circleRevealState, setCircleRevealState] = useAtom(circleRevealStateAtom)
-  const setThemePickerOpen = useSetAtom(themePickerOpenAtom)
+  const [circleRevealState, setCircleRevealState] = React.useState<CircleRevealState | null>(null)
+  const [themePickerOpen, setThemePickerOpen] = React.useState(false)
+  const themePickerReturnFocus = React.useRef<HTMLElement | null>(null)
+  const closeReveal = React.useCallback(() => setCircleRevealState(null), [])
   const sendWithCmdEnter = useAtomValue(sendWithCmdEnterAtom)
   const longTextPasteAsAttachmentEnabled = useAtomValue(longTextPasteAsAttachmentEnabledAtom)
   const stoppedByUser = stoppedByUserSessions.has(sessionId)
@@ -719,6 +721,15 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       return next
     })
   }, [sessionId, setDraftHtmlMap])
+
+  const handleLocalComposerCommand = React.useCallback((text: string, editor: HTMLElement): boolean => {
+    if (text.trim().toLowerCase() !== '/theme') return false
+    themePickerReturnFocus.current = editor
+    setInputContent('')
+    setInputHtmlContent('')
+    setThemePickerOpen(true)
+    return true
+  }, [setInputContent, setInputHtmlContent])
 
   const createTodoForCurrentSession = React.useCallback(async (title: string, groupId: string, sourceText?: string): Promise<boolean> => {
     const normalizedTitle = title.trim()
@@ -2160,12 +2171,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
     const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
     const text = (overrideText ?? currentDraft).trim()
-    if (text.toLowerCase() === '/theme') {
-      setInputContent('')
-      setInputHtmlContent('')
-      setThemePickerOpen(true)
-      return
-    }
     // 如果输入为空但有建议，使用建议内容
     const effectiveText = text || suggestion || ''
     const pendingFilesSnapshot = pendingFilesRef.current
@@ -3323,6 +3328,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const canSend = !isStopping && messagesLoaded && (streaming || !messagesRefreshing) && (hasTextInput || pendingFiles.length > 0 || !!suggestion) && agentChannelId !== null && hasAvailableModel
 
   const inputToolbarItems = React.useMemo<ToolbarItem[]>(() => [
+    { key: 'chat-wallpaper', node: <ThemeDockTrigger /> },
     ...(isCodexFastModeAvailable ? [{
       key: 'codex-fast-mode',
       node: (
@@ -3534,12 +3540,12 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     <IntelligentUiSessionProvider key={`${currentWorkspaceId}:${sessionId}`} value={intelligentUiSession}>
     <SkillMentionNamesProvider workspaceSlug={workspaceSlug}>
       <div
-        ref={setBackgroundContainer}
         data-agent-conversation-root=""
         className="relative isolate flex h-full min-h-0 flex-1 min-w-0 flex-col overflow-hidden"
         onFocusCapture={markStopShortcutTarget}
         onPointerDownCapture={markStopShortcutTarget}
       >
+        <ChatWallpaper reveal={circleRevealState} onRevealComplete={closeReveal} />
         {/* 临时 Agent 已由右侧 Tab 表明归属，避免在窄面板重复渲染全局标题栏。 */}
         {!embedded && <AgentHeader sessionId={sessionId} />}
 
@@ -3550,7 +3556,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         )}>
         {/* 消息区域 */}
         <AgentMessages
-          backgroundContainer={backgroundContainer}
           sessionId={sessionId}
           sessionModelId={agentModelId || undefined}
           messagesLoaded={messagesLoaded}
@@ -3584,11 +3589,26 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
         {/* 输入区域 — 交互横幅显示时隐藏，由横幅替代 */}
         {!hasBannerOverlay && (
-        <div className="relative px-4 pb-2.5 md:px-6 md:pb-4" data-input-mode="agent">
-          <ThemeFloatingDock />
+        <ThemeFloatingDock
+          open={themePickerOpen}
+          onOpenChange={setThemePickerOpen}
+          onSelect={(style, point, previousStyle) => {
+            setCircleRevealState(point && style !== 'default' ? { point, style, previousStyle } : null)
+            setThemePickerOpen(false)
+          }}
+          onCloseAutoFocus={(event) => {
+            const editor = themePickerReturnFocus.current
+            themePickerReturnFocus.current = null
+            if (!event.defaultPrevented && editor?.isConnected) {
+              event.preventDefault()
+              editor.focus({ preventScroll: true })
+            }
+          }}
+        >
+        <div className="relative isolate px-4 pb-2.5 md:px-6 md:pb-4" data-input-mode="agent">
           <div
             className={cn(
-              'gamma-composer bg-background/70 backdrop-blur-sm',
+              'gamma-composer bg-background/95',
               (isPlanMode || isPermissionPlanMode) && !isDragOver && 'plan-mode-border',
               isDragOver && 'border-[2px] border-dashed border-primary bg-primary/[0.03]'
             )}
@@ -3719,6 +3739,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
               onDraftEdit={handleDraftEdit}
               draftSyncDelayMs={300}
               onSubmit={handleSend}
+              onLocalCommand={handleLocalComposerCommand}
               onPasteFiles={handlePasteFiles}
               onPasteLongText={handlePasteLongText}
               voiceInputId={agentVoiceInputId}
@@ -3754,6 +3775,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           {/* 独立底部工具行，保留原有响应式折叠与键盘功能。 */}
           <InputToolbarOverflow items={inputToolbarItems} trailing={inputTrailingNode} />
         </div>
+        </ThemeFloatingDock>
         )}
         </div>
         </OnDemandConversationLayout>
@@ -3814,15 +3836,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-
-    {circleRevealState?.active && (
-      <CircleRevealTransition
-        targetStyle={circleRevealState.targetStyle}
-        originX={circleRevealState.originX}
-        originY={circleRevealState.originY}
-        onComplete={() => setCircleRevealState(null)}
-      />
-    )}
 
     </SkillMentionNamesProvider>
     </IntelligentUiSessionProvider>

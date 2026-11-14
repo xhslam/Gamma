@@ -48,8 +48,8 @@ describe('工作台密度设置', () => {
         updateSettings({workbenchDensity:'comfortable'});
         updateSettings({notificationsEnabled:false});
         const settings=getSettings(), saved=JSON.parse(readFileSync(path,'utf8'));
-        console.log(JSON.stringify({density:settings.workbenchDensity,saved:saved.workbenchDensity,mode:settings.themeMode,style:settings.themeStyle,cmd:settings.sendWithCmdEnter}));
-      `)).toEqual({ density: 'comfortable', saved: 'comfortable', mode: 'special', style: 'honu-lagoon', cmd: true })
+        console.log(JSON.stringify({density:settings.workbenchDensity,saved:saved.workbenchDensity,mode:settings.themeMode,wallpaper:settings.chatWallpaper,cmd:settings.sendWithCmdEnter}));
+      `)).toEqual({ density: 'comfortable', saved: 'comfortable', mode: 'dark', wallpaper: 'honu-lagoon', cmd: true })
       expect(await scenario(path, `updateSettings({workbenchDensity:'invalid'});console.log(JSON.stringify({density:getSettings().workbenchDensity}))`)).toEqual({ density: 'compact' })
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })

@@ -30,7 +30,7 @@ describe('Gamma 渲染层旧缓存迁移', () => {
       const entryPath = join(fixtureDir, 'bootstrap.ts')
       const migrationPath = fileURLToPath(new URL('./legacy-storage-migration.ts', import.meta.url))
       const themePath = fileURLToPath(new URL('../atoms/theme.ts', import.meta.url))
-      writeFileSync(entryPath, `import ${JSON.stringify(migrationPath)}\nimport { themeModeAtom, themeStyleAtom } from ${JSON.stringify(themePath)}\nconsole.log(JSON.stringify([themeModeAtom.init, themeStyleAtom.init]))\n`)
+      writeFileSync(entryPath, `import ${JSON.stringify(migrationPath)}\nimport { themeModeAtom, chatWallpaperAtom } from ${JSON.stringify(themePath)}\nconsole.log(JSON.stringify([themeModeAtom.init, chatWallpaperAtom.init]))\n`)
       const result = Bun.spawnSync([process.execPath, '--eval', `
         const values = new Map([['proma-theme-mode', 'light'], ['proma-theme-style', 'ocean-light']]);
         const storage = {
@@ -44,7 +44,7 @@ describe('Gamma 渲染层旧缓存迁移', () => {
         await import(${JSON.stringify(entryPath)});
       `])
       expect(result.exitCode).toBe(0)
-      expect(result.stdout.toString().trim()).toBe('["light","ocean-light"]')
+      expect(result.stdout.toString().trim()).toBe('["light","default"]')
     } finally {
       rmSync(fixtureDir, { recursive: true, force: true })
     }

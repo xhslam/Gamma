@@ -128,66 +128,110 @@
   --border: var(--palette-light-background-hsl) / 0.08;
 }
 
-/* 8 款 ASCII 艺术壁纸主题调色板 */
-.theme-claude-code {
-  color-scheme: dark;
+/* 场景色取自对应参考帧。通过语义令牌同时驱动导航、工作区和浮层。 */
+:root[data-scene-theme] {
+  --background: var(--scene-background);
+  --foreground: var(--scene-text);
+  --panel: var(--scene-panel);
+  --inset: var(--scene-inset);
+  --text-secondary: var(--scene-secondary);
+  --text-tertiary: var(--scene-tertiary);
+  --content-area: var(--scene-background);
+  --sidebar-surface: var(--scene-sidebar);
+  --border: var(--foreground) / 0.12;
+  --color-background: hsl(var(--background));
+  --color-panel: hsl(var(--panel));
+  --color-inset: hsl(var(--inset));
+  --color-text: hsl(var(--foreground));
+  --color-secondary: hsl(var(--text-secondary));
+  --color-tertiary: hsl(var(--text-tertiary));
+  --color-border: hsl(var(--border));
 }
 
-.theme-cloud-drift {
-  color-scheme: light;
-  --background: 195 80% 91%;
-  --foreground: 210 8% 15%;
-  --panel: 0 0% 100%;
-  --inset: 195 50% 96%;
-  --primary: 195 72% 45%;
-  --primary-foreground: 0 0% 100%;
-  --border: 210 8% 15% / 0.12;
+:root[data-scene-theme="claude-code"] {
+  --scene-background: 40.0 7.0% 8.4%;
+  --scene-sidebar: 20.0 7.3% 8.0%;
+  --scene-topbar: 15.0 8.0% 9.8%;
+  --scene-panel: 25.7 11.1% 12.4%;
+  --scene-inset: 25.0 14.6% 16.1%;
+  --scene-text: 30.0 28.0% 90.2%;
+  --scene-secondary: 28.7 16.5% 72.7%;
+  --scene-tertiary: 25.7 10.4% 60.6%;
 }
 
-.theme-honu-lagoon {
-  color-scheme: dark;
-  --background: 177 47% 21%;
-  --panel: 177 42% 16%;
-  --inset: 177 38% 12%;
-  --primary: 174 80% 40%;
+:root[data-scene-theme="cloud-drift"] {
+  --scene-background: 201.9 70.3% 85.5%;
+  --scene-sidebar: 200.0 80.8% 89.8%;
+  --scene-topbar: 201.3 86.4% 82.7%;
+  --scene-panel: 202.8 82.9% 93.1%;
+  --scene-inset: 202.2 73.0% 85.5%;
+  --scene-text: 205.9 55.0% 15.7%;
+  --scene-secondary: 205.4 37.1% 27.5%;
+  --scene-tertiary: 204.5 27.1% 35.5%;
 }
 
-.theme-koi-pond {
-  color-scheme: dark;
-  --background: 159 34% 22%;
-  --panel: 159 30% 17%;
-  --inset: 159 26% 13%;
-  --primary: 158 64% 45%;
+:root[data-scene-theme="honu-lagoon"] {
+  --scene-background: 180.0 53.7% 26.3%;
+  --scene-sidebar: 173.8 56.7% 23.5%;
+  --scene-topbar: 172.3 42.7% 32.2%;
+  --scene-panel: 180.0 54.0% 19.6%;
+  --scene-inset: 178.0 46.5% 24.9%;
+  --scene-text: 158.2 100.0% 97.8%;
+  --scene-secondary: 163.6 54.1% 88.0%;
+  --scene-tertiary: 166.8 39.0% 79.4%;
 }
 
-.theme-jellyfish {
-  color-scheme: dark;
-  --background: 206 63% 12%;
-  --panel: 206 58% 9%;
-  --inset: 206 50% 7%;
-  --primary: 199 89% 48%;
+:root[data-scene-theme="koi-pond"] {
+  --scene-background: 159.5 32.8% 24.5%;
+  --scene-sidebar: 152.3 28.9% 26.5%;
+  --scene-topbar: 153.9 29.5% 30.6%;
+  --scene-panel: 161.1 34.5% 21.6%;
+  --scene-inset: 154.7 25.7% 29.0%;
+  --scene-text: 136.4 57.9% 96.3%;
+  --scene-secondary: 145.0 35.3% 86.7%;
+  --scene-tertiary: 146.7 29.0% 75.7%;
 }
 
-.theme-paper-boats {
-  color-scheme: dark;
-  --background: 183 30% 23%;
-  --panel: 183 26% 18%;
-  --inset: 183 22% 14%;
-  --primary: 174 65% 52%;
+:root[data-scene-theme="jellyfish"] {
+  --scene-background: 204.6 66.1% 11.6%;
+  --scene-sidebar: 211.7 64.3% 11.0%;
+  --scene-topbar: 198.7 77.2% 15.5%;
+  --scene-panel: 207.1 56.8% 14.5%;
+  --scene-inset: 206.7 54.0% 19.6%;
+  --scene-text: 210.0 100.0% 96.5%;
+  --scene-secondary: 211.4 52.5% 84.3%;
+  --scene-tertiary: 208.8 40.6% 74.9%;
 }
 
-.theme-fireflies {
-  color-scheme: dark;
-  --background: 197 40% 6%;
-  --panel: 197 35% 5%;
-  --inset: 197 30% 4%;
-  --primary: 84 81% 44%;
+:root[data-scene-theme="paper-boats"] {
+  --scene-background: 183.2 30.2% 24.7%;
+  --scene-sidebar: 175.0 27.7% 25.5%;
+  --scene-topbar: 171.6 28.5% 29.6%;
+  --scene-panel: 183.4 31.0% 22.2%;
+  --scene-inset: 176.9 26.5% 28.8%;
+  --scene-text: 170.0 60.0% 96.1%;
+  --scene-secondary: 172.8 36.2% 86.5%;
+  --scene-tertiary: 172.5 27.6% 77.3%;
 }
 
-.theme-moonlit {
-  color-scheme: dark;
-  --background: 232 51% 7%;
-  --panel: 232 45% 5%;
-  --inset: 232 40% 4%;
-  --primary: 239 84% 67%;
+:root[data-scene-theme="fireflies"] {
+  --scene-background: 180.0 43.8% 6.3%;
+  --scene-sidebar: 171.4 38.9% 7.1%;
+  --scene-topbar: 203.3 50.0% 7.1%;
+  --scene-panel: 176.5 39.5% 8.4%;
+  --scene-inset: 166.4 33.3% 12.9%;
+  --scene-text: 88.0 60.0% 95.1%;
+  --scene-secondary: 116.7 20.5% 82.7%;
+  --scene-tertiary: 124.6 17.8% 71.4%;
+}
+
+:root[data-scene-theme="moonlit"] {
+  --scene-background: 223.2 58.1% 8.4%;
+  --scene-sidebar: 225.5 54.7% 10.4%;
+  --scene-topbar: 229.4 48.6% 6.9%;
+  --scene-panel: 225.5 46.0% 12.4%;
+  --scene-inset: 224.3 43.7% 18.8%;
+  --scene-text: 231.4 100.0% 97.3%;
+  --scene-secondary: 226.5 58.8% 86.7%;
+  --scene-tertiary: 224.5 48.3% 76.5%;
 }

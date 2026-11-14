@@ -1,216 +1,104 @@
-/**
- * 主题状态原子
- *
- * 管理应用主题模式（浅色/深色/跟随系统/特殊风格）和特殊风格。
- * - themeModeAtom: 用户选择的主题模式，持久化到 ~/.gamma/settings.json
- * - themeStyleAtom: 特殊风格主题
- * - systemIsDarkAtom: 系统当前是否为深色模式
- * - resolvedThemeAtom: 派生的最终主题（light | dark）
- *
- * 使用 localStorage 作为缓存，避免页面加载时闪烁。
- */
-
 import { atom } from 'jotai'
-import { THEME_STYLES, normalizeThemeStyle, type ThemeMode, type ThemeStyle } from '../../types'
+import {
+  normalizeThemeAppearance,
+  normalizeThemeStyle,
+  type ThemeAppearance,
+  type ThemeMode,
+  type ThemeStyle,
+} from '../../types'
+import { ASCII_THEME_REGISTRY } from '../lib/ascii-theme-registry'
 
-/** localStorage 缓存键 */
 const THEME_CACHE_KEY = 'gamma-theme-mode'
-const THEME_STYLE_CACHE_KEY = 'gamma-theme-style'
+const WALLPAPER_CACHE_KEY = 'gamma-chat-wallpaper'
 
-/**
- * 从 localStorage 读取缓存的主题模式
- */
-function getCachedThemeMode(): ThemeMode {
+function readAppearanceCache(): ThemeAppearance {
   try {
-    const cached = localStorage.getItem(THEME_CACHE_KEY)
-    if (cached === 'light' || cached === 'dark' || cached === 'system' || cached === 'special') {
-      return cached
-    }
+    return normalizeThemeAppearance({
+      themeMode: localStorage.getItem(THEME_CACHE_KEY),
+      themeStyle: localStorage.getItem('gamma-theme-style'),
+      chatWallpaper: localStorage.getItem(WALLPAPER_CACHE_KEY),
+    })
   } catch {
-    // localStorage 不可用时忽略
-  }
-  return 'dark'
-}
-
-/**
- * 从 localStorage 读取缓存的特殊风格
- */
-function getCachedThemeStyle(): ThemeStyle {
-  try {
-    const cached = localStorage.getItem(THEME_STYLE_CACHE_KEY)
-    return normalizeThemeStyle(cached)
-  } catch {
-    // localStorage 不可用时忽略
-  }
-  return 'default'
-}
-
-/**
- * 缓存主题模式到 localStorage
- */
-function cacheThemeMode(mode: ThemeMode): void {
-  try {
-    localStorage.setItem(THEME_CACHE_KEY, mode)
-  } catch {
-    // localStorage 不可用时忽略
+    return normalizeThemeAppearance({})
   }
 }
 
-/**
- * 缓存特殊风格到 localStorage
- */
-function cacheThemeStyle(style: ThemeStyle): void {
+function cacheAppearance(mode?: ThemeMode, wallpaper?: ThemeStyle): void {
   try {
-    localStorage.setItem(THEME_STYLE_CACHE_KEY, style)
+    if (mode) localStorage.setItem(THEME_CACHE_KEY, mode)
+    if (wallpaper) localStorage.setItem(WALLPAPER_CACHE_KEY, wallpaper)
   } catch {
-    // localStorage 不可用时忽略
+    // 缓存不可用时仍可通过主进程保存设置。
   }
 }
 
-/** 用户选择的主题模式 */
-export const themeModeAtom = atom<ThemeMode>(getCachedThemeMode())
+const initialAppearance = readAppearanceCache()
+export const themeModeAtom = atom<ThemeMode>(initialAppearance.themeMode)
+export const chatWallpaperAtom = atom<ThemeStyle>(initialAppearance.chatWallpaper ?? 'default')
+export const systemIsDarkAtom = atom(true)
 
-/** 用户选择的特殊风格 */
-export const themeStyleAtom = atom<ThemeStyle>(getCachedThemeStyle())
+function resolveTheme(mode: ThemeMode, systemIsDark: boolean, style: ThemeStyle): 'light' | 'dark' {
+  if (style !== 'default') return ASCII_THEME_REGISTRY[style].mode
+  return (mode === 'system' ? systemIsDark : mode !== 'light') ? 'dark' : 'light'
+}
 
-/** 系统当前是否为深色模式 */
-export const systemIsDarkAtom = atom<boolean>(true)
+export const resolvedThemeAtom = atom((get) =>
+  resolveTheme(get(themeModeAtom), get(systemIsDarkAtom), get(chatWallpaperAtom)),
+)
 
-/** 派生：最终解析的主题（light | dark） */
-export const resolvedThemeAtom = atom<'light' | 'dark'>((get) => {
-  const mode = get(themeModeAtom)
-  if (mode === 'system') {
-    return get(systemIsDarkAtom) ? 'dark' : 'light'
-  }
-  if (mode === 'special') {
-    const style = get(themeStyleAtom)
-    // 根据特殊风格决定是浅色还是深色基调（除 cloud-drift 浅色外其余均为暗色调）
-    return style === 'cloud-drift' ? 'light' : 'dark'
-  }
-  return mode
-})
-
-/** 所有特殊风格 class（用于清理旧值）— 从 THEME_STYLES 单一源派生，排除 'default' */
-const ALL_THEME_STYLE_CLASSES = THEME_STYLES
-  .filter((style) => style !== 'default')
-  .map((style) => `theme-${style}` as const)
-
-/**
- * 应用主题到 DOM
- *
- * 在 <html> 元素上切换 dark 类名和特殊风格类名。
- *
- * 幂等实现：先计算目标 class 状态，与当前 DOM 对比，一致时直接 return，
- * 不触发任何 classList mutation。避免与 vibrancy 合成层叠加
- * 导致 Chromium 重建合成层造成的全屏闪烁。
- */
-export function applyThemeToDOM(themeMode: ThemeMode, themeStyle: ThemeStyle = 'default', systemIsDark: boolean = true): void {
+export function applyThemeToDOM(mode: ThemeMode, systemIsDark: boolean, style: ThemeStyle = 'default'): void {
   const html = document.documentElement
-
-  // 计算目标状态
-  let targetStyleClass: string | null = null
-  let targetIsDark: boolean
-
-  if (themeMode === 'special' && themeStyle !== 'default') {
-    targetStyleClass = `theme-${themeStyle}`
-    targetIsDark = themeStyle !== 'cloud-drift'
-  } else if (themeMode === 'system') {
-    targetIsDark = systemIsDark
-  } else {
-    targetIsDark = themeMode === 'dark'
-  }
-
-  // 读取当前状态
-  const currentIsDark = html.classList.contains('dark')
-  const currentStyleClass = ALL_THEME_STYLE_CLASSES.find((c) => html.classList.contains(c)) ?? null
-
-  // 与目标一致 → 直接跳过，避免触发 CSS 重新级联
-  if (currentIsDark === targetIsDark && currentStyleClass === targetStyleClass) {
-    return
-  }
-
-  // [FLASH-DEBUG] 仅在真正发生 DOM 变更时打印
-  console.log(
-    `[FLASH-DEBUG] applyThemeToDOM apply: mode=${themeMode}, style=${themeStyle}, systemIsDark=${systemIsDark}, diff={dark: ${currentIsDark}→${targetIsDark}, style: ${currentStyleClass}→${targetStyleClass}}`
-  )
-
-  // 只修改确实需要变的 class
-  if (currentStyleClass !== targetStyleClass) {
-    if (currentStyleClass) {
-      html.classList.remove(currentStyleClass)
-    }
-    if (targetStyleClass) {
-      html.classList.add(targetStyleClass)
-    }
-  }
-  if (currentIsDark !== targetIsDark) {
-    html.classList.toggle('dark', targetIsDark)
-  }
+  html.classList.toggle('dark', resolveTheme(mode, systemIsDark, style) === 'dark')
+  if (style === 'default') delete html.dataset.sceneTheme
+  else html.dataset.sceneTheme = style
 }
 
-/**
- * 初始化主题系统
- *
- * 从主进程加载设置，监听系统主题变化。
- * 返回清理函数。
- */
 export async function initializeTheme(
   setThemeMode: (mode: ThemeMode) => void,
   setSystemIsDark: (isDark: boolean) => void,
-  setThemeStyle?: (style: ThemeStyle) => void,
+  setChatWallpaper: (style: ThemeStyle) => void,
 ): Promise<() => void> {
-  // 从主进程加载持久化设置
-  const settings = await window.electronAPI.getSettings()
-  setThemeMode(settings.themeMode)
-  cacheThemeMode(settings.themeMode)
-
-  // 加载特殊风格
-  if (setThemeStyle && settings.themeStyle) {
-    setThemeStyle(settings.themeStyle)
-    cacheThemeStyle(settings.themeStyle)
+  function apply(settings: ThemeAppearance): void {
+    const { themeMode, chatWallpaper } = normalizeThemeAppearance(settings)
+    const wallpaper = normalizeThemeStyle(chatWallpaper)
+    setThemeMode(themeMode)
+    setChatWallpaper(wallpaper)
+    cacheAppearance(themeMode, wallpaper)
   }
 
-  // 获取系统主题
-  const isDark = await window.electronAPI.getSystemTheme()
+  const [settings, isDark] = await Promise.all([
+    window.electronAPI.getSettings(),
+    window.electronAPI.getSystemTheme(),
+  ])
+  apply(settings)
   setSystemIsDark(isDark)
-
-  // 监听系统主题变化
-  const cleanupSystem = window.electronAPI.onSystemThemeChanged((newIsDark) => {
-    setSystemIsDark(newIsDark)
-  })
-
-  // 监听用户手动切换主题（跨窗口同步，如 Quick Task 面板）
-  const cleanupThemeSettings = window.electronAPI.onThemeSettingsChanged((payload) => {
-    const mode = payload.themeMode as ThemeMode
-    const style = (payload.themeStyle || 'default') as ThemeStyle
-    setThemeMode(mode)
-    cacheThemeMode(mode)
-    if (setThemeStyle) {
-      setThemeStyle(style)
-      cacheThemeStyle(style)
-    }
-  })
+  const cleanupSystem = window.electronAPI.onSystemThemeChanged(setSystemIsDark)
+  const cleanupSettings = window.electronAPI.onThemeSettingsChanged(apply)
 
   return () => {
     cleanupSystem()
-    cleanupThemeSettings()
+    cleanupSettings()
   }
 }
 
-/**
- * 更新主题模式并持久化
- *
- * 同时更新 localStorage 缓存和主进程配置文件。
- */
-export async function updateThemeMode(mode: ThemeMode): Promise<void> {
-  cacheThemeMode(mode)
-  await window.electronAPI.updateSettings({ themeMode: mode })
-}
+/** 在主进程确认保存后更新本窗口，避免失败时显示未保存的主题。 */
+export const saveThemeModeAtom = atom(null, async (_get, set, mode: ThemeMode) => {
+  const result = await window.electronAPI.updateSettings({ themeMode: mode })
+  set(themeModeAtom, result.themeMode)
+  cacheAppearance(result.themeMode)
+})
 
-/**
- * 更新特殊风格并持久化
- */
-export async function updateThemeStyle(style: ThemeStyle): Promise<void> {
-  cacheThemeStyle(style)
-  await window.electronAPI.updateSettings({ themeStyle: style })
-}
+export const wallpaperSavingAtom = atom(false)
+export const saveChatWallpaperAtom = atom(null, async (get, set, wallpaper: ThemeStyle) => {
+  if (get(wallpaperSavingAtom) || get(chatWallpaperAtom) === wallpaper) return false
+  set(wallpaperSavingAtom, true)
+  try {
+    const result = await window.electronAPI.updateSettings({ chatWallpaper: wallpaper })
+    const saved = normalizeThemeStyle(result.chatWallpaper)
+    set(chatWallpaperAtom, saved)
+    cacheAppearance(undefined, saved)
+    return true
+  } finally {
+    set(wallpaperSavingAtom, false)
+  }
+})

@@ -148,6 +148,8 @@ interface RichTextInputProps {
   draftSyncDelayMs?: number
   /** 提交回调（Enter 键）；传入值可避免草稿同步尚未提交时发送旧内容。 */
   onSubmit: (content?: string, fromEditor?: boolean) => void
+  /** 仅在编辑器发送快捷键命中本地指令时消费按键。 */
+  onLocalCommand?: (text: string, editor: HTMLElement) => boolean
   /** 粘贴文件回调（拦截粘贴的文件） */
   onPasteFiles?: (files: File[]) => void
   /** 粘贴超长文本回调（由调用方决定是否转换为附件） */
@@ -225,6 +227,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   onDraftEdit,
   draftSyncDelayMs = 0,
   onSubmit,
+  onLocalCommand,
   onPasteFiles,
   onPasteLongText,
   longTextPasteThreshold,
@@ -286,6 +289,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   // 保持 onSubmit 引用最新
   const onSubmitRef = useRef(onSubmit)
   onSubmitRef.current = onSubmit
+  const onLocalCommandRef = useRef(onLocalCommand)
+  onLocalCommandRef.current = onLocalCommand
   // 保持 onPasteFiles 引用最新
   const onPasteFilesRef = useRef(onPasteFiles)
   onPasteFilesRef.current = onPasteFiles
@@ -739,9 +744,26 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       handleDOMEvents: {
         // DOM handler 返回 true 只跳过 ProseMirror 快捷键，不 preventDefault：
         // 原生 IME 仍能提交候选，StarterKit 的 Enter 则不会提前拆段/关闭建议。
-        keydown: (view, event) => isImeKeyboardEvent(event, isComposingRef.current || view.composing)
-          ? true
-          : handleAgentHistoryQuoteKeyDown(event),
+        keydown: (view, event) => {
+          if (isImeKeyboardEvent(event, isComposingRef.current || view.composing)) return true
+          // 本地指令优先于 Skill 建议，只匹配独立纯文本段落。
+          const paragraph = view.state.doc.firstChild
+          const command = onLocalCommandRef.current
+          const modified = event.metaKey || event.ctrlKey
+          if (
+            command && event.key === 'Enter' && !event.shiftKey && !event.altKey
+            && modified === Boolean(sendWithCmdEnterRef.current)
+            && view.state.doc.childCount === 1
+            && paragraph?.type.name === 'paragraph'
+            && paragraph.childCount > 0
+            && paragraph.content.content.every(node => node.isText && node.marks.length === 0)
+            && command(view.state.doc.textContent, view.dom)
+          ) {
+            event.preventDefault()
+            return true
+          }
+          return handleAgentHistoryQuoteKeyDown(event)
+        },
         focus: () => {
           setLastFocusedVoiceInputId(inputIdRef.current)
           return false

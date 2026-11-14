@@ -68,7 +68,29 @@
   position: relative;
   /* 分隔线不参与高度计算，避免顶栏内容改变三个区域的对齐。 */
   border-bottom: 1px solid transparent;
-  background-color: hsl(var(--content-area));
+  background-color: hsl(var(--scene-topbar, var(--content-area)));
+}
+
+.gamma-workbench-frame .gamma-panel[data-panel="sidebar"] {
+  background-color: hsl(var(--sidebar-surface));
+}
+
+/* 场景底纹透过导航侧栏，文字和控件保持原本的不透明度。 */
+:root[data-scene-theme] .gamma-workbench-frame [data-sidebar-region="navigation"] {
+  background-color: hsl(var(--scene-background));
+  background-image:
+    radial-gradient(circle, hsl(var(--foreground) / 0.19) 0.6px, transparent 1px),
+    radial-gradient(ellipse at 10% 12%, hsl(var(--scene-topbar)) 0%, transparent 68%),
+    radial-gradient(ellipse at 100% 100%, hsl(var(--scene-topbar) / 0.8) 0%, transparent 58%);
+  background-size: 6px 6px, 100% 100%, 100% 100%;
+}
+
+:root[data-scene-theme] .gamma-workbench-frame .gamma-panel[data-panel="sidebar"] {
+  background-color: hsl(var(--sidebar-surface) / 0.68);
+}
+
+:root[data-scene-theme] .gamma-workbench-frame .gamma-sidebar-topbar {
+  background-color: hsl(var(--scene-topbar) / 0.62);
 }
 
 .gamma-topbar::after {

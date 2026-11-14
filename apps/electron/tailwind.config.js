@@ -7,14 +7,6 @@ export default {
   // 主题 class 由运行时根据设置拼接到 <html>，Tailwind 无法从 TSX 静态扫描到。
   // 必须 safelist，否则 @layer base 中对应的 CSS 变量块会在构建时被裁掉。
   safelist: [
-    'theme-claude-code',
-    'theme-cloud-drift',
-    'theme-honu-lagoon',
-    'theme-koi-pond',
-    'theme-jellyfish',
-    'theme-paper-boats',
-    'theme-fireflies',
-    'theme-moonlit',
   ],
   theme: {
     extend: {

@@ -9,9 +9,11 @@
   --auris-motion-fast: 120ms;
   --auris-motion-base: 160ms;
   --auris-ease: cubic-bezier(0.2, 0, 0, 1);
-  --notes-terminal-bg: hsl(var(--background));
+  --notes-bg: hsl(var(--content-area));
+  --notes-terminal-bg: var(--notes-bg);
   --notes-text: hsl(var(--foreground));
-  --notes-line: hsl(var(--border) / 0.7);
+  --notes-terminal-fg: var(--notes-text);
+  --notes-line: var(--color-border);
   --notes-muted: hsl(var(--muted-foreground));
   --notes-accent: hsl(var(--primary));
   --notes-pane: hsl(var(--card));

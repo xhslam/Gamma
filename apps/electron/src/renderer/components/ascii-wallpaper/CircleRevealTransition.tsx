@@ -1,89 +1,49 @@
 import * as React from 'react'
 import type { ThemeStyle } from '../../../types'
-import { AsciiWallpaperCanvas } from './AsciiWallpaperCanvas'
+
+export interface CircleRevealState {
+  point: { x: number; y: number }
+  style: ThemeStyle
+  previousStyle: ThemeStyle
+}
 
 export function calculateCircleRevealRadius(
   origin: { x: number; y: number },
-  viewport: { width: number; height: number }
+  viewport: { width: number; height: number },
 ): number {
-  const corners = [
-    { x: 0, y: 0 },
-    { x: viewport.width, y: 0 },
-    { x: 0, y: viewport.height },
-    { x: viewport.width, y: viewport.height },
-  ]
-  const maxDistance = Math.max(
-    ...corners.map((c) => Math.hypot(c.x - origin.x, c.y - origin.y))
-  )
-  return Math.ceil(maxDistance * 1.05)
+  return Math.ceil(Math.hypot(
+    Math.max(Math.abs(origin.x), Math.abs(viewport.width - origin.x)),
+    Math.max(Math.abs(origin.y), Math.abs(viewport.height - origin.y)),
+  ))
 }
 
 interface CircleRevealTransitionProps {
-  targetStyle: ThemeStyle
-  originX: number
-  originY: number
+  point: CircleRevealState['point']
   onComplete: () => void
-  durationMs?: number
+  children: React.ReactNode
 }
 
-export function CircleRevealTransition({
-  targetStyle,
-  originX,
-  originY,
-  onComplete,
-  durationMs = 380,
-}: CircleRevealTransitionProps): React.ReactElement {
-  const [currentRadius, setCurrentRadius] = React.useState(0)
-  const containerRef = React.useRef<HTMLDivElement>(null)
+export function CircleRevealTransition({ point, onComplete, children }: CircleRevealTransitionProps): React.ReactElement {
+  const layer = React.useRef<HTMLDivElement>(null)
 
-  React.useEffect(() => {
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (motion.matches) {
+  React.useLayoutEffect(() => {
+    const element = layer.current
+    if (!element) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       onComplete()
       return
     }
 
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    }
-    const maxRadius = calculateCircleRevealRadius({ x: originX, y: originY }, viewport)
+    const rect = element.getBoundingClientRect()
+    const origin = { x: point.x - rect.left, y: point.y - rect.top }
+    const radius = calculateCircleRevealRadius(origin, rect)
+    const animation = element.animate(
+      [0, radius].map((size) => ({ clipPath: `circle(${size}px at ${origin.x}px ${origin.y}px)` })),
+      { duration: 280, easing: 'cubic-bezier(.2,.7,.3,1)' },
+    )
+    animation.onfinish = onComplete
+    return () => animation.cancel()
+  }, [point, onComplete])
 
-    let animationFrame = 0
-    const startTime = performance.now()
-
-    const animate = (now: number): void => {
-      const elapsed = now - startTime
-      const progress = Math.min(1, elapsed / durationMs)
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3)
-      setCurrentRadius(eased * maxRadius)
-
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate)
-      } else {
-        onComplete()
-      }
-    }
-
-    animationFrame = requestAnimationFrame(animate)
-
-    return () => {
-      cancelAnimationFrame(animationFrame)
-    }
-  }, [originX, originY, durationMs, onComplete])
-
-  return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 pointer-events-none z-10 overflow-hidden"
-      style={{
-        clipPath: `circle(${currentRadius}px at ${originX}px ${originY}px)`,
-        WebkitClipPath: `circle(${currentRadius}px at ${originX}px ${originY}px)`,
-      }}
-      aria-hidden="true"
-    >
-      <AsciiWallpaperCanvas styleOverride={targetStyle} />
-    </div>
-  )
+  return <div ref={layer} data-wallpaper-reveal="" className="absolute inset-0">{children}</div>
 }

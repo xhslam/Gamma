@@ -11,15 +11,17 @@
         // ESM 缓存迁移尚未执行时，也用旧缓存呈现首帧主题。
         var mode = localStorage.getItem('gamma-theme-mode') ?? localStorage.getItem('proma-theme-mode') ?? 'dark'
         var style = localStorage.getItem('gamma-theme-style') ?? localStorage.getItem('proma-theme-style')
+        var scene = localStorage.getItem('gamma-chat-wallpaper') ?? (mode === 'special' ? style : null)
         var html = document.documentElement
 
-        if (mode === 'special' && style && style !== 'default') {
-          // 特殊风格模式：添加主题类名 + 根据后缀决定 dark 类
-          html.classList.add('theme-' + style)
-          if (style.endsWith('-dark')) {
+        if (['claude-code', 'cloud-drift', 'honu-lagoon', 'koi-pond', 'jellyfish', 'paper-boats', 'fireflies', 'moonlit'].includes(scene)) {
+          html.dataset.sceneTheme = scene
+          html.classList.toggle('dark', scene !== 'cloud-drift')
+        } else if (mode === 'special' && style && style !== 'default') {
+          if (style !== 'cloud-drift' && !style.endsWith('-light')) {
             html.classList.add('dark')
           }
-        } else if (mode === 'dark') {
+        } else if (mode === 'dark' || mode === 'special') {
           html.classList.add('dark')
         } else if (mode === 'system') {
           if (window.matchMedia('(prefers-color-scheme: dark)').matches) {

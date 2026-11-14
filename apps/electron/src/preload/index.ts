@@ -174,6 +174,7 @@ import type {
   UserProfile,
   AppSettings,
   UpdateAppSettings,
+  ThemeAppearance,
   QuickTaskSubmitInput,
   QuickTaskOpenSessionData,
   VoiceDictationAudioChunkInput,
@@ -432,7 +433,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
 
   /** 订阅用户手动切换主题事件（跨窗口同步，返回清理函数） */
   onIntelligentUiChanged: (callback: (enabled: boolean) => void) => () => void
-  onThemeSettingsChanged: (callback: (payload: { themeMode: string; themeStyle: string }) => void) => () => void
+  onThemeSettingsChanged: (callback: (payload: ThemeAppearance) => void) => () => void
 
   // ===== Scratch Pad =====
 
@@ -1663,8 +1664,8 @@ const electronAPI: ElectronAPI = {
     return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.ON_SYSTEM_THEME_CHANGED, listener) }
   },
 
-  onThemeSettingsChanged: (callback: (payload: { themeMode: string; themeStyle: string }) => void) => {
-    const listener = (_: unknown, payload: { themeMode: string; themeStyle: string }): void => callback(payload)
+  onThemeSettingsChanged: (callback: (payload: ThemeAppearance) => void) => {
+    const listener = (_: unknown, payload: ThemeAppearance): void => callback(payload)
     ipcRenderer.on(SETTINGS_IPC_CHANNELS.ON_THEME_SETTINGS_CHANGED, listener)
     return () => { ipcRenderer.removeListener(SETTINGS_IPC_CHANNELS.ON_THEME_SETTINGS_CHANGED, listener) }
   },

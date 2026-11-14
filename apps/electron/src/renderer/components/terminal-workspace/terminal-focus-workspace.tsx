@@ -27,7 +27,6 @@ import {
   FilePlus,
 } from "lucide-react";
 import { useHydratedDesktopBridge, type DesktopTerminalBridge } from "./desktop-bridge";
-import { useAppTheme } from "./use-app-theme";
 import { DEFAULT_NOTES_TYPOGRAPHY, loadNotesTypography, NOTES_TYPOGRAPHY_EVENT, notesTypographyCssVars } from "./notes-typography";
 import { formatTerminalPath } from "./notes-terminal-path";
 import { useNotesTerminalSessions, type NotesTerminalSession } from "./use-notes-terminal-sessions";
@@ -244,7 +243,6 @@ function TrackSeparator({ axis, index, weights, onResize, singlePane }: {
 }
 
 export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: DesktopTerminalBridge | null; ready?: boolean }) {
-  const theme = useAppTheme();
   const [typography, setTypography] = useState(DEFAULT_NOTES_TYPOGRAPHY);
   const [layout, setLayout] = useState<FocusLayout>(DEFAULT_FOCUS_LAYOUT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -385,7 +383,7 @@ export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: Deskt
     setTimeout(end, 160);
   }, [terminal]);
 
-  return <div className="notes-v2 notes-v2--minimal terminal-focus" data-notes-theme={theme} data-sidebar-collapsed={layout.sidebarCollapsed ? "true" : "false"} style={notesTypographyCssVars(typography) as CSSProperties}>
+  return <div className="notes-v2 notes-v2--minimal terminal-focus" data-sidebar-collapsed={layout.sidebarCollapsed ? "true" : "false"} style={notesTypographyCssVars(typography) as CSSProperties}>
     <aside id="terminal-focus-sidebar" className="terminal-focus__sidebar" aria-label="终端会话" {...((projectPickerOpen || layout.sidebarCollapsed) ? { inert: '' } : {})} hidden={layout.sidebarCollapsed}>
       <TerminalFocusSidebar sessions={sessions} activeSessionId={activeSessionId} singlePane={singlePane} bridge={bridge}
         disabledCreate={!bridge || terminal.isRestoring || terminal.isMaxed} restoring={terminal.isRestoring}

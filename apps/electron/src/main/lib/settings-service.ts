@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
 import { writeJsonFileAtomic } from './safe-file'
 import { normalizeAppIconVariant } from '../../types/app-icons'
-import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeThemeStyle, normalizeWorkbenchDensity } from '../../types'
+import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeThemeAppearance, normalizeWorkbenchDensity } from '../../types'
 import type { AgentIslandSettings, AppSettings, UpdateAppSettings } from '../../types'
 import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@gamma/shared'
 
@@ -76,8 +76,7 @@ export function getSettings(): AppSettings {
     } = data
     return {
       ...settings,
-      themeMode: data.themeMode || DEFAULT_THEME_MODE,
-      themeStyle: normalizeThemeStyle(data.themeStyle),
+      ...normalizeThemeAppearance(data),
       onboardingCompleted: data.onboardingCompleted ?? false,
       environmentCheckSkipped: data.environmentCheckSkipped ?? false,
       notificationsEnabled: data.notificationsEnabled ?? true,
@@ -129,9 +128,10 @@ export function getSettings(): AppSettings {
  */
 export function updateSettings(updates: UpdateAppSettings): AppSettings {
   const current = getSettings()
+  const merged = { ...current, ...updates }
   const updated: AppSettings = {
-    ...current,
-    ...updates,
+    ...merged,
+    ...normalizeThemeAppearance(merged),
     intelligentUiEnabled: (updates.intelligentUiEnabled === undefined ? current.intelligentUiEnabled : updates.intelligentUiEnabled) === true,
     workbenchDensity: normalizeWorkbenchDensity(updates.workbenchDensity === undefined ? current.workbenchDensity : updates.workbenchDensity),
     appIconVariant: normalizeAppIconVariant(updates.appIconVariant ?? current.appIconVariant),

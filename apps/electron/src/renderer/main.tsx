@@ -9,7 +9,7 @@ import './lib/legacy-storage-migration'
 
 // 字体由 globals.css → typography.css 统一自托管加载，主窗口和独立预览共用。
 
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
 import { useSetAtom, useAtomValue, useStore } from 'jotai'
 import App from './App'
@@ -20,11 +20,10 @@ import { sendWithCmdEnterAtom, shortcutOverridesAtom } from './atoms/shortcut-at
 import { TooltipProvider } from './components/ui/tooltip'
 import {
   themeModeAtom,
-  themeStyleAtom,
   systemIsDarkAtom,
-  resolvedThemeAtom,
   applyThemeToDOM,
   initializeTheme,
+  chatWallpaperAtom,
 } from './atoms/theme'
 import {
   agentChannelIdAtom,
@@ -111,18 +110,18 @@ if (isMainWindow || isWorkspaceMemoryWindow || isSettingsWindow) {
  */
 function ThemeInitializer(): null {
   const setThemeMode = useSetAtom(themeModeAtom)
-  const setThemeStyle = useSetAtom(themeStyleAtom)
+  const setChatWallpaper = useSetAtom(chatWallpaperAtom)
   const setSystemIsDark = useSetAtom(systemIsDarkAtom)
   const themeMode = useAtomValue(themeModeAtom)
-  const themeStyle = useAtomValue(themeStyleAtom)
   const systemIsDark = useAtomValue(systemIsDarkAtom)
+  const wallpaper = useAtomValue(chatWallpaperAtom)
 
   // 初始化：从主进程加载设置 + 订阅系统主题变化
   useEffect(() => {
     let isMounted = true
     let cleanup: (() => void) | undefined
 
-    initializeTheme(setThemeMode, setSystemIsDark, setThemeStyle).then((fn) => {
+    initializeTheme(setThemeMode, setSystemIsDark, setChatWallpaper).then((fn) => {
       if (isMounted) {
         cleanup = fn
       } else {
@@ -135,26 +134,11 @@ function ThemeInitializer(): null {
       isMounted = false
       cleanup?.()
     }
-  }, [setThemeMode, setSystemIsDark, setThemeStyle])
+  }, [setThemeMode, setSystemIsDark, setChatWallpaper])
 
-  // 响应式应用主题到 DOM
-  // 用 useMemo 计算"实际会影响 DOM 的状态签名"作为唯一依赖：
-  // special 模式下 systemIsDark 不影响最终 class，避免系统主题变化时触发无意义的
-  // applyThemeToDOM 调用（配合 applyThemeToDOM 内部的幂等检查双重兜底）。
-  const themeSignature = useMemo(() => {
-    if (themeMode === 'special') {
-      return `special:${themeStyle}`
-    }
-    if (themeMode === 'system') {
-      return `system:${systemIsDark ? 'dark' : 'light'}`
-    }
-    return themeMode
-  }, [themeMode, themeStyle, systemIsDark])
-
-  useEffect(() => {
-    applyThemeToDOM(themeMode, themeStyle, systemIsDark)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeSignature])
+  useLayoutEffect(() => {
+    applyThemeToDOM(themeMode, systemIsDark, wallpaper)
+  }, [themeMode, systemIsDark, wallpaper])
 
   return null
 }
