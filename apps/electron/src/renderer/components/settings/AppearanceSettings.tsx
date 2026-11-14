@@ -6,8 +6,9 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Check } from 'lucide-react'
+import { circleRevealStateAtom } from '@/atoms/theme-picker'
 import {
   SettingsSection,
   SettingsCard,
@@ -34,13 +35,14 @@ import type { ThemeMode, ThemeStyle, MarkdownFontSize } from '../../../types'
 import { AppIconPicker } from './AppIconPicker'
 
 // ===== 主题预览图片导入 =====
-import themeCloudDancer from '@/assets/theme-previews/theme-cloud-dancer.webp'
-import themeOceanLight from '@/assets/theme-previews/theme-ocean-light.webp'
-import themeForestMorning from '@/assets/theme-previews/theme-forest-morning.webp'
-import themeOceanDark from '@/assets/theme-previews/theme-ocean-dark.webp'
-import themeForestNight from '@/assets/theme-previews/theme-forest-night.webp'
-import themeMorandiNight from '@/assets/theme-previews/theme-morandi-night.webp'
-import themeTerminalDark from '@/assets/theme-previews/theme-terminal-dark.png'
+import themeClaudeCode from '@/assets/theme-previews/theme-claude-code.webp'
+import themeCloudDrift from '@/assets/theme-previews/theme-cloud-drift.webp'
+import themeHonuLagoon from '@/assets/theme-previews/theme-honu-lagoon.webp'
+import themeKoiPond from '@/assets/theme-previews/theme-koi-pond.webp'
+import themeJellyfish from '@/assets/theme-previews/theme-jellyfish.webp'
+import themePaperBoats from '@/assets/theme-previews/theme-paper-boats.webp'
+import themeFireflies from '@/assets/theme-previews/theme-fireflies.webp'
+import themeMoonlit from '@/assets/theme-previews/theme-moonlit.webp'
 
 /** 主题选项 */
 const THEME_OPTIONS = [
@@ -77,51 +79,52 @@ interface SpecialStyle {
 
 const SPECIAL_STYLES: readonly SpecialStyle[] = [
   {
-    id: 'slate-light',
+    id: 'claude-code',
+    name: 'Claude Code',
+    variant: 'dark',
+    image: themeClaudeCode,
+  },
+  {
+    id: 'cloud-drift',
     name: '云朵舞者',
     variant: 'light',
-    image: themeCloudDancer,
-    imageScale: 1.3,
+    image: themeCloudDrift,
   },
   {
-    id: 'ocean-light',
-    name: '晴空碧海',
-    variant: 'light',
-    image: themeOceanLight,
-  },
-  {
-    id: 'forest-light',
-    name: '森息晨光',
-    variant: 'light',
-    image: themeForestMorning,
-    imageScale: 1.45,
-  },
-  {
-    id: 'ocean-dark',
-    name: '远山暮霭',
+    id: 'honu-lagoon',
+    name: '碧海绿龟',
     variant: 'dark',
-    image: themeOceanDark,
+    image: themeHonuLagoon,
   },
   {
-    id: 'forest-dark',
-    name: '森息夜语',
+    id: 'koi-pond',
+    name: '锦鲤碧潭',
     variant: 'dark',
-    image: themeForestNight,
+    image: themeKoiPond,
   },
   {
-    id: 'slate-dark',
-    name: '莫兰迪夜',
+    id: 'jellyfish',
+    name: '深海水母',
     variant: 'dark',
-    image: themeMorandiNight,
-    imageScale: 1.15,
-    objectPosition: '44% 58%',
+    image: themeJellyfish,
   },
   {
-    id: 'terminal-dark',
-    name: '旧屏微光',
+    id: 'paper-boats',
+    name: '青波纸船',
     variant: 'dark',
-    image: themeTerminalDark,
-    tooltip: '该主题包含轻微闪烁动画',
+    image: themePaperBoats,
+  },
+  {
+    id: 'fireflies',
+    name: '夏夜萤火',
+    variant: 'dark',
+    image: themeFireflies,
+  },
+  {
+    id: 'moonlit',
+    name: '皓月繁星',
+    variant: 'dark',
+    image: themeMoonlit,
   },
 ]
 
@@ -152,6 +155,7 @@ export function AppearanceSettings(): React.ReactElement {
   const [themeMode, setThemeMode] = useAtom(themeModeAtom)
   const [themeStyle, setThemeStyle] = useAtom(themeStyleAtom)
   const systemIsDark = useAtomValue(systemIsDarkAtom)
+  const setCircleReveal = useSetAtom(circleRevealStateAtom)
   const [markdownFontSize, setMarkdownFontSize] = useAtom(markdownFontSizeAtom)
 
   /** 切换主题模式 */
@@ -168,14 +172,22 @@ export function AppearanceSettings(): React.ReactElement {
   }, [setThemeMode, setThemeStyle, systemIsDark])
 
   /** 选择特殊风格 */
-  const handleStyleSelect = React.useCallback((style: ThemeStyle) => {
+  const handleStyleSelect = React.useCallback((style: ThemeStyle, e?: React.MouseEvent) => {
+    if (e) {
+      setCircleReveal({
+        active: true,
+        originX: e.clientX,
+        originY: e.clientY,
+        targetStyle: style,
+      })
+    }
     // 同时切换到特殊风格模式
     setThemeMode('special')
     setThemeStyle(style)
-    updateThemeMode('special')
-    updateThemeStyle(style)
+    void updateThemeMode('special')
+    void updateThemeStyle(style)
     applyThemeToDOM('special', style, systemIsDark)
-  }, [setThemeMode, setThemeStyle, systemIsDark])
+  }, [setThemeMode, setThemeStyle, systemIsDark, setCircleReveal])
 
   /** 切换 Markdown 字号 */
   const handleMarkdownFontSizeChange = React.useCallback((value: string) => {
@@ -213,13 +225,13 @@ export function AppearanceSettings(): React.ReactElement {
           {/* 特殊风格 - 标签在上，卡片在下 */}
           <div className="px-4 py-3 space-y-2">
             <div className="text-sm font-medium text-foreground">特殊风格</div>
-            <div className="grid grid-cols-4 gap-x-3 gap-y-4 min-[720px]:grid-cols-7">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-4 min-[720px]:grid-cols-8">
               {SPECIAL_STYLES.map((style) => (
                 <StyleCard
                   key={style.id}
                   style={style}
                   isSelected={themeMode === 'special' && themeStyle === style.id}
-                  onSelect={() => handleStyleSelect(style.id)}
+                  onSelect={(e) => handleStyleSelect(style.id, e)}
                 />
               ))}
             </div>
@@ -254,7 +266,7 @@ function StyleCard({
 }: {
   style: SpecialStyle
   isSelected: boolean
-  onSelect: () => void
+  onSelect: (e: React.MouseEvent) => void
 }): React.ReactElement {
   return (
     <button
