@@ -227,17 +227,38 @@ export type ThemeMode = 'light' | 'dark' | 'system' | 'special'
 /** 所有合法的特殊风格值（白名单，新增主题时只需追加这里） */
 export const THEME_STYLES = [
   'default',
-  'ocean-light',
-  'ocean-dark',
-  'forest-light',
-  'forest-dark',
-  'slate-light',
-  'slate-dark',
-  'terminal-dark',
+  'claude-code',
+  'cloud-drift',
+  'honu-lagoon',
+  'koi-pond',
+  'jellyfish',
+  'paper-boats',
+  'fireflies',
+  'moonlit',
 ] as const
 
 /** 特殊风格主题 */
 export type ThemeStyle = (typeof THEME_STYLES)[number]
+
+/** 历史主题平滑映射表 */
+const LEGACY_THEME_STYLE_MAP: Record<string, ThemeStyle> = {
+  'ocean-light': 'cloud-drift',
+  'ocean-dark': 'honu-lagoon',
+  'forest-light': 'cloud-drift',
+  'forest-dark': 'fireflies',
+  'slate-light': 'cloud-drift',
+  'slate-dark': 'moonlit',
+  'terminal-dark': 'claude-code',
+}
+
+/** 归一化并校验特殊风格，老配置安全映射至对应新主题 */
+export function normalizeThemeStyle(raw: unknown): ThemeStyle {
+  if (typeof raw !== 'string') return 'default'
+  if ((THEME_STYLES as readonly string[]).includes(raw)) {
+    return raw as ThemeStyle
+  }
+  return LEGACY_THEME_STYLE_MAP[raw] ?? 'default'
+}
 
 /** 默认主题模式 */
 export const DEFAULT_THEME_MODE: ThemeMode = 'dark'

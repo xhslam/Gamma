@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
 import { writeJsonFileAtomic } from './safe-file'
 import { normalizeAppIconVariant } from '../../types/app-icons'
-import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeWorkbenchDensity } from '../../types'
+import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeThemeStyle, normalizeWorkbenchDensity } from '../../types'
 import type { AgentIslandSettings, AppSettings, UpdateAppSettings } from '../../types'
 import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@gamma/shared'
 
@@ -77,6 +77,7 @@ export function getSettings(): AppSettings {
     return {
       ...settings,
       themeMode: data.themeMode || DEFAULT_THEME_MODE,
+      themeStyle: normalizeThemeStyle(data.themeStyle),
       onboardingCompleted: data.onboardingCompleted ?? false,
       environmentCheckSkipped: data.environmentCheckSkipped ?? false,
       notificationsEnabled: data.notificationsEnabled ?? true,

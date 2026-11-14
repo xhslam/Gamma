@@ -11,7 +11,7 @@
  */
 
 import { atom } from 'jotai'
-import { THEME_STYLES, type ThemeMode, type ThemeStyle } from '../../types'
+import { THEME_STYLES, normalizeThemeStyle, type ThemeMode, type ThemeStyle } from '../../types'
 
 /** localStorage 缓存键 */
 const THEME_CACHE_KEY = 'gamma-theme-mode'
@@ -38,9 +38,7 @@ function getCachedThemeMode(): ThemeMode {
 function getCachedThemeStyle(): ThemeStyle {
   try {
     const cached = localStorage.getItem(THEME_STYLE_CACHE_KEY)
-    if ((THEME_STYLES as readonly string[]).includes(cached ?? '')) {
-      return cached as ThemeStyle
-    }
+    return normalizeThemeStyle(cached)
   } catch {
     // localStorage 不可用时忽略
   }
@@ -86,8 +84,8 @@ export const resolvedThemeAtom = atom<'light' | 'dark'>((get) => {
   }
   if (mode === 'special') {
     const style = get(themeStyleAtom)
-    // 根据特殊风格决定是浅色还是深色基调
-    return style.endsWith('-light') ? 'light' : 'dark'
+    // 根据特殊风格决定是浅色还是深色基调（除 cloud-drift 浅色外其余均为暗色调）
+    return style === 'cloud-drift' ? 'light' : 'dark'
   }
   return mode
 })
@@ -115,7 +113,7 @@ export function applyThemeToDOM(themeMode: ThemeMode, themeStyle: ThemeStyle = '
 
   if (themeMode === 'special' && themeStyle !== 'default') {
     targetStyleClass = `theme-${themeStyle}`
-    targetIsDark = themeStyle.endsWith('-dark')
+    targetIsDark = themeStyle !== 'cloud-drift'
   } else if (themeMode === 'system') {
     targetIsDark = systemIsDark
   } else {
