@@ -127,3 +127,67 @@
   --text-tertiary: var(--palette-dark-tertiary-hsl);
   --border: var(--palette-light-background-hsl) / 0.08;
 }
+
+/* 8 款 ASCII 艺术壁纸主题调色板 */
+.theme-claude-code {
+  color-scheme: dark;
+}
+
+.theme-cloud-drift {
+  color-scheme: light;
+  --background: 195 80% 91%;
+  --foreground: 210 8% 15%;
+  --panel: 0 0% 100%;
+  --inset: 195 50% 96%;
+  --primary: 195 72% 45%;
+  --primary-foreground: 0 0% 100%;
+  --border: 210 8% 15% / 0.12;
+}
+
+.theme-honu-lagoon {
+  color-scheme: dark;
+  --background: 177 47% 21%;
+  --panel: 177 42% 16%;
+  --inset: 177 38% 12%;
+  --primary: 174 80% 40%;
+}
+
+.theme-koi-pond {
+  color-scheme: dark;
+  --background: 159 34% 22%;
+  --panel: 159 30% 17%;
+  --inset: 159 26% 13%;
+  --primary: 158 64% 45%;
+}
+
+.theme-jellyfish {
+  color-scheme: dark;
+  --background: 206 63% 12%;
+  --panel: 206 58% 9%;
+  --inset: 206 50% 7%;
+  --primary: 199 89% 48%;
+}
+
+.theme-paper-boats {
+  color-scheme: dark;
+  --background: 183 30% 23%;
+  --panel: 183 26% 18%;
+  --inset: 183 22% 14%;
+  --primary: 174 65% 52%;
+}
+
+.theme-fireflies {
+  color-scheme: dark;
+  --background: 197 40% 6%;
+  --panel: 197 35% 5%;
+  --inset: 197 30% 4%;
+  --primary: 84 81% 44%;
+}
+
+.theme-moonlit {
+  color-scheme: dark;
+  --background: 232 51% 7%;
+  --panel: 232 45% 5%;
+  --inset: 232 40% 4%;
+  --primary: 239 84% 67%;
+}
