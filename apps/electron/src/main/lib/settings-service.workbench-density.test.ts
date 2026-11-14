@@ -43,13 +43,13 @@ describe('工作台密度设置', () => {
   test('Given 用户已有特殊主题 When 切换密度并重载 Then 原子保存且不覆盖主题和其他设置', async () => {
     const { directory, path } = temporarySettings()
     try {
-      writeJsonFileAtomic(path, { themeMode: 'special', themeStyle: 'ocean-dark', sendWithCmdEnter: true })
+      writeJsonFileAtomic(path, { themeMode: 'special', themeStyle: 'honu-lagoon', sendWithCmdEnter: true })
       expect(await scenario(path, `
         updateSettings({workbenchDensity:'comfortable'});
         updateSettings({notificationsEnabled:false});
         const settings=getSettings(), saved=JSON.parse(readFileSync(path,'utf8'));
         console.log(JSON.stringify({density:settings.workbenchDensity,saved:saved.workbenchDensity,mode:settings.themeMode,style:settings.themeStyle,cmd:settings.sendWithCmdEnter}));
-      `)).toEqual({ density: 'comfortable', saved: 'comfortable', mode: 'special', style: 'ocean-dark', cmd: true })
+      `)).toEqual({ density: 'comfortable', saved: 'comfortable', mode: 'special', style: 'honu-lagoon', cmd: true })
       expect(await scenario(path, `updateSettings({workbenchDensity:'invalid'});console.log(JSON.stringify({density:getSettings().workbenchDensity}))`)).toEqual({ density: 'compact' })
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })

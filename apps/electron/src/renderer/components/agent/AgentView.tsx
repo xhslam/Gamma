@@ -2161,8 +2161,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
     const text = (overrideText ?? currentDraft).trim()
     if (text.toLowerCase() === '/theme') {
-      richTextInputRef.current?.setContent('')
-      setDraft('')
+      setInputContent('')
+      setInputHtmlContent('')
       setThemePickerOpen(true)
       return
     }

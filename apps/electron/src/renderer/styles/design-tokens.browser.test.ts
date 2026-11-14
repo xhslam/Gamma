@@ -34,7 +34,18 @@ describe('Given 真实 Chromium 中的暖色主题', () => {
   }, 30_000)
 
   test('When 恢复历史特殊主题或反复切换 Then 不重新引入色板之外的颜色', async () => {
-    const themes = ['theme-ocean-light', 'theme-forest-light', 'theme-slate-light', 'dark theme-ocean-dark', 'dark theme-forest-dark', 'dark theme-slate-dark', 'dark theme-terminal-dark', '', 'dark']
+    const themes = [
+      'theme-cloud-drift',
+      'dark theme-claude-code',
+      'dark theme-honu-lagoon',
+      'dark theme-koi-pond',
+      'dark theme-jellyfish',
+      'dark theme-paper-boats',
+      'dark theme-fireflies',
+      'dark theme-moonlit',
+      '',
+      'dark',
+    ]
     const snapshots = await renderer.run<ThemeSnapshot[]>(`return [${themes.map(theme => `(()=>{${snapshotScript(theme)}})()`).join(',')}];`)
     expect(snapshots).toEqual(themes.map(theme => theme.startsWith('dark') ? dark : light))
   }, 30_000)

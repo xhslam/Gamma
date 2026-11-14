@@ -57,12 +57,12 @@ describe('Given 真实 Chromium 中的工作台密度', () => {
 
   test('When 切换密度 Then 输入圆角为 12/14px、底部行独立且编辑焦点草稿不丢失', async () => {
     const result = await renderer.run<{ before: string; after: string; focus: boolean; draft: boolean; independent: boolean; theme: boolean }>(`
-      document.documentElement.classList.add('dark','theme-ocean-dark');
+      document.documentElement.classList.add('dark','theme-honu-lagoon');
       const f=await window.mountWorkbench(),dom=document.querySelector('.tiptap');
       dom.focus();const before=getComputedStyle(document.querySelector('.gamma-composer')).borderRadius;
       f.setDensity('comfortable');await window.leftSidebarRegression.delay(80);
       const after=getComputedStyle(document.querySelector('.gamma-composer')).borderRadius;
-      const result={before,after,focus:document.activeElement===dom,draft:dom.textContent.includes('保留我的草稿'),independent:document.querySelector('.gamma-composer-footer').previousElementSibling.classList.contains('gamma-composer'),theme:document.documentElement.classList.contains('theme-ocean-dark')};
+      const result={before,after,focus:document.activeElement===dom,draft:dom.textContent.includes('保留我的草稿'),independent:document.querySelector('.gamma-composer-footer').previousElementSibling.classList.contains('gamma-composer'),theme:document.documentElement.classList.contains('theme-honu-lagoon')};
       f.root.unmount();return result;
     `)
     expect(result).toEqual({ before: '12px', after: '14px', focus: true, draft: true, independent: true, theme: true })

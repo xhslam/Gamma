@@ -1,4 +1,4 @@
-import type { ThemeStyle } from '@/types'
+import type { ThemeStyle } from '../../../../types'
 import type { AsciiWallpaperEngine } from '../engine-types'
 import { ClaudeCodeEngine } from './claude-code'
 import { CloudDriftEngine } from './cloud-drift'

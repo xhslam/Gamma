@@ -107,7 +107,7 @@ describe('Given 真实 Chromium 渲染的会话 UI', () => {
       expect(result.markdown).toBe('normal')
     }, 30_000)
   }
-  for (const theme of ['theme-ocean-light', 'dark theme-ocean-dark', 'theme-forest-light', 'dark theme-forest-dark', 'theme-slate-light', 'dark theme-slate-dark', 'dark theme-terminal-dark']) {
+  for (const theme of ['theme-cloud-drift', 'dark theme-claude-code', 'dark theme-honu-lagoon', 'dark theme-koi-pond', 'dark theme-jellyfish', 'dark theme-paper-boats', 'dark theme-fireflies', 'dark theme-moonlit']) {
     test(`When 选择历史主题 ${theme} Then 使用统一暖色强调色并保留控件几何`, async () => {
       const result = await renderer.run<VisualResult>(`window.setTheme(${JSON.stringify(theme)}); return window.visual()`)
       expect(result.primary).toBe('14.76923077 63.10679612% 59.60784314%')

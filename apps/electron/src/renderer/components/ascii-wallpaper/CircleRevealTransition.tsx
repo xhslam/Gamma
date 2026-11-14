@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { ThemeStyle } from '@/types'
+import type { ThemeStyle } from '../../../types'
 import { AsciiWallpaperCanvas } from './AsciiWallpaperCanvas'
 
 export function calculateCircleRevealRadius(
