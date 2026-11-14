@@ -242,7 +242,13 @@ function TrackSeparator({ axis, index, weights, onResize, singlePane }: {
     }} />;
 }
 
-export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: DesktopTerminalBridge | null; ready?: boolean }) {
+interface TerminalFocusWorkspaceProps {
+  bridge: DesktopTerminalBridge | null;
+  ready?: boolean;
+  visible?: boolean;
+}
+
+export function TerminalFocusWorkspace({ bridge, ready = true, visible = true }: TerminalFocusWorkspaceProps) {
   const [typography, setTypography] = useState(DEFAULT_NOTES_TYPOGRAPHY);
   const [layout, setLayout] = useState<FocusLayout>(DEFAULT_FOCUS_LAYOUT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -265,7 +271,7 @@ export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: Deskt
     });
   }, []);
   const terminal = useNotesTerminalSessions({
-    enabled: Boolean(bridge), terminalBridge: bridge, workspaceInstanceId: TERMINAL_FOCUS_SCOPE,
+    enabled: Boolean(bridge), terminalBridge: bridge, workspaceInstanceId: TERMINAL_FOCUS_SCOPE, visible,
     multiPane: true, singlePane, autoCreateSession: false, maxSessions: TERMINAL_FOCUS_LIMIT, strictWorkspaceScope: true,
     sessionIdPrefix: "focus-term", onSearch: toggleSearch,
     readingSessions, onToggleReadingMode: toggleReadingMode,
@@ -308,12 +314,13 @@ export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: Deskt
 
   useEffect(() => {
     bridge?.reportVisiblePanes?.({
-      activeSessionId,
-      visibleSessionIds,
+      activeSessionId: visible ? activeSessionId : null,
+      visibleSessionIds: visible ? visibleSessionIds : [],
     }).catch(() => undefined);
-  }, [bridge, activeSessionId, visibleSessionIds]);
+  }, [bridge, activeSessionId, visibleSessionIds, visible]);
 
   useEffect(() => {
+    if (!visible) return;
     const onFocus = () => {
       if (typeof document !== "undefined" && document.hasFocus()) {
         for (const session of sessions) {
@@ -328,7 +335,7 @@ export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: Deskt
     return () => {
       window.removeEventListener("focus", onFocus);
     };
-  }, [clearUnread, sessions, visibleSessionIds]);
+  }, [clearUnread, sessions, visibleSessionIds, visible]);
 
   useEffect(() => {
     try { setLayout(normalizeFocusLayout(JSON.parse(localStorage.getItem(TERMINAL_FOCUS_LAYOUT_KEY) ?? "null"))); } catch { /* Corrupt preferences must not block Shell startup. */ }
@@ -478,7 +485,7 @@ export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: Deskt
           {columnWeights.slice(0, -1).map((_, index) => <TrackSeparator key={`column-${index}`} axis="column" index={index} weights={columnWeights} singlePane={singlePane} onResize={(weights) => setLayout((previous) => ({ ...previous, columnWeights: weights }))} />)}
           {rowWeights.slice(0, -1).map((_, index) => <TrackSeparator key={`row-${index}`} axis="row" index={index} weights={rowWeights} singlePane={singlePane} onResize={(weights) => setLayout((previous) => ({ ...previous, rowWeights: weights }))} />)}
         </div>
-        {!sessions.length && <div className="terminal-focus__empty"><TerminalWindow size={32} /><h2>{!ready ? "正在连接桌面终端…" : terminal.isRestoring ? "正在恢复终端会话…" : bridge ? "开始一个终端会话" : "终端仅在 Auris 桌面端可用"}</h2>
+        {!sessions.length && <div className="terminal-focus__empty"><TerminalWindow size={32} /><h2>{!ready ? "正在连接桌面终端…" : terminal.isRestoring ? "正在恢复终端会话…" : bridge ? "开始一个终端会话" : "终端仅在 Gamma 桌面端可用"}</h2>
           <p>{bridge ? "选择文件夹或最近项目，在对应目录启动本机默认 Shell。" : "请在桌面应用中打开终端模式。"}</p>
           {bridge && <button type="button" disabled={terminal.isRestoring} onClick={() => setProjectPickerOpen(true)}>新建终端</button>}
         </div>}
@@ -503,11 +510,11 @@ export function TerminalFocusWorkspace({ bridge, ready = true }: { bridge: Deskt
   </div>;
 }
 
-export function TerminalWorkspaceView() {
+export function TerminalWorkspaceView({ visible = true }: { visible?: boolean }) {
   const { desktopBridge, hasHydratedDesktopBridge } = useHydratedDesktopBridge();
   return (
     <div className="flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <TerminalFocusWorkspace bridge={desktopBridge?.terminal ?? null} ready={hasHydratedDesktopBridge} />
+      <TerminalFocusWorkspace bridge={desktopBridge?.terminal ?? null} ready={hasHydratedDesktopBridge} visible={visible} />
     </div>
   );
 }

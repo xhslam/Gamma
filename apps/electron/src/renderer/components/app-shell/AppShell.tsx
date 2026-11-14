@@ -95,7 +95,7 @@ export function AppShell(): React.ReactElement {
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
   const activeView = useAtomValue(activeViewAtom)
   React.useEffect(() => {
-    const isEnabled = (tab: string): boolean => tab !== 'todos' && tab !== 'calendar'
+    const isEnabled = (tab: string): boolean => tab !== 'todos' && tab !== 'calendar' && tab !== 'agy-terminal'
     setAgentSessionComponentOpenMap((previous) => {
       let changed = false
       const next = Object.fromEntries(Object.entries(previous).map(([sessionId, tabs]) => {

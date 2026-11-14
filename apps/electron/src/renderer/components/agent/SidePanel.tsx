@@ -33,7 +33,6 @@ import type { RightWorkspaceTabDragState, WorkspacePanelTab } from '@/components
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { AgentView } from '@/components/agent/AgentView'
 const MarkdownWorkspaceView = React.lazy(() => import('@/components/markdown-workspace/MarkdownWorkspaceView'))
-const TerminalWorkspaceView = React.lazy(() => import('@/components/terminal-workspace/TerminalWorkspaceView'))
 const ProjectAgyTerminalView = React.lazy(() => import('@/components/tabs/ProjectAgyTerminalView').then(module => ({ default: module.ProjectAgyTerminalView })))
 import {
   currentSessionSidePanelOpenAtom,
@@ -123,7 +122,6 @@ import { getDelegatedChildSessionStatus, getDelegationStatusIconClass } from '@/
 import { markSessionCompletionViewed } from '@/lib/agent-completion-presence'
 import { rememberStopGenerationTarget } from '@/lib/stop-generation-target'
 import { TerminalTabContent } from '@/components/tabs/TerminalTabContent'
-import { TabErrorBoundary } from '@/components/tabs/TabErrorBoundary'
 import { shouldShowBothFileSources } from './file-panel-layout'
 import {
   clampRightWorkspaceSplitRatio,
@@ -1273,7 +1271,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       closable: true,
     })),
     ...(activeTab === 'agy-tasks' || split?.leftTab === 'agy-tasks' || split?.rightTab === 'agy-tasks' ? [{ id: 'agy-tasks' as const, label: '外部任务', icon: <SquareTerminal className="size-3.5" />, closable: true }] : []),
-    ...workspaceComponentTabs.map((component) => {
+    ...workspaceComponentTabs.filter(isWorkspaceComponentTab).map((component) => {
       const meta: Record<WorkspaceComponentTab, { label: string; icon: React.ReactNode }> = {
         design: { label: 'design', icon: <Palette className="size-3.5" /> },
         todos: { label: 'Todo', icon: <ListTodo className="size-3.5" /> },
@@ -1283,7 +1281,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
         mcp: { label: 'MCP', icon: <ServerCog className="size-3.5" /> },
         memory: { label: '项目记忆', icon: <Brain className="size-3.5" /> },
         markdown: { label: 'Markdown', icon: <BookOpen className="size-3.5" /> },
-        'agy-terminal': { label: '终端工作台', icon: <SquareTerminal className="size-3.5" /> },
       }
       return { id: component, ...meta[component], closable: true }
     }),
@@ -1640,14 +1637,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       ) : (
         <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">等待项目初始化...</div>
       )
-    ) : paneTab === 'agy-terminal' ? (
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <TabErrorBoundary key={`terminal-workbench:${currentWorkspaceId}`} sessionId={sessionId}>
-          <React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载终端工作台…</div>}>
-            <TerminalWorkspaceView />
-          </React.Suspense>
-        </TabErrorBoundary>
-      </div>
     ) : paneTab === 'markdown' ? (
       <div className="min-h-0 flex-1 overflow-hidden"><React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载 Markdown 工作区…</div>}><MarkdownWorkspaceView key={currentWorkspaceId + ':' + sessionId} workspaceId={currentWorkspaceId ?? undefined} sessionId={sessionId} /></React.Suspense></div>
     ) : paneTab === 'changes' ? (

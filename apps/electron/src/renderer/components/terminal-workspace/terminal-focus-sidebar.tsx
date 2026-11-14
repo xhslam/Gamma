@@ -108,7 +108,7 @@ export function TerminalFocusSidebar({
   };
 
   return <>
-    <div className="terminal-focus__sidebar-heading"><TerminalWindow size={18} /><h1>终端模式</h1><span>{sessions.length}/8</span>
+    <div className="terminal-focus__sidebar-heading"><TerminalWindow size={18} /><h1>终端工作台</h1><span>{sessions.length}/8</span>
       <button type="button" className="terminal-focus__tool" aria-label="新建终端" title="新建终端（最多 8 个）；切换页面不会结束会话" disabled={disabledCreate} onClick={onNew}><Plus size={17} /></button>
     </div>
     <div ref={listRef} className="terminal-focus__session-list" role="tablist" aria-label="按启动项目分组的终端会话" aria-orientation="vertical">

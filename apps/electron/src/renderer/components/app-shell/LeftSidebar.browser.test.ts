@@ -51,16 +51,15 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result.separated).toBe(true)
   }, 30_000)
 
-  test('When 点击终端工作台入口 Then 与 Markdown 一样作为右侧工作区栏目打开且不改选会话', async () => {
-    expect(await renderer.run<{ view: string; workspace: string; agent: string; workspaceTab: string; componentTabs: string[]; current: string }>(`
-      const api = window.leftSidebarRegression, fixture = await api.mount();
-      const button = [...document.querySelectorAll('button')].find(item => item.textContent.trim() === '终端工作台' || item.textContent.trim() === 'AGY');
-      if (!button) throw new Error('侧栏缺少终端工作台入口');
-      button.click(); await api.until(() => fixture.state().workspaceTab === 'agy-terminal');
-      const state = fixture.state(), current = button.getAttribute('aria-current');
+  test('Given 没有活跃会话 When 点击终端工作台 Then 仍能进入独立页面', async () => {
+    expect(await renderer.run<{ view: string; agent: string | null; componentTabs: string[] }>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount({ activeAgent: null });
+      const button = fixture.button('终端工作台');
+      button.click(); await api.until(() => button.getAttribute('aria-current') === 'page');
+      const { view, agent, componentTabs } = fixture.state();
       fixture.root.unmount();
-      return { view: state.view, workspace: state.workspace, agent: state.agent, workspaceTab: state.workspaceTab, componentTabs: state.componentTabs, current };
-    `)).toEqual({ view: 'conversations', workspace: 'project-a', agent: 'parent', workspaceTab: 'agy-terminal', componentTabs: ['agy-terminal'], current: 'page' })
+      return { view, agent, componentTabs };
+    `)).toEqual({ view: 'agy-terminal', agent: null, componentTabs: [] })
   }, 30_000)
 
   test('When 点击 design Then 打开完整主工作台而非草稿或重复右侧会话', async () => {

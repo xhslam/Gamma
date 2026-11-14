@@ -2,8 +2,7 @@ import { DesignWorkspaceView } from '@/components/design/DesignWorkspaceView'
 /**
  * MainArea — 主内容区域
  *
- * 组合 TabBar + TabContent。文件、Markdown 和 Diff 预览统一由右侧工作区承载；
- * MainArea 仅保留对话主区。
+ * 承载对话和独立工作区页面。会话文件与 Diff 预览由右侧工作区承载。
  */
 
 import * as React from 'react'
@@ -19,7 +18,7 @@ import { WelcomeView } from '@/components/welcome/WelcomeView'
 import { useTrackSessionView } from '@/hooks/useTrackSessionView'
 import { TabBar } from './TabBar'
 import { TabContent } from './TabContent'
-import { ProjectAgyTerminalView } from './ProjectAgyTerminalView'
+import { TabErrorBoundary } from './TabErrorBoundary'
 import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
@@ -59,7 +58,13 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
   const activeTab = useAtomValue(activeTabAtom)
   const automationFormOpen = useAtomValue(automationFormAtom).open
   const activeView = useAtomValue(activeViewAtom)
+  const terminalVisible = activeView === 'agy-terminal'
+  const [terminalVisited, setTerminalVisited] = React.useState(false)
   const store = useStore()
+
+  React.useEffect(() => {
+    if (terminalVisible) setTerminalVisited(true)
+  }, [terminalVisible])
 
   // TabBar 立即反馈，较重的中心内容可让出当前交互帧；Agent 历史则保持当前会话避免旧内容占屏。
   const deferredActiveTabId = React.useDeferredValue(activeTabId)
@@ -67,7 +72,7 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
   // Agent 会话从左侧历史列表切换，中心区不再重复展示同一组顶部 Tab。
   const showCenterTabBar = activeTab?.type !== 'agent'
   const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
-  const [activeOverlay, setActiveOverlay] = useAtom(activeOnDemandOverlayAtom)
+  const activeOverlay = useAtomValue(activeOnDemandOverlayAtom)
   const toggleOverlay = useSetAtom(toggleOnDemandOverlayAtom)
   const closeOverlay = useSetAtom(closeOnDemandOverlayAtom)
 
@@ -83,6 +88,7 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
 
   // 统一注册按需右侧面板快捷键与大面板快捷键
   React.useEffect(() => {
+    if (terminalVisible) return
     const unregisterBigPanel = registerShortcut('toggle-right-panel', toggleRightPanel)
     const unregisterFiles = registerShortcut('toggle-right-panel-files', () => {
       if (activeTab?.type !== 'agent') return
@@ -108,7 +114,7 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
       unregisterChanges()
       unregisterExploration()
     }
-  }, [activeTab?.type, toggleOverlay, toggleRightPanel])
+  }, [activeTab, terminalVisible, toggleOverlay, toggleRightPanel, store])
 
   // 浏览器状态仍由主内容区常驻订阅，右侧工作区只读取 atom 渲染，避免侧栏收起时遗漏状态更新。
   const setBrowserOpenMap = useSetAtom(browserPanelOpenMapAtom)
@@ -194,17 +200,27 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
 
 
   return (
-    <Panel variant="grow" className="bg-content-area">
+    <Panel variant="grow" className="bg-content-area" style={terminalVisible ? { padding: 0 } : undefined}>
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex flex-1 flex-col min-w-0 h-full">
-          {activeView === 'planning' ? (
+          {/* 首次打开后保留终端实例，让后台 Shell 继续接收输出。 */}
+          {(terminalVisible || terminalVisited) && (
+            <section
+              aria-label="终端工作台"
+              hidden={!terminalVisible}
+              className={terminalVisible ? 'flex min-h-0 flex-1 flex-col titlebar-no-drag' : 'hidden'}
+            >
+              <TabErrorBoundary sessionId="terminal-workbench">
+                <React.Suspense fallback={<div role="status" className="p-4 text-xs text-muted-foreground">正在加载终端工作台…</div>}>
+                  <TerminalWorkspaceView visible={terminalVisible} />
+                </React.Suspense>
+              </TabErrorBoundary>
+            </section>
+          )}
+          {terminalVisible ? null : activeView === 'planning' ? (
             automationFormOpen ? <AutomationFormView /> : <PlanningView />
           ) : activeView === 'agent-skills' ? (
             <AgentSkillsView />
-          ) : activeView === 'agy-terminal' ? (
-            <React.Suspense fallback={<div className="p-4 text-xs text-muted-foreground">正在加载终端工作台…</div>}>
-              <TerminalWorkspaceView />
-            </React.Suspense>
           ) : activeView === 'design' ? (
             <DesignWorkspaceView />
           ) : activeView === 'markdown' ? (

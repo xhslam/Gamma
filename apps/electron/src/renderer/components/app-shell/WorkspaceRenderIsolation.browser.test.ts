@@ -42,7 +42,18 @@ const fixtureSource = leftSidebarFixtureSource
   .replace('root, calls,', 'root, calls, store,')
 
 let renderer: ElectronRendererHarness
-beforeAll(async () => { renderer = await createElectronRendererHarness(fixtureSource) }, 180_000)
+beforeAll(async () => {
+  renderer = await createElectronRendererHarness(fixtureSource, {
+    moduleStubs: {
+      'components/tabs/TabContent.tsx': 'export function TabContent(){return null}',
+      'components/design/DesignWorkspaceView.tsx': 'export function DesignWorkspaceView(){return null}',
+      'components/markdown-workspace/MarkdownWorkspaceView.tsx': 'export default function MarkdownWorkspaceView(){return null}',
+      'components/planning/PlanningView.tsx': 'export function PlanningView(){return null}',
+      'components/automation/AutomationFormView.tsx': 'export function AutomationFormView(){return null}',
+      'components/agent-skills/AgentSkillsView.tsx': 'export function AgentSkillsView(){return null}',
+    },
+  })
+}, 180_000)
 afterAll(async () => { await renderer?.dispose() })
 
 describe('工作区父布局与内容渲染隔离', () => {
@@ -69,12 +80,12 @@ describe('工作区父布局与内容渲染隔离', () => {
     `)).toEqual({ atomUpdated: true, propUpdated: true, width: '280px', errors: [] })
   }, 30_000)
 
-  test('Given 主区跳过父布局更新 When 自身视图 atom 切到 AGY Then 仍渲染真实 AGY 界面', async () => {
+  test('Given 主区跳过父布局更新 When 切到终端工作台 Then 仍渲染真实终端页面', async () => {
     expect(await renderer.run<Record<string, unknown>>(`
       const api=window.workspaceRenderIsolation, sidebar=window.leftSidebarRegression;
       api.withMainArea=true;const fixture=await sidebar.mount(),before=api.counts.main;
-      api.showAgy(fixture);await sidebar.until(()=>document.querySelector('section[aria-label="项目级 AGY 终端"]'));
-      const result={updated:api.counts.main>before,rendered:!!document.querySelector('section[aria-label="项目级 AGY 终端"]'),errors:api.errors};
+      api.showAgy(fixture);await sidebar.until(()=>document.querySelector('main[aria-label="专注终端工作区"]'));
+      const result={updated:api.counts.main>before,rendered:!!document.querySelector('main[aria-label="专注终端工作区"]'),errors:api.errors};
       fixture.root.unmount();return result;
     `)).toEqual({ updated: true, rendered: true, errors: [] })
   }, 30_000)

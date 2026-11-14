@@ -121,7 +121,7 @@ describe('Given 真实 AppShell 宽度预览与持久化', () => {
   }, 30_000)
 
   test('When 新会话首次打开扩展工作区或 AGY 终端拖动后松手 Then 最终宽度保留且不再回弹', async () => {
-    for (const customTab of ['delegation', 'agy:task-1', 'agy-terminal']) {
+    for (const customTab of ['delegation', 'agy:task-1']) {
       const result = await renderer.run<{ before: number; preview: number; final: number; stored: number; hasOpenedWide: boolean }>(`
         const f=await window.resizeFixture.mount('right',true,true,{freshWide:true,customTab:'${customTab}'});
         const handle=document.querySelector('[role="separator"]');if(!handle)throw new Error(document.body.innerHTML);

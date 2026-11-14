@@ -239,7 +239,7 @@ interface WorkspaceComponentSidebarEntryProps {
   badge?: React.ReactNode
 }
 
-/** 左侧项目级组件的单行入口；每项只打开一个对应的右侧 Tab。 */
+/** 左侧工作区导航入口。 */
 function WorkspaceComponentSidebarEntry({ label, icon, active, onClick, badge }: WorkspaceComponentSidebarEntryProps): React.ReactElement {
   return (
     <button
@@ -526,6 +526,7 @@ function deleteSetEntry<T>(prev: Set<T>, value: T): Set<T> {
 /** 隔离父工作区的宽度与栏目更新；自身 atom、state 和 props 仍正常触发渲染。 */
 export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
+  const isTerminalPage = activeView === 'agy-terminal'
   const setAutomationForm = useSetAtom(automationFormAtom)
   const setPlanningTab = useSetAtom(planningTabAtom)
   const setAgentSkillsTab = useSetAtom(agentSkillsTabAtom)
@@ -601,8 +602,8 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     ? sideDelegationMap.get(activeParentSessionId) ?? null
     : null
   const isWorkspaceComponentActive = React.useCallback(
-    (component: WorkspaceComponentTab): boolean => activeRightWorkspaceTab === component,
-    [activeRightWorkspaceTab],
+    (component: WorkspaceComponentTab): boolean => !isTerminalPage && activeRightWorkspaceTab === component,
+    [activeRightWorkspaceTab, isTerminalPage],
   )
   const agentIndicatorMap = useAtomValue(agentSessionIndicatorMapAtom)
   const unviewedCompletedSessionIds = useAtomValue(unviewedCompletedSessionIdsAtom)
@@ -896,15 +897,9 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     openWorkspaceComponent('markdown')
   }, [currentAgentSessionId, openWorkspaceComponent, setActiveView, setMarkdownSidebarOpen])
 
-  /** 与 Markdown 一致：优先作为右侧可拖动栏目打开；无会话时保留全屏兜底。 */
-  const handleOpenAgyTerminal = React.useCallback((): void => {
-    setActiveView('conversations')
-    if (!currentAgentSessionId) {
-      setActiveView('agy-terminal')
-      return
-    }
-    openWorkspaceComponent('agy-terminal')
-  }, [currentAgentSessionId, openWorkspaceComponent, setActiveView])
+  const handleOpenTerminalWorkbench = React.useCallback((): void => {
+    setActiveView('agy-terminal')
+  }, [setActiveView])
 
   const handleOpenDesign = React.useCallback((): void => {
     setActiveView('design')
@@ -2173,7 +2168,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       for (const item of group.trees) {
         const childCount = item.childSessions.length
         const rowStatus = getSessionTreeStatus(item, agentIndicatorMap)
-        const treeActive = treeContainsSessionId(item, activeSessionId)
+        const treeActive = !isTerminalPage && treeContainsSessionId(item, activeSessionId)
         const activeChildVisible = item.childSessions.some((child) => child.id === activeSessionId)
         const expandedChildren = expandedDelegationParentIds.has(item.session.id)
           || (activeChildVisible && !collapsedDelegationParentIds.has(item.session.id))
@@ -2222,8 +2217,8 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                 )}>
                   <DelegatedChildSessionItem
                     session={childSession}
-                    activeSessionId={activeSessionId}
-                    activeDelegationSessionId={activeDelegationSessionId}
+                    activeSessionId={isTerminalPage ? null : activeSessionId}
+                    activeDelegationSessionId={isTerminalPage ? null : activeDelegationSessionId}
                     agentIndicatorMap={agentIndicatorMap}
                     relativeTimeNow={relativeTimeNow}
                     workspaceName={childSession.workspaceId ? workspaceNameMap.get(childSession.workspaceId) : undefined}
@@ -2243,7 +2238,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       }
     }
     return rows
-  }, [sidebarRowHeight, activeDelegationSessionId, activeSessionId, agentIndicatorMap, archivedAgentSessionProjectGroups, collapsedDelegationParentIds, currentWorkspaceId, expandedArchivedProjectIds, expandedDelegationParentIds, handleAgentRename, handleRequestDelete, handleRequestMove, handleSelectAgentSession, handleToggleArchiveAgent, handleToggleArchivedProject, handleToggleDelegationParent, handleTogglePinAgent, handleToggleStarAgent, relativeTimeNow, sessionHoverPreviewEnabled, workspaceNameMap])
+  }, [sidebarRowHeight, activeDelegationSessionId, activeSessionId, agentIndicatorMap, archivedAgentSessionProjectGroups, collapsedDelegationParentIds, currentWorkspaceId, expandedArchivedProjectIds, expandedDelegationParentIds, handleAgentRename, handleRequestDelete, handleRequestMove, handleSelectAgentSession, handleToggleArchiveAgent, handleToggleArchivedProject, handleToggleDelegationParent, handleTogglePinAgent, handleToggleStarAgent, isTerminalPage, relativeTimeNow, sessionHoverPreviewEnabled, workspaceNameMap])
 
   const hasExpandedProject = React.useMemo(
     () => displayProjectGroups.some((group) => !collapsedWorkspaceIds.has(group.workspace.id)),
@@ -2263,7 +2258,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     ): void => {
       const childCount = item.childSessions.length
       const rowStatus = getSessionTreeStatus(item, agentIndicatorMap)
-      const treeActive = treeContainsSessionId(item, activeSessionId)
+      const treeActive = !isTerminalPage && treeContainsSessionId(item, activeSessionId)
       const activeChildVisible = item.childSessions.some((child) => child.id === activeSessionId)
       const expandedChildren = expandedDelegationParentIds.has(item.session.id)
         || (activeChildVisible && !collapsedDelegationParentIds.has(item.session.id))
@@ -2325,8 +2320,8 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
               >
                 <DelegatedChildSessionItem
                   session={childSession}
-                  activeSessionId={activeSessionId}
-                  activeDelegationSessionId={activeDelegationSessionId}
+                  activeSessionId={isTerminalPage ? null : activeSessionId}
+                  activeDelegationSessionId={isTerminalPage ? null : activeDelegationSessionId}
                   agentIndicatorMap={agentIndicatorMap}
                   relativeTimeNow={relativeTimeNow}
                   suppressAutomationIcon={isAutomationGroup}
@@ -2459,6 +2454,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
     handleToggleGroupCollapse,
     handleTogglePinAgent,
     handleToggleStarAgent,
+    isTerminalPage,
     handleWorkspaceRename,
     newProjectName,
     pinnedAgentSessionTrees,
@@ -2547,13 +2543,12 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
         </Tooltip>
       </div>
 
-      {/* 项目级组件：每一行直接打开对应的右侧工作区 Tab。 */}
       <nav aria-label="工作区" className="shrink-0 pt-1">
         <WorkspaceComponentSidebarEntry
           label="终端工作台"
           icon={<TerminalSquare size={16} />}
-          active={activeView === 'agy-terminal' || isWorkspaceComponentActive('agy-terminal')}
-          onClick={handleOpenAgyTerminal}
+          active={isTerminalPage}
+          onClick={handleOpenTerminalWorkbench}
         />
         <WorkspaceComponentSidebarEntry label="Markdown" icon={<BookOpen size={16} />} active={activeView === 'markdown' || isWorkspaceComponentActive('markdown')} onClick={handleOpenMarkdown} />
         <WorkspaceComponentSidebarEntry

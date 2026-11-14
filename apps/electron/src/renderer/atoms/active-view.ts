@@ -6,6 +6,7 @@
  * - planning: 任务、日程与定时任务统一视图
  * - agent-skills: Agent 技能（Skills/MCP）全屏管理视图
  * - markdown: Markdown 工作区视图
+ * - agy-terminal: 终端工作台独立页
  */
 
 import { atom } from 'jotai'
