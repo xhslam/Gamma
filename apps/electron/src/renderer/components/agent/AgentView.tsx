@@ -52,6 +52,9 @@ import {
 import { preventHoverPopoverFocusRestore } from '@/components/ai-elements/input-toolbar-popover-focus'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ThemeFloatingDock } from '@/components/ascii-wallpaper/ThemeFloatingDock'
+import { CircleRevealTransition } from '@/components/ascii-wallpaper/CircleRevealTransition'
+import { themePickerOpenAtom, circleRevealStateAtom } from '@/atoms/theme-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -476,6 +479,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   // 点击停止后，底层 Pi query 仍需一个很短的收尾窗口。该窗口内不可发起/排队新消息，
   // 否则旧 run 与新 run 会交错，导致同一用户消息被重复展示或持久化。
   const [isStopping, setIsStopping] = React.useState(false)
+  const [circleRevealState, setCircleRevealState] = useAtom(circleRevealStateAtom)
+  const setThemePickerOpen = useSetAtom(themePickerOpenAtom)
   const sendWithCmdEnter = useAtomValue(sendWithCmdEnterAtom)
   const longTextPasteAsAttachmentEnabled = useAtomValue(longTextPasteAsAttachmentEnabledAtom)
   const stoppedByUser = stoppedByUserSessions.has(sessionId)
@@ -1641,6 +1646,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const largeFiles = result.largeFiles ?? []
     const skippedFiles = result.skippedFiles ?? []
     const oversized: string[] = []
+    const usedNames: string[] = pendingFilesRef.current.map((f) => f.filename)
+    const newPendingFiles: AgentPendingFile[] = []
 
     for (const fileInfo of result.files) {
       if (fileInfo.size > MAX_ATTACHMENT_SIZE) {
@@ -1651,9 +1658,12 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         ? `data:${fileInfo.mediaType};base64,${fileInfo.data}`
         : undefined
 
+      const uniqueFilename = makeUniqueFilename(fileInfo.filename, usedNames)
+      usedNames.push(uniqueFilename)
+
       const pending: AgentPendingFile = {
         id: `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        filename: fileInfo.filename,
+        filename: uniqueFilename,
         mediaType: fileInfo.mediaType,
         size: fileInfo.size,
         previewUrl,
@@ -1664,7 +1674,11 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       }
       window.__pendingAgentFileData.set(pending.id, fileInfo.data)
 
-      setPendingFiles((prev) => [...prev, pending])
+      newPendingFiles.push(pending)
+    }
+
+    if (newPendingFiles.length > 0) {
+      setPendingFiles((prev) => [...prev, ...newPendingFiles])
     }
 
     if (oversized.length > 0) {
@@ -1674,7 +1688,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (skippedFiles.length > 0) {
       toast.warning(`以下文件无法读取，已跳过：${formatFileNames(skippedFiles.map((file) => file.filename))}`)
     }
-  }, [addLargeDialogFilesAsReferences, setPendingFiles])
+  }, [addLargeDialogFilesAsReferences, makeUniqueFilename, setPendingFiles])
 
   /** 打开混合选择器：文件作为附件，文件夹仅授权给当前会话。 */
   const handleAttachContent = React.useCallback(async (): Promise<void> => {
@@ -2146,6 +2160,12 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (activeComposerSessionRef.current === sessionId) richTextInputRef.current?.getMarkdown()
     const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
     const text = (overrideText ?? currentDraft).trim()
+    if (text.toLowerCase() === '/theme') {
+      richTextInputRef.current?.setContent('')
+      setDraft('')
+      setThemePickerOpen(true)
+      return
+    }
     // 如果输入为空但有建议，使用建议内容
     const effectiveText = text || suggestion || ''
     const pendingFilesSnapshot = pendingFilesRef.current
@@ -3564,7 +3584,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
         {/* 输入区域 — 交互横幅显示时隐藏，由横幅替代 */}
         {!hasBannerOverlay && (
-        <div className="px-4 pb-2.5 md:px-6 md:pb-4" data-input-mode="agent">
+        <div className="relative px-4 pb-2.5 md:px-6 md:pb-4" data-input-mode="agent">
+          <ThemeFloatingDock />
           <div
             className={cn(
               'gamma-composer bg-background/70 backdrop-blur-sm',
@@ -3793,6 +3814,15 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {circleRevealState?.active && (
+      <CircleRevealTransition
+        targetStyle={circleRevealState.targetStyle}
+        originX={circleRevealState.originX}
+        originY={circleRevealState.originY}
+        onComplete={() => setCircleRevealState(null)}
+      />
+    )}
 
     </SkillMentionNamesProvider>
     </IntelligentUiSessionProvider>
