@@ -562,6 +562,8 @@ export interface AgentSidePanelLayout {
   widePanelWidthOverride: number | null
   /** 旧布局未记录方向时仍在右侧；交换后宽度与内容继续归属于工作区。 */
   workspaceSide?: 'left' | 'right'
+  /** 最大化时保留普通与宽视图的尺寸，供恢复分栏使用。 */
+  maximized?: boolean
 }
 
 export const MAX_PERSISTED_AGENT_SIDE_PANEL_LAYOUTS = 50

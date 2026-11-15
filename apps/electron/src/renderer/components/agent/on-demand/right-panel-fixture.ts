@@ -22,10 +22,13 @@ export const rightPanelFixture = String.raw`
     currentSessionSidePanelOpenAtom,
     agentSideTemporaryAgentMapAtom,
     agentDiffPanelTabAtom,
+    getPreviewSidePanelTab,
     agentTerminalTabsAtom,
     agentAttachedFilesMapAtom,
     agentAttachedDirectoriesMapAtom,
     agentSidePanelLayoutAtomFamily,
+    agentSidePanelSplitMapAtom,
+    agentSessionComponentOpenMapAtom,
     workspaceFilesVersionAtom,
     workspaceGitDiffRefreshVersionAtom,
   } from '@/atoms/agent-atoms'
@@ -35,7 +38,7 @@ export const rightPanelFixture = String.raw`
     toggleOnDemandOverlayAtom,
     closeOnDemandOverlayAtom,
   } from '@/atoms/on-demand-panel-atoms'
-  import { previewFileMapAtom, previewFilesMapAtom, previewPanelOpenMapAtom } from '@/atoms/preview-atoms'
+  import { getPreviewFileId, previewFileMapAtom, previewFilesMapAtom, previewPanelOpenMapAtom } from '@/atoms/preview-atoms'
   import '@/styles/globals.css'
 
   document.head.insertAdjacentHTML('beforeend', '<style>html,body,#root{height:100%;margin:0;overflow:hidden;}</style>')
@@ -171,6 +174,7 @@ export const rightPanelFixture = String.raw`
     getFileMetadata: async () => ({ size: 1024, mtime: Date.now() }),
     showInFolder: async () => {},
     filterExistingFilePaths: async (p) => p,
+    markdownWorkspace: async () => ({ status: 'sources', sources: [] }),
     setAgentSessionActiveWorktree: async () => store.get(agentSessionsAtom)[0],
     getFileDiff: async () => 'diff --git a/src/index.ts b/src/index.ts\n--- a/src/index.ts\n+++ b/src/index.ts',
     getUntrackedContent: async () => 'export const answer = 42;',
@@ -194,12 +198,13 @@ export const rightPanelFixture = String.raw`
 
   function WorkbenchPanels() {
     const workspaceOpen = useAtomValue(currentSessionSidePanelOpenAtom)
+    const { workspaceSide } = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId))
     const modalOpen = useAtomValue(modalOpenAtom)
     return React.createElement(
       React.Fragment,
       null,
       React.createElement(WorkspacePanels, {
-        workspaceSide: 'right',
+        workspaceSide,
         workspaceOpen,
         workspaceWidth: 460,
         minimumWidth: 300,
@@ -278,6 +283,17 @@ export const rightPanelFixture = String.raw`
     getPreviewFile: () => store.get(previewFileMapAtom).get(sessionId),
     getActiveOverlay: () => store.get(activeOnDemandOverlayAtom),
     getIsBigPanelOpen: () => store.get(currentSessionSidePanelOpenAtom),
+    setMarkdownLayout: ({ side, split } = {}) => {
+      const file = { filePath: 'src/index.ts', dirPath: '/workspace/gamma', previewOnly: true }
+      store.set(agentSidePanelLayoutAtomFamily(sessionId), previous => ({ ...previous, workspaceSide: side ?? 'right' }))
+      store.set(previewFilesMapAtom, split ? new Map([[sessionId, [file]]]) : new Map())
+      store.set(agentSidePanelSplitMapAtom, split
+        ? new Map([[sessionId, { leftTab: getPreviewSidePanelTab(getPreviewFileId(file)), rightTab: 'markdown', focusedPane: 'right', ratio: 0.5 }]])
+        : new Map())
+      store.set(agentSessionComponentOpenMapAtom, side ? { [sessionId]: ['markdown'] } : {})
+      store.set(agentDiffPanelTabAtom, new Map([[sessionId, side ? 'markdown' : 'files']]))
+      store.set(currentSessionSidePanelOpenAtom, Boolean(side))
+    },
     setModalOpen: (open) => store.set(modalOpenAtom, open),
     toggleOverlay: (tab) => store.set(toggleOnDemandOverlayAtom, tab),
     closeOverlay: () => store.set(closeOnDemandOverlayAtom),

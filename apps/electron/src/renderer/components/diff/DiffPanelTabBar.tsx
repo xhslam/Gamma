@@ -6,7 +6,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { ArrowLeftRight, Columns2, PanelLeft, PanelRight, Repeat2, X } from 'lucide-react'
+import { ArrowLeftRight, Columns2, Minimize2, PanelLeft, PanelRight, Repeat2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SidebarExpandButton } from '@/components/app-shell/CollapsedSidebarHeader'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
@@ -95,7 +95,7 @@ export function DiffPanelTabBar({
   const [layout, setLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
   const workspaceSide = layout.workspaceSide === 'left' ? 'left' : 'right'
   const workspaceSideLabel = workspaceSide === 'left' ? '左侧' : '右侧'
-  const ownsWindowControls = sidebarCollapsed && workspaceSide === 'left' && !!currentSessionId
+  const canExpandSidebar = sidebarCollapsed && workspaceSide === 'left' && !!currentSessionId && !layout.maximized
   const swapFocusRef = React.useRef<HTMLButtonElement | null>(null)
   const unseenChanges = unseenMap.get(currentSessionId ?? '') ?? false
   const [isSplitTabGroupHovered, setIsSplitTabGroupHovered] = React.useState(false)
@@ -312,9 +312,9 @@ export function DiffPanelTabBar({
   }, [tabs, visibleTabs?.left, visibleTabs?.right])
 
   return (
-    <div ref={barRef} className={cn('gamma-topbar relative flex items-center', ownsWindowControls && detectIsMac() && 'pl-20')}>
+    <div ref={barRef} className={cn('gamma-topbar relative flex items-center', detectIsMac() && 'gamma-workspace-mac-topbar', canExpandSidebar && detectIsMac() && 'pl-20')}>
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
-      {ownsWindowControls && <SidebarExpandButton />}
+      {canExpandSidebar && <SidebarExpandButton />}
       <div className="relative flex h-full min-w-0 flex-1 items-center titlebar-no-drag">
         <div className="relative flex min-w-0 flex-1 self-stretch">
           <div ref={tabListRef} className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 scrollbar-none" role="tablist" aria-label={`${workspaceSideLabel}工作区`}>
@@ -432,6 +432,19 @@ export function DiffPanelTabBar({
           )}
         </div>
         {activeTabAction && <div className="ml-1 flex shrink-0 items-center titlebar-no-drag">{activeTabAction}</div>}
+        {currentSessionId && layout.maximized && (
+          <Button data-icon-button="true"
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mr-1 h-7 w-7 shrink-0 px-0 text-muted-foreground"
+            aria-label="恢复工作区分栏"
+            title="恢复工作区分栏"
+            onClick={() => setLayout(previous => ({ ...previous, maximized: false }))}
+          >
+            <Minimize2 aria-hidden="true" />
+          </Button>
+        )}
         {currentSessionId && (
           <Tooltip>
             <TooltipTrigger asChild>

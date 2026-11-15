@@ -17,6 +17,7 @@ beforeAll(async () => {
     ['components/computer-use/index.ts', 'ComputerModals'],
     ['components/ui/sonner.tsx', 'Toaster'],
   ]) moduleStubs[path!] = `export function ${name}(){return null}`
+  moduleStubs['components/tabs/MainArea.tsx'] = "import React from 'react'; export function MainArea(){return React.createElement('input', {'aria-label':'会话草稿'})}"
   moduleStubs['hooks/useProjectActions.ts'] = 'export function useProjectActions(){return {workspaces:[],currentWorkspaceId:null}}'
   renderer = await createElectronRendererHarness(`
     import React from 'react';
@@ -41,7 +42,7 @@ beforeAll(async () => {
       await delay(500);
       const events=[];
       for(const type of ['pointerdown','pointermove','pointerup','gotpointercapture','lostpointercapture','blur','dblclick'])window.addEventListener(type,e=>events.push({type,x:e.clientX}),true);
-      return {root,store,events,delay,layout:()=>store.get(agentSidePanelLayoutAtomFamily('resize'))};
+      return {root,store,events,delay,layout:()=>store.get(agentSidePanelLayoutAtomFamily('resize')),sidebarCollapsed:()=>store.get(sidebarCollapsedAtom)};
     }};
   `, {
     moduleStubs,
@@ -52,6 +53,46 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 真实 AppShell 宽度预览与持久化', () => {
+  test('When 分隔条拖到窗口边缘再拉回来 Then 工作区占满窗口并能恢复分栏和草稿', async () => {
+    for (const side of ['left', 'right']) {
+      const result = await renderer.run<Record<string, boolean>>(`
+        const side = ${JSON.stringify(side)};
+        const f = await window.resizeFixture.mount(side, true, false);
+        const pane = document.querySelector('[data-workspace-pane="workspace"]');
+        const agent = document.querySelector('[data-workspace-pane="agent"]');
+        const draft = agent.querySelector('input'); draft.value = '未发送草稿';
+        const handle = pane.querySelector('[role="separator"]');
+        const y = 200, edge = side === 'right' ? 6 : innerWidth - 6;
+        const center = () => Math.round(handle.getBoundingClientRect().left + handle.getBoundingClientRect().width / 2);
+        const input = (type, x) => window.shellResizeInput({ type, x, y, button: 'left', clickCount: 1 });
+        const fills = () => pane.getBoundingClientRect().left === 0 && Math.abs(pane.getBoundingClientRect().right - innerWidth) < 1 && agent.hidden;
+        const originalWidth = f.layout().widePanelWidthOverride;
+        await input('mouseDown', center());
+        await input('mouseMove', edge);
+        const previewFills = fills();
+        await input('mouseUp', edge);
+        const maxCommitted = fills() && f.layout().maximized === true && f.layout().widePanelWidthOverride === originalWidth;
+        await input('mouseDown', center());
+        const restoreX = side === 'right' ? 55 : innerWidth - 55;
+        await input('mouseMove', restoreX);
+        await input('mouseUp', restoreX);
+        await f.delay(300);
+        const restored = !agent.hidden && pane.getBoundingClientRect().width < innerWidth && !f.layout().maximized && !f.sidebarCollapsed();
+        const draftPreserved = draft.isConnected && draft.value === '未发送草稿';
+        handle.focus();
+        handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+        await f.delay();
+        const keyMax = fills();
+        handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await f.delay();
+        const keyRestore = !agent.hidden && !f.layout().maximized;
+        f.root.unmount();
+        return { previewFills, maxCommitted, restored, draftPreserved, keyMax, keyRestore };
+      `)
+      expect(result).toEqual({ previewFills: true, maxCommitted: true, restored: true, draftPreserved: true, keyMax: true, keyRestore: true })
+    }
+  }, 30_000)
+
   test('When 双击序列中任一次发生拖动 Then 松手仍保留拖动宽度，不触发双击重置', async () => {
     for (const deltas of [[30,30], [30,0], [0,30]]) {
       const result=await renderer.run<{preview:number;final:number;doubleClick:boolean;captured:boolean}>(`

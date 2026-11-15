@@ -1773,7 +1773,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
 
   return (
     <div
-      className="gamma-panel relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area"
+      className="gamma-panel gamma-workspace-surface relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region"
       data-panel="workspace"
       data-panel-open={isOpen}
       style={{ width }}

@@ -200,7 +200,7 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
 
 
   return (
-    <Panel variant="grow" className="bg-content-area" style={terminalVisible ? { padding: 0 } : undefined}>
+    <Panel variant="grow" className={activeView === 'conversations' ? 'bg-content-area' : 'gamma-workspace-surface'}>
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex flex-1 flex-col min-w-0 h-full">
           {/* 首次打开后保留终端实例，让后台 Shell 继续接收输出。 */}

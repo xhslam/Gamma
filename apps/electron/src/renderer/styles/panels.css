@@ -35,6 +35,12 @@
   padding: var(--panel-padding);
   box-shadow: none;
 }
+
+/* 工作区铺满外壳；编辑器、列表和工具栏自行管理内容间距。 */
+.gamma-panel[data-panel].gamma-workspace-surface {
+  padding: 0;
+  background-color: hsl(var(--content-area));
+}
 /* 快捷侧栏与主对话区仅作轻微明度区分，随主题前景自动适配深浅色。 */
 .gamma-panel[data-panel="quick-sidebar"] {
   background-color: color-mix(in srgb, hsl(var(--content-area)), hsl(var(--foreground)) 4%);
@@ -53,15 +59,19 @@
 .gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel[data-panel] {
   border-right-width: var(--panel-border-width);
 }
-.gamma-workbench-frame [data-workspace-side="right"] .gamma-panel[data-panel="workspace"],
-.gamma-workbench-frame [data-workspace-side="right"] [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
+.gamma-workbench-frame [data-workspace-side="right"]:not([data-workspace-maximized="true"]) .gamma-panel[data-panel="workspace"],
+.gamma-workbench-frame [data-workspace-side="right"]:not([data-workspace-maximized="true"]) [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
   border-left-width: var(--panel-border-width);
 }
-.gamma-workbench-frame [data-workspace-side="left"] [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
+.gamma-workbench-frame [data-workspace-side="left"]:not([data-workspace-maximized="true"]) [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
   border-right-width: var(--panel-border-width);
 }
 
-/* 三个区域的顶栏共享高度，工作区正文沿用现有面板内边距。 */
+[data-workspace-maximized="true"] .gamma-workspace-mac-topbar {
+  padding-left: 5rem;
+}
+
+/* 三个区域的顶栏共享高度。 */
 .gamma-topbar {
   height: var(--workbench-topbar-height);
   flex-shrink: 0;

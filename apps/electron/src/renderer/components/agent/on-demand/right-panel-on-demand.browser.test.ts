@@ -26,6 +26,42 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
     await visualHarness?.dispose()
   })
 
+  test('Given 浅色场景主题 When Markdown 单独显示或与文件预览并排 Then 工作区底色和状态栏贴齐面板边缘', async () => {
+    const result = await visualHarness.run<boolean[]>(`
+      const api = window.onDemandTest;
+      const root = document.getElementById('root'), frame = root.firstElementChild;
+      root.classList.add('gamma-workbench');
+      frame.classList.add('gamma-workbench-frame');
+      document.documentElement.dataset.sceneTheme = 'cloud-drift';
+      const results = [];
+      const sameEdge = (a, b) => Math.abs(a - b) < 1;
+      try {
+        for (const [side, split] of [['right', false], ['left', false], ['right', true]]) {
+          api.setMarkdownLayout({ side, split });
+          const selector = '[data-workspace-side="' + side + '"]';
+          const markdown = () => document.querySelector(selector + (split ? ' section[aria-label="右侧 Pane：markdown"]' : '') + ' .markdown-workspace-view');
+          await api.until(markdown);
+          const editor = markdown(), panel = editor.closest('[data-panel="workspace"]');
+          const parent = split ? editor.closest('section[aria-label="右侧 Pane：markdown"]') : panel;
+          const bounds = parent.getBoundingClientRect(), rect = editor.getBoundingClientRect();
+          const footer = editor.querySelector('footer').getBoundingClientRect();
+          const panelStyle = getComputedStyle(panel);
+          results.push(sameEdge(rect.left, bounds.left + (split ? 0 : parseFloat(panelStyle.borderLeftWidth)))
+            && sameEdge(rect.right, bounds.right - (split ? 0 : parseFloat(panelStyle.borderRightWidth)))
+            && sameEdge(footer.bottom, panel.getBoundingClientRect().bottom)
+            && getComputedStyle(editor).backgroundColor === panelStyle.backgroundColor);
+        }
+      } finally {
+        api.setMarkdownLayout();
+        delete document.documentElement.dataset.sceneTheme;
+        frame.classList.remove('gamma-workbench-frame');
+        root.classList.remove('gamma-workbench');
+      }
+      return results;
+    `)
+    expect(result).toEqual([true, true, true])
+  })
+
   test('S0 默认状态：大面板收起，聊天占据全宽，标题栏右侧显示紧凑图标组与正确行级角标', async () => {
     const result = await visualHarness.run<{
       hasNav: boolean

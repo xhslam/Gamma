@@ -18,7 +18,7 @@ import { MainArea } from '@/components/tabs/MainArea'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { LEFT_SIDEBAR_WIDTH } from '@/atoms/sidebar-atoms'
 import { activeTabAtom, sidebarCollapsedAtom } from '@/atoms/tab-atoms'
-import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth } from './right-panel-layout'
+import { clampRightPanelWidth, getRightPanelMaxWidth, getWorkspaceResizeWidth, WORKSPACE_MAXIMIZE_SNAP_PX } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { workbenchDensityAtom } from '@/atoms/ui-preferences'
@@ -137,7 +137,10 @@ export function AppShell(): React.ReactElement {
   const [viewportWidth, setViewportWidth] = React.useState(() => window.innerWidth)
   const currentSessionIdRef = React.useRef(currentSessionId)
   const rightPanelDragCleanup = React.useRef<(() => void) | null>(null)
-  const [draggedRightPanelWidth, setDraggedRightPanelWidth] = React.useState<number | null>(null)
+  const [draggedRightPanel, setDraggedRightPanel] = React.useState<{ width: number; maximized: boolean } | null>(null)
+  const workspaceMaximized = showRightPanel && isPanelOpen
+    && (draggedRightPanel?.maximized ?? rightPanelLayout.maximized === true)
+  const navigationCollapsed = sidebarCollapsed || workspaceMaximized
   currentSessionIdRef.current = currentSessionId
   const isExpandedRightWorkspace = isExpandedWorkspaceTab(activeRightPanelTab)
   // 普通宽度必须独立计算：分屏的临时 720px 下限不能被 effect 写回 Session 的普通 width。
@@ -180,7 +183,7 @@ export function AppShell(): React.ReactElement {
   // 并排仅临时借用宽布局；退出后自动回到 Session 先前的普通/宽工作区宽度。
   const usesWidePanelLayout = rightPanelLayout.hasOpenedWideWorkspace || isExpandedRightWorkspace || activeRightPanelSplit !== null
   const persistedRightPanelWidth = usesWidePanelLayout ? effectiveWidePanelWidth : clampedRightPanelWidth
-  const displayedRightPanelWidth = draggedRightPanelWidth ?? persistedRightPanelWidth
+  const displayedRightPanelWidth = workspaceMaximized ? viewportWidth : draggedRightPanel?.width ?? persistedRightPanelWidth
 
   React.useEffect(() => {
     return () => rightPanelDragCleanup.current?.()
@@ -223,18 +226,25 @@ export function AppShell(): React.ReactElement {
     rightPanelDragCleanup.current?.()
     const dragSessionId = currentSessionId
     const startX = e.clientX
-    const startWidth = displayedRightPanelWidth
+    const startWidth = workspaceMaximized ? persistedRightPanelWidth : displayedRightPanelWidth
     const snapshot = rightPanelLayout
     const isWideWorkspace = usesWidePanelLayout || isExpandedRightWorkspace
     let sidebarCollapsedDuringDrag = sidebarCollapsed
     let latestWidth = startWidth
+    let latestMaximized = workspaceMaximized
     rightPanelDragCleanup.current = beginPaneResize({
       target: e.currentTarget,
       pointerId: e.pointerId,
       startX,
       move: clientX => {
+        const edgeDistance = workspaceSide === 'right' ? clientX : viewportWidth - clientX
+        latestMaximized = edgeDistance <= WORKSPACE_MAXIMIZE_SNAP_PX
+        if (latestMaximized) {
+          setDraggedRightPanel({ width: viewportWidth, maximized: true })
+          return
+        }
         const requestedWidth = getWorkspaceResizeWidth(startWidth, startX, clientX, workspaceSide)
-        const shouldCollapseSidebar = canAutoCollapseSidebarForRightPanel
+        const shouldCollapseSidebar = !workspaceMaximized && canAutoCollapseSidebarForRightPanel
           && requestedWidth > getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth)
         if (shouldCollapseSidebar && !sidebarCollapsedDuringDrag) {
           sidebarCollapsedDuringDrag = true
@@ -246,12 +256,12 @@ export function AppShell(): React.ReactElement {
         )
         latestWidth = clampRightPanelWidth(requestedWidth, viewportWidth, rightPanelMinimumWidth,
           sidebarCollapsedDuringDrag ? 0 : LEFT_SIDEBAR_WIDTH + PANEL_GAP_PX, allowFullAvailableWidth)
-        setDraggedRightPanelWidth(latestWidth)
+        setDraggedRightPanel({ width: latestWidth, maximized: false })
       },
       finish: commit => {
         rightPanelDragCleanup.current = null
         if (!commit) {
-          setDraggedRightPanelWidth(null)
+          setDraggedRightPanel(null)
           setSidebarCollapsed(sidebarCollapsed)
           if (currentSessionIdRef.current === dragSessionId) {
             setRightPanelLayout(snapshot)
@@ -263,30 +273,45 @@ export function AppShell(): React.ReactElement {
         // 切换，避免先显示旧宽度并触发宽度过渡，造成松手后回弹。
         commitPaneResize(() => {
           if (currentSessionIdRef.current === dragSessionId) {
+            if (latestMaximized) {
+              setSidebarCollapsed(sidebarCollapsed)
+              setRightPanelLayout(previous => ({ ...previous, maximized: true }))
+              return
+            }
             setRightPanelLayout(previous => isWideWorkspace
               ? {
                 ...previous,
+                maximized: false,
                 widePanelWidthOverride: latestWidth,
                 hasOpenedWideWorkspace: true,
                 width: isExpandedRightWorkspace ? previous.width : latestWidth,
               }
-              : { ...previous, width: latestWidth })
+              : { ...previous, maximized: false, width: latestWidth })
           }
-        }, () => setDraggedRightPanelWidth(null))
+        }, () => setDraggedRightPanel(null))
       },
     })
-  }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, isPanelOpen, leftSidebarOccupiedWidth, rightPanelLayout, rightPanelMinimumWidth, setIsPanelOpen, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth, workspaceSide])
+  }, [activeRightPanelSplit, canAutoCollapseSidebarForRightPanel, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, isPanelOpen, leftSidebarOccupiedWidth, persistedRightPanelWidth, rightPanelLayout, rightPanelMinimumWidth, setIsPanelOpen, setRightPanelLayout, setSidebarCollapsed, sidebarCollapsed, usesWidePanelLayout, viewportWidth, workspaceMaximized, workspaceSide])
 
-  const rightPanelMaximumWidth = getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
   const handleResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!currentSessionId || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    if (!currentSessionId) return
+    const restoreKey = workspaceSide === 'right' ? 'ArrowRight' : 'ArrowLeft'
+    if (workspaceMaximized && ['Escape', 'Enter', 'Home', restoreKey].includes(event.key)) {
+      event.preventDefault()
+      event.stopPropagation()
+      setRightPanelLayout(previous => ({ ...previous, maximized: false }))
+      return
+    }
+    if (workspaceMaximized || !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'].includes(event.key)) return
     event.preventDefault()
+    if (event.key === 'End' || event.key === 'Enter') {
+      setRightPanelLayout(previous => ({ ...previous, maximized: true }))
+      return
+    }
     const step = event.shiftKey ? 48 : 24
     const requestedWidth = event.key === 'Home'
       ? rightPanelMinimumWidth
-      : event.key === 'End'
-        ? rightPanelMaximumWidth
-        : getWorkspaceResizeWidth(displayedRightPanelWidth, 0, event.key === 'ArrowLeft' ? -step : step, workspaceSide)
+      : getWorkspaceResizeWidth(displayedRightPanelWidth, 0, event.key === 'ArrowLeft' ? -step : step, workspaceSide)
     const width = clampRightPanelWidth(requestedWidth, viewportWidth, rightPanelMinimumWidth, leftSidebarOccupiedWidth, canUseCollapsedSidebarSpace)
     setRightPanelLayout(previous => (usesWidePanelLayout || isExpandedRightWorkspace)
       ? {
@@ -296,7 +321,7 @@ export function AppShell(): React.ReactElement {
         width: isExpandedRightWorkspace ? previous.width : width,
       }
       : { ...previous, width })
-  }, [canUseCollapsedSidebarSpace, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelMaximumWidth, rightPanelMinimumWidth, setRightPanelLayout, usesWidePanelLayout, viewportWidth, workspaceSide])
+  }, [canUseCollapsedSidebarSpace, currentSessionId, displayedRightPanelWidth, isExpandedRightWorkspace, leftSidebarOccupiedWidth, rightPanelMinimumWidth, setRightPanelLayout, usesWidePanelLayout, viewportWidth, workspaceMaximized, workspaceSide])
 
   return (
     <>
@@ -304,23 +329,24 @@ export function AppShell(): React.ReactElement {
 
       <div data-workbench-density={density} className="shell-bg relative h-screen w-screen overflow-hidden bg-background">
         <div
-          data-sidebar-collapsed={sidebarCollapsed}
+          data-sidebar-collapsed={navigationCollapsed}
           className={cn('gamma-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows))}
         >
           <div className="gamma-workbench-frame">
-            <SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>
+            <SidebarTransition collapsed={navigationCollapsed} resizing={workspaceMaximized || draggedRightPanel !== null} width={LEFT_SIDEBAR_WIDTH}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
             </SidebarTransition>
 
             <div className="flex min-w-0 min-h-0 flex-1 flex-col">
-              {sidebarCollapsed && !hasAgentSessionHeader && <CollapsedSidebarHeader />}
+              {sidebarCollapsed && !workspaceMaximized && !hasAgentSessionHeader && <CollapsedSidebarHeader />}
               <WorkspacePanels
                 workspaceSide={workspaceSide}
                 workspaceOpen={isPanelOpen}
+                workspaceMaximized={workspaceMaximized}
                 workspaceWidth={displayedRightPanelWidth}
-                resizing={draggedRightPanelWidth !== null}
+                resizing={draggedRightPanel !== null || workspaceMaximized}
                 minimumWidth={rightPanelMinimumWidth}
-                maximumWidth={rightPanelMaximumWidth}
+                maximumWidth={viewportWidth}
                 onResizeStart={handleMouseDown}
                 onResizeKeyDown={handleResizeKeyDown}
                 agent={<>

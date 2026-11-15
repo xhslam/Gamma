@@ -39,6 +39,7 @@ const fixtureSource = leftSidebarFixtureSource
   .replace('root, calls,', `
     root, calls, callsToTerminal,
     setTheme: applyThemeToDOM,
+    setView: view => store.set(activeViewAtom, view),
     emit: data => dataListeners.forEach(listener => listener({ sessionId: terminal.id, data, sequence: 2 })),
     errors: rendererErrors,
   `)
@@ -64,6 +65,27 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given Gamma 的终端工作台独立页', () => {
+  test('When 从会话切换到独立工作区 Then 工作区内容贴合主面板四边', async () => {
+    expect(await renderer.run<boolean[]>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount();
+      fixture.setTheme('light', false, 'cloud-drift');
+      const panel = document.querySelector('[data-workspace-pane="agent"] > [data-panel="content"]');
+      const fills = () => {
+        const outer = panel.getBoundingClientRect(), inner = panel.firstElementChild.getBoundingClientRect();
+        return ['top', 'bottom', 'left', 'right'].every(edge => Math.abs(outer[edge] - inner[edge]) < 1);
+      };
+      const results = [!fills()];
+      for (const view of ['markdown', 'design', 'planning', 'agent-skills']) {
+        fixture.setView(view);
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        results.push(fills());
+      }
+      fixture.root.unmount();
+      fixture.setTheme('light', false);
+      return results;
+    `)).toEqual([true, true, true, true, true])
+  }, 30_000)
+
   test('When 从有右侧工作区的会话打开终端 Then 占满主内容区，切回会话后仍保留 Shell 和后台输出', async () => {
     expect(await renderer.run<Record<string, unknown>>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();

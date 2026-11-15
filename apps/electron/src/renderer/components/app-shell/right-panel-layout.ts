@@ -1,5 +1,7 @@
 export const RIGHT_PANEL_MAX_VIEWPORT_RATIO = 3 / 5
 export const MIN_MAIN_AREA_WIDTH = 320
+// 保留少量吸附空间，即使指针无法精确落在窗口边缘也能切换。
+export const WORKSPACE_MAXIMIZE_SNAP_PX = 24
 
 export type WorkspaceSide = 'left' | 'right'
 
