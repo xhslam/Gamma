@@ -101,6 +101,16 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: 准备 Electron（有限重试）
         run: bun run apps/electron/scripts/install-electron.ts
+      - name: 从上游准备固定设计资源
+        id: design
+        continue-on-error: true
+        working-directory: apps/electron
+        run: bun run prepare:design
+      - name: 从已校验的 Gamma 发行包恢复同一设计快照
+        if: steps.design.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash apps/electron/scripts/restore-release-design-bundle.sh
       - name: 构建 Electron 应用
         run: bun run electron:build
       - name: 准备运行时依赖

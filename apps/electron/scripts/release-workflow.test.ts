@@ -3,7 +3,7 @@ import { YAML } from 'bun'
 import { readFileSync } from 'node:fs'
 import { GITHUB_RELEASE_REPO } from '../src/main/lib/github-release-client'
 
-interface Step { run?: string; uses?: string; 'working-directory'?: string; with?: Record<string, string> }
+interface Step { id?: string; if?: string; 'continue-on-error'?: boolean; run?: string; uses?: string; 'working-directory'?: string; with?: Record<string, string> }
 interface Job { needs?: string; if?: string; env?: Record<string, string>; outputs?: Record<string, string>; steps: Step[]; strategy?: { matrix: { include: { target: string }[] } }; permissions?: Record<string, string> }
 const workflow = YAML.parse(readFileSync(new URL('../../../.github/workflows/release.yml', import.meta.url), 'utf8')) as {
   on: { push: { tags: string[] }; workflow_dispatch?: object };  jobs: Record<string, Job>; permissions: Record<string, string>
@@ -30,6 +30,17 @@ describe('Given 标签发布工作流', () => {
     expect(step.run).toContain('--publish never')
     expect(workflow.permissions.contents).toBe('read')
     expect(workflow.jobs.publish!.permissions!.contents).toBe('write')
+  })
+  test('When 上游设计资源准备失败 Then 构建前恢复已发布的固定快照', () => {
+    const steps = workflow.jobs.build!.steps
+    const prepare = steps.findIndex(step => step.run === 'bun run prepare:design')
+    const restore = steps.findIndex(step => step.run?.endsWith('/restore-release-design-bundle.sh'))
+    const build = steps.findIndex(step => step.run === 'bun run electron:build')
+    expect(prepare).toBeGreaterThanOrEqual(0)
+    expect(steps[prepare]).toMatchObject({ id: 'design', 'continue-on-error': true })
+    expect(restore).toBeGreaterThan(prepare)
+    expect(steps[restore]!.if).toBe("steps.design.outcome == 'failure'")
+    expect(build).toBeGreaterThan(restore)
   })
   test('When 任一构建失败 Then 发布 job 不执行；发布前重新合并校验', () => {
     const job = workflow.jobs.publish!
