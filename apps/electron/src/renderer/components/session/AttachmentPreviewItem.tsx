@@ -21,7 +21,7 @@ export interface AttachmentSibling {
   /** 文件名 */
   filename: string
   /** 该图的编辑完成回调（可选） */
-  onEditComplete?: (editedDataUrl: string) => void
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void
 }
 
 interface AttachmentPreviewItemProps {
@@ -35,8 +35,8 @@ interface AttachmentPreviewItemProps {
   onRemove: () => void
   /** 点击回调（用于打开文件预览等） */
   onClick?: () => void
-  /** 编辑完成回调 — 提供则启用图片编辑功能 */
-  onEditComplete?: (editedDataUrl: string) => void
+  /** 编辑完成回调 — 提供则启用图片高级编辑与位置评论 */
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void
   /** 同批图片列表（可选）— 提供则大图预览时可左右翻页 */
   imageSiblings?: AttachmentSibling[]
   /** 当前图片在同批列表中的索引（可选） */

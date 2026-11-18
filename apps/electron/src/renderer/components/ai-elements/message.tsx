@@ -995,8 +995,8 @@ export function MessageStopped({ className, ...props }: MessageStoppedProps): Re
 interface MessageAttachmentsProps extends HTMLAttributes<HTMLDivElement> {
   /** 附件列表 */
   attachments: FileAttachment[]
-  /** 图片编辑完成回调 */
-  onImageEditComplete?: (editedDataUrl: string) => void
+  /** 图片编辑完成回调；评论模式同时返回结构化编辑要求 */
+  onImageEditComplete?: (editedDataUrl: string, prompt?: string) => void
 }
 
 /** 消息附件容器 */

@@ -81,6 +81,7 @@ import {
   rememberStopGenerationTarget,
 } from '@/lib/stop-generation-target'
 import { previewFileMapAtom, previewPanelOpenMapAtom, quotedSelectionMapAtom, currentQuotedSelectionAtom } from '@/atoms/preview-atoms'
+import { appendImageEditPromptAtom } from '@/atoms/image-edit-handoff'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import {
   agentStreamingStatesAtom,
@@ -694,6 +695,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const setDraftsMap = useSetAtom(agentSessionDraftsAtom)
   const setDraftSyncVersions = useSetAtom(agentSessionDraftSyncVersionsAtom)
   const setDraftHtmlMap = useSetAtom(agentSessionDraftHtmlAtom)
+  const appendImageEditPrompt = useSetAtom(appendImageEditPromptAtom)
   const setInputContent = React.useCallback((value: string) => {
     setDraftSyncVersions((previous) => {
       const next = new Map(previous)
@@ -1756,7 +1758,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   }, [setPendingFiles])
 
   /** 图片附件编辑完成：用编辑后的图替换该附件（统一转为内存图片走 __pendingAgentFileData） */
-  const handleAttachmentEditComplete = React.useCallback((fileId: string, editedDataUrl: string): void => {
+  const handleAttachmentEditComplete = React.useCallback((fileId: string, editedDataUrl: string, prompt?: string): void => {
     const base64 = editedDataUrl.split(',')[1]
     if (!base64) return
     if (!window.__pendingAgentFileData) {
@@ -1779,7 +1781,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         isClipboardDraft: undefined,
       }
     }))
-  }, [setPendingFiles])
+    if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt })
+  }, [setPendingFiles, appendImageEditPrompt, sessionId])
 
   const openClipboardPreviewFile = React.useCallback((filePath: string): void => {
     const parentPath = getFileParentPath(filePath)
@@ -3489,7 +3492,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     () => pendingImageFiles.map((f) => ({
       previewUrl: f.previewUrl as string,
       filename: f.filename,
-      onEditComplete: (editedDataUrl: string) => handleAttachmentEditComplete(f.id, editedDataUrl),
+      onEditComplete: (editedDataUrl: string, prompt?: string) => handleAttachmentEditComplete(f.id, editedDataUrl, prompt),
     })),
     [pendingImageFiles, handleAttachmentEditComplete]
   )
@@ -3655,7 +3658,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
                       previewUrl={file.previewUrl}
                       onRemove={() => handleRemoveFile(file.id)}
                       onClick={file.filename.startsWith('clipboard-') ? () => handleClipboardPreview(file) : undefined}
-                      onEditComplete={(editedDataUrl) => handleAttachmentEditComplete(file.id, editedDataUrl)}
+                      onEditComplete={(editedDataUrl, prompt) => handleAttachmentEditComplete(file.id, editedDataUrl, prompt)}
                       imageSiblings={imageSiblingsForPending}
                       siblingIndex={pendingImageFiles.findIndex((f) => f.id === file.id)}
                     />

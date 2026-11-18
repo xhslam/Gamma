@@ -94,7 +94,7 @@ export function ImageLightboxPreview({ src, alt, children }: ImageLightboxPrevie
         />
         {failed && <p role="status" className="absolute text-inverse-foreground">图片加载失败</p>}
       </div>
-      <div className="mt-3 flex items-center gap-0.5 rounded-full bg-overlay/50 px-3 py-2.5 shadow-lg backdrop-blur-md">
+      <div className="mt-3 flex max-w-[94vw] flex-wrap items-center justify-center gap-0.5 rounded-[24px] bg-overlay/50 px-3 py-2.5 shadow-lg backdrop-blur-md">
         {children}
         <div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden />
         <button data-icon-button="true" data-icon-button-tone="inverse" type="button" aria-label="缩小图片" title="缩小图片" className={buttonClass} disabled={!loaded || transform.scale <= 1} onClick={() => zoom(transformRef.current.scale / 1.25)}><Minus className="size-5" /></button>

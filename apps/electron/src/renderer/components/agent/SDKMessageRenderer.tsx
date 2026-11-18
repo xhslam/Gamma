@@ -59,6 +59,7 @@ import { formatMessageTime } from '@/lib/message-time'
 import { getModelLogo, resolveModelDisplayName, resolveModelProvider } from '@/lib/model-logo'
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/channel-atoms'
 import { agentSessionPendingFilesAtom, agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
+import { appendImageEditPromptAtom } from '@/atoms/image-edit-handoff'
 import { activeSessionIdAtom } from '@/atoms/tab-atoms'
 import { automationsAtom, automationFormAtom, automationToDraft } from '@/atoms/automation-atoms'
 import { openWorkspaceComponentAtom } from '@/atoms/agent-atoms'
@@ -990,10 +991,11 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
   const imageFiles = attachedFiles.filter((f) => isImageFile(f.filename))
   const activeSessionId = useAtomValue(activeSessionIdAtom)
   const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
+  const appendImageEditPrompt = useSetAtom(appendImageEditPromptAtom)
   const nonImageFiles = attachedFiles.filter((f) => !isImageFile(f.filename))
   const contextRefs = (message as unknown as { contextRefs?: AgentContextRef[] }).contextRefs
 
-  const handleImageEditComplete = React.useCallback((editedDataUrl: string): void => {
+  const handleImageEditComplete = React.useCallback((editedDataUrl: string, prompt?: string): void => {
     const base64 = editedDataUrl.split(',')[1]
     if (!base64 || !activeSessionId) return
 
@@ -1017,7 +1019,8 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
       map.set(activeSessionId, [...sessionFiles, pending])
       return map
     })
-  }, [activeSessionId, setSessionPendingFiles])
+    if (prompt?.trim()) appendImageEditPrompt({ sessionId: activeSessionId, prompt })
+  }, [activeSessionId, setSessionPendingFiles, appendImageEditPrompt])
 
   // 共享大图预览状态（多图可左右翻页）
   const [lightboxOpen, setLightboxOpen] = React.useState(false)

@@ -12,10 +12,12 @@
 
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { ChevronLeft, ChevronRight, Download, Pencil, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Eraser, ImageMinus, MessageSquarePlus, Pencil, Proportions, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { iconButtonNoRingFocusClass } from '@/components/ui/icon-button-styles'
 import { ImageEditor } from '@/components/ui/image-editor'
+import type { ImageEditorTool } from '@/components/ui/image-editor'
+import { ImageCommentEditor } from '@/components/ui/image-comment-editor'
 import { ImageLightboxPreview } from './image-lightbox-preview'
 
 /** 单张图片描述（多图导航时使用） */
@@ -26,8 +28,8 @@ export interface LightboxImage {
   alt?: string
   /** 下载回调（可选） */
   onSave?: () => void
-  /** 编辑完成回调 — 提供则显示编辑按钮 */
-  onEditComplete?: (editedDataUrl: string) => void
+  /** 编辑完成回调 — 提供则显示高级编辑与评论操作 */
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void
 }
 
 interface ImageLightboxProps {
@@ -41,8 +43,8 @@ interface ImageLightboxProps {
   onOpenChange: (open: boolean) => void
   /** 下载回调（可选，单图模式） */
   onSave?: () => void
-  /** 编辑完成回调 — 提供则显示编辑按钮（单图模式） */
-  onEditComplete?: (editedDataUrl: string) => void
+  /** 编辑完成回调 — 提供则显示高级编辑与评论操作（单图模式） */
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void
   /** 多图列表（可选）— 提供则启用左右翻页 */
   images?: LightboxImage[]
   /** 当前展示的图片索引（多图模式，受控） */
@@ -65,7 +67,8 @@ export function ImageLightbox({
   onIndexChange,
   initialMode = 'preview',
 }: ImageLightboxProps): React.ReactElement | null {
-  const [mode, setMode] = React.useState<'preview' | 'editing'>(initialMode)
+  const [mode, setMode] = React.useState<'preview' | 'editing' | 'comments'>(initialMode)
+  const [editorTool, setEditorTool] = React.useState<ImageEditorTool>('select')
   const returnFocusRef = React.useRef<HTMLElement | null>(null)
 
   const hasImages = Array.isArray(images) && images.length > 0
@@ -76,6 +79,7 @@ export function ImageLightbox({
   React.useEffect(() => {
     if (open) setMode(initialMode)
     else setMode('preview')
+    if (open) setEditorTool('select')
   }, [open, initialMode])
 
   // 多图模式下监听方向键翻页（编辑模式禁用）
@@ -102,8 +106,8 @@ export function ImageLightbox({
       : null
   if (!current) return null
 
-  const handleEditSave = (editedDataUrl: string): void => {
-    current.onEditComplete?.(editedDataUrl)
+  const handleEditSave = (editedDataUrl: string, prompt?: string): void => {
+    current.onEditComplete?.(editedDataUrl, prompt)
     onOpenChange(false)
     setMode('preview')
   }
@@ -188,11 +192,26 @@ export function ImageLightbox({
                 <DialogPrimitive.Close data-icon-button="true" data-icon-button-tone="inverse" className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)}>
                   <X className="size-5" /><span className="sr-only">关闭</span>
                 </DialogPrimitive.Close>
-                {showEdit && (<><div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden /><button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={() => setMode('editing')} className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)} title="编辑图片"><Pencil className="size-5" /></button></>)}
+                {showEdit && (
+                  <>
+                    <div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden />
+                    {[
+                      { label: '标注', icon: Pencil, action: () => { setEditorTool('draw'); setMode('editing') } },
+                      { label: '添加评论', icon: MessageSquarePlus, action: () => setMode('comments') },
+                      { label: '移除背景', icon: ImageMinus, action: () => { setEditorTool('background'); setMode('editing') } },
+                      { label: '擦除', icon: Eraser, action: () => { setEditorTool('erase'); setMode('editing') } },
+                      { label: '调整大小', icon: Proportions, action: () => { setEditorTool('resize'); setMode('editing') } },
+                    ].map(({ label, icon: Icon, action }) => (
+                      <button key={label} data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={action} className={cn('flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)} title={label}><Icon className="size-4" /><span>{label}</span></button>
+                    ))}
+                  </>
+                )}
                 {current.onSave && (<><div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden /><button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={current.onSave} className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)} title="保存图片"><Download className="size-5" /></button></>)}
             </ImageLightboxPreview>
+          ) : mode === 'editing' ? (
+            <ImageEditor key={`${safeIndex}:${current.src}:${editorTool}`} src={current.src} initialTool={editorTool} onSave={handleEditSave} onCancel={handleEditCancel} />
           ) : (
-            <ImageEditor key={`${safeIndex}:${current.src}`} src={current.src} onSave={handleEditSave} onCancel={handleEditCancel} />
+            <ImageCommentEditor key={`${safeIndex}:${current.src}`} src={current.src} onSave={handleEditSave} onCancel={handleEditCancel} />
           ))}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
