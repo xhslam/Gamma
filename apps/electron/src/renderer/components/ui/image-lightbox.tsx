@@ -52,7 +52,9 @@ interface ImageLightboxProps {
   /** 翻页回调（多图模式） */
   onIndexChange?: (nextIndex: number) => void
   /** 打开时的初始模式（默认 'preview'） */
-  initialMode?: 'preview' | 'editing'
+  initialMode?: 'preview' | 'editing' | 'comments'
+  /** 编辑模式打开时直接选择的工具 */
+  initialTool?: ImageEditorTool
 }
 
 export function ImageLightbox({
@@ -66,6 +68,7 @@ export function ImageLightbox({
   index,
   onIndexChange,
   initialMode = 'preview',
+  initialTool = 'select',
 }: ImageLightboxProps): React.ReactElement | null {
   const [mode, setMode] = React.useState<'preview' | 'editing' | 'comments'>(initialMode)
   const [editorTool, setEditorTool] = React.useState<ImageEditorTool>('select')
@@ -79,8 +82,8 @@ export function ImageLightbox({
   React.useEffect(() => {
     if (open) setMode(initialMode)
     else setMode('preview')
-    if (open) setEditorTool('select')
-  }, [open, initialMode])
+    if (open) setEditorTool(initialTool)
+  }, [open, initialMode, initialTool])
 
   // 多图模式下监听方向键翻页（编辑模式禁用）
   React.useEffect(() => {
@@ -113,7 +116,7 @@ export function ImageLightbox({
   }
 
   const handleEditCancel = (): void => {
-    if (initialMode === 'editing') {
+    if (initialMode !== 'preview') {
       onOpenChange(false)
     } else {
       setMode('preview')

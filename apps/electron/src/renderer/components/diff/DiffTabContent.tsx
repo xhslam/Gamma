@@ -6,16 +6,17 @@
  */
 
 import * as React from 'react'
-import { ChevronRight, Code2, Copy, Check, Eye, FolderOpen, List, Pencil, RotateCw, Save, WrapText, X } from 'lucide-react'
+import { ChevronRight, Code2, Copy, Check, Eraser, Eye, FolderOpen, ImageMinus, List, MessageSquarePlus, Pencil, Proportions, RotateCw, Save, WrapText, X } from 'lucide-react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import DOMPurify from 'dompurify'
 import { File as PierreFile } from '@pierre/diffs/react'
 import { toast } from 'sonner'
-import type { FilePreviewMetadata } from '@gamma/shared'
+import type { AgentPendingFile, FilePreviewMetadata } from '@gamma/shared'
 import { cn } from '@/lib/utils'
 import {
   agentDiffViewModeAtom,
   agentDiffRefreshVersionAtom,
+  agentSessionPendingFilesAtom,
 } from '@/atoms/agent-atoms'
 import { resolvedThemeAtom } from '@/atoms/theme'
 import {
@@ -27,6 +28,7 @@ import {
 } from '@/atoms/preview-atoms'
 
 import { markdownTocOpenAtom } from '@/atoms/markdown-toc'
+import { appendImageEditPromptAtom } from '@/atoms/image-edit-handoff'
 import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
 import { useShortcut } from '@/hooks/useShortcut'
 import { initShortcutRegistry } from '@/lib/shortcut-registry'
@@ -45,6 +47,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PIERRE_FILE_CSS } from '@/components/agent/tool-result-renderers/pierre-styles'
 import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
+import { ImageLightbox } from '@/components/ui/image-lightbox'
+import type { ImageEditorTool } from '@/components/ui/image-editor'
 import { insertAgentInputQuote } from '@/lib/agent-input-quote'
 import { SELECTION_ACTION_POPOVER_SELECTOR } from '@/lib/quoted-selection'
 import { copyTextToClipboard } from '@/lib/clipboard'
@@ -325,9 +329,43 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   // 默认 25%：预览面板空间有限，先展示缩略全貌，用户可手动放大查看细节
   const [imageZoom, setImageZoom] = React.useState(0.25)
   const [imageNaturalSize, setImageNaturalSize] = React.useState({ w: 0, h: 0 })
+  const [imageEditorRequest, setImageEditorRequest] = React.useState<{
+    mode: 'editing' | 'comments'
+    tool: ImageEditorTool
+  } | null>(null)
+  const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
+  const appendImageEditPrompt = useSetAtom(appendImageEditPromptAtom)
   const imageContainerRef = React.useRef<HTMLDivElement>(null)
   const imageDragging = React.useRef(false)
   const imageDragStart = React.useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
+
+  const handleImageEditComplete = React.useCallback((editedDataUrl: string, prompt?: string): void => {
+    const base64 = editedDataUrl.split(',')[1]
+    if (!base64 || !sessionId) return
+    const now = Date.now()
+    const id = `pending-${now}-${Math.random().toString(36).slice(2)}`
+    const sourceName = getPreviewPathLabel(filePath)
+    const sourceStem = sourceName.replace(/\.[^.]+$/, '') || 'image'
+    const pending: AgentPendingFile = {
+      id,
+      filename: `${sourceStem}-edited-${now}.png`,
+      mediaType: 'image/png',
+      size: Math.round(base64.length * 0.75),
+      previewUrl: editedDataUrl,
+    }
+    if (!window.__pendingAgentFileData) window.__pendingAgentFileData = new Map()
+    window.__pendingAgentFileData.set(id, base64)
+    setSessionPendingFiles((previous) => {
+      const next = new Map(previous)
+      next.set(sessionId, [...(previous.get(sessionId) ?? []), pending])
+      return next
+    })
+    if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt })
+  }, [appendImageEditPrompt, filePath, sessionId, setSessionPendingFiles])
+
+  React.useEffect(() => {
+    setImageEditorRequest(null)
+  }, [filePath, sessionId])
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const markdownEditorRef = React.useRef<LiveMarkdownEditorHandle>(null)
   const [findOpen, setFindOpen] = React.useState(false)
@@ -1817,18 +1855,36 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
             ) : isImage ? (
               imageDataUrl ? (
                 <div className="relative h-full">
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-2 py-1 rounded-lg bg-background/80 backdrop-blur-sm border border-border/30 shadow-sm">
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1 overflow-x-auto whitespace-nowrap rounded-lg border border-border/30 bg-background/90 px-2 py-1 shadow-sm backdrop-blur-sm">
                   <button
                     type="button"
-                    className="w-6 h-6 rounded border border-border/30 flex items-center justify-center text-sm text-muted-foreground hover:bg-muted/50"
+                    aria-label="缩小图片"
+                    className="flex size-7 shrink-0 items-center justify-center rounded text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                     onClick={() => setImageZoom((z) => Math.max(0.1, z / 1.5))}
                   >−</button>
-                  <span className="text-xs text-muted-foreground min-w-[40px] text-center font-mono">{Math.round(imageZoom * 100)}%</span>
+                  <span className="min-w-[40px] text-center font-mono text-xs text-muted-foreground">{Math.round(imageZoom * 100)}%</span>
                   <button
                     type="button"
-                    className="w-6 h-6 rounded border border-border/30 flex items-center justify-center text-sm text-muted-foreground hover:bg-muted/50"
+                    aria-label="放大图片"
+                    className="flex size-7 shrink-0 items-center justify-center rounded text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                     onClick={() => setImageZoom((z) => Math.min(5, z * 1.5))}
                   >+</button>
+                  <div className="mx-1 h-4 w-px shrink-0 bg-border/50" />
+                  <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'editing', tool: 'draw' })}>
+                    <Pencil className="size-3.5" />标注
+                  </button>
+                  <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'comments', tool: 'select' })}>
+                    <MessageSquarePlus className="size-3.5" />添加评论
+                  </button>
+                  <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'editing', tool: 'background' })}>
+                    <ImageMinus className="size-3.5" />移除背景
+                  </button>
+                  <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'editing', tool: 'erase' })}>
+                    <Eraser className="size-3.5" />擦除
+                  </button>
+                  <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'editing', tool: 'resize' })}>
+                    <Proportions className="size-3.5" />调整大小
+                  </button>
                 </div>
                 <div
                   ref={imageContainerRef}
@@ -1868,6 +1924,15 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                     />
                   </div>
                 </div>
+                <ImageLightbox
+                  open={imageEditorRequest !== null}
+                  onOpenChange={(open) => { if (!open) setImageEditorRequest(null) }}
+                  src={imageDataUrl}
+                  alt={getPreviewPathLabel(filePath)}
+                  initialMode={imageEditorRequest?.mode ?? 'editing'}
+                  initialTool={imageEditorRequest?.tool ?? 'select'}
+                  onEditComplete={handleImageEditComplete}
+                />
               </div>
               ) : null
             ) : isOfficePreview ? (
