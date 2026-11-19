@@ -64,6 +64,32 @@ describe('Given 生产 computer 执行入口', () => {
   })
 })
 
+describe('Given computer session end', () => {
+  test('When 用户结束自动桌面会话 Then 走真实停止屏障且不透传上游 session', async () => {
+    const f = createComputerFixture({ consent: false })
+    const result = await f.controller.execute(f.binding, { command: 'session', subcommand: 'end' })
+    expect(result).toMatchObject({ ok: true, command: 'session', data: { stopped: true, barrier: 'gamma-controller' } })
+    expect(f.calls.map(call => call.method)).toEqual(['terminate'])
+    expect(f.controller.getState(f.binding.sessionId).phase).toBe('paused')
+    await expect(f.controller.execute(f.binding, { command: 'status' })).rejects.toThrow('暂停')
+    await f.controller.finishRun(f.binding)
+  })
+
+  test('When host 停止未确认 Then 返回可重试失败且不假报 stopped', async () => {
+    const f = createComputerFixture({ call: async method => {
+      if (method === 'terminate') throw new Error('host still running')
+    } })
+    const result = await f.controller.execute(f.binding, { command: 'session', subcommand: 'end' })
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'STOP_NOT_CONFIRMED', disposition: { delivery: 'delivered', retry: 'safe' } },
+    })
+    expect(result.data).toBeUndefined()
+    expect(f.controller.getState(f.binding.sessionId).phase).toBe('error')
+    expect(f.calls.map(call => call.method)).toEqual(['terminate'])
+  })
+})
+
 describe('Given 正在等待本地确认', () => {
   test('When 尚未创建原生 run 就停止，随后风险批准到达 Then 不投递', async () => {
     const answer = deferred<boolean>()

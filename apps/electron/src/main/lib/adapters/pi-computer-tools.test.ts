@@ -105,6 +105,16 @@ describe('Pi computer 工具集成 agent-desktop 协议', () => {
     )
   })
 
+  test('Given 逐命令参数 When 校验工具 schema Then 拒绝跨命令字段并保留必填位置参数', () => {
+    const tool = buildPiComputerTools(mockSdk, binding, 'user', {} as ComputerController)[0]!
+    expect(Value.Check(tool.parameters, { command: 'get', ref: '@s1:e1', property: 'name' })).toBe(true)
+    expect(Value.Check(tool.parameters, { command: 'get', property: 'name' })).toBe(false)
+    expect(Value.Check(tool.parameters, { command: 'get', ref: '@s1:e1', timeoutMs: 1000 })).toBe(false)
+    expect(Value.Check(tool.parameters, { command: 'snapshot', limit: 40 })).toBe(false)
+    expect(Value.Check(tool.parameters, { command: 'set-value', ref: '@s1:e1', value: 'x', app: 'Notes' })).toBe(false)
+    expect(Value.Check(tool.parameters, { command: 'set-value', ref: '@s1:e1', value: 'x' })).toBe(true)
+  })
+
   test('Given find、wait、mouse-click 的 count When 校验工具 schema Then 同时暴露布尔开关与数值计数', () => {
     const tool = buildPiComputerTools(mockSdk, binding, 'user', {} as ComputerController)[0]!
     for (const input of [{ command: 'find', count: true }, { command: 'wait', count: 2 }, { command: 'mouse-click', count: 2 }]) {

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import { lstat, opendir, realpath } from 'node:fs/promises'
+import { lstat, opendir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, isAbsolute, join, normalize, sep } from 'node:path'
+import { basename, isAbsolute, join, normalize, sep, win32 } from 'node:path'
 import { promisify } from 'node:util'
 
 const exec = promisify(execFile)
@@ -19,6 +19,10 @@ export interface InstalledComputerAppOptions {
   reader?: (plistPath: string, signal: AbortSignal) => Promise<unknown>
   maxEntries?: number
   timeoutMs?: number
+  /** Windows 测试可注入固定系统根、PATH 和规范化读取器；生产只使用主进程环境。 */
+  windowsSystemRoot?: string
+  windowsPathEntries?: readonly string[]
+  windowsCanonicalize?: (path: string) => Promise<string | undefined>
 }
 
 function installationRoots(): string[] {
@@ -76,11 +80,53 @@ async function readPlist(path: string, signal: AbortSignal): Promise<unknown> {
  * 不进入 bundle、隐藏目录或符号链接；InfoPlist.strings 和系统本地化别名不在支持范围内。
  * 读取失败、预算耗尽或身份不完整均失败关闭，不能把部分扫描误认为唯一匹配。
  */
+async function canonicalWindowsExecutable(path: string): Promise<string | undefined> {
+  try {
+    const canonical = await realpath(path)
+    return (await stat(canonical)).isFile() ? canonical : undefined
+  } catch (error: unknown) {
+    if (missing(error)) return undefined
+    throw error
+  }
+}
+
+/** Windows 只解析文件身份，不执行 where、PowerShell 或目标程序；授权后始终使用规范绝对路径。 */
+async function resolveWindowsComputerApp(
+  identifier: string,
+  options: InstalledComputerAppOptions,
+): Promise<InstalledComputerApp | undefined> {
+  if (typeof identifier !== 'string' || !identifier.trim() || identifier.length > 1024 || /[\x00-\x1f\x7f]/.test(identifier)) return undefined
+  const requested = identifier.trim()
+  const hasSeparator = requested.includes('/') || requested.includes('\\')
+  if ((hasSeparator && !win32.isAbsolute(requested)) || (!hasSeparator && requested.includes(':'))) return undefined
+  const systemRoot = options.windowsSystemRoot ?? process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows'
+  if (!win32.isAbsolute(systemRoot)) return undefined
+  const pathEntries = options.windowsPathEntries ?? (process.env.PATH ?? '').split(';')
+  if (pathEntries.length > 64 || pathEntries.some(path => path && !win32.isAbsolute(path))) return undefined
+  const names = hasSeparator || win32.extname(requested) ? [requested] : [requested, `${requested}.exe`]
+  const directories = [win32.join(systemRoot, 'System32'), systemRoot, win32.join(systemRoot, 'SysWOW64'), ...pathEntries.filter(Boolean)]
+  const candidates = hasSeparator ? names : directories.flatMap(directory => names.map(name => win32.join(directory, name)))
+  const canonicalize = options.windowsCanonicalize ?? canonicalWindowsExecutable
+  try {
+    for (const candidate of candidates.slice(0, 256)) {
+      const canonical = await canonicalize(candidate)
+      if (!canonical || !win32.isAbsolute(canonical) || win32.extname(canonical).toLowerCase() !== '.exe') continue
+      const appName = win32.basename(canonical)
+      if (!appName) return undefined
+      return { appName, bundleId: canonical }
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
 export async function resolveInstalledComputerApp(
   identifier: string,
   platform: NodeJS.Platform = process.platform,
   options: InstalledComputerAppOptions = {},
 ): Promise<InstalledComputerApp | undefined> {
+  if (platform === 'win32') return resolveWindowsComputerApp(identifier, options)
   if (platform !== 'darwin' || typeof identifier !== 'string' || !identifier.trim()
     || identifier.length > 1024 || /[\x00-\x1f\x7f]/.test(identifier)) return undefined
   const requested = identifier.trim()

@@ -465,6 +465,16 @@ export function buildAgentDesktopArgs(input: AgentDesktopInput): string[] {
     }
   }
 
+  if (input.waitFor !== undefined && input.waitForGone !== undefined) {
+    throw new Error('waitFor 与 waitForGone 互斥，不能同时等待出现和消失')
+  }
+  if (
+    input.waitTimeout !== undefined &&
+    input.waitFor === undefined &&
+    input.waitForGone === undefined
+  ) {
+    throw new Error('waitTimeout 仅能与 waitFor 或 waitForGone 一起使用')
+  }
   if (
     input.command === 'session' &&
     !['list', 'end', 'start'].includes(String(input.subcommand))

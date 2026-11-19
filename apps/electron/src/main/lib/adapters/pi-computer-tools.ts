@@ -3,7 +3,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { ComputerBinding, ComputerState } from '@gamma/shared'
 import { computerController } from '../computer-service'
 import type { ComputerController } from '../computer-controller'
-import type { AgentDesktopEnvelope, AgentDesktopInput } from '../agent-desktop-protocol'
+import { AGENT_DESKTOP_COMMANDS, type AgentDesktopEnvelope, type AgentDesktopInput } from '../agent-desktop-protocol'
 import { getComputerPauseReason } from '../computer-pause'
 
 export interface ComputerToolDetails {
@@ -17,7 +17,7 @@ export interface ComputerToolDetails {
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 
-const ComputerToolSchema = Type.Object({
+const ComputerToolBaseSchema = Type.Object({
   command: Type.Union([
     Type.Literal('snapshot'),
     Type.Literal('find'),
@@ -153,6 +153,50 @@ const ComputerToolSchema = Type.Object({
   waitTimeout: Type.Optional(Type.Number({ description: '动作后等待超时时间' })),
 })
 
+type ComputerOptionName = keyof typeof ComputerToolBaseSchema.properties
+const optionalPositionals = new Set(['hover:ref', 'wait:ms', 'clipboard-set:text'])
+
+function requiredComputerOption(schema: import('typebox').TSchema): import('typebox').TSchema {
+  const required: Record<string, unknown> = { ...schema }
+  delete required['~optional']
+  return required as import('typebox').TSchema
+}
+
+/**
+ * 按上游逐命令能力生成判别联合，避免全局 Schema 暗示所有字段都可组合。
+ * 位置参数保持必填；headed 与 post-action wait 是上游真正的全局选项。
+ */
+export function buildComputerToolSchema() {
+  return Type.Union(Object.entries(AGENT_DESKTOP_COMMANDS).map(([command, spec]) => {
+    const properties: Record<string, import('typebox').TSchema> = {
+      command: Type.Literal(command),
+    }
+    const names = new Set([
+      ...spec.positional,
+      ...spec.options,
+      'headed',
+      'waitFor',
+      'waitForGone',
+      'waitTimeout',
+      ...(command === 'notification-action' ? ['notificationAction'] : []),
+    ])
+    for (const name of names) {
+      let schema: import('typebox').TSchema | undefined = ComputerToolBaseSchema.properties[name as ComputerOptionName]
+      if (name === 'count') {
+        schema = command === 'find'
+          ? Type.Optional(Type.Boolean({ description: 'find：仅返回匹配数量' }))
+          : Type.Optional(Type.Number({ description: '数值计数' }))
+      }
+      if (!schema) continue
+      const positional = spec.positional.includes(name) && !optionalPositionals.has(`${command}:${name}`)
+      properties[name] = positional ? requiredComputerOption(schema) : schema
+    }
+    return Type.Object(properties, { additionalProperties: false })
+  }))
+}
+
+const ComputerToolSchema = buildComputerToolSchema()
+
 /** 注册统一的 computer 工具 */
 export function buildPiComputerTools(
   sdk: PiSdk,
@@ -167,6 +211,8 @@ export function buildPiComputerTools(
       label: '电脑桌面操作 (Computer)',
       description: `使用内置 agent-desktop 原生自动化引擎操作桌面应用。
 - 遵循 observe → act → verify 循环：先 status 查状态，使用 snapshot / find 观察，再执行 click / set-value / type / press，并通过新观察验证结果。
+- 每个 command 只接受 Schema 中列出的字段与必填位置参数；不要附加其他命令的选项。find 至少提供一个筛选条件。
+- session end 调用 Gamma 停止屏障并回收桌面进程，不是上游 trace session；停止后等待用户的新消息。
 - 元素引用格式为 @snapshot:eN（例如 @s1:e5）。旧引用随 UI 刷新失效；遇到 STALE_REF 重新 snapshot 或 find。
 - 密集界面先用 skeleton 概览，再用 root 进行局部精细观察。覆盖层出现时优先指定 surface。
 - 默认使用 headless 语义操作（不抢焦点、不改剪贴板）。物理键鼠输入需要用户在本地明确授权 headed；headless 失败不会自动转为 headed。

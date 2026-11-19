@@ -61,10 +61,55 @@ import Darwin
         try check(rejected { _ = try JSONDecoder().decode(Request.self, from: maliciousRequest) }, "Given IPC 额外 executable/env 字段 Then 明确拒绝")
         let engine = CommandLine.arguments[1]
         var stdout = Data()
-        let exitCode = try EngineJob().execute(executable: engine, arguments: ["version"], root: root, session: session, connection: -1) { kind, bytes in
+        let firstHostJob = EngineJob()
+        let exitCode = try firstHostJob.execute(executable: engine, arguments: ["version"], root: root, session: session, connection: -1) { kind, bytes in
             if kind == "stdout" { stdout.append(bytes) }
         }
         try check(exitCode == 0 && String(data: stdout, encoding: .utf8)?.contains("1.0.2") == true, "Given 固定引擎 version When 执行 Then 完整输出与正常退出码")
+
+        let firstHosts = firstHostJob.commandHosts
+        try check(firstHosts.count == 1, "Given 一次性 CLI 正常退出 Then 保留唯一原生 command host")
+        let secondHostJob = EngineJob(retainedHosts: firstHosts)
+        _ = try secondHostJob.execute(executable: engine, arguments: ["version"], root: root, session: session, connection: -1) { _, _ in }
+        try check(secondHostJob.commandHosts == firstHosts, "Given 同一会话下一条命令 Then 复用同一 retained_object owner")
+        let handedOffHosts = secondHostJob.commandHosts
+        try EngineJob(retainedHosts: handedOffHosts).stopRetainedHosts()
+        let remainingHostPids = Set(handedOffHosts.keys)
+        try check(!processTable().contains { remainingHostPids.contains($0.kp_proc.p_pid) && $0.kp_proc.p_stat != SZOMB }, "Given 无活动 CLI 的停止会话 Then command host 已停止")
+
+        if CommandLine.arguments.contains("--live-ref") {
+            let snapshotJob = EngineJob()
+            var snapshotOutput = Data()
+            _ = try snapshotJob.execute(executable: engine, arguments: ["snapshot", "--app=com.gamma.app", "--skeleton"], root: root, session: session, connection: -1) { kind, bytes in
+                if kind == "stdout" { snapshotOutput.append(bytes) }
+            }
+            func firstRef(_ value: Any) -> String? {
+                if let object = value as? [String: Any] {
+                    if let ref = object["ref_id"] as? String { return ref }
+                    for child in object.values { if let ref = firstRef(child) { return ref } }
+                } else if let array = value as? [Any] {
+                    for child in array { if let ref = firstRef(child) { return ref } }
+                }
+                return nil
+            }
+            let envelope = try JSONSerialization.jsonObject(with: snapshotOutput)
+            defer { try? EngineJob(retainedHosts: snapshotJob.commandHosts).stopRetainedHosts() }
+            if let object = envelope as? [String: Any], object["ok"] as? Bool != true {
+                let error = object["error"] as? [String: Any]
+                throw ComponentError.rejected("真实快照失败：\(error?["code"] as? String ?? "未知响应")")
+            }
+            let ref = try { () throws -> String in
+                guard let ref = firstRef(envelope) else { throw ComponentError.rejected("真实快照没有可验证引用") }
+                return ref
+            }()
+            let readJob = EngineJob(retainedHosts: snapshotJob.commandHosts)
+            var readOutput = Data()
+            _ = try readJob.execute(executable: engine, arguments: ["get", ref, "--property=name"], root: root, session: session, connection: -1) { kind, bytes in
+                if kind == "stdout" { readOutput.append(bytes) }
+            }
+            let readEnvelope = try JSONSerialization.jsonObject(with: readOutput) as? [String: Any]
+            try check(readEnvelope?["ok"] as? Bool == true, "Given 真实 Gamma 快照引用 When 下一条命令读取属性 Then retained_object owner 仍有效")
+        }
 
         func stoppedScenario(disconnect: Bool) throws {
             let job = EngineJob()

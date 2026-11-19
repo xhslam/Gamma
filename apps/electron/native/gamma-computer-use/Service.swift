@@ -1,9 +1,16 @@
 import Foundation
 import Darwin
 
+private func bundledComponentVersion() throws -> String {
+    guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+          !version.isEmpty else { throw ComponentError.rejected("组件版本缺失") }
+    return version
+}
+
 private struct SessionState {
     let root: String
     var job: EngineJob?
+    var hosts: [pid_t: OwnedProcess]
     var stopped: Bool
 }
 final class DesktopService {
@@ -32,9 +39,11 @@ final class DesktopService {
     let identity: String
     let engine: String
     let engineVersion: String
+    let componentVersion: String
 
     init() throws {
         identity = try ownIdentity()
+        componentVersion = try bundledComponentVersion()
         engine = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/agent-desktop/agent-desktop").path
         let manifest = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/agent-desktop/.source-build.json")
         let data = try Data(contentsOf: manifest)
@@ -103,12 +112,17 @@ final class DesktopService {
                 lock.lock()
                 if let existing = sessions[session], existing.root != root { lock.unlock(); throw ComponentError.rejected("会话 root 不匹配") }
                 if sessions[session] == nil && sessions.count >= 4096 { lock.unlock(); throw ComponentError.rejected("会话容量已满") }
-                let job = sessions[session]?.job
-                sessions[session] = SessionState(root: root, job: job, stopped: true)
+                let state = sessions[session]
+                let job = state?.job
+                let retainedHosts = state?.hosts ?? [:]
+                sessions[session] = SessionState(root: root, job: job, hosts: retainedHosts, stopped: true)
                 lock.unlock()
                 try job?.stopAndWait()
+                // 没有活动 CLI 时也必须停止已交接的 host；停止 ACK 只有在进程消失后才返回。
+                if job == nil && !retainedHosts.isEmpty { try EngineJob(retainedHosts: retainedHosts).stopRetainedHosts() }
                 lock.lock()
                 if let job, sessions[session]?.job === job, job.terminationConfirmed() { sessions[session]?.job = nil }
+                if job?.terminationConfirmed() ?? true { sessions[session]?.hosts = [:] }
                 lock.unlock()
                 try persistStop(session)
                 try sendFrame(fd, Reply(kind: "stopped", exitCode: 0))
@@ -117,7 +131,8 @@ final class DesktopService {
                 guard let arguments = request.arguments else { throw ComponentError.rejected("缺少 CLI 参数") }
                 try validateArguments(arguments)
                 try require(!wasStopped(session), "会话已永久停止；不得重放")
-                let job = EngineJob()
+                let inheritedHosts = sessions[session]?.hosts ?? [:]
+                let job = EngineJob(retainedHosts: inheritedHosts)
                 lock.lock()
                 if shuttingDown { lock.unlock(); throw ComponentError.rejected("组件正在停止；不得重放") }
                 if let existing = sessions[session] {
@@ -125,13 +140,16 @@ final class DesktopService {
                         lock.unlock(); throw ComponentError.rejected("会话已停止、root 不匹配或正在执行；不得重放")
                     }
                 } else if sessions.count >= 4096 { lock.unlock(); throw ComponentError.rejected("会话容量已满") }
-                sessions[session] = SessionState(root: root, job: job, stopped: false)
+                sessions[session] = SessionState(root: root, job: job, hosts: inheritedHosts, stopped: false)
                 lock.unlock()
                 var succeeded = false
                 defer {
                     lock.lock()
                     // 屏障失败时保留失败对象；之后的 stop 不得把丢失执行者误报为成功。
-                    if job.terminationConfirmed() { sessions[session]?.job = nil }
+                    if job.terminationConfirmed() {
+                        sessions[session]?.job = nil
+                        sessions[session]?.hosts = job.commandHosts
+                    }
                     if !succeeded { sessions[session]?.stopped = true }
                     lock.unlock()
                     if !succeeded { try? persistStop(session) }
@@ -152,11 +170,14 @@ final class DesktopService {
         if listener >= 0 { Darwin.shutdown(listener, SHUT_RDWR); close(listener); listener = -1 }
         lock.lock()
         shuttingDown = true
-        let jobs = sessions.values.compactMap(\.job)
+        let states = Array(sessions.values)
         let identifiers = Array(sessions.keys)
         for key in identifiers { sessions[key]?.stopped = true }
         lock.unlock()
-        for job in jobs { try? job.stopAndWait() }
+        for state in states {
+            try? state.job?.stopAndWait()
+            if state.job == nil && !state.hosts.isEmpty { try? EngineJob(retainedHosts: state.hosts).stopRetainedHosts() }
+        }
         for session in identifiers { try? persistStop(session) }
         unlink(socketPath)
         if lockFD >= 0 { close(lockFD); lockFD = -1 }
@@ -165,6 +186,7 @@ final class DesktopService {
 
 func runClient(_ arguments: [String]) throws -> Int32 {
     _ = try ownIdentity()
+    let componentVersion = try bundledComponentVersion()
     try validatePrivateDirectory(socketDirectory)
     let info = try fileInfo(socketPath)
     try require(info.st_uid == getuid() && info.st_mode & S_IFMT == S_IFSOCK && info.st_mode & 0o777 == 0o600, "IPC socket 身份无效")

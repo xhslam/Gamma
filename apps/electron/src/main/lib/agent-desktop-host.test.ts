@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { resolve, join } from 'node:path'
 import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { AgentDesktopHost } from './agent-desktop-host'
 
@@ -154,10 +154,13 @@ describe('AgentDesktopHost 传输和停止屏障', () => {
             if (fail) throw new Error('终止失败')
             process.kill(pid, signal)
           } } : {}),
-          ...(failure === 'windows' ? { terminateWindows: async (pid: number) => {
-            if (fail) throw new Error('taskkill 失败')
-            process.kill(pid, 'SIGKILL')
-          } } : {}),
+          ...(failure === 'windows' ? {
+            terminateWindows: async (pid: number) => {
+              if (fail) throw new Error('taskkill 失败')
+              process.kill(pid, 'SIGKILL')
+            },
+            stopCursorOverlay: async () => {},
+          } : {}),
         },
       )
       const result = host.execute('failure', ['-e', 'setInterval(() => {}, 1000)'])
@@ -361,10 +364,70 @@ it('Given 独立代理输出成功 envelope 但未成功退出 When 读取结果
 })
 
 describe('Given AgentDesktopHost 在 Windows 平台的特性', () => {
+  it('When detached cursor overlay 停止失败 Then 不删除状态、不确认停止，并允许重试', async () => {
+    let fail = true
+    let root = ''
+    let attempts = 0
+    const host = new AgentDesktopHost(
+      () => ({ executable: process.execPath, stop: async identity => { root = identity.root } }),
+      'win32',
+      {
+        stopCursorOverlay: async () => { attempts++; if (fail) throw new Error('overlay 仍在运行') },
+        terminateWindows: async pid => { try { process.kill(pid, 'SIGKILL') } catch {} },
+      },
+    )
+    await host.execute('win-overlay-stop', ['-e', "process.stdout.write(JSON.stringify({version:'2.5',ok:true,command:'click'}))"])
+    await expect(host.terminate('win-overlay-stop')).rejects.toThrow('overlay 仍在运行')
+    expect(existsSync(root)).toBe(true)
+    fail = false
+    await host.terminate('win-overlay-stop')
+    expect(attempts).toBe(2)
+    expect(existsSync(root)).toBe(false)
+  })
+
+  it('When overlay 停止命令超时后仍存活 Then 保留其子进程所有权并在重试时先回收', async () => {
+    let root = ''
+    let attempts = 0
+    let overlayPid = 0
+    let overlayClosed = false
+    const host = new AgentDesktopHost(
+      () => ({ executable: process.execPath, stop: async identity => { root = identity.root } }),
+      'win32',
+      {
+        stopCursorOverlay: async (_command, _identity, track) => {
+          attempts++
+          if (attempts > 1) return
+          const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+          if (!child.pid) throw new Error('测试子进程未启动')
+          overlayPid = child.pid
+          overlayClosed = false
+          track(child)
+          child.once('close', () => { overlayClosed = true })
+          throw new Error('停止超时')
+        },
+        terminateWindows: async pid => {
+          try { process.kill(pid, 'SIGKILL') } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+          }
+        },
+      },
+    )
+    await host.execute('win-overlay-timeout', ['-e', "process.stdout.write(JSON.stringify({version:'2.5',ok:true,command:'click'}))"])
+    await expect(host.terminate('win-overlay-timeout')).rejects.toThrow('停止超时')
+    expect(existsSync(root)).toBe(true)
+    expect(overlayClosed).toBe(false)
+    await host.terminate('win-overlay-timeout')
+    expect(attempts).toBe(2)
+    expect(overlayClosed).toBe(true)
+    expect(() => process.kill(overlayPid, 0)).toThrow()
+    expect(existsSync(root)).toBe(false)
+  })
+
   it('When Windows 平台执行命令 Then 传递完整的 Windows 环境变量', async () => {
     const host = new AgentDesktopHost(
       () => ({ executable: process.execPath }),
       'win32',
+      { stopCursorOverlay: async () => {} },
     )
     const result = await host.execute('win-env', [
       '-e',

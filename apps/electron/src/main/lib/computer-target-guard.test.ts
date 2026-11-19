@@ -98,15 +98,37 @@ test('Given Windows 平台应用尚未运行 When launch 目标应用 Then 无�
   const originalPlatform = process.platform
   Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
   try {
+    const canonical = 'C:\\Windows\\System32\\notepad.exe'
     const f = createComputerFixture({
       policy: 'standard',
+      installedApp: { appName: 'notepad.exe', bundleId: canonical },
       call: async (method) => (method === 'list-apps' ? { apps: [] } : undefined),
     })
     f.auth.recordAppDecision('notepad', 'always')
     await expect(f.controller.execute(f.binding, { command: 'launch', app: 'notepad' })).resolves.toMatchObject({ ok: true })
     expect(f.calls.at(-1)?.params.args).toContain('launch')
-    expect(f.calls.at(-1)?.params.args).toContain('notepad')
+    expect(f.calls.at(-1)?.params.args).toContain(canonical)
     await f.controller.finishRun(f.binding)
+  } finally {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  }
+})
+
+test('Given Windows 已拒绝映像名 When 使用绝对路径或省略扩展名启动 Then 规范身份仍命中拒绝且不投递', async () => {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+  try {
+    for (const requested of ['C:\\Windows\\System32\\notepad.exe', 'notepad']) {
+      const f = createComputerFixture({
+        policy: 'standard',
+        installedApp: { appName: 'notepad.exe', bundleId: 'C:\\Windows\\System32\\notepad.exe' },
+        call: async method => method === 'list-apps' ? { apps: [] } : undefined,
+      })
+      f.auth.recordAppDecision('notepad.exe', 'denied')
+      await expect(f.controller.execute(f.binding, { command: 'launch', app: requested })).rejects.toThrow('拒绝')
+      expect(f.actions).toHaveLength(0)
+      await f.controller.finishRun(f.binding)
+    }
   } finally {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   }

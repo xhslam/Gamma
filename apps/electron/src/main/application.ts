@@ -44,6 +44,7 @@ import { agyTaskService } from './lib/agy-task-controller'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
 import { browserController } from './lib/browser-controller'
 import { computerController, startNativeLoggerSelfCheck } from './lib/computer-service'
+import { createComputerQuitBarrier } from './lib/computer-quit'
 import { configureComputerLogPath, logComputerUseEvent } from './lib/computer-logger'
 import { AgentRuntimeClient } from './lib/agent-runtime-client'
 import { markRunningDelegationsAsInterrupted } from './lib/agent-session-manager'
@@ -846,6 +847,16 @@ app.on('window-all-closed', () => {
   }
 })
 
+const confirmComputerQuit = createComputerQuitBarrier({
+  stop: async () => { await computerController.stop('应用正在退出') },
+  phase: () => computerController.getState().phase,
+  quit: () => app.quit(),
+  onFailure: (error: unknown) => {
+    setQuitting(false)
+    console.error('[computer] 退出前停止桌面操作失败:', error)
+    dialog.showErrorBox('桌面操作尚未完全停止', 'Gamma 暂未退出，以避免遗留桌面执行进程。请重试退出；若仍失败，请查看电脑操作日志。')
+  },
+})
 let designShutdownFinished = false
 app.on('before-quit', (event) => {
   if (!designShutdownFinished) {
@@ -857,12 +868,12 @@ app.on('before-quit', (event) => {
     })
     return
   }
-  void computerController.stop('应用正在退出')
-  // 标记正在退出，让 close 事件不再阻止关闭
+  // 先阻止新 Agent 动作，再等待桌面进程停止确认；失败时不能把 Promise resolve 当作成功。
   setQuitting()
-
-  // 中止所有活跃的 Agent 和终端子进程
   stopAllAgents()
+  if (!confirmComputerQuit(() => event.preventDefault())) return
+
+  // 中止终端子进程并执行其余退出清理。
   void stopAllTerminals()
   agyTaskService.shutdown()
   browserController.dispose()

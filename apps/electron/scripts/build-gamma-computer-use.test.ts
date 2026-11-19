@@ -12,7 +12,7 @@ afterAll(() => rmSync(temporary, { recursive: true, force: true }))
 
 describe('Given gammaComputerUse 独立构建入口', () => {
   it('Then 使用独立版本和固定 bundle identity，不导入时构建或安装', () => {
-    expect(COMPONENT_VERSION).toBe('1.0.0')
+    expect(COMPONENT_VERSION).toBe('1.0.2')
     expect(BUNDLE_ID).toBe('com.gamma.computeruse')
     expect(DEFAULT_OUTPUT).toBe(join(appRoot, 'out/gamma-computer-use/gammaComputerUse.app'))
   })
@@ -62,8 +62,10 @@ describe('Given gammaComputerUse 独立构建入口', () => {
   it('Then 正常路径、真实后代取消、断连、输出上限及恶意参数均通过', () => {
     const stdout = execFileSync(executable, [join(appRoot, 'resources/agent-desktop/agent-desktop')], { encoding: 'utf8', timeout: 45_000 })
     const scenarios = JSON.parse(stdout) as string[]
-    expect(scenarios.length).toBeGreaterThanOrEqual(16)
+    expect(scenarios.length).toBeGreaterThanOrEqual(19)
     expect(scenarios.some(text => text.includes('真实引擎和后代均已停止'))).toBe(true)
+    expect(scenarios.some(text => text.includes('复用同一 retained_object owner'))).toBe(true)
+    expect(scenarios.some(text => text.includes('command host 已停止'))).toBe(true)
     expect(scenarios.some(text => text.includes('输出超过24MiB'))).toBe(true)
   }, 50_000)
   it('When 已有构建产物 Then 原生签名和 identity 可独立校验', () => {
@@ -75,5 +77,9 @@ describe('Given gammaComputerUse 独立构建入口', () => {
     const plist = readFileSync(join(DEFAULT_OUTPUT, 'Contents/Info.plist'), 'utf8')
     expect(plist).toContain('<key>LSUIElement</key><true/>')
     expect(plist).toContain(BUNDLE_ID)
+    expect(plist).toContain('<key>CFBundleIconFile</key><string>gamma-computer-use.icns</string>')
+    expect(readFileSync(join(DEFAULT_OUTPUT, 'Contents/Resources/gamma-computer-use.icns'))).toEqual(
+      readFileSync(join(appRoot, 'resources/gamma-computer-use.icns')),
+    )
   })
 })

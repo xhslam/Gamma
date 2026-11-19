@@ -6,8 +6,9 @@ import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readF
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const COMPONENT_VERSION = '1.0.0'
+export const COMPONENT_VERSION = '1.0.2'
 export const BUNDLE_ID = 'com.gamma.computeruse'
+const ICON_FILE = 'gamma-computer-use.icns'
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const DEFAULT_OUTPUT = join(appRoot, 'out/gamma-computer-use/gammaComputerUse.app')
 export const INSTALL_TARGET = '/Applications/gammaComputerUse.app'
@@ -35,6 +36,10 @@ export function verifyComponent(path: string): void {
   const identifier = command('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', info])
   const version = command('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleShortVersionString', info])
   if (identifier !== BUNDLE_ID || version !== COMPONENT_VERSION) throw new Error('组件身份或版本不匹配')
+  const icon = command('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', info])
+  if (icon !== ICON_FILE || !lstatSync(join(path, 'Contents/Resources', ICON_FILE)).isFile()) {
+    throw new Error('组件图标无效')
+  }
   const binary = join(path, 'Contents/MacOS/gammaComputerUse')
   if (!lstatSync(binary).isFile() || lstatSync(binary).isSymbolicLink()) throw new Error('组件 executable 无效')
 }
@@ -52,6 +57,7 @@ export function buildComponent(options: BuildOptions = {}): string {
     mkdirSync(join(staged, 'Contents/MacOS'), { recursive: true })
     mkdirSync(join(staged, 'Contents/Resources'), { recursive: true })
     cpSync(source, join(staged, 'Contents/Resources/agent-desktop'), { recursive: true })
+    cpSync(join(appRoot, 'resources', ICON_FILE), join(staged, 'Contents/Resources', ICON_FILE))
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -59,6 +65,7 @@ export function buildComponent(options: BuildOptions = {}): string {
 <key>CFBundleName</key><string>gammaComputerUse</string>
 <key>CFBundleDisplayName</key><string>gammaComputerUse</string>
 <key>CFBundleExecutable</key><string>gammaComputerUse</string>
+<key>CFBundleIconFile</key><string>${ICON_FILE}</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>${COMPONENT_VERSION}</string>
 <key>CFBundleVersion</key><string>${COMPONENT_VERSION}</string>

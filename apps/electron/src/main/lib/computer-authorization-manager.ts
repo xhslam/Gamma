@@ -15,6 +15,13 @@ interface ConsentHandlers {
   observationConsent?: (signal?: AbortSignal) => Promise<boolean>
 }
 const normalizeKey = (value: string): string => value.trim().toLowerCase()
+const imageNameKeys = (value: string): string[] => {
+  const key = normalizeKey(value)
+  if (!key.includes('/') && !key.includes('\\') && key.endsWith('.exe')) {
+    return [key, key.slice(0, -4)]
+  }
+  return [key]
+}
 const validDecision = (value: unknown): value is ComputerAppAuthDecision => ['once', 'always', 'denied', 'cancelled'].includes(String(value))
 const defaults = (): ComputerUsePreferences => ({ riskPolicy: 'relaxed', systemPermissionsDismissed: false, shareObservations: false, headedAllowed: false, allowedApps: {} })
 
@@ -149,8 +156,8 @@ export class ComputerAuthorizationManager {
   }
   clearRun(scope: string): void { this.once.delete(scope) }
   checkAppAuthorization(appName: string, bundleId?: string, scope = 'local'): 'allowed' | 'denied' | 'pending' {
-    // Bundle ID 是规范身份；显示名仅用于兼容旧配置，不得覆盖 bundle 的拒绝。
-    const keys = [bundleId, appName].filter((key): key is string => !!key).map(normalizeKey)
+    // Bundle ID/规范路径优先；Windows 映像名的有无 .exe 是同一授权身份，不是绕过拒绝的新应用。
+    const keys = [...(bundleId ? [normalizeKey(bundleId)] : []), ...imageNameKeys(appName)]
     if (keys.some(key => this.preferences.allowedApps[key] === 'denied')) return 'denied'
     if (keys.some(key => this.preferences.allowedApps[key] === 'always' || this.once.get(scope)?.has(key))) return 'allowed'
     // 宽松策略按用户任务操作应用，不再逐应用重复确认；这是当前策略，不冒充持久 always 授权。

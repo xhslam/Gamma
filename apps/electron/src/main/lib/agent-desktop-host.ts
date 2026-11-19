@@ -38,6 +38,7 @@ interface ProcessControl {
   listProcesses(): Promise<ProcessRow[]>
   signal(pid: number, signal: NodeJS.Signals): void
   terminateWindows(pid: number): Promise<void>
+  stopCursorOverlay(command: AgentDesktopCommand, identity: AgentDesktopRunIdentity, track: (child: ChildProcess) => void): Promise<void>
 }
 
 async function processRows(): Promise<ProcessRow[]> {
@@ -56,9 +57,82 @@ async function processRows(): Promise<ProcessRow[]> {
   })
 }
 
+function desktopEnvironment(root: string, sessionId: string, platform: NodeJS.Platform): NodeJS.ProcessEnv {
+  const isWin = platform === 'win32'
+  return {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    SystemRoot: process.env.SystemRoot,
+    LANG: 'en_US.UTF-8',
+    TMPDIR: process.env.TMPDIR || tmpdir(),
+    AGENT_DESKTOP_HOME: join(root, 'state'),
+    AGENT_DESKTOP_SESSION: sessionId,
+    AGENT_DESKTOP_NO_UPDATE_NOTIFIER: '1',
+    ...(isWin
+      ? {
+          SystemDrive: process.env.SystemDrive || 'C:',
+          TEMP: process.env.TEMP || tmpdir(),
+          TMP: process.env.TMP || tmpdir(),
+          APPDATA: process.env.APPDATA,
+          LOCALAPPDATA: process.env.LOCALAPPDATA,
+          COMSPEC: process.env.COMSPEC,
+          windir: process.env.windir || process.env.SystemRoot,
+        }
+      : {}),
+  }
+}
+
+/** Windows overlay 是 detached 进程；disable 的原生 ACK 会等待 renderer 窗口退出，不能靠 taskkill CLI 父进程代替。 */
+async function stopWindowsCursorOverlay(
+  command: AgentDesktopCommand,
+  identity: AgentDesktopRunIdentity,
+  track: (child: ChildProcess) => void,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command.executable, [...(command.argsPrefix ?? []), 'cursor-overlay', 'disable'], {
+      shell: false,
+      detached: false,
+      cwd: identity.root,
+      env: desktopEnvironment(identity.root, identity.sessionId, 'win32'),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    track(child)
+    let stdout = ''
+    let settled = false
+    const finish = (error?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve()
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      finish(new Error('Windows cursor overlay 停止超时；停止未确认'))
+    }, 8000)
+    child.stdout.on('data', (chunk: Buffer) => {
+      if (stdout.length <= 1024 * 1024) stdout += chunk.toString('utf8')
+    })
+    child.stderr.on('data', () => {})
+    child.once('error', error => finish(new Error(`Windows cursor overlay 停止命令启动失败: ${error.message}`)))
+    child.once('close', code => {
+      try {
+        const envelope = parseAgentDesktopEnvelope(stdout.trim())
+        if (code !== 0 || !envelope.ok) throw new Error('Windows cursor overlay 未确认停止')
+        finish()
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error('Windows cursor overlay 停止响应无效'))
+      }
+    })
+  })
+}
+
 const defaultProcessControl: ProcessControl = {
   listProcesses: processRows,
   signal: signalPid,
+  stopCursorOverlay: stopWindowsCursorOverlay,
   async terminateWindows(pid) {
     const taskkill = process.env.SystemRoot
       ? join(process.env.SystemRoot, 'System32', 'taskkill.exe')
@@ -225,6 +299,17 @@ class RunHost {
     return readAgentDesktopRefTarget(this.root, this.desktopSessionId, ref)
   }
 
+  private trackChild(child: ChildProcess): void {
+    this.currentChild = child
+    if (child.pid) this.owned.add(child.pid)
+    this.childClosed = new Promise<void>((resolveClose) => {
+      child.once('close', () => {
+        if (this.currentChild === child) this.currentChild = undefined
+        resolveClose()
+      })
+    })
+  }
+
   async execute(
     args: string[],
     signal: AbortSignal | undefined,
@@ -283,28 +368,7 @@ class RunHost {
 
         this.dispatched = true
         const isWin = this.platform === 'win32'
-        const env: NodeJS.ProcessEnv = {
-          PATH: process.env.PATH,
-          HOME: process.env.HOME,
-          USERPROFILE: process.env.USERPROFILE,
-          SystemRoot: process.env.SystemRoot,
-          LANG: 'en_US.UTF-8',
-          TMPDIR: process.env.TMPDIR || tmpdir(),
-          AGENT_DESKTOP_HOME: join(this.root, 'state'),
-          AGENT_DESKTOP_SESSION: this.desktopSessionId,
-          AGENT_DESKTOP_NO_UPDATE_NOTIFIER: '1',
-          ...(isWin
-            ? {
-                SystemDrive: process.env.SystemDrive || 'C:',
-                TEMP: process.env.TEMP || tmpdir(),
-                TMP: process.env.TMP || tmpdir(),
-                APPDATA: process.env.APPDATA,
-                LOCALAPPDATA: process.env.LOCALAPPDATA,
-                COMSPEC: process.env.COMSPEC,
-                windir: process.env.windir || process.env.SystemRoot,
-              }
-            : {}),
-        }
+        const env = desktopEnvironment(this.root, this.desktopSessionId, this.platform)
         const child = spawn(this.command.executable, [...(this.command.argsPrefix ?? []), ...args], {
           shell: false,
           detached: !isWin,
@@ -313,14 +377,7 @@ class RunHost {
           stdio: ['ignore', 'pipe', 'pipe'],
         })
 
-        this.currentChild = child
-        if (child.pid) this.owned.add(child.pid)
-        this.childClosed = new Promise<void>((resolveClose) => {
-          child.once('close', () => {
-            if (this.currentChild === child) this.currentChild = undefined
-            resolveClose()
-          })
-        })
+        this.trackChild(child)
 
         child.stdout.on('data', (chunk: Buffer) => {
           if (completed) return
@@ -429,6 +486,13 @@ class RunHost {
         } finally {
           if (timer) clearTimeout(timer)
         }
+      }
+      if (this.platform === 'win32' && this.dispatched) {
+        await this.processControl.stopCursorOverlay(
+          this.command,
+          { root: this.root, sessionId: this.desktopSessionId },
+          child => this.trackChild(child),
+        )
       }
       this.owned.clear()
       if (existsSync(this.root)) rmSync(this.root, { recursive: true, force: true })

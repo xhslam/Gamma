@@ -1,7 +1,6 @@
 import Foundation
 import Darwin
 
-let componentVersion = "1.0.0"
 let protocolVersion = 1
 let maxOutput = 24 * 1024 * 1024
 let socketDirectory = "/tmp/gamma-computer-use-\(getuid())"

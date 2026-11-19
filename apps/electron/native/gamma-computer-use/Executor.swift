@@ -28,10 +28,21 @@ final class EngineJob {
     private var stopRequested = false
     private var completed = false
     private var stopError: String?
-    private var owned: [pid_t: OwnedProcess] = [:]
+    private var owned: [pid_t: OwnedProcess]
     private var pid: pid_t = 0
     private var reaped = false
     private var waitStatus: Int32 = 0
+    private var retainedHosts: [pid_t: OwnedProcess] = [:]
+
+    init(retainedHosts: [pid_t: OwnedProcess] = [:]) {
+        // 上一次命令留下的 host 也属于本会话；下一条命令失败或会话停止时必须一并回收。
+        self.owned = retainedHosts
+    }
+
+    var commandHosts: [pid_t: OwnedProcess] {
+        condition.lock(); defer { condition.unlock() }
+        return retainedHosts
+    }
 
     func terminationConfirmed() -> Bool {
         condition.lock(); defer { condition.unlock() }
@@ -75,21 +86,45 @@ final class EngineJob {
         let result = waitpid(pid, &waitStatus, WNOHANG)
         if result == pid { reaped = true }
     }
-    private func stopTree() throws {
-        guard pid > 0 else { return }
+    private func liveCommandHosts(_ rows: [kinfo_proc], executable: String) throws -> [pid_t: OwnedProcess] {
+        let hosts = rows.filter { row in
+            let id = row.kp_proc.p_pid
+            // 上游 host 使用同一固定引擎路径，并通过 process_group(0) 脱离一次性 CLI 进程组。
+            // 只保留已在本任务 owned 链中核验过启动时间的该进程，不信任模型参数或任意同名进程。
+            return id != pid && row.kp_proc.p_stat != SZOMB && row.kp_eproc.e_pgid == id
+                && owned[id] == fingerprint(row) && (try? executablePath(id)) == executable
+        }
+        try require(hosts.count <= 1, "会话存在多个原生 command host；不得猜测保留对象")
+        return Dictionary(uniqueKeysWithValues: hosts.map { ($0.kp_proc.p_pid, fingerprint($0)) })
+    }
+
+    private func stopTree(keeping hosts: Set<pid_t> = []) throws {
         // 即使后续进程枚举失败，也先停止尚未 reap 的自有进程组；仍然不虚报 ACK。
-        if !reaped { kill(-pid, SIGKILL) }
+        if pid > 0 && !reaped { kill(-pid, SIGKILL) }
         let deadline = Date().addingTimeInterval(8)
         repeat {
             let alive = try collect()
             // 使用单独 spawn process group；并核验每个已观察后代的启动时间，避免杀死重用 PID。
-            if !reaped { kill(-pid, SIGKILL) }
-            for row in alive { kill(row.kp_proc.p_pid, SIGKILL) }
+            if pid > 0 && !reaped { kill(-pid, SIGKILL) }
+            for row in alive where !hosts.contains(row.kp_proc.p_pid) { kill(row.kp_proc.p_pid, SIGKILL) }
             reap()
-            if reaped && alive.isEmpty { return }
+            if (pid == 0 || reaped) && alive.allSatisfy({ hosts.contains($0.kp_proc.p_pid) }) { return }
             usleep(10000)
         } while Date() < deadline
         throw ComponentError.rejected("真实执行者停止未确认；不得重放")
+    }
+
+    func stopRetainedHosts() throws {
+        condition.lock()
+        try require(pid == 0 && !stopRequested, "仅可停止已交接的 command host")
+        stopRequested = true
+        completed = true
+        condition.unlock()
+        do { try stopTree() }
+        catch {
+            condition.lock(); stopError = String(describing: error); condition.unlock()
+            throw error
+        }
     }
 
     func execute(executable: String, arguments: [String], root: String, session: String, connection: Int32, output: (String, Data) throws -> Void) throws -> Int32 {
@@ -157,10 +192,16 @@ final class EngineJob {
                 reap()
                 usleep(10000)
             }
-            try stopTree() // 正常退出也必须回收所有残留后代。
+            // 上游 macOS host 持有 refmap 中的 retained_object；一次性 CLI 退出后仍需保留它。
+            // host 已脱离 CLI 进程组，先按固定 executable + 自有 PID/PGID + 启动时间核验，再交接到 SessionState。
+            let hosts = try liveCommandHosts(try processTable(), executable: executable)
+            condition.lock(); retainedHosts = hosts; condition.unlock()
+            try stopTree(keeping: Set(hosts.keys))
             if waitStatus & 0x7f == 0 { return (waitStatus >> 8) & 0xff }
             return 128 + (waitStatus & 0x7f)
         } catch {
+            // 保留或清理任一环节失败都回到全量停止；不能把未交接的新 host 留成无主流程。
+            condition.lock(); retainedHosts = [:]; condition.unlock()
             do { try stopTree() } catch let barrier { failure = barrier; throw barrier }
             throw error
         }

@@ -557,6 +557,28 @@ export class ComputerController {
     signal?: AbortSignal,
   ): Promise<AgentDesktopEnvelope> {
     buildAgentDesktopArgs(input)
+    // 上游 session end 只结束带 manifest 的 trace session，不能停止 Gamma 的自动桌面会话。
+    // 对外保留统一的 computer 入口，但停止必须走真实 host 屏障，且不得要求观察外发同意。
+    if (input.command === 'session' && input.subcommand === 'end') {
+      this.assertTool(binding, 'computer')
+      if (signal?.aborted) throw new Error('操作已取消')
+      const state = await this.stop('用户通过 computer session end 停止桌面操作', 'paused')
+      const stopped = state.phase === 'paused' && !this.stopFailed
+      return {
+        version: '2.5',
+        ok: stopped,
+        command: 'session',
+        ...(stopped
+          ? { data: { subcommand: 'end', stopped: true, barrier: 'gamma-controller' } }
+          : {
+              error: {
+                code: 'STOP_NOT_CONFIRMED',
+                message: state.message ?? '桌面进程退出未完全确认',
+                disposition: { delivery: 'delivered', retry: 'safe' },
+              },
+            }),
+      }
+    }
     const assertCurrent = (): void => {
       this.assertTool(binding, 'computer')
       this.assertObservationSharing(binding)

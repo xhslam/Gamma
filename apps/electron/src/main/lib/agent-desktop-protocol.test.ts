@@ -180,6 +180,15 @@ describe('agent-desktop-protocol', () => {
         .toEqual(['press', 'return', '--app=Notes', '--window-id=123'])
     })
 
+    it('Given post-action wait 依赖与互斥条件 When 构造参数 Then 在本地失败关闭', () => {
+      expect(() => buildAgentDesktopArgs({ command: 'click', ref: '@s1:e1', waitTimeout: 1000 }))
+        .toThrow('waitTimeout 仅能与 waitFor 或 waitForGone')
+      expect(() => buildAgentDesktopArgs({ command: 'click', ref: '@s1:e1', waitFor: 'button:保存', waitForGone: 'button:保存' }))
+        .toThrow('waitFor 与 waitForGone 互斥')
+      expect(buildAgentDesktopArgs({ command: 'click', ref: '@s1:e1', waitFor: 'button:保存', waitTimeout: 1000 }))
+        .toEqual(['click', '@s1:e1', '--wait-for=button:保存', '--wait-timeout=1000'])
+    })
+
     it('click/type/press 包含 ref、text 与 headed 标志', () => {
       const clickArgs = buildAgentDesktopArgs({
         command: 'click',
