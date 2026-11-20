@@ -49,6 +49,8 @@ type Operation = 'annotation' | 'erase' | 'move' | 'crop' | null
 interface ImageEditorProps {
   src: string
   initialTool?: ImageEditorTool
+  /** 弹窗按视口布局；侧边栏按可用容器尺寸布局。 */
+  layout?: 'lightbox' | 'inline'
   onSave: (editedDataUrl: string) => void
   onCancel: () => void
 }
@@ -109,7 +111,7 @@ function normalizedRect(rect: ImageRect): ImageRect {
   return { x: Math.min(rect.x, rect.x + rect.w), y: Math.min(rect.y, rect.y + rect.h), w: Math.abs(rect.w), h: Math.abs(rect.h) }
 }
 
-export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: ImageEditorProps): React.ReactElement {
+export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', onSave, onCancel }: ImageEditorProps): React.ReactElement {
   const [tool, setTool] = React.useState<ImageEditorTool>(initialTool)
   const [drawColor, setDrawColor] = React.useState<string>(DRAW_COLORS[0])
   const [brushSize, setBrushSize] = React.useState(6)
@@ -129,8 +131,10 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
   const [restoring, setRestoring] = React.useState(false)
   const [drawVersion, setDrawVersion] = React.useState(0)
   const [historyVersion, setHistoryVersion] = React.useState(0)
+  const [inlineCanvasSize, setInlineCanvasSize] = React.useState({ w: 0, h: 0 })
 
   const displayCanvasRef = React.useRef<HTMLCanvasElement>(null)
+  const canvasStageRef = React.useRef<HTMLDivElement>(null)
   const baseCanvasRef = React.useRef<HTMLCanvasElement | null>(null)
   const sourceImageRef = React.useRef<HTMLImageElement | null>(null)
   const annotationsRef = React.useRef<ImageAnnotation[]>([])
@@ -266,14 +270,30 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
     }
   }, [refreshCanvas])
 
+  // 内联编辑器不能按整个窗口计算画布，否则窄侧边栏会溢出并拦截指针。
+  React.useEffect(() => {
+    if (layout !== 'inline') return
+    const stage = canvasStageRef.current
+    if (!stage) return
+    const updateSize = (): void => {
+      const next = { w: Math.floor(stage.clientWidth), h: Math.floor(stage.clientHeight) }
+      setInlineCanvasSize((current) => current.w === next.w && current.h === next.h ? current : next)
+    }
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [layout])
+
   // 将底图、对象标注和选区绘制到统一显示坐标系。
   React.useEffect(() => {
     if (!imageLoaded) return
     const display = displayCanvasRef.current
     const base = baseCanvasRef.current
     if (!display || !base) return
-    const maxW = document.documentElement.clientWidth * 0.9
-    const maxH = document.documentElement.clientHeight * 0.72
+    const maxW = layout === 'inline' ? inlineCanvasSize.w : document.documentElement.clientWidth * 0.9
+    const maxH = layout === 'inline' ? inlineCanvasSize.h : document.documentElement.clientHeight * 0.72
+    if (maxW < 1 || maxH < 1) return
     const rotated = rotation % 180 !== 0
     const sourceW = rotated ? base.height : base.width
     const sourceH = rotated ? base.width : base.height
@@ -349,7 +369,7 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
       ctx.setLineDash([])
     }
     ctx.restore()
-  }, [imageLoaded, rotation, annotations, draftAnnotation, selectedId, cropRect, tool, drawVersion])
+  }, [imageLoaded, rotation, annotations, draftAnnotation, selectedId, cropRect, tool, drawVersion, layout, inlineCanvasSize])
 
   const restoreSnapshot = React.useCallback((snapshot: EditorSnapshot): void => {
     const version = ++restoreVersionRef.current
@@ -815,8 +835,14 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
   }
 
   return (
-    <div className="flex w-full max-w-[96vw] flex-col items-center gap-3">
-      <div className="relative flex items-center justify-center">
+    <div className={cn(
+      'flex w-full flex-col items-center gap-3',
+      layout === 'lightbox' ? 'max-w-[96vw]' : 'h-full min-h-0 max-w-full overflow-y-auto p-4 pt-2',
+    )}>
+      <div ref={canvasStageRef} className={cn(
+        'relative flex items-center justify-center',
+        layout === 'inline' && 'min-h-[160px] w-full min-w-0 flex-1 overflow-hidden',
+      )}>
         {imageError && (
           <div className="flex flex-col items-center gap-3 text-inverse-foreground/70" role="alert">
             <span className="text-sm">图片加载失败</span>
@@ -869,7 +895,7 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
       )}
 
       {tool === 'resize' && (
-        <div className="flex max-w-[94vw] flex-wrap items-center justify-center gap-1 rounded-2xl bg-overlay/50 p-1.5 shadow-lg backdrop-blur-md">
+        <div className={cn('flex flex-wrap items-center justify-center gap-1 rounded-2xl bg-overlay/50 p-1.5 shadow-lg backdrop-blur-md', layout === 'lightbox' ? 'max-w-[94vw]' : 'max-w-full')}>
           {IMAGE_ASPECT_RATIOS.map((option) => (
             <button
               key={option.id}
@@ -887,7 +913,7 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
       )}
 
       {tool === 'background' && (
-        <div className="flex max-w-[94vw] flex-wrap items-center justify-center gap-3 rounded-full bg-overlay/50 px-4 py-2 text-xs text-inverse-foreground/75 shadow-lg backdrop-blur-md">
+        <div className={cn('flex flex-wrap items-center justify-center gap-3 rounded-full bg-overlay/50 px-4 py-2 text-xs text-inverse-foreground/75 shadow-lg backdrop-blur-md', layout === 'lightbox' ? 'max-w-[94vw]' : 'max-w-full')}>
           <label className="flex items-center gap-2">
             <span>颜色容差</span>
             <input aria-label="背景颜色容差" type="range" min="0" max="120" value={backgroundTolerance} onChange={(event) => setBackgroundTolerance(Number(event.target.value))} className="w-28 accent-current" />
@@ -905,9 +931,9 @@ export function ImageEditor({ src, initialTool = 'select', onSave, onCancel }: I
         </label>
       )}
 
-      {status && <p role="status" className="max-w-[80vw] text-center text-xs text-inverse-foreground/65">{status}</p>}
+      {status && <p role="status" className={cn('text-center text-xs text-inverse-foreground/65', layout === 'lightbox' ? 'max-w-[80vw]' : 'max-w-full')}>{status}</p>}
 
-      <div className="flex max-w-[96vw] flex-wrap items-center justify-center gap-1 rounded-[26px] bg-overlay/50 px-3 py-2.5 shadow-lg backdrop-blur-md">
+      <div className={cn('flex flex-wrap items-center justify-center gap-1 rounded-[26px] bg-overlay/50 px-3 py-2.5 shadow-lg backdrop-blur-md', layout === 'lightbox' ? 'max-w-[96vw]' : 'max-w-full')}>
         <EditorButton label="选择标注" active={tool === 'select'} onClick={() => chooseTool('select')}><MousePointer2 className="size-5" /></EditorButton>
         <EditorButton label="画笔" active={tool === 'draw'} onClick={() => chooseTool('draw')}><Pencil className="size-5" /></EditorButton>
         <EditorButton label="文字" active={tool === 'text'} onClick={() => chooseTool('text')}><Type className="size-5" /></EditorButton>

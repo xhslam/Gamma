@@ -32,6 +32,7 @@ function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): R
             workspaceSkillSlug={file.workspaceSkillSlug}
             legacySkillFilePath={file.legacySkillFilePath}
             baseRef={file.baseRef}
+            imageEditorPresentation="inline"
             onEmptyDiff={onClose}
           />
         </PreviewContentErrorBoundary>

@@ -24,11 +24,13 @@ import { normalizeWorkbenchDensity } from '../../../types/settings'
 import type { ThemeMode, MarkdownFontSize } from '../../../types'
 
 import { AppIconPicker } from './AppIconPicker'
+import { CustomThemeSettings } from './CustomThemeSettings'
 
 const THEME_OPTIONS = [
+  { value: 'system', label: '跟随系统' },
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
-  { value: 'system', label: '跟随系统' },
+  { value: 'custom', label: '自定义' },
 ]
 
 const MARKDOWN_FONT_SIZE_OPTIONS = [
@@ -96,14 +98,15 @@ export function AppearanceSettings(): React.ReactElement {
         <SettingsCard>
           <fieldset disabled={themeSaving} aria-busy={themeSaving}>
             <SettingsSegmentedControl
-              label="默认配色"
-              description="关闭场景主题后使用此配色。"
+              label="模式"
+              description="场景主题启用时会暂时覆盖此配色。"
               value={themeMode}
               onValueChange={(value) => { void handleThemeChange(value) }}
               options={THEME_OPTIONS}
             />
           </fieldset>
           {themeError && <p role="alert" className="px-4 pb-3 text-sm text-destructive">应用配色保存失败，请重试。</p>}
+          {themeMode === 'custom' && <CustomThemeSettings />}
           <div data-wallpaper-settings className="px-4 py-3">
             <WallpaperChoices />
           </div>

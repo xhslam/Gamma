@@ -9,13 +9,14 @@ import { renderImageCommentMarkers } from '@/lib/image-editor-canvas'
 
 interface ImageCommentEditorProps {
   src: string
+  layout?: 'lightbox' | 'inline'
   onSave: (editedDataUrl: string, prompt: string) => void
   onCancel: () => void
 }
 
 const MAX_DIM = 4096
 
-export function ImageCommentEditor({ src, onSave, onCancel }: ImageCommentEditorProps): React.ReactElement {
+export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel }: ImageCommentEditorProps): React.ReactElement {
   const [comments, setComments] = React.useState<ImageComment[]>([])
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [loaded, setLoaded] = React.useState(false)
@@ -101,8 +102,15 @@ export function ImageCommentEditor({ src, onSave, onCancel }: ImageCommentEditor
   }, [comments, exporting, onSave])
 
   return (
-    <div className="flex w-full max-w-[94vw] flex-col items-center gap-3">
-      <div ref={containerRef} className="relative flex max-h-[70vh] max-w-[90vw] items-center justify-center">
+    <div className={cn(
+      'flex w-full flex-col items-center gap-3',
+      layout === 'lightbox' ? 'max-w-[94vw]' : 'h-full min-h-0 max-w-full overflow-y-auto p-4 pt-2',
+    )}>
+      <div className={layout === 'inline' ? 'flex min-h-[160px] w-full min-w-0 flex-1 items-center justify-center overflow-hidden' : 'contents'}>
+      <div ref={containerRef} className={cn(
+        'relative flex items-center justify-center',
+        layout === 'lightbox' ? 'max-h-[70vh] max-w-[90vw]' : 'max-h-full max-w-full',
+      )}>
         {!loaded && !loadError && <div className="h-[150px] w-[200px]" role="status" aria-label="正在加载图片" />}
         {loadError ? (
           <div className="flex flex-col items-center gap-3 text-inverse-foreground/70" role="alert">
@@ -118,7 +126,11 @@ export function ImageCommentEditor({ src, onSave, onCancel }: ImageCommentEditor
             onLoad={() => setLoaded(true)}
             onError={() => setLoadError(true)}
             onClick={addComment}
-            className={cn('max-h-[70vh] max-w-[90vw] cursor-crosshair select-none rounded-lg object-contain shadow-2xl', !loaded && 'hidden')}
+            className={cn(
+              'cursor-crosshair select-none rounded-lg object-contain shadow-2xl',
+              layout === 'lightbox' ? 'max-h-[70vh] max-w-[90vw]' : 'max-h-full max-w-full',
+              !loaded && 'hidden',
+            )}
           />
         )}
         {loaded && comments.map((comment) => {
@@ -173,6 +185,7 @@ export function ImageCommentEditor({ src, onSave, onCancel }: ImageCommentEditor
             </button>
           )
         })}
+      </div>
       </div>
 
       {comments.length === 0 && loaded && (

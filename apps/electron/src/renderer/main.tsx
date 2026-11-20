@@ -24,6 +24,7 @@ import {
   applyThemeToDOM,
   initializeTheme,
   chatWallpaperAtom,
+  customThemeAtom,
 } from './atoms/theme'
 import {
   agentChannelIdAtom,
@@ -111,17 +112,19 @@ if (isMainWindow || isWorkspaceMemoryWindow || isSettingsWindow) {
 function ThemeInitializer(): null {
   const setThemeMode = useSetAtom(themeModeAtom)
   const setChatWallpaper = useSetAtom(chatWallpaperAtom)
+  const setCustomTheme = useSetAtom(customThemeAtom)
   const setSystemIsDark = useSetAtom(systemIsDarkAtom)
   const themeMode = useAtomValue(themeModeAtom)
   const systemIsDark = useAtomValue(systemIsDarkAtom)
   const wallpaper = useAtomValue(chatWallpaperAtom)
+  const customTheme = useAtomValue(customThemeAtom)
 
   // 初始化：从主进程加载设置 + 订阅系统主题变化
   useEffect(() => {
     let isMounted = true
     let cleanup: (() => void) | undefined
 
-    initializeTheme(setThemeMode, setSystemIsDark, setChatWallpaper).then((fn) => {
+    initializeTheme(setThemeMode, setSystemIsDark, setChatWallpaper, setCustomTheme).then((fn) => {
       if (isMounted) {
         cleanup = fn
       } else {
@@ -134,11 +137,11 @@ function ThemeInitializer(): null {
       isMounted = false
       cleanup?.()
     }
-  }, [setThemeMode, setSystemIsDark, setChatWallpaper])
+  }, [setThemeMode, setSystemIsDark, setChatWallpaper, setCustomTheme])
 
   useLayoutEffect(() => {
-    applyThemeToDOM(themeMode, systemIsDark, wallpaper)
-  }, [themeMode, systemIsDark, wallpaper])
+    applyThemeToDOM(themeMode, systemIsDark, wallpaper, customTheme)
+  }, [themeMode, systemIsDark, wallpaper, customTheme])
 
   return null
 }

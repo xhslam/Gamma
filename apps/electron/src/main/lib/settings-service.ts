@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
 import { writeJsonFileAtomic } from './safe-file'
 import { normalizeAppIconVariant } from '../../types/app-icons'
-import { DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeThemeAppearance, normalizeWorkbenchDensity } from '../../types'
+import { DEFAULT_CUSTOM_THEME, DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeThemeAppearance, normalizeWorkbenchDensity } from '../../types'
 import type { AgentIslandSettings, AppSettings, UpdateAppSettings } from '../../types'
 import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@gamma/shared'
 
@@ -36,6 +36,7 @@ export function getSettings(): AppSettings {
   if (!existsSync(filePath)) {
     return {
       themeMode: DEFAULT_THEME_MODE,
+      customTheme: DEFAULT_CUSTOM_THEME,
       onboardingCompleted: false,
       environmentCheckSkipped: false,
       notificationsEnabled: true,
@@ -103,6 +104,7 @@ export function getSettings(): AppSettings {
     console.error('[设置] 读取失败:', error)
     return {
       themeMode: DEFAULT_THEME_MODE,
+      customTheme: DEFAULT_CUSTOM_THEME,
       onboardingCompleted: false,
       environmentCheckSkipped: false,
       notificationsEnabled: true,

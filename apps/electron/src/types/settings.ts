@@ -221,8 +221,36 @@ export interface ShortcutOverrides {
   }
 }
 
-/** 主题模式 */
-export type ThemeMode = 'light' | 'dark' | 'system' | 'special'
+/** 主题模式；special 仅用于兼容旧配置。 */
+export type ThemeMode = 'light' | 'dark' | 'system' | 'custom' | 'special'
+
+/** 自定义主题的三项基础颜色，其余语义令牌由这些颜色派生。 */
+export interface CustomThemeColors {
+  accent: string
+  background: string
+  foreground: string
+}
+
+export const DEFAULT_CUSTOM_THEME: CustomThemeColors = {
+  accent: '#458588',
+  background: '#282828',
+  foreground: '#EBDBB2',
+}
+
+export function isCustomThemeColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+}
+
+export function normalizeCustomTheme(input: unknown): CustomThemeColors {
+  const colors = input && typeof input === 'object'
+    ? input as { accent?: unknown; background?: unknown; foreground?: unknown }
+    : {}
+  return {
+    accent: isCustomThemeColor(colors.accent) ? colors.accent.toUpperCase() : DEFAULT_CUSTOM_THEME.accent,
+    background: isCustomThemeColor(colors.background) ? colors.background.toUpperCase() : DEFAULT_CUSTOM_THEME.background,
+    foreground: isCustomThemeColor(colors.foreground) ? colors.foreground.toUpperCase() : DEFAULT_CUSTOM_THEME.foreground,
+  }
+}
 
 /** 所有合法的特殊风格值（白名单，新增主题时只需追加这里） */
 export const THEME_STYLES = [
@@ -245,19 +273,20 @@ export function normalizeThemeStyle(raw: unknown): ThemeStyle {
   return THEME_STYLES.find(style => style === raw) ?? 'default'
 }
 
-export type ThemeAppearance = Pick<AppSettings, 'themeMode' | 'themeStyle' | 'chatWallpaper'>
+export type ThemeAppearance = Pick<AppSettings, 'themeMode' | 'themeStyle' | 'chatWallpaper' | 'customTheme'>
 
-/** 将旧版「特殊风格」拆为基础配色和独立壁纸。 */
-export function normalizeThemeAppearance(settings: { themeMode?: unknown; themeStyle?: unknown; chatWallpaper?: unknown }): ThemeAppearance {
-  const { themeMode, themeStyle, chatWallpaper } = settings
+/** 将旧版「特殊风格」拆为基础配色和独立壁纸，并校验自定义颜色。 */
+export function normalizeThemeAppearance(settings: { themeMode?: unknown; themeStyle?: unknown; chatWallpaper?: unknown; customTheme?: unknown }): ThemeAppearance {
+  const { themeMode, themeStyle, chatWallpaper, customTheme } = settings
   const legacyWallpaper = normalizeThemeStyle(themeStyle)
   const wasSpecial = themeMode === 'special'
   return {
     themeMode: wasSpecial
       ? (themeStyle === 'cloud-drift' || typeof themeStyle === 'string' && themeStyle.endsWith('-light') ? 'light' : 'dark')
-      : (themeMode === 'light' || themeMode === 'system' ? themeMode : 'dark'),
+      : (themeMode === 'light' || themeMode === 'system' || themeMode === 'custom' ? themeMode : 'dark'),
     themeStyle: 'default',
     chatWallpaper: normalizeThemeStyle(chatWallpaper ?? (wasSpecial ? legacyWallpaper : undefined)),
+    customTheme: normalizeCustomTheme(customTheme),
   }
 }
 
@@ -317,6 +346,8 @@ export interface AppSettings {
   themeStyle?: ThemeStyle
   /** 聊天壁纸，与应用配色独立。 */
   chatWallpaper?: ThemeStyle
+  /** 自定义模式使用的基础颜色；缺省时使用 Gruvbox 风格默认值。 */
+  customTheme?: CustomThemeColors
   /** Agent 默认渠道 ID（由当前 Agent Core 解释） — 当前选中的渠道 */
   agentChannelId?: string
   /** Agent 默认模型 ID */

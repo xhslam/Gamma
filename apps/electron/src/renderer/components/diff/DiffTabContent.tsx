@@ -48,6 +48,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PIERRE_FILE_CSS } from '@/components/agent/tool-result-renderers/pierre-styles'
 import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
+import { ImageCommentEditor } from '@/components/ui/image-comment-editor'
+import { ImageEditor } from '@/components/ui/image-editor'
 import type { ImageEditorTool } from '@/components/ui/image-editor'
 import { insertAgentInputQuote } from '@/lib/agent-input-quote'
 import { SELECTION_ACTION_POPOVER_SELECTOR } from '@/lib/quoted-selection'
@@ -245,9 +247,11 @@ interface DiffTabContentProps {
   toolbarActions?: React.ReactNode
   /** 基准 ref（如 "origin/main"），用于 worktree vs main 模式 */
   baseRef?: string
+  /** 正文保持弹窗编辑；右侧预览直接在当前图片区域编辑。 */
+  imageEditorPresentation?: 'lightbox' | 'inline'
 }
 
-export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewOnly, readOnly, basePaths, unrestricted, workspaceSkillSlug, legacySkillFilePath, onEmptyDiff, toolbarActions, baseRef }: DiffTabContentProps): React.ReactElement {
+export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewOnly, readOnly, basePaths, unrestricted, workspaceSkillSlug, legacySkillFilePath, onEmptyDiff, toolbarActions, baseRef, imageEditorPresentation = 'lightbox' }: DiffTabContentProps): React.ReactElement {
   const ext = getExtension(filePath)
   const isMarkdown = previewOnly && MD_EXTS.has(ext)
   const isHtml = previewOnly && HTML_EXTS.has(ext)
@@ -339,6 +343,10 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   const imageDragging = React.useRef(false)
   const imageDragStart = React.useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
 
+  const closeInlineImageEditor = React.useCallback((): void => {
+    setImageEditorRequest(null)
+  }, [])
+
   const handleImageEditComplete = React.useCallback((editedDataUrl: string, prompt?: string): void => {
     const base64 = editedDataUrl.split(',')[1]
     if (!base64 || !sessionId) return
@@ -361,7 +369,8 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       return next
     })
     if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt })
-  }, [appendImageEditPrompt, filePath, sessionId, setSessionPendingFiles])
+    if (imageEditorPresentation === 'inline') setImageEditorRequest(null)
+  }, [appendImageEditPrompt, filePath, imageEditorPresentation, sessionId, setSessionPendingFiles])
 
   React.useEffect(() => {
     setImageEditorRequest(null)
@@ -1886,9 +1895,30 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                     <Proportions className="size-3.5" />调整大小
                   </button>
                 </div>
+                {imageEditorPresentation === 'inline' && imageEditorRequest && (
+                  <div className="h-full min-h-0 pt-12" data-image-inline-editor>
+                    {imageEditorRequest.mode === 'editing' ? (
+                      <ImageEditor
+                        key={`${imageEditorRequest.mode}:${imageEditorRequest.tool}`}
+                        src={imageDataUrl}
+                        layout="inline"
+                        initialTool={imageEditorRequest.tool}
+                        onSave={handleImageEditComplete}
+                        onCancel={closeInlineImageEditor}
+                      />
+                    ) : (
+                      <ImageCommentEditor
+                        src={imageDataUrl}
+                        layout="inline"
+                        onSave={handleImageEditComplete}
+                        onCancel={closeInlineImageEditor}
+                      />
+                    )}
+                  </div>
+                )}
                 <div
                   ref={imageContainerRef}
-                  className="h-full overflow-auto p-4 pt-12"
+                  className={cn('h-full overflow-auto p-4 pt-12', imageEditorPresentation === 'inline' && imageEditorRequest && 'hidden')}
                   style={{ cursor: imageZoom > 1 ? (imageDragging.current ? 'grabbing' : 'grab') : 'default' }}
                   onMouseDown={(e) => {
                     if (imageZoom <= 1 || e.button !== 0) return
@@ -1925,7 +1955,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                   </div>
                 </div>
                 <ImageLightbox
-                  open={imageEditorRequest !== null}
+                  open={imageEditorPresentation === 'lightbox' && imageEditorRequest !== null}
                   onOpenChange={(open) => { if (!open) setImageEditorRequest(null) }}
                   src={imageDataUrl}
                   alt={getPreviewPathLabel(filePath)}

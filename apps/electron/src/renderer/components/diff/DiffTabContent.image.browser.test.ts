@@ -27,6 +27,7 @@ beforeAll(async () => {
       return React.createElement(TooltipProvider,null,
         React.createElement('div',{style:{height:'540px'}},React.createElement(DiffTabContent,{
           filePath:'reference.png',dirPath:'/tmp',sessionId,previewOnly:true,readOnly:true,
+          imageEditorPresentation:'inline',
         })),
         React.createElement(SessionState),
       );
@@ -51,7 +52,7 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 describe('Given 输入框 @ 图片在右侧文件预览中打开', () => {
-  test('When 使用五项高级编辑 Then 直接进入对应模式并将结果和评论回填当前会话', async () => {
+  test('When 使用五项高级编辑 Then 在当前侧边栏完成操作并回填当前会话', async () => {
     const result = await renderer.run(`
       const wait=()=>new Promise(resolve=>setTimeout(resolve,300));await wait();
       const click=(label)=>{const button=Array.from(document.querySelectorAll('button')).find(item=>item.textContent===label||item.title===label||item.getAttribute('aria-label')===label);if(!button)throw new Error('按钮不存在:'+label);button.click();};
@@ -61,7 +62,17 @@ describe('Given 输入框 @ 图片在右侧文件预览中打开', () => {
       const originalSrc=document.querySelector('img[alt="reference.png"]')?.src;
 
       click('标注');await wait();
-      const annotationOpened=!!document.querySelector('[role="dialog"] canvas');
+      const canvas=document.querySelector('[data-image-inline-editor] canvas');
+      const annotationOpened=!!canvas&&!document.querySelector('[role="dialog"]');
+      if(!canvas)throw new Error('侧边栏标注画布未打开');
+      canvas.setPointerCapture=()=>{};canvas.hasPointerCapture=()=>false;canvas.releasePointerCapture=()=>{};
+      const canvasBounds=canvas.getBoundingClientRect();
+      const pointer=(type,x,y)=>canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:7,isPrimary:true,button:0,clientX:canvasBounds.left+x,clientY:canvasBounds.top+y}));
+      const beforeDraw=canvas.toDataURL();
+      pointer('pointerdown',canvasBounds.width*0.3,canvasBounds.height*0.3);
+      pointer('pointermove',canvasBounds.width*0.45,canvasBounds.height*0.4);
+      pointer('pointerup',canvasBounds.width*0.45,canvasBounds.height*0.4);await wait();
+      const annotationDrawn=canvas.toDataURL()!==beforeDraw;
       click('取消编辑');await wait();
 
       click('移除背景');await wait();
@@ -77,8 +88,9 @@ describe('Given 输入框 @ 图片在右侧文件预览中打开', () => {
       click('取消编辑');await wait();
 
       click('添加评论');await wait();
-      const commentImage=document.querySelector('img[alt="点击添加位置评论"]');
-      if(!commentImage)throw new Error('位置评论编辑器未打开');
+      const commentImage=document.querySelector('[data-image-inline-editor] img[alt="点击添加位置评论"]');
+      const commentInline=!!commentImage&&!document.querySelector('[role="dialog"]');
+      if(!commentImage)throw new Error('位置评论编辑器未在侧边栏打开');
       const bounds=commentImage.getBoundingClientRect();
       commentImage.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:bounds.left+bounds.width*0.25,clientY:bounds.top+bounds.height*0.5}));
       await wait();
@@ -99,11 +111,13 @@ describe('Given 输入框 @ 图片在右侧文件预览中打开', () => {
       const annotationAttached=document.getElementById('pending-files').textContent.split(',').filter(Boolean).length===2;
       const notAutoSent=!document.querySelector('[role="dialog"]')&&window.__pendingAgentFileData?.size===2;
 
-      return {entriesVisible,annotationOpened,backgroundOpened,eraseOpened,resizeOpened,commentAttached,promptAttached,binaryAttached,originalPreserved,annotationAttached,notAutoSent};
+      return {entriesVisible,annotationOpened,annotationDrawn,commentInline,backgroundOpened,eraseOpened,resizeOpened,commentAttached,promptAttached,binaryAttached,originalPreserved,annotationAttached,notAutoSent};
     `)
     expect(result).toEqual({
       entriesVisible: true,
       annotationOpened: true,
+      annotationDrawn: true,
+      commentInline: true,
       backgroundOpened: true,
       eraseOpened: true,
       resizeOpened: true,
