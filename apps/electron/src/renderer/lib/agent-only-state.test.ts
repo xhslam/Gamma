@@ -70,8 +70,10 @@ describe('Given Agent-only 产品入口', () => {
     const shell = readFileSync(new URL('../components/app-shell/AppShell.tsx', import.meta.url), 'utf8')
     expect(sidebar).not.toContain('ModeSwitcher')
     expect(sidebar).not.toContain('pb-3 pt-1')
-    expect(sidebar).toContain('新建任务')
-    expect(shell).toContain('<SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>')
+    expect(sidebar).toContain('aria-label="新建"')
+    expect(sidebar).toContain('新建会话')
+    expect(shell).toContain('<SidebarTransition collapsed={navigationCollapsed}')
+    expect(shell).toContain('width={LEFT_SIDEBAR_WIDTH}>')
     expect(shell).toContain('<LeftSidebar width={LEFT_SIDEBAR_WIDTH} />')
   })
 

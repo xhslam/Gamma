@@ -36,8 +36,8 @@ const fixtureSource = leftSidebarFixtureSource
     if (activeAgent) store.set(agentSidePanelOpenMapAtom, { [activeAgent]: true });
     if (options.legacy) store.set(agentSessionComponentOpenMapAtom, { parent: ['agy-terminal', 'markdown'] });
   `)
-  .replace('root, calls,', `
-    root, calls, callsToTerminal,
+  .replace('root, store, calls,', `
+    root, store, calls, callsToTerminal,
     setTheme: applyThemeToDOM,
     setView: view => store.set(activeViewAtom, view),
     emit: data => dataListeners.forEach(listener => listener({ sessionId: terminal.id, data, sequence: 2 })),
@@ -86,10 +86,10 @@ describe('Given Gamma 的终端工作台独立页', () => {
     `)).toEqual([true, true, true, true, true])
   }, 30_000)
 
-  test('When 从有右侧工作区的会话打开终端 Then 占满主内容区，切回会话后仍保留 Shell 和后台输出', async () => {
+  test('When 从有右侧工作区的会话打开 Code Then 占满主内容区，切回会话后仍保留 Shell 和后台输出', async () => {
     expect(await renderer.run<Record<string, unknown>>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      const button = fixture.button('终端工作台');
+      const button = fixture.button('Code');
       const layout = document.querySelector('[data-testid="agent-workspace-layout"]');
       const workspace = () => layout.querySelector('[data-workspace-pane="workspace"]');
       const page = () => layout.querySelector('section[aria-label="终端工作台"]');
@@ -134,7 +134,7 @@ describe('Given Gamma 的终端工作台独立页', () => {
   test('Given 旧阅读主题和已运行的终端 When 切换 Gamma 主题 Then 页面和终端实时同步', async () => {
     expect(await renderer.run<Record<string, boolean>>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      fixture.button('终端工作台').click();
+      fixture.button('Code').click();
       const page = () => document.querySelector('.terminal-focus');
       const rows = () => page()?.querySelector('.xterm-rows');
       const green = () => [...(rows()?.querySelectorAll('span') ?? [])].find(span => span.textContent.includes('ANSI_GREEN'));
@@ -165,7 +165,7 @@ describe('Given Gamma 的终端工作台独立页', () => {
     expect(await renderer.run<{ componentTabs: string[]; view: string }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ legacy: true });
       await api.until(() => fixture.state().componentTabs.join(',') === 'markdown');
-      fixture.button('终端工作台').click();
+      fixture.button('Code').click();
       await api.until(() => document.querySelector('section[aria-label="终端工作台"]'));
       const { componentTabs, view } = fixture.state();
       fixture.root.unmount();

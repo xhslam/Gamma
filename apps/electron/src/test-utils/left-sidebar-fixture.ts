@@ -18,7 +18,9 @@ export const leftSidebarFixtureSource = `
   import { searchDialogOpenAtom } from '@/atoms/search-atoms'
   import { updateStatusAtom } from '@/atoms/updater'
   import { planningTabAtom } from '@/atoms/planning-atoms'
-  import { productivityToolsAtom } from '@/atoms/ui-preferences'
+  import { productivityToolsAtom, workbenchDensityAtom } from '@/atoms/ui-preferences'
+  import { userProfileAtom } from '@/atoms/user-profile'
+  import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
   import { SidebarTransition } from '@/components/app-shell/SidebarTransition'
   import '@/styles/globals.css'
 
@@ -53,16 +55,34 @@ export const leftSidebarFixtureSource = `
 
   function Layout({ width = 256 }) {
     const collapsed = useAtomValue(sidebarCollapsedAtom);
-    return React.createElement(React.Fragment, null,
-      React.createElement(SidebarTransition, { collapsed, width },
-        React.createElement(LeftSidebar, { width, noTransition: true })),
-      React.createElement('main', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } },
-        collapsed ? React.createElement(CollapsedSidebarHeader) : null,
-        React.createElement('div', { 'data-testid': 'fixture-content', style: { flex: 1 } })));
+    return React.createElement('div', { className: 'gamma-workbench flex h-full w-full', 'data-workbench-density': 'comfortable' },
+      React.createElement('div', { className: 'gamma-workbench-frame' },
+        React.createElement(SidebarTransition, { collapsed, width },
+          React.createElement(LeftSidebar, { width, noTransition: true })),
+        React.createElement('main', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } },
+          collapsed ? React.createElement(CollapsedSidebarHeader) : null,
+          React.createElement('div', { 'data-testid': 'fixture-content', style: { flex: 1 } }))));
   }
 
   window.leftSidebarRegression = {
     until, delay,
+    atoms: { agentSessions: agentSessionsAtom },
+    async openMenu(trigger) {
+      if (!trigger) throw new Error('菜单触发器不存在');
+      trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, ctrlKey: false, pointerType: 'mouse', isPrimary: true }));
+      await until(() => document.querySelector('[role="menu"]'));
+      await delay(40);
+      return document.querySelector('[role="menu"]');
+    },
+    async chooseMenu(label) {
+      const menu = document.querySelector('[role="menu"]');
+      const item = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])].find(node => node.textContent.trim() === label);
+      if (!item) throw new Error('菜单项不存在：' + label);
+      item.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse', isPrimary: true }));
+      item.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse', isPrimary: true }));
+      item.click();
+      await until(() => !document.querySelector('[role="menu"]'));
+    },
     async mount(options = {}) {
       // 仅覆盖平台判断输入；Windows 原生滚动和字体仍由 Windows CI 的 Chromium 验证。
       Object.defineProperty(navigator, 'platform', { configurable: true, value: options.platform ?? nativePlatform });
@@ -70,12 +90,13 @@ export const leftSidebarFixtureSource = `
         ? { platform: options.platform === 'Win32' ? 'Windows' : options.platform }
         : nativeUserAgentData });
       localStorage.clear();
+      Object.assign(document.getElementById('root').style, { height: options.height ? options.height + 'px' : '', minHeight: options.height ? '0' : '' });
       document.documentElement.classList.toggle('dark', !!options.dark);
       const store = createStore(), root = createRoot(document.getElementById('root')), calls = [];
-      const fixtureAgents = options.agents ?? agents;
-      const fixtureWorkspaces = options.workspaces ?? workspaces;
+      const fixtureAgents = (options.agents ?? agents).map(session => ({ ...session }));
+      const fixtureWorkspaces = (options.workspaces ?? workspaces).map(workspace => ({ ...workspace }));
       const activeAgent = options.activeAgent === undefined ? (fixtureAgents[0]?.id ?? null) : options.activeAgent;
-      const profile = { userName: options.userName ?? 'Gamma 用户', avatar: '🌱' };
+      const profile = { userName: options.userName ?? 'Gamma 用户', avatar: options.avatar ?? '🌱' };
       let computerState = options.computerState ?? { supported: true, phase: 'disabled' };
       let computerListener = () => {};
       window.electronAPI = {
@@ -98,6 +119,29 @@ export const leftSidebarFixtureSource = `
         countArchivedAgentSessions: async () => fixtureAgents.filter(session => session.archived).length,
         listArchivedAgentSessions: async () => fixtureAgents.filter(session => session.archived),
         getUserProfile: async () => profile,
+        createAgentProject: async input => {
+          calls.push({ createProject: input });
+          const workspace = { id: 'created-project', name: input.name, slug: 'created-project', projectRootPath: input.projectRootPath, createdAt: now, updatedAt: now };
+          const session = { id: 'created-session', title: '新会话', workspaceId: workspace.id, isDraft: true, createdAt: now, updatedAt: now };
+          fixtureWorkspaces.unshift(workspace);
+          fixtureAgents.unshift(session);
+          store.set(agentWorkspacesAtom, [...fixtureWorkspaces]);
+          store.set(agentSessionsAtom, [...fixtureAgents]);
+          return { workspace, session };
+        },
+        openFolderDialog: async () => options.folder ?? null,
+        togglePinAgentSession: async id => {
+          const session = fixtureAgents.find(item => item.id === id);
+          if (session) session.pinned = !session.pinned;
+          calls.push({ pin: id, pinned: session?.pinned });
+          return session;
+        },
+        toggleArchiveAgentSession: async id => {
+          calls.push({ archive: id });
+          const session = fixtureAgents.find(item => item.id === id);
+          if (session) session.archived = !session.archived;
+          return session;
+        },
         getWorkspaceCapabilities: async () => ({ mcpServers: [], skills: [] }),
         updateSettings: async settings => { calls.push(settings); },
       };
@@ -107,8 +151,11 @@ export const leftSidebarFixtureSource = `
       store.set(currentAgentSessionIdAtom, activeAgent);
       store.set(sidebarCollapsedAtom, !!options.collapsed);
       store.set(productivityToolsAtom, { todosEnabled: true, calendarEnabled: true });
+      store.set(userProfileAtom, profile);
+      store.set(draftSessionIdsAtom, new Set());
       store.set(updateStatusAtom, options.update ?? { status: 'idle' });
       store.set(activeViewAtom, 'conversations');
+      store.set(settingsOpenAtom, false);
       const activeId = activeAgent;
       store.set(tabsAtom, activeId ? [{ id: activeId, sessionId: activeId, type: 'agent', title: '当前会话' }] : []);
       store.set(activeTabIdAtom, activeId);
@@ -125,7 +172,7 @@ export const leftSidebarFixtureSource = `
           && getComputedStyle(content).opacity === (options.collapsed ? '0' : '1');
       });
       return {
-        root, calls,
+        root, store, calls,
         button: label => document.querySelector('button[aria-label="' + label + '"]'),
         row: id => document.querySelector('[data-session-switch-id="' + id + '"]'),
         state: () => ({
@@ -140,6 +187,12 @@ export const leftSidebarFixtureSource = `
           search: store.get(searchDialogOpenAtom),
         }),
         closeSettings: () => store.set(settingsOpenAtom, false),
+        closeSearch: () => store.set(searchDialogOpenAtom, false),
+        setDensity: value => store.set(workbenchDensityAtom, value),
+        setSessions: sessions => {
+          fixtureAgents.splice(0, fixtureAgents.length, ...sessions);
+          store.set(agentSessionsAtom, [...sessions]);
+        },
       };
     },
   };

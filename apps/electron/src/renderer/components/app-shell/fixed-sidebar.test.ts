@@ -5,6 +5,8 @@ import { LEFT_SIDEBAR_WIDTH } from '../../atoms/sidebar-atoms'
 const shellSource = readFileSync(new URL('./AppShell.tsx', import.meta.url), 'utf8')
 const atomSource = readFileSync(new URL('../../atoms/sidebar-atoms.ts', import.meta.url), 'utf8')
 const sidebarSource = readFileSync(new URL('./LeftSidebar.tsx', import.meta.url), 'utf8')
+const panelStyles = readFileSync(new URL('../../styles/panels.css', import.meta.url), 'utf8')
+const globalStyles = readFileSync(new URL('../../styles/globals.css', import.meta.url), 'utf8')
 
 describe('Given 固定展开宽度的左侧导航', () => {
   test('When 渲染展开侧栏 Then 使用 256px 且不读取历史拖拽宽度', () => {
@@ -31,21 +33,34 @@ describe('Given 完全收起的左侧导航', () => {
   })
 
   test('When 收起 Then 顶部出现展开入口且侧栏不保留分隔线', () => {
-    expect(shellSource).toContain('{sidebarCollapsed && !hasAgentSessionHeader && <CollapsedSidebarHeader />}')
-    expect(shellSource).toContain('<SidebarTransition collapsed={sidebarCollapsed} width={LEFT_SIDEBAR_WIDTH}>')
+    expect(shellSource).toContain('{sidebarCollapsed && !workspaceMaximized && !hasAgentSessionHeader && <CollapsedSidebarHeader />}')
+    expect(shellSource).toContain('<SidebarTransition collapsed={navigationCollapsed}')
+    expect(shellSource).toContain('width={LEFT_SIDEBAR_WIDTH}>')
     expect(shellSource).not.toContain("sidebarCollapsed && 'hidden'")
     expect(shellSource).not.toContain('COLLAPSED_LEFT_SIDEBAR_WIDTH')
   })
 })
 
-describe('Given 侧边栏项目标题与操作栏', () => {
-  test('When 渲染活跃视图 Then 项目操作栏位于滚动容器之外作为固定头部，不随会话列表滚动改变', () => {
-    expect(sidebarSource).not.toContain("id: 'agent-project-heading'")
-    expect(sidebarSource).not.toContain("id: 'agent-project-create'")
-    expect(sidebarSource).toContain("viewMode === 'active' && (")
-    expect(sidebarSource).toContain('<span className="px-2 text-xs font-medium leading-5 text-muted-foreground select-none">项目</span>')
+describe('Given 侧边栏项目分组与树形边界', () => {
+  test('When 渲染活跃视图 Then 项目标题可独立折叠，创建操作收纳在标题菜单中', () => {
+    expect(sidebarSource).toContain("id: 'agent-projects-heading'")
+    expect(sidebarSource).toContain('label="项目"')
+    expect(sidebarSource).toContain('projectsSectionCollapsed')
     expect(sidebarSource).toContain('aria-label="折叠所有项目"')
-    expect(sidebarSource).toContain('aria-label="从本地文件夹创建项目"')
-    expect(sidebarSource).toContain('aria-label="新建空白项目"')
+    expect(sidebarSource).toContain('aria-label="新建项目"')
+    expect(sidebarSource).toContain('<span>新建空白项目</span>')
+    expect(sidebarSource).toContain('<span>从本地文件夹创建项目</span>')
+    expect(sidebarSource).not.toContain('活跃视图下固定在工作区导航下方的项目操作栏')
+  })
+
+  test('When 绘制项目会话 Then 使用连续竖线和空心圆点，且只移除导航右侧分隔线', () => {
+    expect(sidebarSource).toContain('gamma-sidebar-thread-children')
+    expect(sidebarSource).toContain('gamma-sidebar-thread-marker')
+    expect(sidebarSource).toContain('gamma-sidebar-preview-boundary')
+    expect(globalStyles).toContain('.gamma-sidebar .gamma-sidebar-thread-children::before')
+    expect(globalStyles).toContain('border-radius: 50%;')
+    expect(panelStyles).toContain('.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel[data-panel]')
+    expect(globalStyles).toContain('.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel.gamma-sidebar')
+    expect(globalStyles).toContain('border-right-width: 0;')
   })
 })

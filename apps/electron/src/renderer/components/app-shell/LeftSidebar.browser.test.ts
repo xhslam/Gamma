@@ -32,18 +32,22 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
 
   test('When 为经典滚动条预留至少 12px 宽度 Then 普通标题仍完整显示且操作按钮不重叠', async () => {
     const result = await renderer.run<{ reserved: number; titleWidth: number; titleScroll: number; separated: boolean }>(`
-      const fixture = await window.leftSidebarRegression.mount({ platform: 'Win32', width: 256 });
+      const api = window.leftSidebarRegression, fixture = await api.mount({ platform: 'Win32', width: 256 });
       const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
       // macOS overlay 不占据布局宽度；补足相同预算，不能让本机验证忽略 Windows 的经典滚动条。
       const nativeGutter = scroll.offsetWidth - scroll.clientWidth;
       scroll.style.paddingInlineEnd = Math.max(0, 12 - nativeGutter) + 'px';
       const row = fixture.row('parent');
       const title = [...row.querySelectorAll('span')].find(span => span.textContent === '整理研究资料');
-      const archive = row.querySelector('button[aria-label="归档"]');
+      row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      await api.openMenu(row.querySelector('button[aria-label="更多会话操作"]'));
+      const menu = document.querySelector('[role="menu"]');
+      const archive = [...menu.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim() === '归档');
       const toggle = row.querySelector('button[aria-label="展开子会话"]');
       const result = { reserved: nativeGutter + parseFloat(getComputedStyle(scroll).paddingInlineEnd),
         titleWidth: title.clientWidth, titleScroll: title.scrollWidth,
-        separated: toggle.getBoundingClientRect().right <= archive.getBoundingClientRect().left };
+        separated: toggle.getBoundingClientRect().right <= menu.getBoundingClientRect().left };
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       fixture.root.unmount(); return result;
     `)
     expect(result.reserved).toBeGreaterThanOrEqual(12)
@@ -51,10 +55,10 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result.separated).toBe(true)
   }, 30_000)
 
-  test('Given 没有活跃会话 When 点击终端工作台 Then 仍能进入独立页面', async () => {
+  test('Given 没有活跃会话 When 点击 Code Then 仍能进入独立页面', async () => {
     expect(await renderer.run<{ view: string; agent: string | null; componentTabs: string[] }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ activeAgent: null });
-      const button = fixture.button('终端工作台');
+      const button = fixture.button('Code');
       button.click(); await api.until(() => button.getAttribute('aria-current') === 'page');
       const { view, agent, componentTabs } = fixture.state();
       fixture.root.unmount();
@@ -62,18 +66,18 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     `)).toEqual({ view: 'agy-terminal', agent: null, componentTabs: [] })
   }, 30_000)
 
-  test('When 点击 design Then 打开完整主工作台而非草稿或重复右侧会话', async () => {
+  test('When 点击 Artifacts Then 打开完整主工作台而非草稿或重复右侧会话', async () => {
     expect(await renderer.run<{ view: string; agent: string; workspace: string }>(`
-      const api=window.leftSidebarRegression,fixture=await api.mount();fixture.button('design').click();
+      const api=window.leftSidebarRegression,fixture=await api.mount();fixture.button('Artifacts').click();
       await api.until(()=>fixture.state().view==='design');const state=fixture.state();fixture.root.unmount();
       return {view:state.view,agent:state.agent,workspace:state.workspace};
     `)).toEqual({view:'design',agent:'parent',workspace:'project-a'})
   }, 30_000)
 
-  test('When 未悬浮会话行且没有归档历史 Then 归档操作和已归档入口仍然可见可点击', async () => {
-    const result = await renderer.run<{ actionVisible: boolean; entryVisible: boolean; opened: boolean; returned: boolean }>(`
+  test('When 未悬浮会话行且没有归档历史 Then 更多操作和已归档入口仍然可达', async () => {
+    const result = await renderer.run<{ actionReachable: boolean; archiveReachable: boolean; entryVisible: boolean; opened: boolean; returned: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ width: 240 });
-      const action = fixture.row('parent').querySelector('button[aria-label="归档"]');
+      const action = fixture.row('parent').querySelector('button[aria-label="更多会话操作"]');
       const visible = element => {
         if (!element) return false;
         for (let node = element; node instanceof HTMLElement; node = node.parentElement) {
@@ -83,7 +87,14 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         const rect = element.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0 && rect.bottom <= innerHeight;
       };
-      const actionVisible = visible(action);
+      fixture.row('parent').focus();
+      fixture.row('parent').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+      await api.until(() => getComputedStyle(action).opacity === '1');
+      const actionReachable = visible(action);
+      await api.openMenu(action);
+      const archiveReachable = [...document.querySelectorAll('[role="menuitem"]')].some(item => item.textContent.trim() === '归档');
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await api.until(() => !document.querySelector('[role="menu"]'));
       const entry = [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档'));
       const entryVisible = visible(entry);
       let opened = false, returned = false;
@@ -93,33 +104,42 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         [...document.querySelectorAll('button')].find(button => button.textContent.includes('返回活跃会话')).click();
         await api.until(() => fixture.row('parent')); returned = true;
       }
-      fixture.root.unmount(); return { actionVisible, entryVisible, opened, returned };
+      fixture.root.unmount(); return { actionReachable, archiveReachable, entryVisible, opened, returned };
     `)
-    expect(result).toEqual({ actionVisible: true, entryVisible: true, opened: true, returned: true })
+    expect(result).toEqual({ actionReachable: true, archiveReachable: true, entryVisible: true, opened: true, returned: true })
   }, 30_000)
 
-  test('When 点击常显归档按钮 Then 仍需二次确认且不会误选该会话', async () => {
-    expect(await renderer.run<{ before: number; after: number; selected: string; confirming: boolean }>(`
-      const api = window.leftSidebarRegression, fixture = await api.mount();
+  test('When 从紧凑会话菜单归档 Then 直接归档且不切换当前会话', async () => {
+    expect(await renderer.run<{ before: number; after: number; selected: string; archived: boolean }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const fixture = await api.mount({ agents: [
+        { id: 'parent', title: '整理研究资料', workspaceId: 'project-a', pinned: true, createdAt: now, updatedAt: now },
+        { id: 'other', title: '检查第二个项目', workspaceId: 'project-b', createdAt: now, updatedAt: now },
+      ] });
       let calls = 0;
+      await api.until(() => fixture.row('other'));
       window.electronAPI.toggleArchiveAgentSession = async id => {
-        calls++; return { id, title: '检查第二个项目', workspaceId: 'project-b', archived: false };
+        calls++;
+        const session = fixture.store.get(window.leftSidebarRegression.atoms.agentSessions).find(item => item.id === id);
+        const updated = { ...session, archived: true };
+        fixture.setSessions(fixture.store.get(window.leftSidebarRegression.atoms.agentSessions).map(item => item.id === id ? updated : item));
+        return updated;
       };
-      const row = fixture.row('other'); row.querySelector('button[aria-label="归档"]').click();
-      await api.delay();
-      const before = calls, selected = fixture.state().agent;
-      const confirm = row.querySelector('button[aria-label="再次点击确认归档"]');
-      const confirming = !!confirm; confirm.click(); await api.until(() => calls === 1); await api.delay();
-      const result = { before, after: calls, selected, confirming }; fixture.root.unmount(); return result;
-    `)).toEqual({ before: 0, after: 1, selected: 'parent', confirming: true })
+      const row = fixture.row('other');
+      await api.openMenu(row.querySelector('button[aria-label="更多会话操作"]'));
+      const before = calls;
+      await api.chooseMenu('归档');
+      await api.until(() => calls === 1 && !fixture.row('other'));
+      const result = { before, after: calls, selected: fixture.state().agent, archived: !fixture.row('other') };
+      fixture.root.unmount(); return result;
+    `)).toEqual({ before: 0, after: 1, selected: 'parent', archived: true })
   }, 30_000)
 
   test('When 浅深色窄侧栏窗口缩短且历史较长 Then 归档和账户入口保持在可见区域', async () => {
     const results = await renderer.run<Array<{ entryVisible: boolean; accountVisible: boolean; scrollable: boolean }>>(`
       const api = window.leftSidebarRegression, results = [], now = Date.now();
-      Object.assign(document.getElementById('root').style, { height: '480px', minHeight: '0' });
       for (const dark of [false, true]) {
-        const fixture = await api.mount({ dark, width: 200, agents: Array.from({ length: 40 }, (_, i) => ({
+        const fixture = await api.mount({ dark, width: 200, height: 480, agents: Array.from({ length: 40 }, (_, i) => ({
           id: 'short-' + i, title: '较长历史会话 ' + i, workspaceId: 'project-a', createdAt: now, updatedAt: now - i,
         })) });
         const entry = [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档'));
@@ -172,28 +192,32 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     }
   }, 30_000)
 
-  test('When 项目包含较多或较早的会话 Then 直接列出且没有底部展开按钮，并保留项目折叠', async () => {
-    const result = await renderer.run<{ allVisible: boolean; hasControls: boolean; collapsed: boolean; restored: boolean }>(`
+  test('When 项目超过七条会话 Then 预览可展开全部与收起，项目折叠独立生效', async () => {
+    const result = await renderer.run<{ preview: number; all: number; restored: number; collapsed: boolean; independent: boolean }>(`
       const api = window.leftSidebarRegression, now = Date.now();
-      const agents = Array.from({ length: 8 }, (_, index) => ({
+      const agents = Array.from({ length: 12 }, (_, index) => ({
         id: 'history-' + index, title: '历史会话 ' + index, workspaceId: 'project-a',
         createdAt: now - index * 86400000, updatedAt: now - index * 86400000,
       }));
       const fixture = await api.mount({ agents });
-      await api.until(() => fixture.row('history-7'));
-      const allVisible = agents.every(agent => !!fixture.row(agent.id));
-      const hasControls = [...document.querySelectorAll('button')].some(button => /显示更多会话|收起额外会话/.test(button.getAttribute('aria-label') ?? ''));
-      const project = [...document.querySelectorAll('button[aria-expanded]')].find(button => button.textContent.includes('Gamma 项目'));
-      project.click(); await api.until(() => !fixture.row('history-0'));
-      const collapsed = project.getAttribute('aria-expanded') === 'false';
-      project.click(); await api.until(() => fixture.row('history-7'));
-      const restored = agents.every(agent => !!fixture.row(agent.id));
-      fixture.root.unmount(); return { allVisible, hasControls, collapsed, restored };
+      const count = () => agents.filter(agent => !!fixture.row(agent.id)).length;
+      await api.until(() => count() === 7);
+      const preview = count(), control = fixture.button('查看「Gamma 项目」的全部会话');
+      control.click(); await api.until(() => count() === 12);
+      const all = count();
+      fixture.button('收起「Gamma 项目」的全部会话').click(); await api.until(() => count() === 7);
+      const restored = count();
+      const project = fixture.button('项目：Gamma 项目');
+      fixture.button('收起项目「Gamma 项目」').click(); await api.until(() => !fixture.row('history-0'));
+      const collapsed = project.getAttribute('aria-expanded') === 'false' && fixture.button('查看「Gamma 项目」的全部会话') === null;
+      fixture.button('展开项目「Gamma 项目」').click(); await api.until(() => count() === 7);
+      const independent = project.getAttribute('aria-expanded') === 'true' && count() === 7;
+      fixture.root.unmount(); return { preview, all, restored, collapsed, independent };
     `)
-    expect(result).toEqual({ allVisible: true, hasControls: false, collapsed: true, restored: true })
+    expect(result).toEqual({ preview: 7, all: 12, restored: 7, collapsed: true, independent: true })
   }, 30_000)
 
-  test('When Windows 窄侧栏包含长历史列表 Then 浅深色均可滚动到底且没有多余展开按钮', async () => {
+  test('When Windows 窄侧栏包含长历史列表 Then 展开预览后可滚动到底且不溢出', async () => {
     const results = await renderer.run<Array<{ scrollable: boolean; lastVisible: boolean; fits: boolean; hasControls: boolean }>>(`
       const api = window.leftSidebarRegression, results = [], now = Date.now();
       for (const dark of [false, true]) {
@@ -202,19 +226,21 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
           workspaceId: 'project-a', createdAt: now - index * 86400000, updatedAt: now - index * 86400000,
         }));
         const fixture = await api.mount({ platform: 'Win32', width: 200, dark, agents });
+        fixture.button('查看「Gamma 项目」的全部会话').click();
+        await api.until(() => fixture.row('win-39'));
         const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
         const scrollable = scroll.scrollHeight > scroll.clientHeight;
         scroll.scrollTop = scroll.scrollHeight; scroll.dispatchEvent(new Event('scroll'));
         await api.delay(60);
         const bounds = scroll.getBoundingClientRect(), last = fixture.row('win-39').getBoundingClientRect();
-        const hasControls = [...document.querySelectorAll('button')].some(button => /显示更多会话|收起额外会话/.test(button.getAttribute('aria-label') ?? ''));
+        const hasControls = !!fixture.button('收起「Gamma 项目」的全部会话');
         results.push({ scrollable, lastVisible: last.top >= bounds.top && last.bottom <= bounds.bottom + 1,
           fits: scroll.scrollWidth <= scroll.clientWidth && last.right <= bounds.right, hasControls });
         fixture.root.unmount(); await api.delay();
       }
       return results;
     `)
-    expect(results).toEqual(Array.from({ length: 2 }, () => ({ scrollable: true, lastVisible: true, fits: true, hasControls: false })))
+    expect(results).toEqual(Array.from({ length: 2 }, () => ({ scrollable: true, lastVisible: true, fits: true, hasControls: true })))
   }, 30_000)
 
   test('When Windows 用户滚动后按 Ctrl 数字 Then 按当前可见会话切换而不是使用 macOS 修饰键', async () => {
@@ -224,6 +250,8 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         id: 'key-' + index, title: '键盘会话 ' + index, workspaceId: 'project-a', createdAt: now, updatedAt: now - index,
       }));
       const fixture = await api.mount({ platform: 'Win32', agents });
+      fixture.button('查看「Gamma 项目」的全部会话').click();
+      await api.until(() => fixture.row('key-39'));
       const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
       scroll.scrollTop = scroll.scrollHeight; scroll.dispatchEvent(new Event('scroll'));
       await api.delay(60);
@@ -256,7 +284,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const titleFits = title.clientWidth > 0 && title.scrollWidth <= title.clientWidth;
       const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
       const states = [];
-      for (const [label, tab] of [['Markdown','markdown'],['定时任务','automations'],['MCP/Skills','skills']]) {
+      for (const [label, tab] of [['Markdown','markdown'],['定时任务','automations'],['插件','skills']]) {
         fixture.button(label).click();
         await api.until(() => fixture.state().workspaceTab === tab && fixture.button(label).getAttribute('aria-current') === 'page');
         states.push({ label, tab: fixture.state().workspaceTab, current: fixture.button(label).getAttribute('aria-current') });
@@ -266,10 +294,10 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return { brand, titleFits, labels, states, components: state.componentTabs, session: state.agent, project: state.workspace, view: state.view, hasLegacyPromotion };
     `)
     expect(result).toEqual({
-      brand: 'Gamma', titleFits: true, labels: ['终端工作台', 'Markdown', 'design', '定时任务', 'MCP/Skills'],
+      brand: 'Gamma', titleFits: true, labels: ['搜索', '项目', 'Artifacts', 'Code', '插件', '定时任务', 'Markdown'],
       states: [
         { label: 'Markdown', tab: 'markdown', current: 'page' },
-        { label: '定时任务', tab: 'automations', current: 'page' }, { label: 'MCP/Skills', tab: 'skills', current: 'page' },
+        { label: '定时任务', tab: 'automations', current: 'page' }, { label: '插件', tab: 'skills', current: 'page' },
       ],
       components: ['markdown', 'automations', 'mcp', 'skills'],
       session: 'parent', project: 'project-a', view: 'conversations', hasLegacyPromotion: false,
@@ -282,7 +310,11 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       collapsed: boolean; expanded: boolean; controls: boolean
     }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      const controls = ['折叠所有项目','从本地文件夹创建项目','新建空白项目','项目菜单'].every(label => !!fixture.button(label));
+      const controls = ['折叠所有项目','新建项目','项目菜单'].every(label => !!fixture.button(label));
+      await api.openMenu(fixture.button('新建项目'));
+      const creationControls = ['新建空白项目','从本地文件夹创建项目'].every(label => [...document.querySelectorAll('[role="menuitem"]')].some(item => item.textContent.trim() === label));
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await api.until(() => !document.querySelector('[role="menu"]'));
       fixture.button('展开子会话').click(); await api.until(() => fixture.row('child'));
       fixture.row('child').click(); await api.until(() => fixture.state().delegation === 'child');
       const childState = fixture.state(), child = { parent: childState.agent, selected: childState.delegation, tab: childState.workspaceTab, open: childState.workspaceOpen };
@@ -291,7 +323,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const projectButton = [...document.querySelectorAll('button[aria-expanded]')].find(button => button.textContent.includes('第二个项目'));
       projectButton.click(); await api.until(() => !fixture.row('other')); const collapsed = projectButton.getAttribute('aria-expanded') === 'false';
       projectButton.click(); await api.until(() => fixture.row('other')); const expanded = projectButton.getAttribute('aria-expanded') === 'true';
-      fixture.root.unmount(); return { child, other, collapsed, expanded, controls };
+      fixture.root.unmount(); return { child, other, collapsed, expanded, controls: controls && creationControls };
     `)
     expect(result).toEqual({
       child: { parent: 'parent', selected: 'child', tab: 'delegation', open: true },
@@ -299,11 +331,11 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     })
   }, 30_000)
 
-  test('When 渲染 Agent-only 导航 Then 无模式栏且新建任务保持可用', async () => {
+  test('When 渲染 Agent-only 导航 Then 无模式栏且新建入口保持可用', async () => {
     const result = await renderer.run<{ modeBar: boolean; newTask: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
       const modeBar = !!document.querySelector('[aria-label="工作模式"]');
-      const newTask = !!fixture.button('新建任务');
+      const newTask = !!fixture.button('新建');
       fixture.root.unmount(); return { modeBar, newTask };
     `)
     expect(result).toEqual({ modeBar: false, newTask: true })
@@ -326,10 +358,13 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       await api.until(() => fixture.button('收起侧边栏'));
       await api.until(() => Math.round(document.querySelector('.gamma-sidebar')?.getBoundingClientRect().width ?? 0) === 256);
       const expanded = !fixture.state().collapsed && Math.round(document.querySelector('.gamma-sidebar').getBoundingClientRect().width) === 256;
-      fixture.button('design').click(); await api.until(() => fixture.state().view === 'design');
+      fixture.button('Artifacts').click(); await api.until(() => fixture.state().view === 'design');
       const tab = fixture.state().view;
-      fixture.button('打开设置').click(); await api.until(() => fixture.state().settings); const settings = fixture.state().settings;
+      await api.openMenu(fixture.button('个人资料与设置'));
+      await api.chooseMenu('打开设置');
+      await api.until(() => fixture.state().settings); const settings = fixture.state().settings;
       fixture.closeSettings(); fixture.button('搜索').click(); await api.until(() => fixture.state().search); const search = fixture.state().search;
+      fixture.closeSearch();
       fixture.root.unmount(); return { absent, contentLeft, top, expanded, tab, settings, search };
     `)
     expect(result).toEqual({ absent: true, contentLeft: 0, top: true, expanded: true, tab: 'design', settings: true, search: true })
@@ -372,11 +407,11 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
           .map(node => node.getAttribute('aria-label') || node.dataset.sessionSwitchId || node.className);
         const footer = sidebar.querySelector('.gamma-sidebar-footer');
         const footerBounds = footer.getBoundingClientRect();
-        const controls = !!fixture.button('新建任务') && ['个人资料与设置', '搜索', '打开设置'].every(label => {
+        const controls = !!fixture.button('新建') && ['个人资料与设置', '设备与连接'].every(label => {
           const button = fixture.button(label);
           if (!button || !footer.contains(button)) return false;
           const bounds = button.getBoundingClientRect();
-          return bounds.width >= 28 && bounds.left >= footerBounds.left && bounds.right <= footerBounds.right;
+          return bounds.width >= (label === '设备与连接' ? 28 : 80) && bounds.left >= footerBounds.left && bounds.right <= footerBounds.right;
         });
         results.push({ dark, empty, width: sidebar.getBoundingClientRect().width, overflow, controls }); fixture.root.unmount();
       }
@@ -391,9 +426,9 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
   }, 30_000)
 })
 
-describe('Given 不带三角标记的项目列表', () => {
-  test('When 切换项目并打开归档 Then 无装饰三角，当前项目语义及折叠菜单入口保持', async () => {
-    const result = await renderer.run<{ absent: boolean; current: boolean; switched: boolean; controls: boolean; archived: boolean; collapsed: boolean }>(`
+describe('Given 使用 disclosure 标记的项目列表', () => {
+  test('When 切换项目并打开归档 Then 当前项目语义、展开标记及折叠菜单入口保持', async () => {
+    const result = await renderer.run<{ disclosure: boolean; noLegacyTriangle: boolean; current: boolean; switched: boolean; controls: boolean; archived: boolean; collapsed: boolean }>(`
       const api = window.leftSidebarRegression, now = Date.now();
       const fixture = await api.mount({ agents: [
         { id: 'a', title: 'A的会话', workspaceId: 'project-a', createdAt: now, updatedAt: now },
@@ -412,10 +447,11 @@ describe('Given 不带三角标记的项目列表', () => {
       archivedProject.click(); await api.until(() => archivedProject.getAttribute('aria-expanded') === 'true');
       archivedProject.click(); await api.until(() => archivedProject.getAttribute('aria-expanded') === 'false');
       const collapsed = archivedProject.getAttribute('aria-expanded') === 'false';
-      const absent = !document.querySelector('.workspace-selected-triangle');
-      fixture.root.unmount(); return { absent, current, switched, controls, archived, collapsed };
+      const disclosure = !!document.querySelector('.gamma-sidebar-project-chevron[data-disclosure-chevron]');
+      const noLegacyTriangle = !document.querySelector('.workspace-selected-triangle');
+      fixture.root.unmount(); return { disclosure, noLegacyTriangle, current, switched, controls, archived, collapsed };
     `)
-    expect(result).toEqual({ absent: true, current: true, switched: true, controls: true, archived: true, collapsed: true })
+    expect(result).toEqual({ disclosure: true, noLegacyTriangle: true, current: true, switched: true, controls: true, archived: true, collapsed: true })
   }, 30_000)
 })
 
@@ -437,26 +473,299 @@ describe('Given Computer Use 已改为按需工具', () => {
   }, 30_000)
 })
 
-describe('Given 固定不随滚动改变的项目操作栏', () => {
-  test('When 侧栏列表向上滚动时 Then 项目操作栏与快捷入口位置保持固定且不位于滚动容器内', async () => {
-    const result = await renderer.run<{ outsideScroll: boolean; topBefore: number; topAfter: number; stable: boolean }>(`
+describe('Given 可滚动且可收起的项目分组', () => {
+  test('When 列表滚动后点击顶部项目入口 Then 展开分组并定位到项目标题', async () => {
+    const result = await renderer.run<{ insideScroll: boolean; revealed: boolean; collapsed: boolean; restored: boolean; navigationFits: boolean }>(`
       const api = window.leftSidebarRegression, now = Date.now();
       const fixture = await api.mount({ agents: Array.from({ length: 30 }, (_, i) => ({
         id: 'scroll-test-' + i, title: '长列表会话 ' + i, workspaceId: 'project-a', createdAt: now, updatedAt: now - i,
       })) });
+      fixture.button('查看「Gamma 项目」的全部会话').click();
+      await api.until(() => fixture.row('scroll-test-29'));
       const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
       const collapseBtn = fixture.button('折叠所有项目');
-      const outsideScroll = !scroll.contains(collapseBtn);
-      const topBefore = collapseBtn.getBoundingClientRect().top;
+      const insideScroll = scroll.contains(collapseBtn);
       scroll.scrollTop = 200;
       await api.delay(60);
-      const topAfter = collapseBtn.getBoundingClientRect().top;
-      const stable = topBefore === topAfter;
+      fixture.button('收起项目').click();
+      await api.until(() => !fixture.row('scroll-test-0'));
+      const collapsed = fixture.button('展开项目').getAttribute('aria-expanded') === 'false';
+      fixture.button('项目').click();
+      await api.until(() => fixture.row('scroll-test-0') && Math.abs(document.querySelector('[data-sidebar-projects]').getBoundingClientRect().top - scroll.getBoundingClientRect().top) < 2);
+      const heading = document.querySelector('[data-sidebar-projects]').getBoundingClientRect();
+      const revealed = heading.top >= scroll.getBoundingClientRect().top - 1 && heading.bottom <= scroll.getBoundingClientRect().bottom;
+      const restored = fixture.button('收起项目').getAttribute('aria-expanded') === 'true' && !!fixture.row('scroll-test-0');
+      const navigation = document.querySelector('nav[aria-label="工作区"]').getBoundingClientRect();
+      const navigationFits = navigation.top >= 0 && navigation.bottom <= scroll.getBoundingClientRect().top;
       fixture.root.unmount();
-      return { outsideScroll, topBefore: Math.round(topBefore), topAfter: Math.round(topAfter), stable };
+      return { insideScroll, revealed, collapsed, restored, navigationFits };
     `)
-    expect(result.outsideScroll).toBe(true)
-    expect(result.stable).toBe(true)
-    expect(result.topAfter).toBe(result.topBefore)
+    expect(result).toEqual({ insideScroll: true, revealed: true, collapsed: true, restored: true, navigationFits: true })
+  }, 30_000)
+})
+
+describe('Given 参考图中的侧栏层级与账户区', () => {
+  test('When 置顶真实项目 Then 项目和七条会话预览移入置顶区且可独立收起', async () => {
+    const result = await renderer.run<boolean>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const fixture = await api.mount({ agents: Array.from({ length: 8 }, (_, index) => ({
+        id: 'project-thread-' + index, title: '项目会话 ' + index, workspaceId: 'project-a',
+        createdAt: now, updatedAt: now - index,
+      })) });
+      const project = () => fixture.button('项目：Gamma 项目');
+      await api.openMenu(project().closest('.gamma-sidebar-project').querySelector('[aria-label="项目菜单"]'));
+      await api.chooseMenu('置顶项目');
+      await api.until(() => fixture.button('收起已置顶'));
+      const heading = document.querySelector('[data-sidebar-projects]');
+      const aboveHeading = !!(project().compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const preview = fixture.button('查看「Gamma 项目」的全部会话');
+      const count = document.querySelectorAll('[data-session-switch-id^="project-thread-"]').length;
+      fixture.button('收起已置顶').click();
+      await api.until(() => !project());
+      fixture.button('展开已置顶').click();
+      await api.until(project);
+      await api.openMenu(project().closest('.gamma-sidebar-project').querySelector('[aria-label="项目菜单"]'));
+      await api.chooseMenu('取消置顶项目');
+      await api.until(() => project() && !fixture.button('收起已置顶'));
+      const restored = !!(heading.compareDocumentPosition(project()) & Node.DOCUMENT_POSITION_FOLLOWING);
+      fixture.root.unmount();
+      return aboveHeading && !!preview && count === 7 && restored;
+    `)
+    expect(result).toBe(true)
+  }, 30_000)
+
+  test('When 置顶项目包含会话 Then 置顶标题可折叠，项目与子会话使用连续树线', async () => {
+    const result = await renderer.run<{
+      labels: string[]; pinnedCollapsed: boolean; restored: boolean; childExpanded: boolean; childCollapsed: boolean
+      railAligned: boolean; markerHollow: boolean; railEndsAtPreview: boolean; heights: number[]; border: string
+      pinnedIcon: boolean; pinnedPreviewCount: number; padding: string
+      pinnedExpandedCount: number; pinnedRestoredCount: number
+    }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const agents = [
+        { id: 'pinned-project', title: '11月21日学习内容', workspaceId: 'project-a', pinned: true, createdAt: now, updatedAt: now },
+        ...Array.from({ length: 8 }, (_, index) => ({
+          id: 'lesson-' + index, title: '学习内容 ' + index, workspaceId: 'project-a', parentSessionId: 'pinned-project',
+          sourceDelegationId: 'delegation-' + index, rootSessionId: 'pinned-project', createdAt: now - index, updatedAt: now - index,
+        })),
+        ...Array.from({ length: 8 }, (_, index) => ({
+          id: 'project-session-' + index, title: '项目会话 ' + index, workspaceId: 'project-b', createdAt: now - index, updatedAt: now - index,
+        })),
+      ];
+      const fixture = await api.mount({ agents });
+      const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
+      await api.until(() => fixture.row('pinned-project'));
+      const pinnedIcon = !!fixture.row('pinned-project').querySelector('.gamma-sidebar-pinned-root > span > svg');
+      await api.until(() => fixture.row('lesson-6'));
+      const pinnedPreviewCount = document.querySelectorAll('[data-session-switch-id^="lesson-"]').length;
+      await api.until(() => fixture.button('查看「11月21日学习内容」的全部会话'));
+      fixture.button('查看「11月21日学习内容」的全部会话').click();
+      await api.until(() => fixture.row('lesson-7'));
+      const childExpanded = !!fixture.row('lesson-7');
+      const pinnedExpandedCount = document.querySelectorAll('[data-session-switch-id^="lesson-"]').length;
+      fixture.button('收起「11月21日学习内容」的全部会话').click();
+      await api.until(() => !fixture.row('lesson-7'));
+      const pinnedRestoredCount = document.querySelectorAll('[data-session-switch-id^="lesson-"]').length;
+      const child = fixture.row('lesson-0');
+      const childWrapper = child.closest('.gamma-sidebar-delegation-children');
+      const railX = childWrapper.getBoundingClientRect().left;
+      const marker = child.querySelector('.gamma-sidebar-thread-marker').getBoundingClientRect();
+      const sidebar = document.querySelector('.gamma-sidebar');
+      const sidebarLeft = sidebar.getBoundingClientRect().left;
+      const sidebarStyle = getComputedStyle(sidebar);
+      const scroller = child.closest('[data-sidebar-scroll]');
+      const contentInset = scroller.getBoundingClientRect().left - sidebarLeft;
+      const railInset = parseFloat(sidebarStyle.getPropertyValue('--sidebar-thread-rail-inset'));
+      const markerInset = parseFloat(sidebarStyle.getPropertyValue('--sidebar-thread-marker-inset'));
+      const railAligned = Math.abs(railX - (sidebarLeft + contentInset + railInset)) < 1
+        && Math.abs(marker.left + marker.width / 2 - (sidebarLeft + contentInset + markerInset)) < 1;
+      if (!railAligned) throw new Error('树线几何异常：' + JSON.stringify({ railX, markerCenter: marker.left + marker.width / 2,
+        expectedRail: sidebarLeft + contentInset + railInset, expectedMarker: sidebarLeft + contentInset + markerInset,
+        contentInset, railInset, markerInset, wrapperClass: childWrapper.className }));
+      const markerStyle = getComputedStyle(child.querySelector('.gamma-sidebar-thread-marker'));
+      const markerHollow = markerStyle.fill === 'none' && markerStyle.backgroundColor !== 'rgba(0, 0, 0, 0)';
+      const preview = document.querySelector('.gamma-sidebar-preview-boundary');
+      const previewButton = preview.querySelector('button').getBoundingClientRect();
+      const railEnd = preview.getBoundingClientRect().bottom - parseFloat(getComputedStyle(preview).getPropertyValue('--sidebar-thread-rail-end'));
+      const railEndsAtPreview = Math.abs(railEnd - previewButton.bottom) < 1;
+      const heights = [...document.querySelectorAll('.gamma-sidebar-nav-item, .gamma-sidebar-project-row, .session-quick-switch-row')].map(row => row.getBoundingClientRect().height);
+      const border = getComputedStyle(document.querySelector('.gamma-sidebar')).borderRightWidth;
+      const padding = getComputedStyle(sidebar).paddingInline;
+      fixture.button('收起子会话').click(); await api.until(() => !fixture.row('lesson-0'));
+      const childCollapsed = !fixture.row('lesson-0');
+      fixture.button('收起已置顶').click(); await api.until(() => !fixture.row('pinned-project'));
+      const pinnedCollapsed = !fixture.row('pinned-project') && !!fixture.button('项目：Gamma 项目');
+      fixture.button('展开已置顶').click(); await api.until(() => fixture.row('pinned-project'));
+      const restored = !!fixture.row('pinned-project');
+      fixture.root.unmount();
+      return { labels, pinnedCollapsed, restored, childExpanded, childCollapsed, railAligned, markerHollow, railEndsAtPreview, heights, border, pinnedIcon, pinnedPreviewCount, pinnedExpandedCount, pinnedRestoredCount, padding };
+    `)
+    expect(result.labels).toEqual(['搜索', '项目', 'Artifacts', 'Code', '插件', '定时任务', 'Markdown'])
+    expect(result.pinnedCollapsed).toBe(true)
+    expect(result.restored).toBe(true)
+    expect(result.childExpanded).toBe(true)
+    expect(result.childCollapsed).toBe(true)
+    expect(result.railAligned).toBe(true)
+    expect(result.markerHollow).toBe(true)
+    expect(result.railEndsAtPreview).toBe(true)
+    expect(result.heights.every(height => height === 36)).toBe(true)
+    expect(result.border).toBe('0px')
+    expect(result.pinnedIcon).toBe(true)
+    expect(result.pinnedPreviewCount).toBe(7)
+    expect(result.pinnedExpandedCount).toBe(8)
+    expect(result.pinnedRestoredCount).toBe(7)
+    expect(result.padding).toBe('8px')
+  }, 30_000)
+
+  test('When 置顶子会话超过七条 Then 预览展开收起与当前选择均保留', async () => {
+    const result = await renderer.run<{ preview: number; all: number; restored: number; selectedVisible: boolean; active: string; controlBefore: boolean; controlAfter: boolean; continuousRail: boolean }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const agents = [
+        { id: 'pinned-preview', title: '置顶学习项目', workspaceId: 'project-a', pinned: true, createdAt: now, updatedAt: now },
+        ...Array.from({ length: 12 }, (_, index) => ({
+          id: 'pinned-child-' + index, title: '置顶子会话 ' + index, workspaceId: 'project-a',
+          parentSessionId: 'pinned-preview', sourceDelegationId: 'delegation-' + index, rootSessionId: 'pinned-preview',
+          createdAt: now - index, updatedAt: now - index,
+        })),
+      ];
+      const fixture = await api.mount({ agents, activeAgent: 'pinned-preview' });
+      const count = () => agents.filter(agent => agent.parentSessionId && fixture.row(agent.id)).length;
+      await api.until(() => count() === 7);
+      const preview = count();
+      fixture.button('查看「置顶学习项目」的全部会话').click();
+      await api.until(() => count() === 12 && fixture.row('pinned-child-10'));
+      const all = count();
+      fixture.row('pinned-child-10').click();
+      await api.until(() => fixture.state().delegation === 'pinned-child-10');
+      const scroller = document.querySelector('[data-sidebar-scroll]');
+      scroller.scrollTop = 0;
+      await api.delay(40);
+      const control = fixture.button('收起「置顶学习项目」的全部会话');
+      const controlBefore = !!control;
+      const continuousRail = [...document.querySelectorAll('.gamma-sidebar-preview-tree')].every(node => getComputedStyle(node, '::before').width === '1px');
+      control.click();
+      await api.until(() => count() === 7);
+      const restored = count();
+      const selectedVisible = !!fixture.row('pinned-child-10');
+      const collapseControl = fixture.button('查看「置顶学习项目」的全部会话');
+      const controlAfter = !!collapseControl;
+      const active = fixture.state().agent;
+      fixture.root.unmount();
+      return { preview, all, restored, selectedVisible, active, controlBefore, controlAfter, continuousRail };
+    `)
+    expect(result).toEqual({ preview: 7, all: 12, restored: 7, selectedVisible: true, active: 'pinned-preview', controlBefore: true, controlAfter: true, continuousRail: true })
+  }, 30_000)
+
+  test('When 当前会话位于第七条之后 Then 收起预览仍保留当前会话及其子会话', async () => {
+    const result = await renderer.run<{ selectedVisible: boolean; childVisible: boolean; count: number; active: string }>(`
+      const api = window.leftSidebarRegression, now = Date.now();
+      const agents = Array.from({ length: 12 }, (_, index) => ({
+        id: 'preview-' + index, title: '预览会话 ' + index, workspaceId: 'project-a', createdAt: now - index, updatedAt: now - index,
+      }));
+      agents.push({ id: 'selected-child', title: '当前子会话', workspaceId: 'project-a', parentSessionId: 'preview-10', sourceDelegationId: 'delegation', rootSessionId: 'preview-10', createdAt: now, updatedAt: now });
+      const fixture = await api.mount({ agents, activeAgent: 'preview-10' });
+      await api.until(() => fixture.row('preview-10'));
+      const parent = fixture.row('preview-10');
+      parent.scrollIntoView({ block: 'center' });
+      parent.querySelector('button[aria-label="展开子会话"]').click();
+      await api.until(() => fixture.row('selected-child'));
+      fixture.row('selected-child').click();
+      await api.until(() => fixture.state().delegation === 'selected-child');
+      await api.until(() => fixture.row('preview-10') && fixture.row('selected-child'));
+      const result = { selectedVisible: !!fixture.row('preview-10'), childVisible: !!fixture.row('selected-child'),
+        count: agents.filter(agent => !!fixture.row(agent.id)).length, active: fixture.state().agent };
+      fixture.root.unmount(); return result;
+    `)
+    expect(result).toEqual({ selectedVisible: true, childVisible: true, count: 8, active: 'preview-10' })
+  }, 30_000)
+
+  test('When 打开账户与设备入口 Then 显示本地身份并进入对应设置，不伪造云端套餐', async () => {
+    const result = await renderer.run<{ name: boolean; local: boolean; initial: string; profileTab: string; deviceTab: string; noPlan: boolean }>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount({ userName: 'Charlie' });
+      const account = fixture.button('个人资料与设置');
+      const name = account.textContent.includes('Charlie'), local = account.textContent.includes('· 本地');
+      const initial = account.querySelector('.gamma-sidebar-avatar').textContent.trim();
+      await api.openMenu(account);
+      const noPlan = !/Free|Pro|升级|云端账户/.test(document.querySelector('[role="menu"]').textContent);
+      await api.chooseMenu('个人资料');
+      await api.until(() => fixture.state().settings && fixture.state().settingsTab === 'general');
+      const profileTab = fixture.state().settingsTab;
+      fixture.closeSettings();
+      fixture.button('设备与连接').click();
+      await api.until(() => fixture.state().settings && fixture.state().settingsTab === 'channels');
+      const deviceTab = fixture.state().settingsTab;
+      fixture.root.unmount(); return { name, local, initial, profileTab, deviceTab, noPlan };
+    `)
+    expect(result).toEqual({ name: true, local: true, initial: 'C', profileTab: 'general', deviceTab: 'channels', noPlan: true })
+  }, 30_000)
+
+  test('When 从标题菜单创建空白或本地项目 Then 保留两种既有创建路径', async () => {
+    const result = await renderer.run<{ blank: boolean; focused: boolean; folder: boolean; calls: unknown[] }>(`
+      const api = window.leftSidebarRegression;
+      const blankFixture = await api.mount();
+      await api.openMenu(blankFixture.button('新建项目'));
+      await api.chooseMenu('新建空白项目');
+      await api.until(() => document.querySelector('input[aria-label="新项目名称"]'));
+      const input = document.querySelector('input[aria-label="新项目名称"]');
+      await api.until(() => document.activeElement === input);
+      const focused = document.activeElement === input;
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      valueSetter.call(input, '新的本地项目');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await api.until(() => blankFixture.state().workspace === 'created-project');
+      const blank = blankFixture.state().workspace === 'created-project';
+      const blankCalls = [...blankFixture.calls];
+      blankFixture.root.unmount();
+      const folderFixture = await api.mount({ folder: { path: '/tmp/gamma-local-project', name: '本地文件夹项目' } });
+      await api.openMenu(folderFixture.button('新建项目'));
+      await api.chooseMenu('从本地文件夹创建项目');
+      await api.until(() => folderFixture.state().workspace === 'created-project');
+      const folder = folderFixture.state().workspace === 'created-project';
+      const calls = [...blankCalls, ...folderFixture.calls].filter(call => call.createProject);
+      folderFixture.root.unmount(); return { blank, focused, folder, calls };
+    `)
+    expect(result.blank).toBe(true)
+    expect(result.focused).toBe(true)
+    expect(result.folder).toBe(true)
+    expect(result.calls).toEqual([
+      { createProject: { name: '新的本地项目' } },
+      { createProject: { name: '本地文件夹项目', projectRootPath: '/tmp/gamma-local-project' } },
+    ])
+  }, 30_000)
+
+  test('When 浅深主题与窄空侧栏展示 Then 图标文字基线稳定、底栏不溢出且空项目可操作', async () => {
+    const results = await renderer.run<Array<{ dark: boolean; width: number; empty: boolean; fits: boolean; footer: boolean; emptyState: boolean; focus: boolean }>>(`
+      const api = window.leftSidebarRegression, results = [];
+      for (const dark of [false, true]) for (const empty of [false, true]) {
+        const fixture = await api.mount({ dark, width: 200, agents: empty ? [] : undefined, userName: 'Charlie' });
+        const sidebar = document.querySelector('.gamma-sidebar');
+        const nodes = [sidebar, ...sidebar.querySelectorAll('nav, .gamma-sidebar-footer, [data-sidebar-scroll], [data-session-switch-id]')];
+        const fits = nodes.every(node => node.scrollWidth <= node.clientWidth + 1);
+        const footer = fixture.button('个人资料与设置').getBoundingClientRect().right < fixture.button('设备与连接').getBoundingClientRect().left;
+        const emptyState = !empty || document.body.textContent.includes('暂无会话');
+        const target = empty ? fixture.button('新建项目') : fixture.row('parent').querySelector('button[aria-label="更多会话操作"]');
+        if (empty) target.focus();
+        else {
+          fixture.row('parent').focus();
+          fixture.row('parent').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+          target.focus();
+        }
+        await api.until(() => getComputedStyle(target).opacity === '1');
+        const focus = document.activeElement === target
+          && getComputedStyle(target).opacity === '1';
+        results.push({ dark, width: sidebar.getBoundingClientRect().width, empty, fits, footer, emptyState, focus });
+        fixture.root.unmount(); await api.delay();
+      }
+      return results;
+    `)
+    expect(results).toHaveLength(4)
+    for (const result of results) {
+      expect(result.width).toBe(200)
+      expect(result.fits).toBe(true)
+      expect(result.footer).toBe(true)
+      expect(result.emptyState).toBe(true)
+      expect(result.focus).toBe(true)
+    }
   }, 30_000)
 })
