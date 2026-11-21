@@ -70,6 +70,15 @@ export function prepareAgentReferenceInput<T extends Pick<AgentSendInput, 'sessi
 export function saveAgentSendOutbox(entry: AgentSendOutboxEntry): void {
   recovery.save({ ...entry, input: prepareAgentReferenceInput(entry.input, entry.id) })
 }
+/** 落盘前运行失败的回写不能影响运行收尾；历史不可读等异常只保留原 pending 日志。 */
+export function markAgentSendOutboxRunFailed(sessionId: string, messageId: string | undefined, startedAt: number | undefined, error: string | undefined, stoppedByUser: boolean | undefined): void {
+  if (!messageId) return
+  try {
+    recovery.markRunFailed({ sessionId, messageId, startedAt, error, stoppedByUser })
+  } catch (writeError) {
+    console.warn('[发送日志] 落盘前失败回写失败，保留暂存消息:', writeError)
+  }
+}
 export function cancelQueuedAgentSend(input: AgentCancelQueuedMessageInput): boolean {
   return recovery.cancelQueued(input, () => cancelAgentQueuedMessage(input))
 }

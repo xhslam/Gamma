@@ -18,6 +18,7 @@ interface TestSender {
 interface RunInput extends AgentSendInput { runGeneration?: number; queueMessageId?: string }
 interface RunCallbacks {
   onRunStarted(input: { startedAt: number; runGeneration: number }): void
+  onError(error: string): void
   onComplete(messages: never[], options: { startedAt: number; runGeneration: number; stoppedByUser: boolean }): void
 }
 interface ControlledRun { input: RunInput; finishModel: (stoppedByUser?: boolean) => void; finishCleanup: () => void }
@@ -38,7 +39,7 @@ function productionFunction(source: string, name: string): string {
 }
 
 /** 执行真实 IPC、service、幂等门禁、队列及流路由，仅替换 Electron 和模型进程。 */
-function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?: boolean; failFirstRouteRegistration?: boolean; failFirstHeadlessTarget?: boolean } = {}) {
+function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?: boolean; failFirstRouteRegistration?: boolean; failFirstHeadlessTarget?: boolean; failBeforePersist?: string } = {}) {
   const ipcSource = readFileSync(new URL('./ipc.ts', import.meta.url), 'utf8')
   const registration = ipcSource.match(/  ipcMain\.handle\(\s*AGENT_IPC_CHANNELS\.SEND_MESSAGE,[\s\S]*?\n  \)/)?.[0]
   if (!registration) throw new Error('未找到生产 SEND_MESSAGE IPC 注册入口')
@@ -74,6 +75,7 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
   const lifecycle: string[] = []
   const stops: boolean[] = []
   const deliveries: { targetId: number; payload: unknown }[] = []
+  const outboxFailures: { sessionId: string; messageId?: string; startedAt?: number; error?: string; stoppedByUser?: boolean }[] = []
   const mirrorReady = Promise.withResolvers<void>()
   const preflightReady = Promise.withResolvers<void>()
   if (!options.holdMirror) mirrorReady.resolve()
@@ -112,6 +114,9 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
     ipcMain: { handle: (_channel: string, callback: SendHandler) => { handler = callback } },
     AGENT_IPC_CHANNELS: { SEND_MESSAGE: 'agent:send-message', STREAM_ERROR: 'agent:stream-error' },
     submitAgentMessageOnce: gate.submit.bind(gate),
+    markAgentSendOutboxRunFailed: (sessionId: string, messageId: string | undefined, startedAt: number | undefined, error: string | undefined, stoppedByUser: boolean | undefined) => {
+      outboxFailures.push({ sessionId, messageId, startedAt, error, stoppedByUser })
+    },
     startingAgentSessions,
     preparingAgentSessions,
     pendingAgentSessionSnapshots: new Map<string, AgentActiveSessionSnapshot>(),
@@ -153,6 +158,14 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
       stop: (_sessionId: string, stopBeforeRun: boolean) => { stops.push(stopBeforeRun) },
       sendMessage: async (input: RunInput, callbacks: RunCallbacks) => {
         await preflightReady.promise
+        const runGeneration = input.runGeneration ?? ++generation
+        const startedAt = input.startedAt ?? Date.now()
+        if (options.failBeforePersist) {
+          // 模拟落盘前门禁/预检拒绝：不持久化用户消息，直接报错并结束运行。
+          callbacks.onError(options.failBeforePersist)
+          callbacks.onComplete([], { startedAt, runGeneration, stoppedByUser: false })
+          return
+        }
         const modelDone = Promise.withResolvers<void>()
         const cleanupDone = Promise.withResolvers<void>()
         let stoppedByUser = false
@@ -160,8 +173,6 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
         lifecycle.push(`start:${input.userMessageUuid}`)
         if (input.userMessageUuid) persistedIds.add(input.userMessageUuid)
         runs.push({ input, finishModel: (stopped = false) => { stoppedByUser = stopped; modelDone.resolve() }, finishCleanup: () => cleanupDone.resolve() })
-        const runGeneration = input.runGeneration ?? ++generation
-        const startedAt = input.startedAt ?? Date.now()
         activeSnapshot = { sessionId: input.sessionId, startedAt, runGeneration }
         callbacks.onRunStarted({ startedAt, runGeneration })
         await modelDone.promise
@@ -191,6 +202,7 @@ function createSubmissionHarness(options: { holdMirror?: boolean; holdPreflight?
     lifecycle,
     stops,
     deliveries,
+    outboxFailures,
     snapshots: () => service.listActiveAgentSessionSnapshots(),
     reload: () => service.rebindActiveAgentStreams(createSender(2)),
     isReserved: () => startingAgentSessions.has('session') || preparingAgentSessions.has('session'),
@@ -519,6 +531,32 @@ describe('Given renderer 经真实 SEND_MESSAGE IPC 提交到主进程', () => {
       expect(run.input.additionalDirectories).toEqual(['/path/to/extra'])
       expect(run.input.contextRefIds).toEqual([])
       expect(run.input.contextRefs).toEqual([])
+    } finally { await harness.dispose() }
+  })
+  test('When 运行在落盘前被门禁拒绝 Then IPC 已回执但失败原因回写暂存日志', async () => {
+    const harness = createSubmissionHarness({ failBeforePersist: '已有桌面控制或系统授权操作，不能并发启动其他运行' })
+    try {
+      const response = await harness.send(message('preflight-rejected'))
+      expect(response).toEqual({ disposition: 'sent' })
+      await flushSubmissionMicrotasks()
+      expect(harness.runs).toHaveLength(0)
+      expect(harness.outboxFailures).toHaveLength(1)
+      expect(harness.outboxFailures[0]).toMatchObject({
+        sessionId: 'session', messageId: 'preflight-rejected',
+        error: '已有桌面控制或系统授权操作，不能并发启动其他运行', stoppedByUser: false,
+      })
+    } finally { await harness.dispose() }
+  })
+  test('When 正常完成运行 Then 回写入口携带空错误由持久化证据判定为无操作', async () => {
+    const harness = createSubmissionHarness()
+    try {
+      await harness.send(message('normal'))
+      await flushSubmissionMicrotasks()
+      harness.runs[0]?.finishModel()
+      harness.runs[0]?.finishCleanup()
+      await flushSubmissionMicrotasks()
+      expect(harness.outboxFailures).toHaveLength(1)
+      expect(harness.outboxFailures[0]).toMatchObject({ messageId: 'normal', error: undefined, stoppedByUser: false })
     } finally { await harness.dispose() }
   })
 })

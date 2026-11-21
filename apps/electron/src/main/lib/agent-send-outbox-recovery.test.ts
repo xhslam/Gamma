@@ -201,3 +201,52 @@ describe('Given 主进程恢复协调器', () => {
     expect(freshQueued.has('msg_failed_a')).toBe(true)
   })
 })
+
+describe('Given 运行在用户消息落盘前结束', () => {
+  function pendingFixture(startedAt = 100) {
+    const f = fixture()
+    const pending: AgentSendOutboxEntry = { ...f.entry, status: 'pending', error: undefined, input: { ...f.entry.input, startedAt } }
+    f.outbox.save(pending)
+    return { ...f, pending }
+  }
+  test('When 门禁拒绝且消息未持久化 Then 暂存消息标记失败并保留错误原因', () => {
+    const f = pendingFixture()
+    f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100, error: '已有桌面控制或系统授权操作，不能并发启动其他运行' })
+    const entry = f.outbox.list('session')[0]
+    expect(entry?.status).toBe('failed')
+    expect(entry?.error).toBe('已有桌面控制或系统授权操作，不能并发启动其他运行')
+  })
+  test('When 没有错误文本 Then 使用可操作的兜底文案', () => {
+    const f = pendingFixture()
+    f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100 })
+    expect(f.outbox.list('session')[0]?.error).toBe('运行在接收消息前结束，请重试发送')
+  })
+  test('When 消息已写入历史 Then 迟到失败不复活旧日志', () => {
+    const f = pendingFixture()
+    f.accepted.add('message')
+    f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100, error: '模型错误' })
+    expect(f.outbox.list('session')).toEqual([])
+  })
+  test('When 消息仍在主进程队列 Then 不标记失败', () => {
+    const f = pendingFixture()
+    f.queued.add('message')
+    f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100, error: '模型错误' })
+    expect(f.outbox.list('session')[0]?.status).toBe('pending')
+  })
+  test('When 新重试已接管 Then 旧运行的迟到失败不覆盖新快照', () => {
+    const f = pendingFixture(200)
+    f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100, error: '旧运行错误' })
+    expect(f.outbox.list('session')[0]?.status).toBe('pending')
+  })
+  test('When 用户主动停止 Then 保留原始暂存状态', () => {
+    const f = pendingFixture()
+    f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100, error: '已停止', stoppedByUser: true })
+    expect(f.outbox.list('session')[0]?.status).toBe('pending')
+  })
+  test('When 历史不可读 Then 抛出异常且原日志不被改写', () => {
+    const f = pendingFixture()
+    f.state.brokenHistory = true
+    expect(() => f.recovery.markRunFailed({ sessionId: 'session', messageId: 'message', startedAt: 100, error: '模型错误' })).toThrow('历史不可读')
+    expect(f.outbox.list('session')[0]?.status).toBe('pending')
+  })
+})

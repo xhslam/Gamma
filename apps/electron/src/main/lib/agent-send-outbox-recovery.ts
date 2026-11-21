@@ -40,6 +40,23 @@ export class AgentSendOutboxRecovery {
     return cancel()
   }
 
+  /**
+   * 运行在用户消息落盘前结束（门禁拒绝、预检失败等）时回写失败原因。
+   * IPC 已回执“已接管”但消息从未持久化的场景，不能永远停在“发送结果待确认”。
+   * 已接收、仍在队列、已被更新的重试接管（startedAt 更新）或用户主动停止的快照不得触碰。
+   */
+  markRunFailed(input: { sessionId: string; messageId: string; startedAt?: number; error?: string; stoppedByUser?: boolean }): void {
+    if (input.stoppedByUser === true) return
+    const accepted = this.acknowledge(input.sessionId)
+    if (accepted.has(input.messageId)) return
+    if (this.options.queuedIds(input.sessionId).has(input.messageId)) return
+    const entry = this.options.outbox.list(input.sessionId).find((item) => item.id === input.messageId)
+    if (!entry) return
+    // 新重试的 startedAt 一定晚于旧运行；旧运行的迟到失败不能覆盖新快照。
+    if (input.startedAt != null && entry.input.startedAt != null && entry.input.startedAt > input.startedAt) return
+    this.options.outbox.save({ ...entry, status: 'failed', error: input.error ?? '运行在接收消息前结束，请重试发送' })
+  }
+
   retry(input: AgentQueuedMessageControlInput, submit: (input: AgentSubmitOrEnqueueInput) => Promise<AgentSubmitOrEnqueueResult>): Promise<AgentSendOutboxRetryResult> {
     const key = `${input.sessionId}:${input.messageId}`
     const current = this.retrying.get(key)

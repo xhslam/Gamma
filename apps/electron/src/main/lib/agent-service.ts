@@ -54,6 +54,7 @@ import { AgentStreamRouteRegistry } from './agent-stream-route-registry'
 import { AgentQueueCoordinator } from './agent-queue-coordinator'
 import { isStaleActiveQueueError } from './agent-queue-routing'
 import { shouldStopBeforeAgentRun } from './agent-stop-policy'
+import { markAgentSendOutboxRunFailed } from './agent-send-outbox-service'
 
 // ===== 实例创建 =====
 
@@ -284,7 +285,16 @@ export async function runAgent(
   input = { ...input, contextRefs: input.contextRefs ?? captureReferenceSnapshotOrEmpty(input.sessionId, input.contextRefIds) }
   // deferred queue runs carry their queue id as an internal extension.
   const queueMessageId = (input as Partial<AgentDeferredQueueMessageInput>).queueMessageId
-  const releaseStart = reserveAgentSessionStart(input.sessionId, queueMessageId)
+  // 落盘前失败（门禁拒绝、预检错误等）不会留下用户消息，必须把原因回写给暂存日志。
+  let lastRunError: string | undefined
+  let releaseStart: () => void
+  try {
+    releaseStart = reserveAgentSessionStart(input.sessionId, queueMessageId)
+  } catch (error) {
+    // 启动槽位被占用时消息同样未被接收；先回写失败原因再交给队列收尾。
+    markAgentSendOutboxRunFailed(input.sessionId, queueMessageId, input.startedAt, error instanceof Error ? error.message : String(error), false)
+    throw error
+  }
   let route: ReturnType<typeof registerWebContents> | undefined
   const getRunTarget = () => route
     ? streamRoutes.getTargetIfOwner(input.sessionId, route.ownerId)
@@ -331,6 +341,7 @@ export async function runAgent(
     }
     await orchestrator.sendMessage(input, {
       onError: (error, opts) => {
+        lastRunError = error
         const target = getRunTarget()
         if (target) {
           target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
@@ -341,6 +352,8 @@ export async function runAgent(
         }
       },
       onComplete: (messages, opts) => {
+        // 先回写再发布完成事件：renderer 收到 run_completed/STREAM_COMPLETE 刷新暂存列表时须已能看到失败原因。
+        markAgentSendOutboxRunFailed(input.sessionId, queueMessageId, opts?.startedAt ?? input.startedAt, lastRunError, opts?.stoppedByUser)
         preparingAgentSessions.delete(input.sessionId)
         pendingAgentSessionSnapshots.delete(input.sessionId)
         publishRunStopped(input.sessionId, opts?.stoppedByUser, opts?.startedAt, opts?.runGeneration)
@@ -400,6 +413,7 @@ export async function runAgent(
   } catch (err) {
     console.error('[Agent 服务] runAgent 未处理异常:', err)
     const errorMessage = err instanceof Error ? err.message : '未知错误'
+    markAgentSendOutboxRunFailed(input.sessionId, queueMessageId, input.startedAt, errorMessage, false)
     const target = getRunTarget()
     if (target) {
       target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
