@@ -129,7 +129,7 @@ describe('Given 第4步面板与布局规范', () => {
         for (const sample of result) {
           expect(sample.left).toBe('0px')
           expect(sample.right).toBe('0px')
-          expect(sample.height).toBe('29px')
+          expect(sample.height).toBe('32px')
           expect(sample.border).toBe('rgba(0, 0, 0, 0)')
           expect(sample.pointer).toBe('none')
           expect(sample.lineColor).not.toBe('rgba(0, 0, 0, 0)')

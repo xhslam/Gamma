@@ -6,7 +6,8 @@
   --panel-border-width: 1px;
   --panel-padding: 16px;
   --list-row-height: 34px;
-  --workbench-topbar-height: 29px;
+  /* 顶栏高度必须容下 macOS 红绿灯（y=8 起、直径 12px），否则窗口按钮会压到分隔线上。 */
+  --workbench-topbar-height: 32px;
   --workbench-footer-height: 32px;
   --workbench-divider: hsl(var(--foreground) / 0.14);
 }

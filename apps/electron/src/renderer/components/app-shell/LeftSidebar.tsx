@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, ChevronsDownUp, ChevronDown, GitBranch, Download, Loader2, RotateCw, Info, CodeXml, Copy, Plug, MonitorSmartphone, UserRound, Circle } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeft, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, ChevronsDownUp, ChevronDown, GitBranch, Download, Loader2, RotateCw, Info, CodeXml, Copy, Plug, UserRound, Circle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SearchDialog } from './SearchDialog'
@@ -2782,7 +2782,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             </span>
           </TooltipContent>
         </Tooltip>
-        <span className="select-none text-sm font-medium text-foreground/80">Gamma</span>
+        <span className="gamma-sidebar-brand select-none">Gamma</span>
       </div>
 
       {/* 新建始终在主导航首位，搜索紧随其后。 */}
@@ -2838,7 +2838,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           />
         )}
         <WorkspaceComponentSidebarEntry
-          label="Artifacts"
+          label="Design"
           icon={<Copy size={18} />}
           active={activeView === 'design' || isWorkspaceComponentActive('design')}
           onClick={handleOpenArtifacts}
@@ -2850,7 +2850,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           onClick={handleOpenTerminalWorkbench}
         />
         <WorkspaceComponentSidebarEntry
-          label="插件"
+          label="MCP/skills"
           icon={<Plug size={18} />}
           active={isWorkspaceComponentActive('skills') || isWorkspaceComponentActive('mcp')}
           onClick={handleOpenMcpSkillsComponents}
@@ -3017,14 +3017,20 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
               <button
                 data-icon-button="true"
                 type="button"
-                aria-label="设备与连接"
-                onClick={() => openSettingsToTab('channels')}
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-foreground/[0.05]"
+                aria-label="设置"
+                onClick={handleOpenSettings}
+                className="relative flex size-8 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-foreground/[0.05]"
               >
-                <MonitorSmartphone size={20} strokeWidth={1.6} />
+                <Settings size={20} strokeWidth={1.6} />
+                {hasEnvironmentIssues && (
+                  <span
+                    aria-label="环境需要处理"
+                    className="absolute right-1 top-1 size-1.5 rounded-full bg-destructive"
+                  />
+                )}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top">设备与连接</TooltipContent>
+            <TooltipContent side="top">设置</TooltipContent>
           </Tooltip>
         </div>
       </div>

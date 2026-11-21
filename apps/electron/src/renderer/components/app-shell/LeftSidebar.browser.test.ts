@@ -66,9 +66,9 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     `)).toEqual({ view: 'agy-terminal', agent: null, componentTabs: [] })
   }, 30_000)
 
-  test('When 点击 Artifacts Then 打开完整主工作台而非草稿或重复右侧会话', async () => {
+  test('When 点击 Design Then 打开完整主工作台而非草稿或重复右侧会话', async () => {
     expect(await renderer.run<{ view: string; agent: string; workspace: string }>(`
-      const api=window.leftSidebarRegression,fixture=await api.mount();fixture.button('Artifacts').click();
+      const api=window.leftSidebarRegression,fixture=await api.mount();fixture.button('Design').click();
       await api.until(()=>fixture.state().view==='design');const state=fixture.state();fixture.root.unmount();
       return {view:state.view,agent:state.agent,workspace:state.workspace};
     `)).toEqual({view:'design',agent:'parent',workspace:'project-a'})
@@ -284,7 +284,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const titleFits = title.clientWidth > 0 && title.scrollWidth <= title.clientWidth;
       const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
       const states = [];
-      for (const [label, tab] of [['Markdown','markdown'],['定时任务','automations'],['插件','skills']]) {
+      for (const [label, tab] of [['Markdown','markdown'],['定时任务','automations'],['MCP/skills','skills']]) {
         fixture.button(label).click();
         await api.until(() => fixture.state().workspaceTab === tab && fixture.button(label).getAttribute('aria-current') === 'page');
         states.push({ label, tab: fixture.state().workspaceTab, current: fixture.button(label).getAttribute('aria-current') });
@@ -294,10 +294,10 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return { brand, titleFits, labels, states, components: state.componentTabs, session: state.agent, project: state.workspace, view: state.view, hasLegacyPromotion };
     `)
     expect(result).toEqual({
-      brand: 'Gamma', titleFits: true, labels: ['搜索', '项目', 'Artifacts', 'Code', '插件', '定时任务', 'Markdown'],
+      brand: 'Gamma', titleFits: true, labels: ['搜索', '项目', 'Design', 'Code', 'MCP/skills', '定时任务', 'Markdown'],
       states: [
         { label: 'Markdown', tab: 'markdown', current: 'page' },
-        { label: '定时任务', tab: 'automations', current: 'page' }, { label: '插件', tab: 'skills', current: 'page' },
+        { label: '定时任务', tab: 'automations', current: 'page' }, { label: 'MCP/skills', tab: 'skills', current: 'page' },
       ],
       components: ['markdown', 'automations', 'mcp', 'skills'],
       session: 'parent', project: 'project-a', view: 'conversations', hasLegacyPromotion: false,
@@ -341,6 +341,40 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
     expect(result).toEqual({ modeBar: false, newTask: true })
   }, 30_000)
 
+  test('When 展开侧栏 Then 品牌字标使用衬线正文栈，顶栏容下 macOS 红绿灯且导航仍为无衬线', async () => {
+    const result = await renderer.run<{
+      brandFamily: string; brandSize: string; brandText: string
+      navFamily: string; topbarHeight: number; dividerTop: number; trafficLightBottom: number
+      brandBaselineDelta: number
+    }>(`
+      const api = window.leftSidebarRegression, fixture = await api.mount({ platform: 'MacIntel' });
+      const topbar = document.querySelector('.gamma-sidebar-topbar');
+      const brand = topbar.querySelector('.gamma-sidebar-brand');
+      const brandStyle = getComputedStyle(brand);
+      const navStyle = getComputedStyle(fixture.button('搜索'));
+      const collapse = fixture.button('收起侧边栏').getBoundingClientRect();
+      const brandBox = brand.getBoundingClientRect();
+      const topbarBox = topbar.getBoundingClientRect();
+      const dividerTop = topbarBox.top + parseFloat(getComputedStyle(document.querySelector('.gamma-sidebar'), '::after').top);
+      // macOS 红绿灯由主进程固定在 y=8，直径 12px；顶栏分隔线必须落在其下方。
+      const trafficLightBottom = 8 + 12;
+      const result = {
+        brandFamily: brandStyle.fontFamily, brandSize: brandStyle.fontSize, brandText: brand.textContent.trim(),
+        navFamily: navStyle.fontFamily, topbarHeight: topbarBox.height, dividerTop, trafficLightBottom,
+        brandBaselineDelta: Math.abs((brandBox.top + brandBox.height / 2) - (collapse.top + collapse.height / 2)),
+      };
+      fixture.root.unmount(); return result;
+    `)
+    expect(result.brandText).toBe('Gamma')
+    expect(result.brandFamily).toContain('Source Serif 4')
+    expect(result.brandSize).toBe('19px')
+    expect(result.navFamily).toContain('Inter')
+    expect(result.navFamily).not.toContain('Source Serif')
+    expect(result.topbarHeight).toBe(32)
+    expect(result.dividerTop).toBeGreaterThanOrEqual(result.trafficLightBottom)
+    expect(result.brandBaselineDelta).toBeLessThanOrEqual(1)
+  }, 30_000)
+
   test('When 收起侧栏 Then 不保留图标栏，顶部展开后导航与全局操作恢复', async () => {
     const result = await renderer.run<{
       absent: boolean; contentLeft: number; top: boolean; expanded: boolean; tab: string; settings: boolean; search: boolean
@@ -358,7 +392,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       await api.until(() => fixture.button('收起侧边栏'));
       await api.until(() => Math.round(document.querySelector('.gamma-sidebar')?.getBoundingClientRect().width ?? 0) === 256);
       const expanded = !fixture.state().collapsed && Math.round(document.querySelector('.gamma-sidebar').getBoundingClientRect().width) === 256;
-      fixture.button('Artifacts').click(); await api.until(() => fixture.state().view === 'design');
+      fixture.button('Design').click(); await api.until(() => fixture.state().view === 'design');
       const tab = fixture.state().view;
       await api.openMenu(fixture.button('个人资料与设置'));
       await api.chooseMenu('打开设置');
@@ -389,7 +423,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return results;
     `)
     expect(results).toHaveLength(4)
-    for (const result of results) expect(result).toEqual({ absent: true, fits: true, focusable: true, height: 29, fallback: true })
+    for (const result of results) expect(result).toEqual({ absent: true, fits: true, focusable: true, height: 32, fallback: true })
   }, 30_000)
 
   test('When 空列表或超长名称在 200px 浅深色侧栏展示 Then 底栏入口可见且更新提示和长用户名不会挤出容器', async () => {
@@ -407,11 +441,11 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
           .map(node => node.getAttribute('aria-label') || node.dataset.sessionSwitchId || node.className);
         const footer = sidebar.querySelector('.gamma-sidebar-footer');
         const footerBounds = footer.getBoundingClientRect();
-        const controls = !!fixture.button('新建') && ['个人资料与设置', '设备与连接'].every(label => {
+        const controls = !!fixture.button('新建') && ['个人资料与设置', '设置'].every(label => {
           const button = fixture.button(label);
           if (!button || !footer.contains(button)) return false;
           const bounds = button.getBoundingClientRect();
-          return bounds.width >= (label === '设备与连接' ? 28 : 80) && bounds.left >= footerBounds.left && bounds.right <= footerBounds.right;
+          return bounds.width >= (label === '设置' ? 28 : 80) && bounds.left >= footerBounds.left && bounds.right <= footerBounds.right;
         });
         results.push({ dark, empty, width: sidebar.getBoundingClientRect().width, overflow, controls }); fixture.root.unmount();
       }
@@ -600,7 +634,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       fixture.root.unmount();
       return { labels, pinnedCollapsed, restored, childExpanded, childCollapsed, railAligned, markerHollow, railEndsAtPreview, heights, border, pinnedIcon, pinnedPreviewCount, pinnedExpandedCount, pinnedRestoredCount, padding };
     `)
-    expect(result.labels).toEqual(['搜索', '项目', 'Artifacts', 'Code', '插件', '定时任务', 'Markdown'])
+    expect(result.labels).toEqual(['搜索', '项目', 'Design', 'Code', 'MCP/skills', '定时任务', 'Markdown'])
     expect(result.pinnedCollapsed).toBe(true)
     expect(result.restored).toBe(true)
     expect(result.childExpanded).toBe(true)
@@ -679,8 +713,8 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
     expect(result).toEqual({ selectedVisible: true, childVisible: true, count: 8, active: 'preview-10' })
   }, 30_000)
 
-  test('When 打开账户与设备入口 Then 显示本地身份并进入对应设置，不伪造云端套餐', async () => {
-    const result = await renderer.run<{ name: boolean; local: boolean; initial: string; profileTab: string; deviceTab: string; noPlan: boolean }>(`
+  test('When 打开账户与齿轮设置入口 Then 显示本地身份并进入设置，不伪造云端套餐', async () => {
+    const result = await renderer.run<{ name: boolean; local: boolean; initial: string; profileTab: string; settingsTab: string; gearIcon: boolean; noPlan: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ userName: 'Charlie' });
       const account = fixture.button('个人资料与设置');
       const name = account.textContent.includes('Charlie'), local = account.textContent.includes('· 本地');
@@ -691,12 +725,14 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       await api.until(() => fixture.state().settings && fixture.state().settingsTab === 'general');
       const profileTab = fixture.state().settingsTab;
       fixture.closeSettings();
-      fixture.button('设备与连接').click();
-      await api.until(() => fixture.state().settings && fixture.state().settingsTab === 'channels');
-      const deviceTab = fixture.state().settingsTab;
-      fixture.root.unmount(); return { name, local, initial, profileTab, deviceTab, noPlan };
+      const gear = fixture.button('设置');
+      const gearIcon = gear.querySelector('svg.lucide-settings') !== null && gear.querySelector('svg.lucide-monitor-smartphone') === null;
+      gear.click();
+      await api.until(() => fixture.state().settings);
+      const settingsTab = fixture.state().settingsTab;
+      fixture.root.unmount(); return { name, local, initial, profileTab, settingsTab, gearIcon, noPlan };
     `)
-    expect(result).toEqual({ name: true, local: true, initial: 'C', profileTab: 'general', deviceTab: 'channels', noPlan: true })
+    expect(result).toEqual({ name: true, local: true, initial: 'C', profileTab: 'general', settingsTab: 'general', gearIcon: true, noPlan: true })
   }, 30_000)
 
   test('When 从标题菜单创建空白或本地项目 Then 保留两种既有创建路径', async () => {
@@ -742,7 +778,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
         const sidebar = document.querySelector('.gamma-sidebar');
         const nodes = [sidebar, ...sidebar.querySelectorAll('nav, .gamma-sidebar-footer, [data-sidebar-scroll], [data-session-switch-id]')];
         const fits = nodes.every(node => node.scrollWidth <= node.clientWidth + 1);
-        const footer = fixture.button('个人资料与设置').getBoundingClientRect().right < fixture.button('设备与连接').getBoundingClientRect().left;
+        const footer = fixture.button('个人资料与设置').getBoundingClientRect().right < fixture.button('设置').getBoundingClientRect().left;
         const emptyState = !empty || document.body.textContent.includes('暂无会话');
         const target = empty ? fixture.button('新建项目') : fixture.row('parent').querySelector('button[aria-label="更多会话操作"]');
         if (empty) target.focus();

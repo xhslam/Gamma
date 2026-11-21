@@ -4,6 +4,7 @@ import { Check, Palette, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { chatWallpaperAtom, saveChatWallpaperAtom, wallpaperSavingAtom } from '@/atoms/theme'
 import { inputToolbarButtonClass } from '@/components/ai-elements/input-toolbar-styles'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { THEME_STYLES, type ThemeStyle } from '../../../types'
 import { ASCII_THEME_REGISTRY } from '@/lib/ascii-theme-registry'
@@ -170,14 +171,16 @@ export function ThemeFloatingDock({
 export function ThemeDockTrigger(): React.ReactElement {
   return (
     <PopoverTrigger asChild>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         aria-label="选择场景主题"
         title="选择场景主题"
         className={inputToolbarButtonClass}
       >
         <Palette aria-hidden="true" className="size-4" />
-      </button>
+      </Button>
     </PopoverTrigger>
   )
 }

@@ -1769,6 +1769,15 @@ body {
   margin-inline: calc(-1 * var(--sidebar-content-inset));
   margin-bottom: 4px;
 }
+/* 品牌字标单独使用正文衬线栈并放大一档；导航与控件仍保持 UI 无衬线。 */
+.gamma-sidebar .gamma-sidebar-brand {
+  font-family: var(--font-body);
+  font-size: 19px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: hsl(var(--foreground));
+}
 .gamma-sidebar :is(.gamma-sidebar-new-button, .gamma-sidebar-nav-item, .gamma-sidebar-project-row, .session-quick-switch-row) {
   height: var(--sidebar-row-height);
   min-height: var(--sidebar-row-height);
