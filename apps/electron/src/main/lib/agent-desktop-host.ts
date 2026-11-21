@@ -1,6 +1,6 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, chmodSync, rmSync, existsSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, chmodSync, rmSync, existsSync, realpathSync, lstatSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -83,14 +83,24 @@ function desktopEnvironment(root: string, sessionId: string, platform: NodeJS.Pl
   }
 }
 
-/** Windows overlay 是 detached 进程；disable 的原生 ACK 会等待 renderer 窗口退出，不能靠 taskkill CLI 父进程代替。 */
+/** Windows overlay 是 detached 进程；有会话时必须等原生停止 ACK，不能靠 taskkill CLI 父进程代替。 */
 async function stopWindowsCursorOverlay(
   command: AgentDesktopCommand,
   identity: AgentDesktopRunIdentity,
   track: (child: ChildProcess) => void,
 ): Promise<void> {
+  // Gamma 分配的 ID 也可仅用作引用命名空间。没有 manifest 时，上游使用默认关闭的
+  // overlay，且 Gamma 不允许启用 overlay 的参数；无需向并不存在的会话请求停止。
+  try {
+    lstatSync(join(identity.root, 'state', 'sessions', identity.sessionId, 'session.json'))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command.executable, [...(command.argsPrefix ?? []), 'cursor-overlay', 'disable'], {
+    // session end 也请求原生 overlay teardown，且已结束的会话仍可重试；disable 会拒绝它。
+    const child = spawn(command.executable, [...(command.argsPrefix ?? []), 'session', 'end', identity.sessionId], {
       shell: false,
       detached: false,
       cwd: identity.root,
@@ -120,7 +130,9 @@ async function stopWindowsCursorOverlay(
     child.once('close', code => {
       try {
         const envelope = parseAgentDesktopEnvelope(stdout.trim())
-        if (code !== 0 || !envelope.ok) throw new Error('Windows cursor overlay 未确认停止')
+        if (code !== 0 || !envelope.ok || envelope.command !== 'session') {
+          throw new Error('Windows cursor overlay 未确认停止')
+        }
         finish()
       } catch (error) {
         finish(error instanceof Error ? error : new Error('Windows cursor overlay 停止响应无效'))

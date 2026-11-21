@@ -8,7 +8,7 @@ import { AgentDesktopHost } from './agent-desktop-host'
 
 const binaryPath = resolve(
   import.meta.dir,
-  '../../../resources/agent-desktop/agent-desktop',
+  `../../../resources/agent-desktop/agent-desktop${process.platform === 'win32' ? '.exe' : ''}`,
 )
 
 describe('AgentDesktopHost', () => {
@@ -364,6 +364,50 @@ it('Given 独立代理输出成功 envelope 但未成功退出 When 读取结果
 })
 
 describe('Given AgentDesktopHost 在 Windows 平台的特性', () => {
+  it.skipIf(process.platform !== 'win32' || !existsSync(binaryPath))('When 真实 CLI 仅使用引用命名空间且未创建会话 Then 全局停止成功', async () => {
+    const host = new AgentDesktopHost(() => ({ executable: binaryPath }))
+    expect((await host.execute('win-no-manifest', ['status'])).ok).toBe(true)
+    await host.terminate()
+    expect(host.isStopped('win-no-manifest')).toBe(true)
+  })
+
+  it('When 会话存在但 CLI 未确认清理 Then 保留会话并允许按相同命名空间重试', async () => {
+    let root = ''
+    const fixture = `
+      const fs = require('node:fs'), path = require('node:path');
+      const id = process.env.AGENT_DESKTOP_SESSION;
+      const manifest = path.join(process.env.AGENT_DESKTOP_HOME, 'sessions', id, 'session.json');
+      const [command, action, target] = process.argv.slice(1);
+      let ok = false;
+      if (command === 'status') {
+        fs.mkdirSync(path.dirname(manifest), { recursive: true });
+        fs.writeFileSync(manifest, '{}');
+        ok = true;
+      } else if (command === 'session' && action === 'end' && target === id && fs.existsSync(manifest)) {
+        const attempt = path.join(process.cwd(), 'stop-attempt');
+        ok = fs.existsSync(attempt);
+        fs.writeFileSync(attempt, 'attempted');
+      }
+      console.log(JSON.stringify({ version: '2.5', command, ok, error: ok ? undefined : {
+        code: 'INTERNAL_ERROR', message: '未确认停止', disposition: { delivery: 'unknown', retry: 'unsafe' }
+      } }));
+      process.exitCode = ok ? 0 : 1;
+    `
+    const host = new AgentDesktopHost(() => ({
+      executable: process.execPath,
+      argsPrefix: ['-e', fixture, '--'],
+      stop: async identity => { root = identity.root },
+    }), 'win32')
+    expect((await host.execute('win-existing-manifest', ['status'])).ok).toBe(true)
+    try {
+      await expect(host.terminate()).rejects.toThrow('Windows cursor overlay 未确认停止')
+      expect(existsSync(root)).toBe(true)
+      await host.terminate()
+      expect(existsSync(root)).toBe(false)
+    } finally {
+      if (root) rmSync(root, { recursive: true, force: true })
+    }
+  })
   it('When detached cursor overlay 停止失败 Then 不删除状态、不确认停止，并允许重试', async () => {
     let fail = true
     let root = ''
