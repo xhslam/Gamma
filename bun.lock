@@ -37,7 +37,7 @@
     },
     "apps/electron": {
       "name": "@gamma/electron",
-      "version": "0.19.285",
+      "version": "0.19.293",
       "dependencies": {
         "@codemirror/commands": "6.11.0",
         "@codemirror/lang-markdown": "6.5.2",
@@ -209,7 +209,7 @@
     },
     "packages/shared": {
       "name": "@gamma/shared",
-      "version": "0.1.125",
+      "version": "0.1.126",
       "devDependencies": {
         "typescript": "^5.0.0",
       },

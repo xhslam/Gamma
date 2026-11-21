@@ -794,6 +794,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
 
   const { entries: outboxEntries, error: outboxError, refresh: refreshOutbox } = useAgentSendOutbox(sessionId)
   const [outboxRetry, setOutboxRetry] = React.useState<{ sessionId: string; id: string; requestId: symbol } | null>(null)
+  const autoResumedOutboxIdsRef = React.useRef(new Set<string>())
   const retryingOutboxId = outboxRetry?.sessionId === sessionId ? outboxRetry.id : null
   const recoveryState = getAgentSendRecoveryState(store)
   const sendGuardRef = React.useRef(recoveryState.guard)
@@ -2736,6 +2737,19 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       await refreshOutbox()
     }
   }, [sessionId, isStopping, isLegacyTranscript, refreshOutbox, readOutboxDraftContext, recoveryState, store, setInputContent, setInputHtmlContent, setPendingFiles, setQuotedSelectionMap, setQueuedMessages])
+
+  // 更新或退出时 pending 的提交结果未知；重启后通过主进程稳定 ID 门禁自动续交。
+  // failed 仍只允许手动重试。逐条串行复用正常重试的权限校验、队列与草稿保护。
+  React.useEffect(() => {
+    if (isStopping || isLegacyTranscript || sendGuardRef.current.isPending(sessionId)) return
+    const pending = outboxEntries.filter((entry) => entry.sessionId === sessionId && entry.status === 'pending'
+      && !autoResumedOutboxIdsRef.current.has(`${entry.sessionId}:${entry.id}`))
+    if (pending.length === 0) return
+    for (const entry of pending) autoResumedOutboxIdsRef.current.add(`${entry.sessionId}:${entry.id}`)
+    void (async () => {
+      for (const entry of pending) await handleRetryOutbox(entry)
+    })()
+  }, [handleRetryOutbox, isLegacyTranscript, isStopping, outboxEntries, sessionId])
 
   /** 停止生成。异常流未发出终态时，允许再次下发幂等的 abort 请求。 */
   const handleStop = React.useCallback((): void => {

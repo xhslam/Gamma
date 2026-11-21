@@ -390,6 +390,8 @@ export interface ShellEnvResult {
 export const IPC_CHANNELS = {
   /** VMark 模块化 Markdown 工作区（主进程 grant 授权）。 */
   MARKDOWN_WORKSPACE: 'markdown-workspace:request',
+  /** 将编辑器导出的图片原子写回已授权的本地文件。 */
+  WRITE_IMAGE_FILE: 'file:write-image',
   /** 获取运行时状态 */
   GET_RUNTIME_STATUS: 'runtime:get-status',
   /** 重新初始化运行时（用户安装完 Git/Node 后触发） */

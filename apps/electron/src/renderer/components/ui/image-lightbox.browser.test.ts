@@ -9,10 +9,11 @@ beforeAll(async () => {
     import { ImageLightbox } from '@/components/ui/image-lightbox';
     import '@/styles/globals.css';
     const src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="blue"/></svg>');
+    const completeEdit=async(url,prompt)=>{await new Promise(resolve=>setTimeout(resolve,50));if(window.failLightboxSave)throw new Error('模拟写回失败');window.edited=url;window.editedPrompt=prompt;};
     function App(){const [open,setOpen]=React.useState(false),[index,setIndex]=React.useState(0);
       return React.createElement(React.Fragment,null,
         React.createElement('button',{id:'opener',onClick:()=>setOpen(true)},'打开'),
-        React.createElement(ImageLightbox,{open,onOpenChange:setOpen,index,onIndexChange:setIndex,images:[{src,alt:'第一张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:(url,prompt)=>{window.edited=url;window.editedPrompt=prompt}},{src,alt:'第二张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:(url,prompt)=>{window.edited=url;window.editedPrompt=prompt}}]}));}
+        React.createElement(ImageLightbox,{open,onOpenChange:setOpen,index,onIndexChange:setIndex,outputMimeType:window.lightboxMime,images:[{src,alt:'第一张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:completeEdit},{src,alt:'第二张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:completeEdit}]}));}
     const root=createRoot(document.getElementById('root'));root.render(React.createElement(App));window.unmountLightbox=()=>root.unmount();
   `)
 }, 60_000)
@@ -111,6 +112,19 @@ describe('Given Chromium 中真实 Radix 图片预览', () => {
     `)
     expect(result).toEqual({ drawn: true, textAdded: true, shapeAdded: true, moved: true, moveCancelled: true, eraserControl: true, erased: true, undoRestored: true })
   }, 40_000)
+  test('When 弹窗写回失败后重试 Then 保留编辑状态并按原图 MIME 导出', async () => {
+    const result = await renderer.run(`window.lightboxMime='image/jpeg';window.failLightboxSave=true;${setup}
+      click('标注');await wait();const beforeFailure=window.edited;click('保存');await wait();
+      const failureVisible=document.body.textContent.includes('保存失败：模拟写回失败');
+      const failureKeptEditor=!!document.querySelector('[role="dialog"] canvas');
+      const failurePreservedResult=window.edited===beforeFailure;
+      window.failLightboxSave=false;click('保存');await wait();
+      const retryExportedJpeg=window.edited?.startsWith('data:image/jpeg')&&!document.querySelector('[role="dialog"]');
+      window.lightboxMime=undefined;
+      return {failureVisible,failureKeptEditor,failurePreservedResult,retryExportedJpeg};
+    `)
+    expect(result).toEqual({ failureVisible: true, failureKeptEditor: true, failurePreservedResult: true, retryExportedJpeg: true })
+  }, 30_000)
   test('When 保存、快速开关和卸载 Then 回调保留、焦点约束及全局状态不残留', async () => {
     const result = await renderer.run(`${setup}
       click('保存图片');const saved=window.saved===1&&!!stage();

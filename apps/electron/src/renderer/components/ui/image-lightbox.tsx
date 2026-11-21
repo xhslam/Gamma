@@ -29,7 +29,7 @@ export interface LightboxImage {
   /** 下载回调（可选） */
   onSave?: () => void
   /** 编辑完成回调 — 提供则显示高级编辑与评论操作 */
-  onEditComplete?: (editedDataUrl: string, prompt?: string) => void
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void | Promise<void>
 }
 
 interface ImageLightboxProps {
@@ -44,7 +44,7 @@ interface ImageLightboxProps {
   /** 下载回调（可选，单图模式） */
   onSave?: () => void
   /** 编辑完成回调 — 提供则显示高级编辑与评论操作（单图模式） */
-  onEditComplete?: (editedDataUrl: string, prompt?: string) => void
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void | Promise<void>
   /** 多图列表（可选）— 提供则启用左右翻页 */
   images?: LightboxImage[]
   /** 当前展示的图片索引（多图模式，受控） */
@@ -55,6 +55,8 @@ interface ImageLightboxProps {
   initialMode?: 'preview' | 'editing' | 'comments'
   /** 编辑模式打开时直接选择的工具 */
   initialTool?: ImageEditorTool
+  /** 文件预览覆盖保存时保持扩展名与实际编码一致；正文附件仍默认 PNG。 */
+  outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
 }
 
 export function ImageLightbox({
@@ -69,6 +71,7 @@ export function ImageLightbox({
   onIndexChange,
   initialMode = 'preview',
   initialTool = 'select',
+  outputMimeType = 'image/png',
 }: ImageLightboxProps): React.ReactElement | null {
   const [mode, setMode] = React.useState<'preview' | 'editing' | 'comments'>(initialMode)
   const [editorTool, setEditorTool] = React.useState<ImageEditorTool>('select')
@@ -109,8 +112,8 @@ export function ImageLightbox({
       : null
   if (!current) return null
 
-  const handleEditSave = (editedDataUrl: string, prompt?: string): void => {
-    current.onEditComplete?.(editedDataUrl, prompt)
+  const handleEditSave = async (editedDataUrl: string, prompt?: string): Promise<void> => {
+    await current.onEditComplete?.(editedDataUrl, prompt)
     onOpenChange(false)
     setMode('preview')
   }
@@ -212,7 +215,7 @@ export function ImageLightbox({
                 {current.onSave && (<><div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden /><button data-icon-button="true" data-icon-button-tone="inverse" type="button" onClick={current.onSave} className={cn('rounded-full p-1.5 text-inverse-foreground/80 transition-colors duration-150', 'hover:bg-card/15 hover:text-inverse-foreground focus-visible:bg-card/15 focus-visible:text-inverse-foreground', iconButtonNoRingFocusClass)} title="保存图片"><Download className="size-5" /></button></>)}
             </ImageLightboxPreview>
           ) : mode === 'editing' ? (
-            <ImageEditor key={`${safeIndex}:${current.src}:${editorTool}`} src={current.src} initialTool={editorTool} onSave={handleEditSave} onCancel={handleEditCancel} />
+            <ImageEditor key={`${safeIndex}:${current.src}:${editorTool}`} src={current.src} initialTool={editorTool} outputMimeType={outputMimeType} onSave={handleEditSave} onCancel={handleEditCancel} />
           ) : (
             <ImageCommentEditor key={`${safeIndex}:${current.src}`} src={current.src} onSave={handleEditSave} onCancel={handleEditCancel} />
           ))}

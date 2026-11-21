@@ -41,7 +41,7 @@ export function writeJsonFileAtomic(filePath: string, data: object, skipBackup =
  * directory could pre-create it as a symlink. `wx` creates a private sibling
  * exclusively, and rename replaces the target itself rather than following it.
  */
-export function writeTextFileAtomic(filePath: string, content: string, preservedMode?: number): void {
+function writeFileAtomic(filePath: string, content: string | Uint8Array, preservedMode?: number): void {
   if (preservedMode !== undefined && (!Number.isInteger(preservedMode) || preservedMode < 0 || preservedMode > 0o777)) throw new Error('无效文件权限')
   const parent = dirname(filePath)
   const stem = basename(filePath)
@@ -60,7 +60,7 @@ export function writeTextFileAtomic(filePath: string, content: string, preserved
       }
     }
     if (descriptor === null || tmpPath === null) throw new Error(`无法为原子写入创建临时文件: ${filePath}`)
-    writeFileSync(descriptor, content, 'utf-8')
+    writeFileSync(descriptor, content)
     if (preservedMode !== undefined) fchmodSync(descriptor, preservedMode)
     fsyncSync(descriptor)
     closeSync(descriptor)
@@ -73,6 +73,15 @@ export function writeTextFileAtomic(filePath: string, content: string, preserved
       try { unlinkSync(tmpPath) } catch { /* best-effort cleanup */ }
     }
   }
+}
+
+export function writeTextFileAtomic(filePath: string, content: string, preservedMode?: number): void {
+  writeFileAtomic(filePath, content, preservedMode)
+}
+
+/** 图片等二进制文件同样通过私有临时文件原子替换，保留原文件权限。 */
+export function writeBinaryFileAtomic(filePath: string, content: Uint8Array, preservedMode?: number): void {
+  writeFileAtomic(filePath, content, preservedMode)
 }
 
 /**

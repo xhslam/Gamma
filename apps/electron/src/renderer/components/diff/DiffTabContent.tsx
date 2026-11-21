@@ -87,6 +87,12 @@ function getPreviewPathLabel(filePath: string): string {
   return filePath.split(/[\\/]/).filter(Boolean).at(-1) || filePath
 }
 
+function getImageOutputMimeType(filePath: string): 'image/png' | 'image/jpeg' | 'image/webp' {
+  if (/\.jpe?g$/i.test(filePath)) return 'image/jpeg'
+  if (/\.webp$/i.test(filePath)) return 'image/webp'
+  return 'image/png'
+}
+
 function getPreviewTargetPath(filePath: string, dirPath: string): string {
   return isAbsoluteFilePath(filePath) ? filePath : `${dirPath.replace(/[\\/]+$/, '')}/${filePath}`
 }
@@ -339,24 +345,57 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   } | null>(null)
   const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
   const appendImageEditPrompt = useSetAtom(appendImageEditPromptAtom)
+  const setImagePreviewContentRefreshVersionMap = useSetAtom(previewContentRefreshVersionAtom)
   const imageContainerRef = React.useRef<HTMLDivElement>(null)
   const imageDragging = React.useRef(false)
   const imageDragStart = React.useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
+
+  const fileAccess = React.useMemo(() => ({
+    sessionId,
+    // 只有文件面板等可信 UI 明确标记的用户主动选择可放宽范围；模型回复中的 chip 默认受会话授权约束。
+    unrestricted: unrestricted === true,
+    ...(workspaceSkillSlug ? { workspaceSkillSlug } : {}),
+    ...(legacySkillFilePath ? { legacySkillFilePath } : {}),
+    candidateBasePaths: getPreviewCandidateBasePaths(basePaths, isAbsoluteFilePath(filePath) ? undefined : dirPath),
+  }), [sessionId, basePaths, dirPath, filePath, unrestricted, workspaceSkillSlug, legacySkillFilePath])
 
   const closeInlineImageEditor = React.useCallback((): void => {
     setImageEditorRequest(null)
   }, [])
 
-  const handleImageEditComplete = React.useCallback((editedDataUrl: string, prompt?: string): void => {
+  const handleImageEditComplete = React.useCallback(async (editedDataUrl: string, prompt?: string): Promise<void> => {
     const base64 = editedDataUrl.split(',')[1]
-    if (!base64 || !sessionId) return
+    if (!base64) throw new Error('图片编辑器没有生成有效内容')
+    const sourceName = getPreviewPathLabel(filePath)
+
+    if (imageEditorRequest?.mode !== 'comments') {
+      const extension = sourceName.split('.').pop()?.toLowerCase()
+      const expectedMime = extension === 'png' ? 'image/png'
+        : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg'
+          : extension === 'webp' ? 'image/webp' : null
+      if (!expectedMime || !editedDataUrl.startsWith(`data:${expectedMime};base64,`)) {
+        throw new Error('仅支持将编辑结果写回 PNG、JPEG 或 WebP 原图')
+      }
+      await window.electronAPI.writeImageFile(filePath, editedDataUrl, fileAccess)
+      clearPreviewContentCacheForFile(sessionId, filePath)
+      setImageDataUrl(editedDataUrl)
+      const refreshKey = getPreviewContentRefreshKey(sessionId, { filePath, previewOnly, gitRoot, baseRef })
+      setImagePreviewContentRefreshVersionMap((previous) => {
+        const next = new Map(previous)
+        next.set(refreshKey, (previous.get(refreshKey) ?? 0) + 1)
+        return next
+      })
+      if (imageEditorPresentation === 'inline') setImageEditorRequest(null)
+      return
+    }
+
+    if (!sessionId) throw new Error('当前没有可接收位置评论的会话')
     const now = Date.now()
     const id = `pending-${now}-${Math.random().toString(36).slice(2)}`
-    const sourceName = getPreviewPathLabel(filePath)
     const sourceStem = sourceName.replace(/\.[^.]+$/, '') || 'image'
     const pending: AgentPendingFile = {
       id,
-      filename: `${sourceStem}-edited-${now}.png`,
+      filename: `${sourceStem}-comments-${now}.png`,
       mediaType: 'image/png',
       size: Math.round(base64.length * 0.75),
       previewUrl: editedDataUrl,
@@ -370,7 +409,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
     })
     if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt })
     if (imageEditorPresentation === 'inline') setImageEditorRequest(null)
-  }, [appendImageEditPrompt, filePath, imageEditorPresentation, sessionId, setSessionPendingFiles])
+  }, [appendImageEditPrompt, baseRef, fileAccess, filePath, gitRoot, imageEditorPresentation, imageEditorRequest?.mode, previewOnly, sessionId, setImagePreviewContentRefreshVersionMap, setSessionPendingFiles])
 
   React.useEffect(() => {
     setImageEditorRequest(null)
@@ -607,17 +646,6 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       dismissTruncationToast()
     }
   }, [previewOnly, clearPreviewSelection, dismissTruncationToast, scheduleSelectionCapture])
-
-  const fileAccess = React.useMemo(() => ({
-    sessionId,
-    // 只有文件面板等可信 UI 明确标记的用户主动选择可放宽范围；模型回复中的 chip 默认受会话授权约束。
-    unrestricted: unrestricted === true,
-    ...(workspaceSkillSlug ? { workspaceSkillSlug } : {}),
-    ...(legacySkillFilePath ? { legacySkillFilePath } : {}),
-    // 历史工具调用的预览仅有相对 filePath；以当前 dirPath（通常是会话 CWD）补全解析上下文。
-    // 绝对路径不追加该回退，避免失效路径按同名文件误命中会话目录。
-    candidateBasePaths: getPreviewCandidateBasePaths(basePaths, isAbsoluteFilePath(filePath) ? undefined : dirPath),
-  }), [sessionId, basePaths, dirPath, filePath, unrestricted, workspaceSkillSlug, legacySkillFilePath])
 
   const resolveProjectMarkdownImageSrc = React.useMemo(() => (
     createLiveMarkdownImageResolver(filePath, async (candidate) => (
@@ -1903,6 +1931,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                         src={imageDataUrl}
                         layout="inline"
                         initialTool={imageEditorRequest.tool}
+                        outputMimeType={getImageOutputMimeType(filePath)}
                         onSave={handleImageEditComplete}
                         onCancel={closeInlineImageEditor}
                       />
@@ -1961,6 +1990,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                   alt={getPreviewPathLabel(filePath)}
                   initialMode={imageEditorRequest?.mode ?? 'editing'}
                   initialTool={imageEditorRequest?.tool ?? 'select'}
+                  outputMimeType={getImageOutputMimeType(filePath)}
                   onEditComplete={handleImageEditComplete}
                 />
               </div>

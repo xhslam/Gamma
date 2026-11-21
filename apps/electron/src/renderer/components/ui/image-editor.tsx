@@ -13,6 +13,7 @@ import {
   Crop,
   Eraser,
   ImageMinus,
+  Link2,
   MousePointer2,
   Pencil,
   Redo2,
@@ -51,8 +52,10 @@ interface ImageEditorProps {
   initialTool?: ImageEditorTool
   /** 弹窗按视口布局；侧边栏按可用容器尺寸布局。 */
   layout?: 'lightbox' | 'inline'
-  onSave: (editedDataUrl: string) => void
+  onSave: (editedDataUrl: string) => void | Promise<void>
   onCancel: () => void
+  /** 文件预览覆盖保存时保持扩展名与实际编码一致。 */
+  outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
 }
 
 interface EditorSnapshot {
@@ -81,6 +84,8 @@ interface EditorButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
 }
 
 const MAX_DIM = 4096
+const MAX_RESIZE_DIM = 8192
+const MAX_RESIZE_PIXELS = 40_000_000
 const HISTORY_LIMIT = 30
 const DRAW_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff', '#111827'] as const
 const BRUSH_SIZES = [3, 6, 12]
@@ -111,7 +116,7 @@ function normalizedRect(rect: ImageRect): ImageRect {
   return { x: Math.min(rect.x, rect.x + rect.w), y: Math.min(rect.y, rect.y + rect.h), w: Math.abs(rect.w), h: Math.abs(rect.h) }
 }
 
-export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', onSave, onCancel }: ImageEditorProps): React.ReactElement {
+export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', onSave, onCancel, outputMimeType = 'image/png' }: ImageEditorProps): React.ReactElement {
   const [tool, setTool] = React.useState<ImageEditorTool>(initialTool)
   const [drawColor, setDrawColor] = React.useState<string>(DRAW_COLORS[0])
   const [brushSize, setBrushSize] = React.useState(6)
@@ -123,12 +128,16 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [cropRect, setCropRect] = React.useState<ImageRect | null>(null)
   const [resizeRatio, setResizeRatio] = React.useState<ImageAspectRatio | null>(null)
+  const [resizeWidth, setResizeWidth] = React.useState('')
+  const [resizeHeight, setResizeHeight] = React.useState('')
+  const [lockAspectRatio, setLockAspectRatio] = React.useState(true)
   const [backgroundTolerance, setBackgroundTolerance] = React.useState(40)
   const [textDraft, setTextDraft] = React.useState<TextDraft | null>(null)
   const [status, setStatus] = React.useState('')
   const [imageLoaded, setImageLoaded] = React.useState(false)
   const [imageError, setImageError] = React.useState(false)
   const [restoring, setRestoring] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
   const [drawVersion, setDrawVersion] = React.useState(0)
   const [historyVersion, setHistoryVersion] = React.useState(0)
   const [inlineCanvasSize, setInlineCanvasSize] = React.useState({ w: 0, h: 0 })
@@ -245,6 +254,8 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
       setTextDraft(null)
       setTool(initialTool)
       setResizeRatio(null)
+      setResizeWidth(String(width))
+      setResizeHeight(String(height))
       setHistoryVersion((version) => version + 1)
       setImageLoaded(true)
       refreshCanvas()
@@ -464,7 +475,16 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     updateDraftAnnotation(null)
     setTextDraft(null)
     setStatus('')
-    if (next !== 'resize') setResizeRatio(null)
+    if (next === 'resize') {
+      const base = baseCanvasRef.current
+      if (base) {
+        const rotated = rotationRef.current % 180 !== 0
+        setResizeWidth(String(rotated ? base.height : base.width))
+        setResizeHeight(String(rotated ? base.width : base.height))
+      }
+    } else {
+      setResizeRatio(null)
+    }
     if (next !== 'select') setSelectedId(null)
   }, [updateCropRect, updateDraftAnnotation])
 
@@ -722,6 +742,73 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     return true
   }, [beginChange, cancelChange, commitChange, refreshCanvas, updateAnnotations, updateCropRect])
 
+  const applyResize = React.useCallback((): boolean => {
+    const base = baseCanvasRef.current
+    const width = Number(resizeWidth)
+    const height = Number(resizeHeight)
+    if (!base || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > MAX_RESIZE_DIM || height > MAX_RESIZE_DIM || width * height > MAX_RESIZE_PIXELS) {
+      setStatus(`尺寸须为 1–${MAX_RESIZE_DIM} 的整数，且总像素不超过 ${MAX_RESIZE_PIXELS / 1_000_000} 百万`)
+      return false
+    }
+    if (!beginChange()) return false
+    const currentRotation = rotationRef.current
+    const rotated = currentRotation % 180 !== 0
+    const source = document.createElement('canvas')
+    source.width = rotated ? base.height : base.width
+    source.height = rotated ? base.width : base.height
+    const sourceCtx = source.getContext('2d')
+    const nextBase = document.createElement('canvas')
+    nextBase.width = width
+    nextBase.height = height
+    const ctx = nextBase.getContext('2d')
+    if (!sourceCtx || !ctx) {
+      cancelChange()
+      return false
+    }
+    if (currentRotation !== 0) {
+      sourceCtx.translate(source.width / 2, source.height / 2)
+      sourceCtx.rotate(currentRotation * Math.PI / 180)
+      sourceCtx.translate(-base.width / 2, -base.height / 2)
+    }
+    sourceCtx.drawImage(base, 0, 0)
+    for (const annotation of annotationsRef.current) renderImageAnnotation(sourceCtx, annotation)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(source, 0, 0, width, height)
+    baseCanvasRef.current = nextBase
+    updateAnnotations([])
+    updateRotation(0)
+    updateCropRect(null)
+    setSelectedId(null)
+    setResizeRatio(null)
+    setResizeWidth(String(width))
+    setResizeHeight(String(height))
+    setStatus(`已调整为 ${width} × ${height}`)
+    commitChange()
+    refreshCanvas()
+    return true
+  }, [resizeWidth, resizeHeight, beginChange, cancelChange, updateAnnotations, updateRotation, updateCropRect, commitChange, refreshCanvas])
+
+  const updateResizeWidth = React.useCallback((value: string): void => {
+    setResizeWidth(value)
+    const base = baseCanvasRef.current
+    const width = Number(value)
+    if (!lockAspectRatio || !base || !(width > 0)) return
+    const currentWidth = rotationRef.current % 180 !== 0 ? base.height : base.width
+    const currentHeight = rotationRef.current % 180 !== 0 ? base.width : base.height
+    setResizeHeight(String(Math.max(1, Math.round(width * currentHeight / currentWidth))))
+  }, [lockAspectRatio])
+
+  const updateResizeHeight = React.useCallback((value: string): void => {
+    setResizeHeight(value)
+    const base = baseCanvasRef.current
+    const height = Number(value)
+    if (!lockAspectRatio || !base || !(height > 0)) return
+    const currentWidth = rotationRef.current % 180 !== 0 ? base.height : base.width
+    const currentHeight = rotationRef.current % 180 !== 0 ? base.width : base.height
+    setResizeWidth(String(Math.max(1, Math.round(height * currentWidth / currentHeight))))
+  }, [lockAspectRatio])
+
   const selectAspectRatio = React.useCallback((id: ImageAspectRatio): void => {
     const base = baseCanvasRef.current
     const option = IMAGE_ASPECT_RATIOS.find((item) => item.id === id)
@@ -770,7 +857,8 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     refreshCanvas()
   }, [beginChange, cancelChange, updateAnnotations, updateRotation, updateCropRect, commitChange, refreshCanvas])
 
-  const handleExport = React.useCallback((): void => {
+  const handleExport = React.useCallback(async (): Promise<void> => {
+    if (saving) return
     if ((tool === 'crop' || tool === 'resize') && cropRectRef.current) applyCrop()
     const base = baseCanvasRef.current
     if (!base) return
@@ -783,6 +871,10 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     final.height = height
     const ctx = final.getContext('2d')
     if (!ctx) return
+    if (outputMimeType === 'image/jpeg') {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, width, height)
+    }
     if (currentRotation !== 0) {
       ctx.translate(width / 2, height / 2)
       ctx.rotate(currentRotation * Math.PI / 180)
@@ -790,8 +882,16 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     }
     ctx.drawImage(base, 0, 0)
     for (const annotation of annotationsRef.current) renderImageAnnotation(ctx, annotation)
-    onSave(final.toDataURL('image/png'))
-  }, [tool, applyCrop, onSave])
+    setSaving(true)
+    setStatus('')
+    try {
+      await onSave(final.toDataURL(outputMimeType, 0.92))
+    } catch (error) {
+      setStatus(`保存失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setSaving(false)
+    }
+  }, [tool, applyCrop, onSave, outputMimeType, saving])
 
   React.useEffect(() => {
     const handler = (event: KeyboardEvent): void => {
@@ -895,20 +995,36 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
       )}
 
       {tool === 'resize' && (
-        <div className={cn('flex flex-wrap items-center justify-center gap-1 rounded-2xl bg-overlay/50 p-1.5 shadow-lg backdrop-blur-md', layout === 'lightbox' ? 'max-w-[94vw]' : 'max-w-full')}>
-          {IMAGE_ASPECT_RATIOS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => selectAspectRatio(option.id)}
-              className={cn(
-                'flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs text-inverse-foreground/70 hover:bg-card/15 hover:text-inverse-foreground',
-                resizeRatio === option.id && 'bg-card/20 text-inverse-foreground',
-              )}
-            >
-              <span>{option.label}</span><span className="tabular-nums text-inverse-foreground/45">{option.id}</span>
+        <div className={cn('flex flex-col items-center gap-2 rounded-2xl bg-overlay/50 p-2 shadow-lg backdrop-blur-md', layout === 'lightbox' ? 'max-w-[94vw]' : 'max-w-full')}>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-inverse-foreground/70">
+              <span>宽</span>
+              <input aria-label="图片宽度（像素）" type="number" min="1" max={MAX_RESIZE_DIM} step="1" value={resizeWidth} onChange={(event) => updateResizeWidth(event.target.value)} className="w-24 rounded-lg border border-card/15 bg-card/10 px-2 py-1.5 text-inverse-foreground outline-none focus:border-ring/50" />
+            </label>
+            <button type="button" aria-label={lockAspectRatio ? '解除比例锁定' : '锁定宽高比例'} aria-pressed={lockAspectRatio} title={lockAspectRatio ? '解除比例锁定' : '锁定宽高比例'} onClick={() => setLockAspectRatio((current) => !current)} className={cn('rounded-full p-1.5 text-inverse-foreground/60 hover:bg-card/15', lockAspectRatio && 'bg-card/15 text-inverse-foreground')}>
+              <Link2 className="size-4" />
             </button>
-          ))}
+            <label className="flex items-center gap-1.5 text-xs text-inverse-foreground/70">
+              <span>高</span>
+              <input aria-label="图片高度（像素）" type="number" min="1" max={MAX_RESIZE_DIM} step="1" value={resizeHeight} onChange={(event) => updateResizeHeight(event.target.value)} className="w-24 rounded-lg border border-card/15 bg-card/10 px-2 py-1.5 text-inverse-foreground outline-none focus:border-ring/50" />
+            </label>
+            <button type="button" onClick={applyResize} className="rounded-xl bg-card/15 px-3 py-1.5 text-xs font-medium text-inverse-foreground hover:bg-card/25">应用尺寸</button>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            {IMAGE_ASPECT_RATIOS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => selectAspectRatio(option.id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs text-inverse-foreground/70 hover:bg-card/15 hover:text-inverse-foreground',
+                  resizeRatio === option.id && 'bg-card/20 text-inverse-foreground',
+                )}
+              >
+                <span>{option.label}</span><span className="tabular-nums text-inverse-foreground/45">{option.id}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -989,14 +1105,14 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
         <EditorButton label="重做" disabled={!canRedo || restoring} onClick={redo}><Redo2 className="size-5" /></EditorButton>
         <EditorButton label="重置图片" onClick={handleReset}><RotateCw className="size-5 -scale-x-100" /></EditorButton>
         {selectedId && <EditorButton label="删除所选标注" onClick={deleteSelected}><X className="size-5" /></EditorButton>}
-        <EditorButton label="取消编辑" onClick={onCancel}><X className="size-5" /></EditorButton>
+        <EditorButton label="取消编辑" disabled={saving} onClick={onCancel}><X className="size-5" /></EditorButton>
         <button
           type="button"
           onClick={handleExport}
-          disabled={!imageLoaded || restoring}
+          disabled={!imageLoaded || restoring || saving}
           className="rounded-full bg-card/15 px-4 py-2 text-sm font-medium text-inverse-foreground transition-colors hover:bg-card/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          保存
+          {saving ? '保存中…' : '保存'}
         </button>
       </div>
       <span className="sr-only">选择标注后可使用方向键微调，Delete 删除；Command 或 Control 加 Z 撤销。</span>

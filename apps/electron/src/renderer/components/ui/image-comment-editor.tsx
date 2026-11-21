@@ -10,7 +10,7 @@ import { renderImageCommentMarkers } from '@/lib/image-editor-canvas'
 interface ImageCommentEditorProps {
   src: string
   layout?: 'lightbox' | 'inline'
-  onSave: (editedDataUrl: string, prompt: string) => void
+  onSave: (editedDataUrl: string, prompt: string) => void | Promise<void>
   onCancel: () => void
 }
 
@@ -22,6 +22,7 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
   const [loaded, setLoaded] = React.useState(false)
   const [loadError, setLoadError] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
+  const [saveError, setSaveError] = React.useState('')
   const imageRef = React.useRef<HTMLImageElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const draggingIdRef = React.useRef<string | null>(null)
@@ -80,6 +81,7 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
     const prompt = buildImageCommentPrompt(validComments)
     if (!image || !prompt || exporting) return
     setExporting(true)
+    setSaveError('')
     try {
       let width = image.naturalWidth
       let height = image.naturalHeight
@@ -92,10 +94,12 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
       canvas.width = width
       canvas.height = height
       const ctx = canvas.getContext('2d')
-      if (!ctx) return
+      if (!ctx) throw new Error('当前浏览器无法创建图片画布')
       ctx.drawImage(image, 0, 0, width, height)
       renderImageCommentMarkers(ctx, validComments, width, height)
-      onSave(canvas.toDataURL('image/png'), prompt)
+      await onSave(canvas.toDataURL('image/png'), prompt)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
     } finally {
       setExporting(false)
     }
@@ -214,15 +218,16 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
         </div>
       )}
 
+      {saveError && <p role="alert" className="max-w-full text-center text-xs text-danger">保存失败：{saveError}</p>}
       <div className="flex items-center gap-1 rounded-full bg-overlay/50 px-2 py-2 shadow-lg backdrop-blur-md">
-        <button type="button" aria-label="取消评论" title="取消评论" onClick={onCancel} className="rounded-full p-2 text-inverse-foreground/70 hover:bg-card/15 hover:text-inverse-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-5" /></button>
+        <button type="button" aria-label="取消评论" title="取消评论" disabled={exporting} onClick={onCancel} className="rounded-full p-2 text-inverse-foreground/70 hover:bg-card/15 hover:text-inverse-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-5" /></button>
         <button
           type="button"
           onClick={finishComments}
           disabled={completedComments.length === 0 || exporting}
           className="flex items-center gap-2 rounded-full bg-card/15 px-4 py-2 text-sm font-medium text-inverse-foreground hover:bg-card/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <Check className="size-4" />完成评论
+          <Check className="size-4" />{exporting ? '保存中…' : '完成评论'}
         </button>
       </div>
       <span className="sr-only">编号可拖动，方向键微调 0.1%，按住 Shift 微调 1%。完成后图片和评论会填入当前会话，不会自动发送。</span>

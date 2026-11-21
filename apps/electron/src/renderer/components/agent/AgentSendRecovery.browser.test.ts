@@ -537,7 +537,25 @@ describe('Given 持久化发送日志与真实 AgentView', () => {
     `)).toEqual({ calls: 0, draft: '失败草稿保留格式', files: 1, disk: 0 })
   }, 30_000)
 
-  test('When 重挂载模拟重启 Then 暂存入口仍在、不自动发送，连续点击只重试一次且保留新草稿', async () => {
+  test('When 更新重启留下结果未知的 pending 消息 Then 自动幂等续交一次且保留新草稿', async () => {
+    expect(await renderer.run<{ automatic: number; kept: string; remaining: number; status: string }>(`
+      const first = await window.sendRecovery.mount({ attachment: true, quote: true }); first.key();
+      await window.sendRecovery.until(() => first.calls.length === 1); first.reject();
+      await window.sendRecovery.until(() => first.disk[0]?.status === 'failed');
+      const disk = first.disk.map(entry => ({ ...entry, status: 'pending' }));
+      first.root.unmount(); await window.sendRecovery.delay(30);
+      const f = await window.sendRecovery.mount({ disk, initialText: '<p>更新后正在写的新草稿</p>', waitRetry: true });
+      await window.sendRecovery.until(() => f.retries.length === 1);
+      await window.sendRecovery.delay(80);
+      const automatic = f.calls.length + f.retries.length;
+      f.editor().commands.insertContent('继续编辑'); f.resolveRetry();
+      await window.sendRecovery.until(() => !document.querySelector('[aria-label="待恢复消息"]'));
+      const result = { automatic, kept: f.editor().getText(), remaining: f.disk.length, status: f.retries[0] ? 'retried' : 'missing' };
+      f.root.unmount(); return result;
+    `)).toEqual({ automatic: 1, kept: '更新后正在写的新草稿继续编辑', remaining: 0, status: 'retried' })
+  }, 30_000)
+
+  test('When 重挂载模拟重启 Then 失败暂存入口仍在、不自动发送，连续点击只重试一次且保留新草稿', async () => {
     expect(await renderer.run<{ restored: number; automatic: number; retries: number; kept: string; remaining: number }>(`
       const first = await window.sendRecovery.mount({ attachment: true, quote: true }); first.key();
       await window.sendRecovery.until(() => first.calls.length === 1); first.reject();

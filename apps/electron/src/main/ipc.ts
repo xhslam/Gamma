@@ -4197,6 +4197,21 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  // 图片编辑器保存：仅允许覆盖当前已授权的 PNG/JPEG/WebP，并保持扩展名与编码一致。
+  ipcMain.handle(
+    IPC_CHANNELS.WRITE_IMAGE_FILE,
+    async (_, filePath: string, dataUrl: string, access?: FileAccessOptions | string[]): Promise<void> => {
+      if (typeof filePath !== 'string' || typeof dataUrl !== 'string') throw new Error('图片保存参数无效')
+      const options = normalizeFileAccessOptions(access)
+      const { resolveFilePath } = await import('./lib/file-preview-service')
+      const resolved = resolveFilePath(filePath, getAllowedCandidateBasePaths(options))
+      if (!resolved || !isPathAllowed(resolved, options)) throw new Error('图片不在当前会话的授权范围内')
+
+      const { writeRasterImageFile } = await import('./lib/image-file-write-service')
+      writeRasterImageFile(resolved, dataUrl)
+    },
+  )
+
   // 解析当前 Markdown 同目录内的相对图片。该接口不接受 unrestricted，避免
   // Markdown 文本中的任意路径借通用预览接口换取本地文件 token。
   ipcMain.handle(
