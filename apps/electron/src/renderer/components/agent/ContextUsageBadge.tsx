@@ -1,12 +1,15 @@
 /**
- * ContextUsageBadge — 上下文使用量指示器
+ * ContextUsageBadge — 上下文使用量与订阅额度指示器
  *
- * 输入框工具栏上的一个 36×36 按钮：
- * - 内部为 16px 圆环，按 displayTokens / displayWindow 比例渲染
- * - hover 弹出 Popover，内含 token 明细 + 手动压缩按钮（点击两次确认触发，避免误触）
+ * 输入框工具栏上的指示器，有两种形态：
+ * - 渠道支持订阅额度查询时渲染为胶囊：16px 圆环 + 「5H xx% · 倒计时 ｜ 周 xx% · 倒计时」摘要，
+ *   新建会话 / 欢迎页尚无 token 用量时也会显示（圆环为空），额度挂载即拉取并定时刷新
+ * - 不支持额度查询的渠道保持原有 36×36 圆环按钮，仅在有 token 用量后显示
+ * - hover 弹出 Popover，内含 token 明细（有用量时）+ 订阅额度明细 + 手动压缩按钮
+ *   （点击两次确认触发，避免误触；无用量时不显示压缩）
  * - 压缩中时按钮位置显示 Loader2 旋转图标
- * - 占用接近当前 Agent runtime 的自动压缩阈值时圆环变琥珀色
- * - 无数据时不显示
+ * - 占用接近当前 Agent runtime 的自动压缩阈值时圆环变琥珀色；额度剩余 ≤20% 时胶囊变警告色
+ * - 无用量且无额度数据时不显示
  */
 
 import * as React from 'react'
@@ -24,7 +27,7 @@ import {
   type ProviderType,
 } from '@gamma/shared'
 import { fetchChannelPlanQuota } from '@/lib/channel-plan-quota'
-import { currentPlanQuota, formatPlanQuotaWindowValue, planQuotaAccountKey } from '@/lib/channel-plan-quota-display'
+import { currentPlanQuota, formatPlanQuotaWindowValue, getPlanQuotaPillDisplay, planQuotaAccountKey } from '@/lib/channel-plan-quota-display'
 import type { LoadedPlanQuota } from '@/lib/channel-plan-quota-display'
 
 /** 显示警告的阈值（压缩阈值的 80%） */
@@ -33,6 +36,8 @@ const WARNING_RATIO = 0.80
 const HOVER_CLOSE_DELAY = 150
 /** 手动压缩二次确认后自动重置确认态的超时（ms），与归档按钮一致 */
 const CONFIRM_RESET_DELAY = 3000
+/** 额度胶囊定时刷新间隔（ms）；与 fetchChannelPlanQuota 的缓存 TTL 对齐，多渠道共享缓存不会重复请求 */
+const QUOTA_REFRESH_INTERVAL = 60_000
 const UNSUPPORTED_PLAN_QUOTA_MESSAGE = '当前渠道不支持订阅 Plan 额度查询'
 
 interface ContextUsageBadgeProps {
@@ -52,10 +57,12 @@ interface ContextUsageBadgeProps {
    * 避免新会话尚未发消息时仍显示上一个会话的 token 数。
    */
   sessionId?: string
-  /** 当前 Agent 渠道 ID，用于 hover 时查询订阅 Plan 剩余额度 */
+  /** 当前 Agent 渠道 ID，用于查询订阅 Plan 剩余额度（支持额度的渠道才传入） */
   channelId?: string | null
   /** 渠道保存时间；凭据变更后用于使旧额度缓存失效。 */
   channelUpdatedAt?: number
+  /** 渠道供应商类型；额度结果返回前用于 Copilot 加载态展示。 */
+  channelProvider?: ProviderType
 }
 
 /** 格式化 token 数为可读字符串（如 1234 → "1.2k"） */
@@ -171,6 +178,7 @@ export function ContextUsageBadge({
   sessionId,
   channelId,
   channelUpdatedAt,
+  channelProvider,
 }: ContextUsageBadgeProps): React.ReactElement | null {
   // usage 高频更新只唤醒这个小组件，不再让 AgentView 和输入框参与 reconciliation。
   const sessionStreamState = useAtomValue(agentSessionViewStreamStateAtomFamily(sessionId ?? ''))
@@ -219,6 +227,8 @@ export function ContextUsageBadge({
   const [loadedQuota, setLoadedQuota] = React.useState<LoadedPlanQuota | null>(null)
   const quotaKey = planQuotaAccountKey(channelId, channelUpdatedAt)
   const quota = currentPlanQuota(loadedQuota, quotaKey)
+  // 倒计时基准时间；随定时刷新推进，避免胶囊上的重置倒计时长期停滞。
+  const [now, setNow] = React.useState(() => Date.now())
 
   const cancelClose = React.useCallback(() => {
     if (closeTimerRef.current != null) {
@@ -249,6 +259,33 @@ export function ContextUsageBadge({
     if (!nextOpen) setConfirming(false)
     setOpen(nextOpen)
   }
+
+  // 挂载即拉取额度（欢迎页无 token 用量时也要展示胶囊），并定时刷新；
+  // hover 打开 Popover 时额外触发一次，保证明细尽量新鲜（缓存层会去重）。
+  React.useEffect(() => {
+    if (!channelId || !quotaKey) return
+
+    let cancelled = false
+    const load = (): void => {
+      fetchChannelPlanQuota(channelId, channelUpdatedAt)
+        .then((result) => {
+          if (cancelled) return
+          setLoadedQuota({ channelKey: quotaKey, result })
+          setNow(Date.now())
+        })
+        .catch(() => { /* fetchChannelPlanQuota 内部已兜底失败结果 */ })
+    }
+    load()
+    const timer = window.setInterval(() => {
+      setNow(Date.now())
+      load()
+    }, QUOTA_REFRESH_INTERVAL)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [channelId, channelUpdatedAt, quotaKey])
 
   React.useEffect(() => {
     if (!open || !channelId || !quotaKey) return
@@ -289,20 +326,23 @@ export function ContextUsageBadge({
   const displayCacheRead = hasCurrent ? displayCacheReadTokens : stable?.cacheReadTokens
   const displayCacheCreation = hasCurrent ? displayCacheCreationTokens : stable?.cacheCreationTokens
 
-  // 从未有过 usage 数据 → 不显示
-  if (!displayTokens || displayTokens <= 0) return null
+  const hasUsage = displayTokens != null && displayTokens > 0
+  const pillDisplay = getPlanQuotaPillDisplay(quota, channelProvider ?? quota?.provider ?? 'custom', now)
+
+  // 无用量且无额度数据 → 不显示（保持不支持额度渠道的原有行为）
+  if (!hasUsage && !pillDisplay) return null
 
   // 警告阈值：Pi 在自动压缩阈值的 80% 时预警。
   const compactThreshold = displayWindow
     ? calculatePiAutoCompactionThresholdTokens(displayWindow)
     : undefined
-  const isWarning = compactThreshold
+  const isWarning = hasUsage && compactThreshold
     ? displayTokens / compactThreshold >= WARNING_RATIO
     : false
 
-  const ratio = displayWindow ? displayTokens / displayWindow : 0
+  const ratio = hasUsage && displayWindow ? displayTokens / displayWindow : 0
 
-  const percent = displayWindow
+  const percent = hasUsage && displayWindow
     ? Math.round((displayTokens / displayWindow) * 100)
     : undefined
 
@@ -312,25 +352,49 @@ export function ContextUsageBadge({
     || quota.message !== UNSUPPORTED_PLAN_QUOTA_MESSAGE
   )
 
+  const handleTriggerEnter = (): void => {
+    cancelClose()
+    setOpen(true)
+  }
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn(
-            inputToolbarButtonClass,
-            isWarning ? 'text-warning dark:text-warning' : 'text-foreground/60 hover:text-foreground',
-          )}
-          onMouseEnter={() => {
-            cancelClose()
-            setOpen(true)
-          }}
-          onMouseLeave={scheduleClose}
-        >
-          <UsageRing ratio={ratio} isWarning={isWarning} />
-        </Button>
+        {pillDisplay ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn(
+              'h-8 shrink-0 gap-1.5 rounded-full px-2.5 text-xs font-medium tabular-nums transition-colors',
+              'bg-muted/50 hover:bg-muted',
+              pillDisplay.muted
+                ? 'text-muted-foreground/70'
+                : pillDisplay.lowQuota
+                  ? 'text-warning dark:text-warning'
+                  : 'text-foreground/70 hover:text-foreground',
+            )}
+            aria-label={pillDisplay.title}
+            onMouseEnter={handleTriggerEnter}
+            onMouseLeave={scheduleClose}
+          >
+            <UsageRing ratio={ratio} isWarning={isWarning} />
+            <span className="whitespace-nowrap">{pillDisplay.summary}</span>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              inputToolbarButtonClass,
+              isWarning ? 'text-warning dark:text-warning' : 'text-foreground/60 hover:text-foreground',
+            )}
+            onMouseEnter={handleTriggerEnter}
+            onMouseLeave={scheduleClose}
+          >
+            <UsageRing ratio={ratio} isWarning={isWarning} />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         side="top"
@@ -349,40 +413,42 @@ export function ContextUsageBadge({
         }}
       >
         <div className="flex flex-col gap-1.5">
-          {displayIsEstimated ? (
-            <DetailRow
-              label="压缩后"
-              value={`预估 ${formatTokens(displayTokens)} tokens${percent != null ? `（${percent}%）` : ''}`}
-              emphasized
-            />
-          ) : (
-            <>
-              {displayOutput ? <DetailRow label="输出" value={displayOutput.toLocaleString()} /> : null}
-              {displayCacheCreation ? <DetailRow label="缓存写入" value={displayCacheCreation.toLocaleString()} /> : null}
-              {displayCacheRead ? <DetailRow label="缓存读取" value={displayCacheRead.toLocaleString()} /> : null}
+          {hasUsage ? (
+            displayIsEstimated ? (
+              <DetailRow
+                label="压缩后"
+                value={`预估 ${formatTokens(displayTokens)} tokens${percent != null ? `（${percent}%）` : ''}`}
+                emphasized
+              />
+            ) : (
+              <>
+                {displayOutput ? <DetailRow label="输出" value={displayOutput.toLocaleString()} /> : null}
+                {displayCacheCreation ? <DetailRow label="缓存写入" value={displayCacheCreation.toLocaleString()} /> : null}
+                {displayCacheRead ? <DetailRow label="缓存读取" value={displayCacheRead.toLocaleString()} /> : null}
 
-              {displayWindow ? (
-                <>
-                  <DetailRow
-                    label="上下文"
-                    value={`${formatTokens(displayTokens)} / ${formatTokens(displayWindow)}`}
-                    emphasized
-                  />
-                  {percent != null && (
+                {displayWindow ? (
+                  <>
                     <DetailRow
-                      label="占用"
-                      value={`${percent}%`}
-                      emphasized={isWarning}
+                      label="上下文"
+                      value={`${formatTokens(displayTokens)} / ${formatTokens(displayWindow)}`}
+                      emphasized
                     />
-                  )}
-                </>
-              ) : null}
-            </>
-          )}
+                    {percent != null && (
+                      <DetailRow
+                        label="占用"
+                        value={`${percent}%`}
+                        emphasized={isWarning}
+                      />
+                    )}
+                  </>
+                ) : null}
+              </>
+            )
+          ) : null}
 
           {shouldShowPlanQuota ? (
             <>
-              <div className="h-px bg-border my-0.5" />
+              {hasUsage ? <div className="h-px bg-border my-0.5" /> : null}
               <div className="text-[11px] font-medium text-foreground/70">
                 订阅额度{quota?.planName ? ` · ${quota.planName}` : ''}
               </div>
@@ -400,30 +466,39 @@ export function ContextUsageBadge({
             </>
           ) : null}
 
-          <div className="h-px bg-border my-0.5" />
-          <Button
-            type="button"
-            variant={confirming ? 'destructive' : isWarning ? 'default' : 'outline'}
-            size="sm"
-            className={cn(
-              'h-7 text-xs gap-1.5 select-none',
-              isWarning && !confirming && 'bg-warning hover:bg-warning text-primary-foreground',
-            )}
-            onClick={() => {
-              if (isProcessing) return
-              if (confirming) {
-                setConfirming(false)
-                onCompact()
-                setOpen(false)
-                return
-              }
-              setConfirming(true)
-            }}
-            disabled={isProcessing}
-          >
-            <Minimize2 className="size-3.5" />
-            {isProcessing ? '对话进行中' : confirming ? '再次点击确认压缩' : '手动压缩'}
-          </Button>
+          {/* 无用量且额度明细尚不可用（如 Copilot 加载中）时，Popover 不留空 */}
+          {!hasUsage && !shouldShowPlanQuota && pillDisplay ? (
+            <div className="text-[11px] text-foreground/50">{pillDisplay.title}</div>
+          ) : null}
+
+          {hasUsage ? (
+            <>
+              <div className="h-px bg-border my-0.5" />
+              <Button
+                type="button"
+                variant={confirming ? 'destructive' : isWarning ? 'default' : 'outline'}
+                size="sm"
+                className={cn(
+                  'h-7 text-xs gap-1.5 select-none',
+                  isWarning && !confirming && 'bg-warning hover:bg-warning text-primary-foreground',
+                )}
+                onClick={() => {
+                  if (isProcessing) return
+                  if (confirming) {
+                    setConfirming(false)
+                    onCompact()
+                    setOpen(false)
+                    return
+                  }
+                  setConfirming(true)
+                }}
+                disabled={isProcessing}
+              >
+                <Minimize2 className="size-3.5" />
+                {isProcessing ? '对话进行中' : confirming ? '再次点击确认压缩' : '手动压缩'}
+              </Button>
+            </>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

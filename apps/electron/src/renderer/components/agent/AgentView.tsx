@@ -3409,6 +3409,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           sessionId={sessionId}
           channelId={planQuotaChannelId}
           channelUpdatedAt={planQuotaChannelUpdatedAt}
+          channelProvider={stableChannel?.provider}
           onCompact={handleCompact}
         />
       ),
@@ -3416,6 +3417,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   ], [
     planQuotaChannelId,
     planQuotaChannelUpdatedAt,
+    stableChannel?.provider,
     isCodexFastModeAvailable,
     codexFastModeEnabled,
     handleCodexFastModeChange,
