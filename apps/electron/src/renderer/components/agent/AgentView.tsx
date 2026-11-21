@@ -3571,7 +3571,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         <OnDemandConversationLayout sessionId={sessionId} embedded={embedded}>
         <div className={cn(
           'flex min-h-0 flex-1 w-full flex-col overflow-hidden',
-          embedded ? 'max-w-none' : 'max-w-3xl mx-auto',
+          embedded ? 'max-w-none' : 'agent-conversation-column max-w-3xl mx-auto',
         )}>
         {/* 消息区域 */}
         <AgentMessages

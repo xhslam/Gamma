@@ -1692,6 +1692,27 @@ body {
   .gamma-ui:active { transform: none; }
 }
 
+/* 只在有输入框的空会话中，把问候和输入框作为一组居中；短窗口保留原布局。 */
+@media (min-height: 560px) {
+  .agent-conversation-column:has(> [data-agent-welcome]):has(> [data-input-mode="agent"]) {
+    max-width: 60rem;
+    overflow-y: auto;
+  }
+  .agent-conversation-column:has(> [data-agent-welcome]):has(> [data-input-mode="agent"])::before,
+  .agent-conversation-column:has(> [data-agent-welcome]):has(> [data-input-mode="agent"])::after {
+    content: '';
+    flex: 1 0 0px;
+  }
+  .agent-conversation-column:has(> [data-agent-welcome]):has(> [data-input-mode="agent"])::after {
+    flex-grow: 0.8;
+  }
+  .agent-conversation-column:has(> [data-input-mode="agent"]) > [data-agent-welcome],
+  .agent-conversation-column:has(> [data-input-mode="agent"]) > [data-agent-welcome] > [role="log"],
+  .agent-conversation-column:has(> [data-agent-welcome]) > [data-input-mode="agent"] {
+    flex: none;
+  }
+}
+
 /* 工作台密度只作用于明确标记的输入外壳与侧栏行；不重设主题或全局控件。 */
 [data-workbench-density="compact"] {
   --workbench-input-radius: 12px;

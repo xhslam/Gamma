@@ -133,7 +133,7 @@ beforeAll(async () => {
         let active = 'a';
         const GlobalListeners = () => { useGlobalAgentListeners(); return null; };
         const render = () => root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null,
-          React.createElement(React.Fragment, null, options.globalListeners && React.createElement(GlobalListeners), React.createElement(AgentView, { sessionId: active, embedded: true }), React.createElement(Toaster)))));
+          React.createElement(React.Fragment, null, options.globalListeners && React.createElement(GlobalListeners), React.createElement(AgentView, { sessionId: active, embedded: !options.fullLayout }), React.createElement(Toaster)))));
         render();
         await until(() => document.querySelector('.tiptap')?.editor);
         await delay(100);
@@ -673,6 +673,31 @@ describe('Given 已审查的重试时序边界', () => {
       const result = { draft: f.editor().getText(), records: f.disk.length };
       f.root.unmount(); return result;
     `)).toEqual({ draft: '', records: 0 })
+  }, 30_000)
+
+  test('When 打开新会话或历史会话 Then 只有空会话在输入框上方显示居中的欢迎内容', async () => {
+    expect(await renderer.run<{ hint: boolean; grouped: boolean; centered: boolean; historyUnchanged: boolean }>(`
+      const api = window.sendRecovery;
+      const f = await api.mount({ initialText: '', fullLayout: true });
+      await api.until(() => document.querySelector('[data-agent-welcome]'));
+      const welcome = document.querySelector('.welcome-empty-state');
+      const composer = document.querySelector('.gamma-composer');
+      const column = welcome.closest('.agent-conversation-column');
+      const welcomeBounds = welcome.getBoundingClientRect();
+      const columnBounds = column.getBoundingClientRect();
+      const composerBounds = composer.getBoundingClientRect();
+      const hint = welcome.textContent.includes('支持拖拽文件到输入框直接上传附件');
+      const grouped = welcomeBounds.bottom <= composerBounds.top && composerBounds.top - welcomeBounds.bottom < 65;
+      const centered = welcomeBounds.top > columnBounds.top + 50 && composerBounds.bottom < columnBounds.bottom - 50;
+      f.root.unmount();
+      const history = await api.mount({ initialText: '', fullLayout: true, history: [
+        { type: 'user', uuid: 'previous-user', message: { content: [{ type: 'text', text: '已有消息' }] }, parent_tool_use_id: null, _createdAt: 1 },
+      ] });
+      await api.until(() => document.body.textContent.includes('已有消息'));
+      const historyUnchanged = !document.querySelector('[data-agent-welcome], .welcome-empty-state');
+      history.root.unmount();
+      return { hint, grouped, centered, historyUnchanged };
+    `)).toEqual({ hint: true, grouped: true, centered: true, historyUnchanged: true })
   }, 30_000)
 
   test('When 渲染真实 AgentView Then 工具行位于输入外壳之外且发送仍可用', async () => {
