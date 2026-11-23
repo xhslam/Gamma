@@ -60,6 +60,7 @@ import { getModelLogo, resolveModelDisplayName, resolveModelProvider } from '@/l
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/channel-atoms'
 import { agentSessionPendingFilesAtom, agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
 import { appendImageEditPromptAtom } from '@/atoms/image-edit-handoff'
+import { useImageCommentAvailability } from '@/hooks/use-image-comment-availability'
 import { activeSessionIdAtom } from '@/atoms/tab-atoms'
 import { automationsAtom, automationFormAtom, automationToDraft } from '@/atoms/automation-atoms'
 import { openWorkspaceComponentAtom } from '@/atoms/agent-atoms'
@@ -997,7 +998,7 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
 
   const handleImageEditComplete = React.useCallback((editedDataUrl: string, prompt?: string): void => {
     const base64 = editedDataUrl.split(',')[1]
-    if (!base64 || !activeSessionId) return
+    if (!base64 || !activeSessionId) throw new Error('无法将编辑后的图片添加到当前会话')
 
     const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const pending: AgentPendingFile = {
@@ -1019,12 +1020,13 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
       map.set(activeSessionId, [...sessionFiles, pending])
       return map
     })
-    if (prompt?.trim()) appendImageEditPrompt({ sessionId: activeSessionId, prompt })
+    if (prompt?.trim()) appendImageEditPrompt({ sessionId: activeSessionId, prompt, filename: pending.filename })
   }, [activeSessionId, setSessionPendingFiles, appendImageEditPrompt])
 
   // 共享大图预览状态（多图可左右翻页）
   const [lightboxOpen, setLightboxOpen] = React.useState(false)
   const [lightboxIndex, setLightboxIndex] = React.useState(0)
+  const canComment = useImageCommentAvailability(lightboxOpen ? activeSessionId ?? undefined : undefined)
   // 各图加载好的 src（key = file.path）——缩略图渲染时已加载，翻页复用不再触发 IO
   const [loadedSrcs, setLoadedSrcs] = React.useState<Record<string, string>>({})
 
@@ -1100,6 +1102,7 @@ function UserInputMessage({ message, onAgentHistoryQuoteClick }: {
           open={lightboxOpen}
           onOpenChange={setLightboxOpen}
           images={lightboxImages}
+          canComment={canComment}
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
         />

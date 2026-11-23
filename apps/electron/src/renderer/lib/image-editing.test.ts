@@ -29,7 +29,7 @@ describe('Given 图片评论坐标', () => {
       { id: 'b', x: 0.5, y: 0.5, text: '   ' },
       { id: 'c', x: 2, y: -1, text: '修复文字' },
     ])
-    expect(prompt).toContain('图像 1：')
+    expect(prompt).toContain('根据图片中的编号评论')
     expect(prompt).toContain('1. (x: 18.2%, y: 2.4%) 在这块侧边栏加上细线')
     expect(prompt).toContain('2. (x: 100.0%, y: 0.0%) 修复文字')
     expect(prompt).not.toContain('0.5')
@@ -75,6 +75,18 @@ describe('Given 连通背景与前景像素', () => {
     expect(result.removed).toBe(4)
     expect(result.data[(0 * 4 + 3) * 4 + 3]).toBe(255)
     expect(result.data[(1 * 4 + 2) * 4 + 3]).toBe(255)
+  })
+
+  test('When 主体碰到边角 Then 自动移除四边的背景并保留主体', () => {
+    const source = image([
+      [black, white, white],
+      [black, black, white],
+      [white, white, white],
+    ])
+    const result = removeEdgeBackground(source)
+    expect(result.removed).toBe(6)
+    expect(result.data[3]).toBe(255)
+    expect(removeEdgeBackground({ ...source, data: result.data }).removed).toBe(0)
   })
 })
 

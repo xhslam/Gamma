@@ -8,7 +8,7 @@
  */
 
 import { getGeminiModelCapability } from './gemini-model-capabilities'
-import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily, isGpt61SolModel, isGpt61TerraModel } from './model-family'
+import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily, isGpt61SolModel, isGpt61TerraModel, isGpt62Model } from './model-family'
 
 /** 默认上下文窗口（无法识别模型时使用） */
 export const DEFAULT_CONTEXT_WINDOW = 200_000
@@ -32,6 +32,9 @@ export const CODEX_GPT_61_TERRA_FALLBACK_CONTEXT_WINDOW = 272_000
  * provider catalog 决定，避免把不同 SKU 误写成同一窗口。
  */
 export function inferCodexAlignedGPT5ContextWindow(modelId: string | undefined): number | undefined {
+  // 官方 Codex 默认值，不将 API 的 1.05M 上限冒充订阅默认窗口。
+  if (isGpt62Model(modelId)) return modelId?.trim().toLowerCase().replace(/\[1m\]$/i, '') === 'gpt-6.2-sol' ? 500_000 : 272_000
+
   // 与当前 Pi SDK Codex 目录中的 GPT-6.1 Sol 元数据保持一致。
   if (isGpt61SolModel(modelId)) return 500_000
 

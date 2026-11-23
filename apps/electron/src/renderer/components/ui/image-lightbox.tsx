@@ -29,7 +29,7 @@ export interface LightboxImage {
   /** 下载回调（可选） */
   onSave?: () => void
   /** 编辑完成回调 — 提供则显示高级编辑与评论操作 */
-  onEditComplete?: (editedDataUrl: string, prompt?: string) => void | Promise<void>
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void | Promise<void | false>
 }
 
 interface ImageLightboxProps {
@@ -44,7 +44,8 @@ interface ImageLightboxProps {
   /** 下载回调（可选，单图模式） */
   onSave?: () => void
   /** 编辑完成回调 — 提供则显示高级编辑与评论操作（单图模式） */
-  onEditComplete?: (editedDataUrl: string, prompt?: string) => void | Promise<void>
+  onEditComplete?: (editedDataUrl: string, prompt?: string) => void | Promise<void | false>
+  canComment?: boolean
   /** 多图列表（可选）— 提供则启用左右翻页 */
   images?: LightboxImage[]
   /** 当前展示的图片索引（多图模式，受控） */
@@ -66,6 +67,7 @@ export function ImageLightbox({
   onOpenChange,
   onSave,
   onEditComplete,
+  canComment = false,
   images,
   index,
   onIndexChange,
@@ -87,6 +89,10 @@ export function ImageLightbox({
     else setMode('preview')
     if (open) setEditorTool(initialTool)
   }, [open, initialMode, initialTool])
+
+  React.useEffect(() => {
+    if (!canComment) setMode((currentMode) => currentMode === 'comments' ? 'preview' : currentMode)
+  }, [canComment, open, initialMode])
 
   // 多图模式下监听方向键翻页（编辑模式禁用）
   React.useEffect(() => {
@@ -113,7 +119,8 @@ export function ImageLightbox({
   if (!current) return null
 
   const handleEditSave = async (editedDataUrl: string, prompt?: string): Promise<void> => {
-    await current.onEditComplete?.(editedDataUrl, prompt)
+    if (prompt && !canComment) throw new Error('当前无法添加位置评论')
+    if (await current.onEditComplete?.(editedDataUrl, prompt) === false) return
     onOpenChange(false)
     setMode('preview')
   }
@@ -203,7 +210,7 @@ export function ImageLightbox({
                     <div className="mx-1.5 h-5 w-px bg-card/20" aria-hidden />
                     {[
                       { label: '标注', icon: Pencil, action: () => { setEditorTool('draw'); setMode('editing') } },
-                      { label: '添加评论', icon: MessageSquarePlus, action: () => setMode('comments') },
+                      ...(canComment ? [{ label: '添加评论', icon: MessageSquarePlus, action: () => setMode('comments') }] : []),
                       { label: '移除背景', icon: ImageMinus, action: () => { setEditorTool('background'); setMode('editing') } },
                       { label: '擦除', icon: Eraser, action: () => { setEditorTool('erase'); setMode('editing') } },
                       { label: '调整大小', icon: Proportions, action: () => { setEditorTool('resize'); setMode('editing') } },

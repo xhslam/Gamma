@@ -10,7 +10,7 @@ import { renderImageCommentMarkers } from '@/lib/image-editor-canvas'
 interface ImageCommentEditorProps {
   src: string
   layout?: 'lightbox' | 'inline'
-  onSave: (editedDataUrl: string, prompt: string) => void | Promise<void>
+  onSave: (editedDataUrl: string, prompt: string) => void | Promise<void | false>
   onCancel: () => void
 }
 
@@ -24,7 +24,6 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
   const [exporting, setExporting] = React.useState(false)
   const [saveError, setSaveError] = React.useState('')
   const imageRef = React.useRef<HTMLImageElement>(null)
-  const containerRef = React.useRef<HTMLDivElement>(null)
   const draggingIdRef = React.useRef<string | null>(null)
 
   const activeComment = comments.find((comment) => comment.id === activeId) ?? null
@@ -37,34 +36,32 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
     setLoadError(false)
   }, [src])
 
-  const pointFromEvent = React.useCallback((event: React.PointerEvent): { x: number, y: number } | null => {
+  const pointFromEvent = React.useCallback((event: React.MouseEvent | React.PointerEvent): { x: number, y: number } | null => {
     const image = imageRef.current
     if (!image) return null
     const rect = image.getBoundingClientRect()
+    if (!rect.width || !rect.height) return null
     return {
       x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
     }
   }, [])
 
-  const addComment = React.useCallback((event: React.MouseEvent<HTMLImageElement>): void => {
-    const image = imageRef.current
-    if (!image) return
-    if (comments.some((comment) => !comment.text.trim())) {
-      const empty = comments.find((comment) => !comment.text.trim())
-      if (empty) setActiveId(empty.id)
+  const addComment = React.useCallback((point: { x: number; y: number } | null): void => {
+    if (!point || !loaded || exporting) return
+    const empty = comments.find((comment) => !comment.text.trim())
+    if (empty) {
+      setActiveId(empty.id)
       return
     }
-    const rect = image.getBoundingClientRect()
     const comment: ImageComment = {
       id: crypto.randomUUID(),
-      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+      ...point,
       text: '',
     }
     setComments((current) => [...current, comment])
     setActiveId(comment.id)
-  }, [comments])
+  }, [comments, exporting, loaded])
 
   const updateComment = React.useCallback((id: string, update: Partial<ImageComment>): void => {
     setComments((current) => current.map((comment) => comment.id === id ? { ...comment, ...update } : comment))
@@ -87,8 +84,8 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
       let height = image.naturalHeight
       if (width > MAX_DIM || height > MAX_DIM) {
         const ratio = Math.min(MAX_DIM / width, MAX_DIM / height)
-        width = Math.round(width * ratio)
-        height = Math.round(height * ratio)
+        width = Math.max(1, Math.round(width * ratio))
+        height = Math.max(1, Math.round(height * ratio))
       }
       const canvas = document.createElement('canvas')
       canvas.width = width
@@ -111,7 +108,7 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
       layout === 'lightbox' ? 'max-w-[94vw]' : 'h-full min-h-0 max-w-full overflow-y-auto p-4 pt-2',
     )}>
       <div className={layout === 'inline' ? 'flex min-h-[160px] w-full min-w-0 flex-1 items-center justify-center overflow-hidden' : 'contents'}>
-      <div ref={containerRef} className={cn(
+      <div className={cn(
         'relative flex items-center justify-center',
         layout === 'lightbox' ? 'max-h-[70vh] max-w-[90vw]' : 'max-h-full max-w-full',
       )}>
@@ -126,12 +123,20 @@ export function ImageCommentEditor({ src, layout = 'lightbox', onSave, onCancel 
             ref={imageRef}
             src={src}
             alt="点击添加位置评论"
+            role="button"
+            aria-label="在图片上添加位置评论"
+            tabIndex={loaded ? 0 : -1}
             draggable={false}
             onLoad={() => setLoaded(true)}
             onError={() => setLoadError(true)}
-            onClick={addComment}
+            onClick={(event) => addComment(pointFromEvent(event))}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              addComment({ x: 0.5, y: 0.5 })
+            }}
             className={cn(
-              'cursor-crosshair select-none rounded-lg object-contain shadow-2xl',
+              'cursor-crosshair select-none rounded-lg object-contain shadow-2xl focus-visible:outline focus-visible:outline-ring',
               layout === 'lightbox' ? 'max-h-[70vh] max-w-[90vw]' : 'max-h-full max-w-full',
               !loaded && 'hidden',
             )}

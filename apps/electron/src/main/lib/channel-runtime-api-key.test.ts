@@ -197,4 +197,21 @@ describe('退役渠道迁移', () => {
     const terraCount = channelAgain?.models.filter((model) => model.id === 'gpt-6.1-terra').length
     expect(terraCount).toBe(1)
   })
+  test('Given 存量 Codex 渠道 When 读取两次 Then 补齐 6.2 且保留已禁用模型与自定义名', () => {
+    writeChannels([{
+      id: 'codex-62', name: 'ChatGPT', provider: 'openai-codex', baseUrl: '', apiKey: 'dummy-key',
+      models: [{ id: 'gpt-6.2-sol', name: '我的 Sol', enabled: false }],
+      enabled: true, createdAt: 1, updatedAt: 1,
+    }], 7)
+    for (let index = 0; index < 2; index++) {
+      const models = channelManager.getChannelById('codex-62')?.models
+      expect(models?.filter((model) => model.id === 'gpt-6.2-astra')).toEqual([
+        expect.objectContaining({ id: 'gpt-6.2-astra', name: 'GPT-6.2 Astra', enabled: true }),
+      ])
+      expect(models?.filter((model) => model.id === 'gpt-6.2-sol')).toEqual([
+        expect.objectContaining({ id: 'gpt-6.2-sol', name: '我的 Sol', enabled: false }),
+      ])
+    }
+  })
+
 })

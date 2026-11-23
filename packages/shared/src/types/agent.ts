@@ -2269,6 +2269,7 @@ export const AGENT_IPC_CHANNELS = {
   UPDATE_SESSION_CODEX_FAST_MODE: 'agent:update-session-codex-fast-mode',
   /** 查询 Pi catalog 或专属 profile 支持的会话级推理档位 */
   GET_PI_REASONING_CAPABILITY: 'agent:get-pi-reasoning-capability',
+  GET_PI_IMAGE_INPUT_SUPPORT: 'agent:get-pi-image-input-support',
   /** 更新指定会话的推理深度（下一轮 Pi 请求生效） */
   UPDATE_SESSION_REASONING_LEVEL: 'agent:update-session-reasoning-level',
 

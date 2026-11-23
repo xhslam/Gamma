@@ -199,6 +199,15 @@ const PRESET_MODEL_CANDIDATE_UPDATES: readonly {
     },
   },
   {
+    id: 'openai-codex-gpt-6-2-v1',
+    candidates: {
+      'openai-codex': [
+        { id: 'gpt-6.2-astra', name: 'GPT-6.2 Astra', enabled: true },
+        { id: 'gpt-6.2-sol', name: 'GPT-6.2 Sol', enabled: true },
+      ],
+    },
+  },
+  {
     // 小米 MiMo-V2.6 系列（2026-09-22 发布，1M 上下文）；v2.5 系列于 2026-10-21 下线，
     // 仅以候选形式补充新模型，不改动存量渠道已启用的旧模型。
     id: 'xiaomi-mimo-v2-6-v1',

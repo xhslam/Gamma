@@ -392,6 +392,8 @@ export const IPC_CHANNELS = {
   MARKDOWN_WORKSPACE: 'markdown-workspace:request',
   /** 将编辑器导出的图片原子写回已授权的本地文件。 */
   WRITE_IMAGE_FILE: 'file:write-image',
+  READ_IMAGE_FOR_EDIT: 'file:read-image-for-edit',
+  SAVE_EDITED_PNG_AS: 'file:save-edited-png-as',
   /** 获取运行时状态 */
   GET_RUNTIME_STATUS: 'runtime:get-status',
   /** 重新初始化运行时（用户安装完 Git/Node 后触发） */

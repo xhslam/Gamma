@@ -141,7 +141,7 @@ export function buildImageCommentPrompt(comments: ImageComment[]): string {
       return `${index + 1}. (x: ${x}%, y: ${y}%) ${comment.text.trim()}`
     })
   if (lines.length === 0) return ''
-  return `请根据图片中的编号评论精准修改，保持未提及区域不变：\n图像 1：\n${lines.join('\n')}`
+  return `请根据图片中的编号评论精准修改，保持未提及区域不变。\n${lines.join('\n')}`
 }
 
 function colorDistance(data: Uint8ClampedArray, index: number, red: number, green: number, blue: number): number {
@@ -229,27 +229,39 @@ export function removeBackgroundAt(
   )
 }
 
-/** 从与左上角同色的图像边缘向内移除背景，适合常见的纯色和近纯色底图。 */
+/** 选取覆盖过半边缘的相近颜色，向内移除连通的背景像素。 */
 export function removeEdgeBackground(image: PixelImage, tolerance = 40): BackgroundRemovalResult {
   if (image.width <= 0 || image.height <= 0 || image.data.length < 4) {
     return { data: new Uint8ClampedArray(image.data), removed: 0 }
   }
-  const red = image.data[0] ?? 0
-  const green = image.data[1] ?? 0
-  const blue = image.data[2] ?? 0
-  const seeds: number[] = []
-  const threshold = Math.max(0, tolerance)
+  const edge: number[] = []
   for (let x = 0; x < image.width; x += 1) {
-    const top = x
-    const bottom = (image.height - 1) * image.width + x
-    if (colorDistance(image.data, top, red, green, blue) <= threshold) seeds.push(top)
-    if (colorDistance(image.data, bottom, red, green, blue) <= threshold) seeds.push(bottom)
+    edge.push(x)
+    if (image.height > 1) edge.push((image.height - 1) * image.width + x)
   }
   for (let y = 1; y + 1 < image.height; y += 1) {
-    const left = y * image.width
-    const right = left + image.width - 1
-    if (colorDistance(image.data, left, red, green, blue) <= threshold) seeds.push(left)
-    if (colorDistance(image.data, right, red, green, blue) <= threshold) seeds.push(right)
+    edge.push(y * image.width)
+    if (image.width > 1) edge.push(y * image.width + image.width - 1)
   }
-  return removeConnectedColors(image, seeds, red, green, blue, tolerance)
+  const visible = edge.filter((index) => (image.data[index * 4 + 3] ?? 0) > 0)
+  if (visible.length <= edge.length / 2) return { data: new Uint8ClampedArray(image.data), removed: 0 }
+
+  const step = Math.ceil(visible.length / 64)
+  const threshold = Math.max(0, tolerance)
+  let bestSeeds: number[] = []
+  let bestColor = { red: 0, green: 0, blue: 0 }
+  for (let index = 0; index < visible.length; index += step) {
+    const offset = visible[index]! * 4
+    const red = image.data[offset]!
+    const green = image.data[offset + 1]!
+    const blue = image.data[offset + 2]!
+    const matching = visible.filter((pixel) => colorDistance(image.data, pixel, red, green, blue) <= threshold)
+    if (matching.length > bestSeeds.length) {
+      bestSeeds = matching
+      bestColor = { red, green, blue }
+      if (matching.length === visible.length) break
+    }
+  }
+  if (bestSeeds.length <= edge.length / 2) return { data: new Uint8ClampedArray(image.data), removed: 0 }
+  return removeConnectedColors(image, bestSeeds, bestColor.red, bestColor.green, bestColor.blue, tolerance)
 }

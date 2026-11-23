@@ -19,6 +19,7 @@ import {
   isGpt6LunaFamily,
   isGpt6SolFamily,
   isGpt61TerraModel,
+  isGpt62Model,
   isMimoV26Model,
   resolveReasoningCapability,
   resolveReasoningProfile,
@@ -375,6 +376,29 @@ function applyPiModelCapabilityOverrides(model: PiCatalogModel | undefined): PiC
 }
 
 const CODEX_MODEL_PATCHES: PiCatalogModelPatch[] = [
+  // 官方 Codex 默认上下文：https://learn.chatgpt.com/docs/models.md
+  // SDK 目录尚未收录时提供回退；真实在线/缓存元数据优先。
+  ...(['gpt-6.2-astra', 'gpt-6.2-sol'] as const).map((id): PiCatalogModel => ({
+    id,
+    name: id === 'gpt-6.2-astra' ? 'GPT-6.2 Astra' : 'GPT-6.2 Sol',
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    baseUrl: CODEX_BASE_URL,
+    reasoning: true,
+    thinkingLevelMap: compilePiReasoningCapabilities('openai-responses', id)?.thinkingLevelMap,
+    input: ['text', 'image'],
+    cost: id === 'gpt-6.2-astra'
+      ? { input: 8, output: 40, cacheRead: 0.4, cacheWrite: 10 }
+      : { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+    contextWindow: inferCodexAlignedGPT5ContextWindow(id)!,
+    maxTokens: CODEX_MAX_TOKENS,
+    compat: {
+      supportsOpenAIGrammarTools: true,
+      supportsAdditionalTools: true,
+      supportsToolSearch: true,
+      supportsMidConvoSystemMessages: true,
+    },
+  })),
   {
     id: 'gpt-6-astra',
     name: 'GPT-6 Astra',
@@ -727,8 +751,8 @@ async function resolvePiModelDefaults(input: Pick<PiAgentQueryOptions, 'provider
     input: catalogModel ? [...catalogModel.input] : ['text', 'image'],
     cost: catalogModel ? { ...catalogModel.cost } : { ...ZERO_MODEL_COST },
     // Codex 明确对齐策略优先，其余采用有效 catalog 值；未知模型统一保守兜底。
-    // 对 GPT-6.1 Terra，因无官方权威规格，真实目录/缓存值优先于保守回退基线。
-    contextWindow: (isGpt61TerraModel(input.model) && catalogModel?.contextWindow)
+    // Terra 与 GPT-6.2 的目录/缓存值优先于兼容回退或 Codex 默认窗口。
+    contextWindow: ((isGpt61TerraModel(input.model) || isGpt62Model(input.model)) && catalogModel?.contextWindow)
       ? catalogModel.contextWindow
       : (codexAlignedCapabilities?.contextWindow ?? modelContextWindow),
     // Pi catalog 缺少时，GLM-5.3 系列仍按官方 128K 输出上限注册。
@@ -846,7 +870,7 @@ function mergeCodexModels(models: readonly PiCatalogModel[]): PiCatalogModel[] {
     const existingIndex = indexById.get(patch.id)
     const existing = existingIndex !== undefined ? merged[existingIndex] : undefined
     if (existingIndex !== undefined && existing) {
-      if (patch.id === 'gpt-6.1-terra') {
+      if (patch.id === 'gpt-6.1-terra' || isGpt62Model(patch.id)) {
         // 若现有 SDK 或缓存已提供新型号元数据，必须优先保留，不被旧兼容回退覆盖
         continue
       }

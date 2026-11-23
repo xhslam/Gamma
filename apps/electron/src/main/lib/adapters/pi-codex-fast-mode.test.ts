@@ -40,6 +40,15 @@ describe('Pi Codex request settings', () => {
     })
   })
 
+  test.each(['gpt-6.2-astra', 'gpt-6.2-sol'])(
+    'Given %s 的存量关闭推理设置 When 注入请求 Then 降为 low 而不是 none',
+    (model) => {
+      expect(injectOpenAIReasoningLevel({ model }, { thinkingLevel: 'off' })).toEqual({
+        model, reasoning: { effort: 'low' },
+      })
+    },
+  )
+
   test('Given thinking is disabled When injecting Then explicitly sends none', () => {
     expect(injectOpenAIReasoningLevel({ model: 'gpt-5.5' }, { thinkingLevel: 'off' })).toEqual({
       model: 'gpt-5.5',

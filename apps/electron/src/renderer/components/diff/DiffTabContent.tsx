@@ -30,6 +30,7 @@ import {
 import { markdownTocOpenAtom } from '@/atoms/markdown-toc'
 import { appendImageEditPromptAtom } from '@/atoms/image-edit-handoff'
 import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
+import { useImageCommentAvailability } from '@/hooks/use-image-comment-availability'
 import { useShortcut } from '@/hooks/useShortcut'
 import { initShortcutRegistry } from '@/lib/shortcut-registry'
 import { DiffView } from './DiffView'
@@ -87,10 +88,11 @@ function getPreviewPathLabel(filePath: string): string {
   return filePath.split(/[\\/]/).filter(Boolean).at(-1) || filePath
 }
 
-function getImageOutputMimeType(filePath: string): 'image/png' | 'image/jpeg' | 'image/webp' {
+function getImageOutputMimeType(filePath: string): 'image/png' | 'image/jpeg' | 'image/webp' | undefined {
   if (/\.jpe?g$/i.test(filePath)) return 'image/jpeg'
   if (/\.webp$/i.test(filePath)) return 'image/webp'
-  return 'image/png'
+  if (/\.png$/i.test(filePath)) return 'image/png'
+  return undefined
 }
 
 function getPreviewTargetPath(filePath: string, dirPath: string): string {
@@ -343,6 +345,17 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
     mode: 'editing' | 'comments'
     tool: ImageEditorTool
   } | null>(null)
+  const [imageEditorSource, setImageEditorSource] = React.useState<{
+    request: NonNullable<typeof imageEditorRequest>
+    path: string
+    src: string
+  } | null>(null)
+  const editorSrc = imageEditorSource && imageEditorSource.request === imageEditorRequest && imageEditorSource.path === imagePath
+    ? imageEditorSource.src
+    : undefined
+  const canComment = useImageCommentAvailability(isImage ? sessionId : undefined)
+  const canOpenImageEditor = imageEditorRequest?.mode !== 'comments' || canComment
+  const imageOutputMimeType = getImageOutputMimeType(imagePath || filePath)
   const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
   const appendImageEditPrompt = useSetAtom(appendImageEditPromptAtom)
   const setImagePreviewContentRefreshVersionMap = useSetAtom(previewContentRefreshVersionAtom)
@@ -363,20 +376,37 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
     setImageEditorRequest(null)
   }, [])
 
-  const handleImageEditComplete = React.useCallback(async (editedDataUrl: string, prompt?: string): Promise<void> => {
+  React.useEffect(() => {
+    setImageEditorSource(null)
+    if (!imageEditorRequest || !imagePath) return
+    if (!canOpenImageEditor) {
+      setImageEditorRequest(null)
+      return
+    }
+    let cancelled = false
+    void window.electronAPI.readImageForEdit(imagePath, fileAccess).then((src) => {
+      if (!cancelled) setImageEditorSource({ request: imageEditorRequest, path: imagePath, src })
+    }).catch((error: unknown) => {
+      if (cancelled) return
+      setImageEditorRequest(null)
+      toast.error('无法打开图片编辑器', { description: error instanceof Error ? error.message : String(error) })
+    })
+    return () => { cancelled = true }
+  }, [imageEditorRequest, imagePath, fileAccess, canOpenImageEditor])
+
+  const handleImageEditComplete = React.useCallback(async (editedDataUrl: string, prompt?: string): Promise<void | false> => {
     const base64 = editedDataUrl.split(',')[1]
     if (!base64) throw new Error('图片编辑器没有生成有效内容')
     const sourceName = getPreviewPathLabel(filePath)
 
-    if (imageEditorRequest?.mode !== 'comments') {
-      const extension = sourceName.split('.').pop()?.toLowerCase()
-      const expectedMime = extension === 'png' ? 'image/png'
-        : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg'
-          : extension === 'webp' ? 'image/webp' : null
-      if (!expectedMime || !editedDataUrl.startsWith(`data:${expectedMime};base64,`)) {
-        throw new Error('仅支持将编辑结果写回 PNG、JPEG 或 WebP 原图')
+    if (!prompt) {
+      if (!imageOutputMimeType || !editedDataUrl.startsWith(`data:${imageOutputMimeType};base64,`)) {
+        const stem = sourceName.replace(/\.[^.]+$/, '') || 'image'
+        if (!await window.electronAPI.saveEditedPngAs(editedDataUrl, `${stem}-edited.png`)) return false
+        if (imageEditorPresentation === 'inline') setImageEditorRequest(null)
+        return
       }
-      await window.electronAPI.writeImageFile(filePath, editedDataUrl, fileAccess)
+      await window.electronAPI.writeImageFile(imagePath, editedDataUrl, fileAccess)
       clearPreviewContentCacheForFile(sessionId, filePath)
       setImageDataUrl(editedDataUrl)
       const refreshKey = getPreviewContentRefreshKey(sessionId, { filePath, previewOnly, gitRoot, baseRef })
@@ -389,7 +419,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       return
     }
 
-    if (!sessionId) throw new Error('当前没有可接收位置评论的会话')
+    if (!sessionId || !canComment) throw new Error('当前无法添加位置评论')
     const now = Date.now()
     const id = `pending-${now}-${Math.random().toString(36).slice(2)}`
     const sourceStem = sourceName.replace(/\.[^.]+$/, '') || 'image'
@@ -407,9 +437,9 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       next.set(sessionId, [...(previous.get(sessionId) ?? []), pending])
       return next
     })
-    if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt })
+    appendImageEditPrompt({ sessionId, prompt, filename: pending.filename })
     if (imageEditorPresentation === 'inline') setImageEditorRequest(null)
-  }, [appendImageEditPrompt, baseRef, fileAccess, filePath, gitRoot, imageEditorPresentation, imageEditorRequest?.mode, previewOnly, sessionId, setImagePreviewContentRefreshVersionMap, setSessionPendingFiles])
+  }, [appendImageEditPrompt, baseRef, canComment, fileAccess, filePath, gitRoot, imageEditorPresentation, imageOutputMimeType, imagePath, previewOnly, sessionId, setImagePreviewContentRefreshVersionMap, setSessionPendingFiles])
 
   React.useEffect(() => {
     setImageEditorRequest(null)
@@ -942,9 +972,10 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
               const resolved = await window.electronAPI.resolveFilePath(filePath, fileAccess)
               if (cancelled) return
               if (resolved) {
-                setImagePath(filePath)
+                const resolvedImagePath = resolved.resolvedPath ?? filePath
+                setImagePath(resolvedImagePath)
                 setImageDataUrl(resolved.url)
-                setPreviewContentCache(cacheKey, { oldContent: '', newContent: '', imagePath: filePath, imageDataUrl: resolved.url })
+                setPreviewContentCache(cacheKey, { oldContent: '', newContent: '', imagePath: resolvedImagePath, imageDataUrl: resolved.url })
               } else {
                 setImagePath('')
                 setImageDataUrl('')
@@ -1892,7 +1923,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
             ) : isImage ? (
               imageDataUrl ? (
                 <div className="relative h-full">
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1 overflow-x-auto whitespace-nowrap rounded-lg border border-border/30 bg-background/90 px-2 py-1 shadow-sm backdrop-blur-sm">
+                <div className={cn('absolute top-2 left-1/2 -translate-x-1/2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1 overflow-x-auto whitespace-nowrap rounded-lg border border-border/30 bg-background/90 px-2 py-1 shadow-sm backdrop-blur-sm', imageEditorPresentation === 'inline' && editorSrc && 'hidden')}>
                   <button
                     type="button"
                     aria-label="缩小图片"
@@ -1910,9 +1941,9 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                   <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'editing', tool: 'draw' })}>
                     <Pencil className="size-3.5" />标注
                   </button>
-                  <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'comments', tool: 'select' })}>
+                  {canComment && <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'comments', tool: 'select' })}>
                     <MessageSquarePlus className="size-3.5" />添加评论
-                  </button>
+                  </button>}
                   <button type="button" className="flex h-7 shrink-0 items-center gap-1 rounded px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground" onClick={() => setImageEditorRequest({ mode: 'editing', tool: 'background' })}>
                     <ImageMinus className="size-3.5" />移除背景
                   </button>
@@ -1923,21 +1954,24 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                     <Proportions className="size-3.5" />调整大小
                   </button>
                 </div>
-                {imageEditorPresentation === 'inline' && imageEditorRequest && (
-                  <div className="h-full min-h-0 pt-12" data-image-inline-editor>
+                {imageEditorRequest && !editorSrc && (
+                  <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 z-10 mx-auto w-fit rounded-full bg-card px-3 py-2 text-xs text-muted-foreground shadow-md">正在打开图片编辑器…</div>
+                )}
+                {imageEditorPresentation === 'inline' && imageEditorRequest && editorSrc && (
+                  <div className="h-full min-h-0" data-image-inline-editor>
                     {imageEditorRequest.mode === 'editing' ? (
                       <ImageEditor
                         key={`${imageEditorRequest.mode}:${imageEditorRequest.tool}`}
-                        src={imageDataUrl}
+                        src={editorSrc}
                         layout="inline"
                         initialTool={imageEditorRequest.tool}
-                        outputMimeType={getImageOutputMimeType(filePath)}
+                        outputMimeType={imageOutputMimeType}
                         onSave={handleImageEditComplete}
                         onCancel={closeInlineImageEditor}
                       />
                     ) : (
                       <ImageCommentEditor
-                        src={imageDataUrl}
+                        src={editorSrc}
                         layout="inline"
                         onSave={handleImageEditComplete}
                         onCancel={closeInlineImageEditor}
@@ -1947,7 +1981,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                 )}
                 <div
                   ref={imageContainerRef}
-                  className={cn('h-full overflow-auto p-4 pt-12', imageEditorPresentation === 'inline' && imageEditorRequest && 'hidden')}
+                  className={cn('h-full overflow-auto p-4 pt-12', imageEditorPresentation === 'inline' && editorSrc && 'hidden')}
                   style={{ cursor: imageZoom > 1 ? (imageDragging.current ? 'grabbing' : 'grab') : 'default' }}
                   onMouseDown={(e) => {
                     if (imageZoom <= 1 || e.button !== 0) return
@@ -1984,13 +2018,14 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                   </div>
                 </div>
                 <ImageLightbox
-                  open={imageEditorPresentation === 'lightbox' && imageEditorRequest !== null}
+                  open={imageEditorPresentation === 'lightbox' && !!editorSrc}
                   onOpenChange={(open) => { if (!open) setImageEditorRequest(null) }}
-                  src={imageDataUrl}
+                  src={editorSrc}
                   alt={getPreviewPathLabel(filePath)}
                   initialMode={imageEditorRequest?.mode ?? 'editing'}
                   initialTool={imageEditorRequest?.tool ?? 'select'}
-                  outputMimeType={getImageOutputMimeType(filePath)}
+                  outputMimeType={imageOutputMimeType}
+                  canComment={canComment}
                   onEditComplete={handleImageEditComplete}
                 />
               </div>

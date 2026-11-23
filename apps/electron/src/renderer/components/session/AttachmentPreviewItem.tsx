@@ -37,6 +37,7 @@ interface AttachmentPreviewItemProps {
   onClick?: () => void
   /** 编辑完成回调 — 提供则启用图片高级编辑与位置评论 */
   onEditComplete?: (editedDataUrl: string, prompt?: string) => void
+  canComment?: boolean
   /** 同批图片列表（可选）— 提供则大图预览时可左右翻页 */
   imageSiblings?: AttachmentSibling[]
   /** 当前图片在同批列表中的索引（可选） */
@@ -56,6 +57,7 @@ export function AttachmentPreviewItem({
   onRemove,
   onClick,
   onEditComplete,
+  canComment,
   imageSiblings,
   siblingIndex,
   className,
@@ -124,6 +126,7 @@ export function AttachmentPreviewItem({
           open={lightboxOpen}
           onOpenChange={setLightboxOpen}
           onEditComplete={onEditComplete}
+          canComment={canComment}
           images={lightboxImages}
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}

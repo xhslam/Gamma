@@ -9,11 +9,11 @@ beforeAll(async () => {
     import { ImageLightbox } from '@/components/ui/image-lightbox';
     import '@/styles/globals.css';
     const src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="blue"/></svg>');
-    const completeEdit=async(url,prompt)=>{await new Promise(resolve=>setTimeout(resolve,50));if(window.failLightboxSave)throw new Error('模拟写回失败');window.edited=url;window.editedPrompt=prompt;};
+    const completeEdit=async(url,prompt)=>{await new Promise(resolve=>setTimeout(resolve,50));if(window.failLightboxSave)throw new Error('模拟写回失败');if(window.cancelLightboxSave)return false;window.edited=url;window.editedPrompt=prompt;};
     function App(){const [open,setOpen]=React.useState(false),[index,setIndex]=React.useState(0);
       return React.createElement(React.Fragment,null,
         React.createElement('button',{id:'opener',onClick:()=>setOpen(true)},'打开'),
-        React.createElement(ImageLightbox,{open,onOpenChange:setOpen,index,onIndexChange:setIndex,outputMimeType:window.lightboxMime,images:[{src,alt:'第一张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:completeEdit},{src,alt:'第二张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:completeEdit}]}));}
+        React.createElement(ImageLightbox,{open,onOpenChange:setOpen,index,onIndexChange:setIndex,canComment:true,outputMimeType:window.lightboxMime,images:[{src,alt:'第一张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:completeEdit},{src,alt:'第二张',onSave:()=>{window.saved=(window.saved||0)+1},onEditComplete:completeEdit}]}));}
     const root=createRoot(document.getElementById('root'));root.render(React.createElement(App));window.unmountLightbox=()=>root.unmount();
   `)
 }, 60_000)
@@ -124,6 +124,18 @@ describe('Given Chromium 中真实 Radix 图片预览', () => {
       return {failureVisible,failureKeptEditor,failurePreservedResult,retryExportedJpeg};
     `)
     expect(result).toEqual({ failureVisible: true, failureKeptEditor: true, failurePreservedResult: true, retryExportedJpeg: true })
+  }, 30_000)
+  test('When 从 JPEG 抠出透明区域 Then PNG 保留透明度且取消另存后可重试', async () => {
+    const result = await renderer.run(`window.lightboxMime='image/jpeg';${setup}
+      click('移除背景');await wait();click('自动移除');await wait();
+      window.cancelLightboxSave=true;click('保存');await wait();
+      const cancelKeptEditor=!!document.querySelector('canvas[aria-label="图片编辑画布"]')&&!window.edited;
+      window.cancelLightboxSave=false;click('保存');await wait();
+      const image=new Image();image.src=window.edited;await image.decode();
+      const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+      return {cancelKeptEditor, png:window.edited.startsWith('data:image/png'), alpha:ctx.getImageData(0,0,1,1).data[3], closed:!document.querySelector('[role=dialog]')};
+    `)
+    expect(result).toEqual({ cancelKeptEditor: true, png: true, alpha: 0, closed: true })
   }, 30_000)
   test('When 保存、快速开关和卸载 Then 回调保留、焦点约束及全局状态不残留', async () => {
     const result = await renderer.run(`${setup}

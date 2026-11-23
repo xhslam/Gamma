@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as sdk from '@earendil-works/pi-coding-agent'
 import type { Api, CredentialStore, Model } from '@earendil-works/pi-ai'
+import { streamSimple } from '@earendil-works/pi-ai/compat'
 import { CodexModelStore } from './pi-codex-model-store'
 import { buildCodexModel, refreshCodexModels } from './pi-model-registry'
 
@@ -166,6 +167,53 @@ describe('ChatGPT 订阅模型在线检测', () => {
     await expect(buildCodexModel(scopedSdk, { model: 'gpt-6.1-terra-preview', codexOAuthCredentials: credentials }))
       .rejects.toThrow('未找到指定的 ChatGPT (Codex) 模型: gpt-6.1-terra-preview')
   })
+
+  for (const [id, name, contextWindow] of [
+    ['gpt-6.2-astra', 'GPT-6.2 Astra', 272_000],
+    ['gpt-6.2-sol', 'GPT-6.2 Sol', 500_000],
+  ] as const) {
+    test(`Given 旧 SDK When 刷新并离线构建 ${id} Then 保留真实 ID 和非 none 推理`, async () => {
+      const store = createStore()
+      const runtime = await createRuntime(store, () => new Response('unavailable', { status: 503 }))
+      expect((await refreshCodexModels(runtime)).some((model) => model.id === id)).toBe(true)
+      const scopedSdk = {
+        ...sdk,
+        ModelRuntime: {
+          ...sdk.ModelRuntime,
+          create: async (options: Parameters<typeof sdk.ModelRuntime.create>[0]) =>
+            sdk.ModelRuntime.create({ ...options, modelsStore: store }),
+        } as typeof sdk.ModelRuntime,
+      }
+      const { model } = await buildCodexModel(scopedSdk, { model: id, codexOAuthCredentials: credentials })
+      expect(model).toMatchObject({ id, name, contextWindow, maxTokens: 128_000, input: ['text', 'image'] })
+      expect(model.thinkingLevelMap?.off).toBe('low')
+      // 在 SDK onPayload 边界截断，验证最终请求体且绝不发送真实网络请求。
+      const tokenPayload = Buffer.from(JSON.stringify({
+        'https://api.openai.com/auth': { chatgpt_account_id: 'fixture-account' },
+      })).toString('base64url')
+      for (const reasoning of [undefined, 'high', 'max'] as const) {
+        let payload: unknown
+        const stream = streamSimple(model, { messages: [] }, {
+          apiKey: `fixture.${tokenPayload}.fixture`, reasoning,
+          onPayload: (body) => {
+            payload = body
+            throw new Error('fixture-stop-before-network')
+          },
+        })
+        const result = await stream.result()
+        expect(result.errorMessage).toContain('fixture-stop-before-network')
+        expect(payload).toMatchObject({ model: id, reasoning: { effort: reasoning ?? 'low' } })
+      }
+      await expect(buildCodexModel(scopedSdk, { model: `${id}-preview`, codexOAuthCredentials: credentials }))
+        .rejects.toThrow('未找到指定')
+    })
+
+    test(`Given 在线目录提供 ${id} When 刷新 Then 不用回退覆盖真实元数据`, async () => {
+      const official = { ...latestModel, id, name: `${name} online`, contextWindow: 600_000 }
+      const runtime = await createRuntime(createStore(), () => Response.json({ models: [official] }, { headers: { 'last-modified': new Date('2099-01-01').toUTCString() } }))
+      expect((await refreshCodexModels(runtime)).find((model) => model.id === id)).toEqual(official)
+    })
+  }
 
   test('Given 其他 provider When 写入目录 Then 不污染 Codex 缓存', async () => {
     const store = createStore()

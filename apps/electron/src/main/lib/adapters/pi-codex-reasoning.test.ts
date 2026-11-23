@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import type { Api, Model, ModelsStoreEntry } from '@earendil-works/pi-ai'
 import { getModels } from '@earendil-works/pi-ai/compat'
 import { CodexModelStore } from './pi-codex-model-store'
-import { getCodexCatalogModels, resolvePiReasoningCapability } from './pi-model-registry'
+import { getCodexCatalogModels, resolvePiBudgetContextWindow, resolvePiReasoningCapability } from './pi-model-registry'
 import { resolvePiThinkingLevel } from '../agent-thinking-level'
 
 const onlineModel: Model<Api> = {
@@ -23,6 +23,19 @@ function cache(models: Model<Api>[] | undefined): void {
 }
 
 describe('ChatGPT 订阅推理滑杆能力', () => {
+  for (const id of ['gpt-6.2-astra', 'gpt-6.2-sol']) {
+    test(`Given ${id} When 查询目录与滑杆 Then 不显示关闭推理且保留缓存窗口`, async () => {
+      cache(undefined)
+      const fallback = (await getCodexCatalogModels()).find((model) => model.id === id)
+      expect(fallback).toBeDefined()
+      expect(await resolvePiReasoningCapability('openai-codex', id)).toMatchObject({
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      })
+      cache([{ ...onlineModel, id, contextWindow: 600_000 }])
+      expect(await resolvePiBudgetContextWindow('openai-codex', id)).toBe(600_000)
+    })
+  }
+
   test('Given 在线模型仅存在受管缓存 When 查询滑杆能力 Then 显示实际支持的档位', async () => {
     cache([onlineModel])
     expect((await getCodexCatalogModels()).find((model) => model.id === onlineModel.id)).toEqual(onlineModel)

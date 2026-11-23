@@ -520,6 +520,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
 
   /** 查询 Pi catalog 或专属 profile 支持的会话级推理档位 */
   getPiReasoningCapability: (channelId: string, modelId: string) => Promise<import('@gamma/shared').ReasoningCapability | undefined>
+  getPiImageInputSupport: (channelId: string, modelId: string) => Promise<boolean>
 
   /** 更新当前会话的推理深度 */
   updateSessionReasoningLevel: (sessionId: string, thinkingLevel: AgentThinkingLevel) => Promise<AgentSessionMeta>
@@ -910,6 +911,8 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
 
   /** 将图片编辑结果原子写回已授权的 PNG/JPEG/WebP 文件。 */
   writeImageFile: (filePath: string, dataUrl: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  readImageForEdit: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<string>
+  saveEditedPngAs: (dataUrl: string, filename: string) => Promise<boolean>
 
   // 仅解析文件路径（供 PDF/图片等用 gamma-file:// 加载）
   resolveFilePath: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<(import('@gamma/shared').ResolvedFileUrl & { resolvedPath?: string }) | null>
@@ -1780,6 +1783,7 @@ const electronAPI: ElectronAPI = {
   getPiReasoningCapability: (channelId: string, modelId: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_PI_REASONING_CAPABILITY, channelId, modelId)
   },
+  getPiImageInputSupport: (channelId, modelId) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_PI_IMAGE_INPUT_SUPPORT, channelId, modelId),
 
   updateSessionReasoningLevel: (sessionId: string, thinkingLevel: AgentThinkingLevel) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_SESSION_REASONING_LEVEL, sessionId, thinkingLevel)
@@ -2375,6 +2379,8 @@ const electronAPI: ElectronAPI = {
   writeImageFile: (filePath: string, dataUrl: string, access?: import('@gamma/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(IPC_CHANNELS.WRITE_IMAGE_FILE, filePath, dataUrl, access) as Promise<void>
   },
+  readImageForEdit: (filePath, access) => ipcRenderer.invoke(IPC_CHANNELS.READ_IMAGE_FOR_EDIT, filePath, access),
+  saveEditedPngAs: (dataUrl, filename) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_EDITED_PNG_AS, dataUrl, filename),
 
   resolveFilePath: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
     return ipcRenderer.invoke('file:resolve-path', filePath, access) as Promise<(import('@gamma/shared').ResolvedFileUrl & { resolvedPath?: string }) | null>

@@ -35,3 +35,9 @@ export function isGpt6LunaFamily(modelId: string | undefined): boolean {
 export function isGpt61TerraModel(modelId: string | undefined): boolean {
   return normalizeModelId(modelId) === GPT_6_1_TERRA_MODEL_ID
 }
+
+/** GPT-6.2 已发布的 Codex 型号，不泛化未知后缀或未来 SKU。 */
+export function isGpt62Model(modelId: string | undefined): boolean {
+  const normalized = normalizeModelId(modelId)
+  return normalized === 'gpt-6.2-astra' || normalized === 'gpt-6.2-sol'
+}

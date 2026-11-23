@@ -16,6 +16,7 @@ import {
   Link2,
   MousePointer2,
   Pencil,
+  Proportions,
   Redo2,
   RotateCw,
   Square,
@@ -52,7 +53,7 @@ interface ImageEditorProps {
   initialTool?: ImageEditorTool
   /** 弹窗按视口布局；侧边栏按可用容器尺寸布局。 */
   layout?: 'lightbox' | 'inline'
-  onSave: (editedDataUrl: string) => void | Promise<void>
+  onSave: (editedDataUrl: string) => void | Promise<void | false>
   onCancel: () => void
   /** 文件预览覆盖保存时保持扩展名与实际编码一致。 */
   outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
@@ -83,7 +84,6 @@ interface EditorButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
   active?: boolean
 }
 
-const MAX_DIM = 4096
 const MAX_RESIZE_DIM = 8192
 const MAX_RESIZE_PIXELS = 40_000_000
 const HISTORY_LIMIT = 30
@@ -97,6 +97,7 @@ function EditorButton({ label, active, className, children, ...props }: EditorBu
       data-icon-button="true"
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       className={cn(
         'rounded-full p-2 text-inverse-foreground/70 transition-colors duration-150',
@@ -114,6 +115,17 @@ function EditorButton({ label, active, className, children, ...props }: EditorBu
 
 function normalizedRect(rect: ImageRect): ImageRect {
   return { x: Math.min(rect.x, rect.x + rect.w), y: Math.min(rect.y, rect.y + rect.h), w: Math.abs(rect.w), h: Math.abs(rect.h) }
+}
+
+/** JPEG 无法记录 Alpha；按行分块检查以避免再分配一整张大图。 */
+function hasTransparentPixels(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D): boolean {
+  for (let y = 0; y < canvas.height; y += 64) {
+    const pixels = context.getImageData(0, y, canvas.width, Math.min(64, canvas.height - y)).data
+    for (let index = 3; index < pixels.length; index += 4) {
+      if (pixels[index] !== 255) return true
+    }
+  }
+  return false
 }
 
 export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', onSave, onCancel, outputMimeType = 'image/png' }: ImageEditorProps): React.ReactElement {
@@ -135,7 +147,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
   const [textDraft, setTextDraft] = React.useState<TextDraft | null>(null)
   const [status, setStatus] = React.useState('')
   const [imageLoaded, setImageLoaded] = React.useState(false)
-  const [imageError, setImageError] = React.useState(false)
+  const [imageError, setImageError] = React.useState('')
   const [restoring, setRestoring] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [drawVersion, setDrawVersion] = React.useState(0)
@@ -220,28 +232,33 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
   React.useEffect(() => {
     let cancelled = false
     setImageLoaded(false)
-    setImageError(false)
+    setImageError('')
     setStatus('')
     const img = new Image()
     img.onload = () => {
       if (cancelled) return
       sourceImageRef.current = img
-      let width = img.naturalWidth
-      let height = img.naturalHeight
-      if (width > MAX_DIM || height > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height)
-        width = Math.round(width * ratio)
-        height = Math.round(height * ratio)
+      const width = img.naturalWidth
+      const height = img.naturalHeight
+      if (!width || !height || width > MAX_RESIZE_DIM || height > MAX_RESIZE_DIM || width * height > MAX_RESIZE_PIXELS) {
+        setImageError(`图片编辑支持最长边 ${MAX_RESIZE_DIM} 像素、总像素不超过 ${MAX_RESIZE_PIXELS / 1_000_000} 百万的图片`)
+        return
       }
       const base = document.createElement('canvas')
       base.width = width
       base.height = height
       const ctx = base.getContext('2d')
       if (!ctx) {
-        setImageError(true)
+        setImageError('无法创建图片画布')
         return
       }
       ctx.drawImage(img, 0, 0, width, height)
+      try {
+        ctx.getImageData(0, 0, 1, 1)
+      } catch {
+        setImageError('无法读取此图片的像素')
+        return
+      }
       baseCanvasRef.current = base
       pastRef.current = []
       futureRef.current = []
@@ -261,7 +278,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
       refreshCanvas()
     }
     img.onerror = () => {
-      if (!cancelled) setImageError(true)
+      if (!cancelled) setImageError('图片加载失败')
     }
     img.src = src
     return () => { cancelled = true }
@@ -397,6 +414,10 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
         baseCanvasRef.current = base
         updateAnnotations(cloneImageAnnotations(snapshot.annotations))
         updateRotation(snapshot.rotation)
+        const rotated = snapshot.rotation % 180 !== 0
+        setResizeWidth(String(rotated ? base.height : base.width))
+        setResizeHeight(String(rotated ? base.width : base.height))
+        setResizeRatio(null)
         updateCropRect(null)
         updateDraftAnnotation(null)
         setSelectedId(null)
@@ -520,9 +541,14 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.beginPath()
-    ctx.moveTo(from.x, from.y)
-    ctx.lineTo(to.x, to.y)
-    ctx.stroke()
+    if (from.x === to.x && from.y === to.y) {
+      ctx.arc(to.x, to.y, eraserSize / 2, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      ctx.moveTo(from.x, from.y)
+      ctx.lineTo(to.x, to.y)
+      ctx.stroke()
+    }
     ctx.restore()
     const remaining = annotationsRef.current.filter((annotation) => !hitTestAnnotation(annotation, to, eraserSize / 2))
     if (remaining.length !== annotationsRef.current.length) updateAnnotations(remaining)
@@ -549,7 +575,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
   }, [backgroundTolerance, beginChange, cancelChange, commitChange, refreshCanvas])
 
   const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLCanvasElement>): void => {
-    if (event.button !== 0 || !event.isPrimary || restoring || operationRef.current) return
+    if (event.button !== 0 || !event.isPrimary || restoring || saving || operationRef.current) return
     const point = getCanvasPos(event)
     event.currentTarget.focus()
     if (tool === 'background') {
@@ -587,7 +613,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     }
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
-  }, [getCanvasPos, restoring, tool, applyBackgroundRemoval, updateCropRect, updateDraftAnnotation, beginChange, eraseAt, drawColor, brushSize])
+  }, [getCanvasPos, restoring, saving, tool, applyBackgroundRemoval, updateCropRect, updateDraftAnnotation, beginChange, eraseAt, drawColor, brushSize])
 
   const handlePointerMove = React.useCallback((event: React.PointerEvent<HTMLCanvasElement>): void => {
     const operation = operationRef.current
@@ -819,9 +845,14 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
   }, [updateCropRect])
 
   const handleRotate = React.useCallback((): void => {
-    if (!beginChange()) return
-    updateRotation((rotationRef.current + 90) % 360)
+    const base = baseCanvasRef.current
+    if (!base || !beginChange()) return
+    const next = (rotationRef.current + 90) % 360
+    updateRotation(next)
+    setResizeWidth(String(next % 180 === 0 ? base.width : base.height))
+    setResizeHeight(String(next % 180 === 0 ? base.height : base.width))
     updateCropRect(null)
+    setResizeRatio(null)
     setSelectedId(null)
     commitChange()
     refreshCanvas()
@@ -830,13 +861,8 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
   const handleReset = React.useCallback((): void => {
     const image = sourceImageRef.current
     if (!image || !beginChange()) return
-    let width = image.naturalWidth
-    let height = image.naturalHeight
-    if (width > MAX_DIM || height > MAX_DIM) {
-      const ratio = Math.min(MAX_DIM / width, MAX_DIM / height)
-      width = Math.round(width * ratio)
-      height = Math.round(height * ratio)
-    }
+    const width = image.naturalWidth
+    const height = image.naturalHeight
     const base = document.createElement('canvas')
     base.width = width
     base.height = height
@@ -852,49 +878,62 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     updateCropRect(null)
     setSelectedId(null)
     setResizeRatio(null)
+    setResizeWidth(String(width))
+    setResizeHeight(String(height))
     setStatus('')
     commitChange()
     refreshCanvas()
   }, [beginChange, cancelChange, updateAnnotations, updateRotation, updateCropRect, commitChange, refreshCanvas])
 
   const handleExport = React.useCallback(async (): Promise<void> => {
-    if (saving) return
-    if ((tool === 'crop' || tool === 'resize') && cropRectRef.current) applyCrop()
-    const base = baseCanvasRef.current
-    if (!base) return
-    const currentRotation = rotationRef.current
-    const rotated = currentRotation % 180 !== 0
-    const width = rotated ? base.height : base.width
-    const height = rotated ? base.width : base.height
-    const final = document.createElement('canvas')
-    final.width = width
-    final.height = height
-    const ctx = final.getContext('2d')
-    if (!ctx) return
-    if (outputMimeType === 'image/jpeg') {
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, width, height)
-    }
-    if (currentRotation !== 0) {
-      ctx.translate(width / 2, height / 2)
-      ctx.rotate(currentRotation * Math.PI / 180)
-      ctx.translate(-base.width / 2, -base.height / 2)
-    }
-    ctx.drawImage(base, 0, 0)
-    for (const annotation of annotationsRef.current) renderImageAnnotation(ctx, annotation)
+    if (!imageLoaded || saving || restoring || operationRef.current) return
     setSaving(true)
     setStatus('')
     try {
-      await onSave(final.toDataURL(outputMimeType, 0.92))
+      const previous = baseCanvasRef.current
+      if (!previous) return
+      const pendingCrop = cropRectRef.current
+      const previousRotated = rotationRef.current % 180 !== 0
+      const previousWidth = previousRotated ? previous.height : previous.width
+      const previousHeight = previousRotated ? previous.width : previous.height
+      if ((tool === 'crop' || tool === 'resize') && pendingCrop?.w && pendingCrop.h) {
+        if (!applyCrop()) {
+          setStatus('请扩大裁剪区域后再保存')
+          return
+        }
+      } else if (tool === 'resize' && (Number(resizeWidth) !== previousWidth || Number(resizeHeight) !== previousHeight)) {
+        if (!applyResize()) return
+      }
+      const base = baseCanvasRef.current
+      if (!base) return
+      const currentRotation = rotationRef.current
+      const rotated = currentRotation % 180 !== 0
+      const final = document.createElement('canvas')
+      final.width = rotated ? base.height : base.width
+      final.height = rotated ? base.width : base.height
+      const ctx = final.getContext('2d')
+      if (!ctx) throw new Error('无法创建导出画布')
+      if (currentRotation !== 0) {
+        ctx.translate(final.width / 2, final.height / 2)
+        ctx.rotate(currentRotation * Math.PI / 180)
+        ctx.translate(-base.width / 2, -base.height / 2)
+      }
+      ctx.drawImage(base, 0, 0)
+      for (const annotation of annotationsRef.current) renderImageAnnotation(ctx, annotation)
+      const mimeType = outputMimeType === 'image/jpeg' && hasTransparentPixels(final, ctx) ? 'image/png' : outputMimeType
+      const dataUrl = final.toDataURL(mimeType, 0.92)
+      if (!dataUrl.startsWith(`data:${mimeType};base64,`)) throw new Error('无法编码编辑后的图片')
+      await onSave(dataUrl)
     } catch (error) {
       setStatus(`保存失败：${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setSaving(false)
     }
-  }, [tool, applyCrop, onSave, outputMimeType, saving])
+  }, [tool, applyCrop, applyResize, imageLoaded, onSave, outputMimeType, resizeHeight, resizeWidth, restoring, saving])
 
   React.useEffect(() => {
     const handler = (event: KeyboardEvent): void => {
+      if (saving) return
       const target = event.target
       if (target instanceof HTMLElement && (target.matches('input, textarea') || target.isContentEditable)) return
       const command = event.metaKey || event.ctrlKey
@@ -922,7 +961,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [undo, redo, handleExport, selectedId, deleteSelected, nudgeSelected])
+  }, [undo, redo, handleExport, selectedId, deleteSelected, nudgeSelected, saving])
 
   const isShape = tool === 'rect' || tool === 'ellipse' || tool === 'arrow'
   const selectedAnnotation = annotations.find((annotation) => annotation.id === selectedId)
@@ -945,7 +984,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
       )}>
         {imageError && (
           <div className="flex flex-col items-center gap-3 text-inverse-foreground/70" role="alert">
-            <span className="text-sm">图片加载失败</span>
+            <span className="text-sm">{imageError}</span>
             <button type="button" onClick={onCancel} className="rounded-full bg-card/10 px-4 py-1.5 text-sm hover:bg-card/20">返回</button>
           </div>
         )}
@@ -1035,7 +1074,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
             <input aria-label="背景颜色容差" type="range" min="0" max="120" value={backgroundTolerance} onChange={(event) => setBackgroundTolerance(Number(event.target.value))} className="w-28 accent-current" />
             <span className="w-7 tabular-nums">{backgroundTolerance}</span>
           </label>
-          <button type="button" onClick={() => applyBackgroundRemoval()} className="rounded-full bg-card/15 px-3 py-1.5 hover:bg-card/25">自动移除</button>
+          <button type="button" disabled={!imageLoaded || restoring || saving} onClick={() => applyBackgroundRemoval()} className="rounded-full bg-card/15 px-3 py-1.5 hover:bg-card/25 disabled:opacity-40">自动移除</button>
         </div>
       )}
 
@@ -1097,6 +1136,7 @@ export function ImageEditor({ src, initialTool = 'select', layout = 'lightbox', 
         <EditorButton label="移除背景" active={tool === 'background'} onClick={() => chooseTool('background')}><ImageMinus className="size-5" /></EditorButton>
         <div className="mx-1 h-5 w-px bg-card/20" aria-hidden />
         <EditorButton label="裁剪" active={tool === 'crop'} onClick={() => chooseTool('crop')}><Crop className="size-5" /></EditorButton>
+        <EditorButton label="调整大小" active={tool === 'resize'} onClick={() => chooseTool('resize')}><Proportions className="size-5" /></EditorButton>
         <EditorButton label="旋转 90°" onClick={handleRotate}><RotateCw className="size-5" /></EditorButton>
         {(tool === 'crop' || tool === 'resize') && cropRect && Math.abs(cropRect.w) > 4 && Math.abs(cropRect.h) > 4 && (
           <EditorButton label={tool === 'resize' ? '应用比例' : '应用裁剪'} onClick={applyCrop} className="text-success"><Check className="size-5" /></EditorButton>

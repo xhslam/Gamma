@@ -29,6 +29,7 @@ import { OnDemandConversationLayout } from './on-demand/OnDemandConversationLayo
 import { AgentMessageQueue } from './AgentMessageQueue'
 import { AgentSendOutbox } from './AgentSendOutbox'
 import { useAgentSendOutbox } from '@/hooks/useAgentSendOutbox'
+import { useImageCommentAvailability } from '@/hooks/use-image-comment-availability'
 import { SkillMentionNamesProvider } from './SkillMentionNamesProvider'
 import { ContextUsageBadge } from './ContextUsageBadge'
 import { PermissionBanner } from './PermissionBanner'
@@ -1761,7 +1762,12 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   /** 图片附件编辑完成：用编辑后的图替换该附件（统一转为内存图片走 __pendingAgentFileData） */
   const handleAttachmentEditComplete = React.useCallback((fileId: string, editedDataUrl: string, prompt?: string): void => {
     const base64 = editedDataUrl.split(',')[1]
-    if (!base64) return
+    const source = pendingFilesRef.current.find((file) => file.id === fileId)
+    if (!base64 || !source) throw new Error('无法更新当前会话中的图片')
+    const filename = makeUniqueFilename(
+      source.filename.replace(/(\.[^.]+)?$/, '') + '_edited.png',
+      pendingFilesRef.current.filter((file) => file.id !== fileId).map((file) => file.filename),
+    )
     if (!window.__pendingAgentFileData) {
       window.__pendingAgentFileData = new Map<string, string>()
     }
@@ -1774,7 +1780,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       return {
         ...f,
         previewUrl: editedDataUrl,
-        filename: f.filename.replace(/(\.[^.]+)?$/, '') + '_edited.png',
+        filename,
         mediaType: 'image/png',
         size: Math.round(base64.length * 0.75),
         // 编辑后统一当作内存图片：清除文件引用，发送时从 __pendingAgentFileData 读取最新数据
@@ -1782,7 +1788,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         isClipboardDraft: undefined,
       }
     }))
-    if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt })
+    if (prompt?.trim()) appendImageEditPrompt({ sessionId, prompt, filename })
   }, [setPendingFiles, appendImageEditPrompt, sessionId])
 
   const openClipboardPreviewFile = React.useCallback((filePath: string): void => {
@@ -3504,6 +3510,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     () => pendingFiles.filter((f) => f.mediaType.startsWith('image/') && !!f.previewUrl),
     [pendingFiles]
   )
+  const canCommentOnAttachment = useImageCommentAvailability(pendingImageFiles.length ? sessionId : undefined)
   const imageSiblingsForPending = React.useMemo(
     () => pendingImageFiles.map((f) => ({
       previewUrl: f.previewUrl as string,
@@ -3675,6 +3682,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
                       onRemove={() => handleRemoveFile(file.id)}
                       onClick={file.filename.startsWith('clipboard-') ? () => handleClipboardPreview(file) : undefined}
                       onEditComplete={(editedDataUrl, prompt) => handleAttachmentEditComplete(file.id, editedDataUrl, prompt)}
+                      canComment={canCommentOnAttachment}
                       imageSiblings={imageSiblingsForPending}
                       siblingIndex={pendingImageFiles.findIndex((f) => f.id === file.id)}
                     />

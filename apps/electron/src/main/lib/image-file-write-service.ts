@@ -1,5 +1,6 @@
 import { MAX_ATTACHMENT_SIZE } from '@gamma/shared'
 import { realpathSync, statSync } from 'node:fs'
+import { open } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { writeBinaryFileAtomic } from './safe-file'
 
@@ -8,6 +9,35 @@ type RasterImageMimeType = 'image/png' | 'image/jpeg' | 'image/webp'
 interface DecodedRasterImage {
   buffer: Buffer
   mimeType: RasterImageMimeType
+}
+
+const editableImageMimeTypes = new Map([
+  ['.png', 'image/png'], ['.jpg', 'image/jpeg'], ['.jpeg', 'image/jpeg'],
+  ['.webp', 'image/webp'], ['.gif', 'image/gif'], ['.svg', 'image/svg+xml'],
+  ['.bmp', 'image/bmp'], ['.ico', 'image/x-icon'],
+])
+
+/** 只读取调用方已授权的单张图片，使 Canvas 可以读取和导出像素。 */
+export async function readImageForEdit(filePath: string): Promise<string> {
+  const mimeType = editableImageMimeTypes.get(extname(filePath).toLowerCase())
+  if (!mimeType) throw new Error('不支持此图片格式')
+  const file = await open(filePath, 'r')
+  try {
+    const info = await file.stat()
+    const { size } = info
+    if (!info.isFile() || size === 0 || size > MAX_ATTACHMENT_SIZE) throw new Error('图片为空或超过 100MB 上限')
+    const buffer = Buffer.allocUnsafe(size)
+    let offset = 0
+    while (offset < size) {
+      const { bytesRead } = await file.read(buffer, offset, size - offset)
+      if (!bytesRead) throw new Error('图片在读取过程中发生变化')
+      offset += bytesRead
+    }
+    if ((await file.stat()).size !== size) throw new Error('图片在读取过程中发生变化')
+    return `data:${mimeType};base64,${buffer.toString('base64')}`
+  } finally {
+    await file.close()
+  }
 }
 
 function hasExpectedSignature(buffer: Buffer, mimeType: RasterImageMimeType): boolean {

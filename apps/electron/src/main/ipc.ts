@@ -164,7 +164,7 @@ import {
 import { loginCodexOAuth, cancelCodexOAuthLogin } from './lib/codex-oauth-service'
 import { loginGithubCopilotOAuth, cancelGithubCopilotOAuthLogin } from './lib/github-copilot-oauth-service'
 import { loginXaiOAuth, cancelXaiOAuthLogin } from './lib/xai-oauth-service'
-import { resolvePiReasoningCapability } from './lib/adapters/pi-model-registry'
+import { resolvePiImageInputCapability, resolvePiReasoningCapability } from './lib/adapters/pi-model-registry'
 import { serializeCodexCredentials, serializeGithubCopilotCredentials, serializeXaiCredentials } from '@gamma/shared'
 import type { CodexOAuthDeviceCode, CodexOAuthLoginMethod, GithubCopilotOAuthDeviceCode, XaiOAuthDeviceCode } from '@gamma/shared'
 import {
@@ -229,7 +229,7 @@ import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
 import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceSkillsDir, getScratchPadPath, getMemoryDir } from './lib/config-paths'
-import { writeTextFileAtomic } from './lib/safe-file'
+import { writeBinaryFileAtomic, writeTextFileAtomic } from './lib/safe-file'
 import { getCachedDefaultAppInfo, saveCachedDefaultAppInfo } from './lib/default-app-cache'
 import { loadDefaultAppIcon } from './lib/default-app-icon'
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from './lib/storage-service'
@@ -3660,6 +3660,15 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(
+    AGENT_IPC_CHANNELS.GET_PI_IMAGE_INPUT_SUPPORT,
+    async (_, channelId: string, modelId: string): Promise<boolean> => {
+      if (typeof channelId !== 'string' || typeof modelId !== 'string' || !channelId || !modelId) return false
+      const channel = getChannelById(channelId)
+      return Boolean(channel?.enabled && await resolvePiImageInputCapability(channel.provider, modelId) === 'supported')
+    },
+  )
+
+  ipcMain.handle(
     AGENT_IPC_CHANNELS.UPDATE_SESSION_REASONING_LEVEL,
     async (_, sessionId: string, thinkingLevel: AgentThinkingLevel): Promise<AgentSessionMeta> => {
       const validThinkingLevels: AgentThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
@@ -4203,12 +4212,42 @@ export function registerIpcHandlers(): void {
     async (_, filePath: string, dataUrl: string, access?: FileAccessOptions | string[]): Promise<void> => {
       if (typeof filePath !== 'string' || typeof dataUrl !== 'string') throw new Error('图片保存参数无效')
       const options = normalizeFileAccessOptions(access)
-      const { resolveFilePath } = await import('./lib/file-preview-service')
-      const resolved = resolveFilePath(filePath, getAllowedCandidateBasePaths(options))
-      if (!resolved || !isPathAllowed(resolved, options)) throw new Error('图片不在当前会话的授权范围内')
+      const resolved = await resolveAuthorizedPreviewPath(filePath, options)
+      if (!resolved) throw new Error('图片不在当前会话的授权范围内')
 
       const { writeRasterImageFile } = await import('./lib/image-file-write-service')
       writeRasterImageFile(resolved, dataUrl)
+    },
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.READ_IMAGE_FOR_EDIT,
+    async (_, filePath: string, access?: FileAccessOptions): Promise<string> => {
+      if (typeof filePath !== 'string') throw new Error('图片路径无效')
+      const resolved = await resolveAuthorizedPreviewPath(filePath, normalizeFileAccessOptions(access))
+      if (!resolved) throw new Error('图片不在当前会话的授权范围内')
+      const { readImageForEdit } = await import('./lib/image-file-write-service')
+      return readImageForEdit(resolved)
+    },
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.SAVE_EDITED_PNG_AS,
+    async (event, dataUrl: string, filename: string): Promise<boolean> => {
+      if (typeof dataUrl !== 'string' || typeof filename !== 'string') throw new Error('图片导出参数无效')
+      const { decodeRasterImageDataUrl } = await import('./lib/image-file-write-service')
+      const { buffer, mimeType } = decodeRasterImageDataUrl(dataUrl)
+      if (mimeType !== 'image/png') throw new Error('图片副本必须为 PNG')
+      const options = {
+        defaultPath: basename(filename.replace(/\\/g, '/')),
+        filters: [{ name: 'PNG 图片', extensions: ['png'] }],
+      }
+      const parent = BrowserWindow.fromWebContents(event.sender)
+      const selected = await (parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options))
+      if (selected.canceled || !selected.filePath) return false
+      if (!/\.png$/i.test(selected.filePath)) throw new Error('请选择 .png 文件名')
+      writeBinaryFileAtomic(selected.filePath, buffer)
+      return true
     },
   )
 

@@ -5,12 +5,14 @@ import { queuedTextToParagraphHtml } from '@/lib/agent-message-queue'
 export interface ImageEditDraftHandoff {
   sessionId: string
   prompt: string
+  filename?: string
 }
 
 /** 将图片编辑要求追加到当前会话草稿；不覆盖已有内容，也不自动启动 Agent。 */
 export const appendImageEditPromptAtom = atom(null, (get, set, handoff: ImageEditDraftHandoff) => {
-  const prompt = handoff.prompt.trim()
-  if (!handoff.sessionId || !prompt) return
+  const comment = handoff.prompt.trim()
+  if (!handoff.sessionId || !comment) return
+  const prompt = handoff.filename ? `图片「${handoff.filename}」的修改要求\n${comment}` : comment
   const previous = get(agentSessionDraftsAtom).get(handoff.sessionId) ?? ''
   const html = get(agentSessionDraftHtmlAtom).get(handoff.sessionId) ?? ''
   const nextDraft = previous.trim() ? `${previous.trimEnd()}\n\n${prompt}` : prompt
