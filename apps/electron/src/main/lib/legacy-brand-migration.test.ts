@@ -164,6 +164,23 @@ describe('Carpus 首次启动复制迁移', () => {
     expect(existsSync(paths.configDirectory)).toBe(false)
   })
 
+  test('Given 外部管理目录已缺失 When 迁移 Then 备份悬空指针并保留两个目录的工作文件', () => {
+    const paths = fixture()
+    const worktree = join('agent-workspaces', 'a', 'worktrees', 'b')
+    const pointer = `gitdir: ${join(dirname(paths.configDirectory), 'missing', '.git', 'worktrees', 'b')}\n`
+    const oldWorktree = join(paths.legacyConfigDirectory, worktree)
+    const newWorktree = join(paths.configDirectory, worktree)
+    write(join(oldWorktree, '.git'), pointer)
+    write(join(oldWorktree, 'file.txt'), '工作文件')
+    prepare(paths).commit()
+    expect(readFileSync(join(oldWorktree, '.git'), 'utf8')).toBe(pointer)
+    expect(existsSync(join(newWorktree, '.git'))).toBe(false)
+    expect(readFileSync(join(newWorktree, '.git.carpus-legacy'), 'utf8')).toBe(pointer)
+    expect(readFileSync(join(newWorktree, 'file.txt'), 'utf8')).toBe('工作文件')
+    write(join(newWorktree, 'file.txt'), 'Carpus 修改')
+    expect(readFileSync(join(oldWorktree, 'file.txt'), 'utf8')).toBe('工作文件')
+  })
+
   test('Given 旧进程仍持有锁 When 获取迁移快照 Then 不执行复制且恢复 Carpus 路径', () => {
     let path = '/carpus'
     let copied = false

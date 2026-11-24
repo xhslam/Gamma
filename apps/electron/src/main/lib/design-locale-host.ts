@@ -22,7 +22,7 @@ export function createDesignLocaleHost() {
     if (previous) return previous
     const locale = resolveDesignLocale(systemLanguages)
     const operation = (async () => {
-      const needsReload = await contents.executeJavaScript(`(()=>{if(typeof globalThis.__gammaDesignLocale!=='string')throw new Error('design 资源缺少语言引导，请重新构建内置资源');const locale=${JSON.stringify(locale)};sessionStorage.setItem(${JSON.stringify(DESIGN_LOCALE_STORAGE_KEY)},locale);return globalThis.__gammaDesignLocale!==locale})()`)
+      const needsReload = await contents.executeJavaScript(`(()=>{if(typeof globalThis.__carpusDesignLocale!=='string')throw new Error('design 资源缺少语言引导，请重新构建内置资源');const locale=${JSON.stringify(locale)};sessionStorage.setItem(${JSON.stringify(DESIGN_LOCALE_STORAGE_KEY)},locale);return globalThis.__carpusDesignLocale!==locale})()`)
       if (needsReload !== true) return
       if (contents.isDestroyed() || !matchesDesignEditorThemeUrl(editorUrl, contents.getURL())) throw new Error('design 编辑器已离开原页面，取消语言初始化')
       await new Promise<void>((resolve, reject) => {
@@ -35,7 +35,7 @@ export function createDesignLocaleHost() {
         try { contents.reload() } catch (error) { clean(); reject(error) }
       })
       if (contents.isDestroyed() || !matchesDesignEditorThemeUrl(editorUrl, contents.getURL())) throw new Error('design 编辑器重载后地址不匹配')
-      const actual = await contents.executeJavaScript('globalThis.__gammaDesignLocale')
+      const actual = await contents.executeJavaScript('globalThis.__carpusDesignLocale')
       if (actual !== locale) throw new Error('design 编辑器语言初始化失败')
     })()
     pages.set(editorUrl, operation)

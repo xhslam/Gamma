@@ -53,7 +53,7 @@ beforeAll(async () => {
           await view.webContents.loadURL(urls[kind]);
           await createDesignLocaleHost().setLocale(view.webContents,urls[kind],[language]);
           await view.webContents.executeJavaScript('new Promise((resolve,reject)=>{const ready=()=>document.querySelector("#root button,#root [role=button],#root canvas")&&!document.querySelector("#root [data-placeholder]");if(ready()){resolve();return}const observer=new MutationObserver(()=>{if(ready()){clearTimeout(timer);observer.disconnect();resolve()}});const timer=setTimeout(()=>{observer.disconnect();reject(new Error("编辑器未就绪"))},15000);observer.observe(document,{childList:true,subtree:true})})');
-          const initial=await view.webContents.executeJavaScript('({locale:globalThis.__gammaDesignLocale,native:globalThis.__appifact_i18n?.lang,title:document.title,text:document.querySelector("#root").innerText,labels:[...document.querySelectorAll("#root button,#root [role=button]")].map(el=>[el.getAttribute("aria-label"),el.getAttribute("title"),el.textContent].filter(Boolean).join(" ")).join(" | ")})');
+          const initial=await view.webContents.executeJavaScript('({locale:globalThis.__carpusDesignLocale,native:globalThis.__appifact_i18n?.lang,title:document.title,text:document.querySelector("#root").innerText,labels:[...document.querySelectorAll("#root button,#root [role=button]")].map(el=>[el.getAttribute("aria-label"),el.getAttribute("title"),el.textContent].filter(Boolean).join(" ")).join(" | ")})');
           const flushed=await view.webContents.executeJavaScript(DESIGN_EDITOR_FLUSH_SCRIPT);
           return {...initial,flushed};
         }finally{view.webContents.close()}

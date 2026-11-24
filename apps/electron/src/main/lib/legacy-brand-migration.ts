@@ -2,7 +2,7 @@
  * 首次从 Gamma 或 Proma 升级到 Carpus 时复制应用拥有的数据。
  * 旧目录始终保留；只有完成凭据与浏览器迁移的 staging 才会成为正式配置。
  */
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
+import { constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -199,6 +199,7 @@ function migrateCopiedMetadata(root: string, sourceRoot: string, targetRoot: str
 export function copyLegacyProfile(source: string, target: string): void {
   cpSync(source, target, {
     recursive: true,
+    mode: constants.COPYFILE_FICLONE,
     dereference: false,
     verbatimSymlinks: true,
     filter: (path) => {
@@ -233,7 +234,15 @@ function migrateCopiedGitPointers(root: string, sourceRoot: string, targetRoot: 
         if (!value) continue
         const oldDirectory = resolve(sourceRoot, relative(root, dirname(path)))
         const pointedPath = resolve(oldDirectory, value)
-        if (mapGitPath(pointedPath) === pointedPath) throw new Error('受管 Git worktree 仍引用外部仓库或外部工作树。请先用 git worktree move 整理位置，再启动 Carpus；原仓库没有被改动。')
+        if (mapGitPath(pointedPath) === pointedPath) {
+          const backup = `${path}.carpus-legacy`
+          if (entry.name === '.git' && !lstatSync(pointedPath, { throwIfNoEntry: false }) && !lstatSync(backup, { throwIfNoEntry: false })) {
+            // 旧 checkout 已失去管理目录。保留文件及指针备份，并阻止副本以后意外连到外部仓库。
+            renameSync(path, backup)
+            continue
+          }
+          throw new Error('受管 Git worktree 仍引用外部仓库或外部工作树。请先用 git worktree move 整理位置，再启动 Carpus；原仓库没有被改动。')
+        }
         const migrated = mapGitPath(value)
         if (migrated !== value) next = `${prefix}${migrated}\n`
       } else {
@@ -292,7 +301,8 @@ export function prepareLegacyBrandMigration(paths: LegacyBrandMigrationPaths): P
     }
     if (configNeedsMigration) {
       stagingConfigDirectory = mkdtempSync(join(dirname(paths.configDirectory), '.carpus-config-migration-'))
-      cpSync(paths.legacyConfigDirectory, stagingConfigDirectory, { recursive: true, dereference: false, verbatimSymlinks: true })
+      // 文件系统支持时使用写时复制，避免大型工作区在迁移时占用两倍空间。
+      cpSync(paths.legacyConfigDirectory, stagingConfigDirectory, { recursive: true, mode: constants.COPYFILE_FICLONE, dereference: false, verbatimSymlinks: true })
       migrateCopiedMetadata(stagingConfigDirectory, paths.legacyConfigDirectory, paths.configDirectory)
       migrateCopiedGitPointers(stagingConfigDirectory, paths.legacyConfigDirectory, paths.configDirectory)
     }

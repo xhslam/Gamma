@@ -12,11 +12,11 @@ function fixture() {
   let destroyed = false
   let reloads = 0
   const scripts: string[] = []
-  const context = createContext({ __gammaDesignLocale: 'en-US', sessionStorage: { setItem: (key: string, value: string) => { values.set(key, value) } } })
+  const context = createContext({ __carpusDesignLocale: 'en-US', sessionStorage: { setItem: (key: string, value: string) => { values.set(key, value) } } })
   const contents: DesignLocaleWebContents = {
     getURL: () => url, isDestroyed: () => destroyed,
     executeJavaScript: async (script) => { scripts.push(script); return runInContext(script, context) as unknown },
-    reload: () => { reloads++; context.__gammaDesignLocale = values.get(DESIGN_LOCALE_STORAGE_KEY); queueMicrotask(() => { for (const listener of [...(listeners.get('did-finish-load') ?? [])]) listener() }) },
+    reload: () => { reloads++; context.__carpusDesignLocale = values.get(DESIGN_LOCALE_STORAGE_KEY); queueMicrotask(() => { for (const listener of [...(listeners.get('did-finish-load') ?? [])]) listener() }) },
     once: (event, listener) => { const callbacks = listeners.get(event) ?? new Set(); callbacks.add(listener); listeners.set(event, callbacks) },
     removeListener: (event, listener) => { listeners.get(event)?.delete(listener) },
   }
@@ -28,7 +28,7 @@ describe('Given 主进程显式提供系统语言的 design 语言宿主', () =>
     const f = fixture()
     await f.host.setLocale(f.contents, URL, ['zh-CN'])
     expect(f.values.get(DESIGN_LOCALE_STORAGE_KEY)).toBe('zh-CN')
-    expect(f.context.__gammaDesignLocale).toBe('zh-CN')
+    expect(f.context.__carpusDesignLocale).toBe('zh-CN')
     expect(f.reloads).toBe(1)
     expect(f.scripts).toHaveLength(2)
     expect(f.listeners.get('did-finish-load')?.size).toBe(0)
@@ -39,7 +39,7 @@ describe('Given 主进程显式提供系统语言的 design 语言宿主', () =>
     await Promise.all([f.host.setLocale(f.contents, URL, ['zh-CN']), f.host.setLocale(f.contents, URL, ['zh-CN'])])
     await f.host.setLocale(f.contents, URL, ['en-US'])
     expect(f.reloads).toBe(1)
-    expect(f.context.__gammaDesignLocale).toBe('zh-CN')
+    expect(f.context.__carpusDesignLocale).toBe('zh-CN')
   })
   test('When 英文 OS 与现有语言一致 Then 不重载', async () => {
     const f = fixture()
@@ -62,7 +62,7 @@ describe('Given 主进程显式提供系统语言的 design 语言宿主', () =>
     expect(f.reloads).toBe(0)
   })
   test('When 内置资源未升级 Then 报告构建缺口而非无限重载', async () => {
-    const f = fixture(); delete f.context.__gammaDesignLocale
+    const f = fixture(); delete f.context.__carpusDesignLocale
     await expect(f.host.setLocale(f.contents, URL, ['zh-CN'])).rejects.toThrow('重新构建')
     expect(f.reloads).toBe(0)
   })

@@ -4,7 +4,7 @@ import { DESIGN_ZH_MESSAGES } from './design-locale-zh'
 import { DESIGN_LOCALE_STORAGE_KEY } from './design-locale-policy'
 export const DESIGN_LOCALE_SKILLS = ['claude-slides', 'claude-design', 'claude-design-system', 'claude-dashboard', 'claude-motion', 'claude-whiteboard'] as const
 const SCRIPT_NAME = 'carpus-design-locale.js'
-const SCRIPT_BLOCK = /<script data-gamma-design-locale>[\s\S]*?<\/script>\s*/g
+const SCRIPT_BLOCK = /<script data-(?:carpus|gamma)-design-locale>[\s\S]*?<\/script>\s*/g
 
 export interface DesignSourceMessage { id: string; defaultMessage: string }
 export interface DesignLocaleCoverage { skill: string; total: number; translated: number; untranslated: string[] }
@@ -47,7 +47,7 @@ export function buildDesignLocaleBootstrap(messages: readonly DesignSourceMessag
   let stored;try{stored=sessionStorage.getItem(${serialize(DESIGN_LOCALE_STORAGE_KEY)})}catch{}
   const requested=stored==='zh-CN'||stored==='en-US'?stored:(navigator.languages?.[0]||navigator.language||'en-US');
   const lang=/^zh(?:-|_|$)/i.test(requested)?'zh-CN':'en-US';
-  globalThis.__gammaDesignLocale=lang;
+  globalThis.__carpusDesignLocale=lang;
   globalThis.__appifact_i18n={lang,settled:lang==='zh-CN'?{...english,...chinese}:english};
   document.documentElement.lang=lang;
 })();\n`
@@ -80,7 +80,7 @@ export async function prepareDesignLocaleBundle(bundleRoot: string): Promise<Des
     if (!/<head(?:\s[^>]*)?>/i.test(html)) throw new Error(`design 编辑器缺少 head：${skill}`)
     // 上游服务器只白名单开放 assets/ 或 artifact-type/，不假定新增根目录 JS 可被访问。
     // 六类原版 HTML 均已有内联启动脚本；沿用该路径，同步安装消息包并允许重复构建刷新词典。
-    html = html.replace(SCRIPT_BLOCK, '').replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}\n<script data-gamma-design-locale>${buildDesignLocaleBootstrap(messages)}</script>\n`)
+    html = html.replace(SCRIPT_BLOCK, '').replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}\n<script data-carpus-design-locale>${buildDesignLocaleBootstrap(messages)}</script>\n`)
     // 均为非 JSON 的构建期文件；不改 artifact 数据、主程序 JS 或许可文本。
     // 上游共享/历史面板自带中英词典，但它只看 Chromium 默认语言；统一改用主进程选定的语言。
     const sharePath = join(editor, 'share-ui.js')
@@ -90,7 +90,8 @@ export async function prepareDesignLocaleBundle(bundleRoot: string): Promise<Des
     }
     if (share !== undefined) {
       const detector = '/^zh\\b/i.test(navigator.language)'
-      const localizedDetector = '/^zh\\b/i.test(globalThis.__gammaDesignLocale||navigator.language)'
+      const localizedDetector = '/^zh\\b/i.test(globalThis.__carpusDesignLocale||navigator.language)'
+      share = share.replace('globalThis.__gammaDesignLocale||navigator.language', 'globalThis.__carpusDesignLocale||navigator.language')
       if (!share.includes(detector) && !share.includes(localizedDetector)) throw new Error(`design 共享面板语言入口已变化：${skill}`)
       await writeFile(sharePath, share.replace(detector, localizedDetector))
     }

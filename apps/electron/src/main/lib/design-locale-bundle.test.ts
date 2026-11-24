@@ -19,7 +19,7 @@ function boot(source: readonly DesignSourceMessage[], language: string, stored?:
   const values = new Map<string, string>(stored ? [[DESIGN_LOCALE_STORAGE_KEY, stored]] : [])
   const context = createContext({ document, navigator: { languages: [language], language }, sessionStorage: { getItem: (key: string) => values.get(key) ?? null } })
   runInContext(buildDesignLocaleBootstrap(source), context)
-  return { context, document, artwork, state: runInContext('({locale:__gammaDesignLocale, words:__appifact_i18n})', context) as { locale: string; words: { lang: string; settled: Record<string, string> } } }
+  return { context, document, artwork, state: runInContext('({locale:__carpusDesignLocale, words:__appifact_i18n})', context) as { locale: string; words: { lang: string; settled: Record<string, string> } } }
 }
 const temporary: string[] = []
 afterEach(async () => { await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true }))) })
@@ -67,6 +67,10 @@ describe('Given 六类编辑器的原生消息协议', () => {
       await writeFile(join(path, 'index.html'), '<html><head><script type="module" src="./assets/index.js"></script></head><body></body></html>')
       await writeFile(join(path, 'artwork.html'), '<h1>Close</h1>')
       await writeFile(join(path, 'share-ui.js'), 'var zh=/^zh\\b/i.test(navigator.language);globalThis.shareLabel=zh?"共享":"Share";')
+      if (skill === 'claude-slides') {
+        await writeFile(join(path, 'index.html'), '<html><head><script data-gamma-design-locale>oldBootstrap()</script><script type="module" src="./assets/index.js"></script></head><body></body></html>')
+        await writeFile(join(path, 'share-ui.js'), 'var zh=/^zh\\b/i.test(globalThis.__gammaDesignLocale||navigator.language);globalThis.shareLabel=zh?"共享":"Share";')
+      }
     }
     const first = await prepareDesignLocaleBundle(root)
     expect(first).toHaveLength(6)
@@ -75,14 +79,15 @@ describe('Given 六类编辑器的原生消息协议', () => {
     for (const skill of DESIGN_LOCALE_SKILLS) {
       const path = join(root, 'skills', skill, 'scripts', 'editor')
       const html = await readFile(join(path, 'index.html'), 'utf8')
-      expect(html.match(/data-gamma-design-locale/g)).toHaveLength(1)
-      expect(html.indexOf('data-gamma-design-locale')).toBeLessThan(html.indexOf('type="module"'))
+      expect(html.match(/data-carpus-design-locale/g)).toHaveLength(1)
+      expect(html).not.toContain('data-gamma-design-locale')
+      expect(html.indexOf('data-carpus-design-locale')).toBeLessThan(html.indexOf('type="module"'))
       expect(await readFile(join(path, 'assets', 'index.js'), 'utf8')).toBe(source)
       expect(await readFile(join(path, 'artwork.html'), 'utf8')).toBe('<h1>Close</h1>')
       expect(html).toContain('__appifact_i18n')
       expect(html).not.toContain('src="./carpus-design-locale.js"')
       const share = await readFile(join(path, 'share-ui.js'), 'utf8')
-      expect(share).toContain('globalThis.__gammaDesignLocale||navigator.language')
+      expect(share).toContain('globalThis.__carpusDesignLocale||navigator.language')
       const { context } = boot(messages, 'en-US', 'zh-CN')
       runInContext(share, context)
       expect(context.shareLabel).toBe('共享')
@@ -130,13 +135,13 @@ describe.skipIf(!bundleRoot)('Given 仓库实际固定快照的六类编辑器',
       expect(entry.translated).toBeGreaterThan(500)
       const target = join(root, 'skills', entry.skill, 'scripts', 'editor')
       const html = await readFile(join(target, 'index.html'), 'utf8')
-      const script = /<script data-gamma-design-locale>([\s\S]*?)<\/script>/.exec(html)?.[1]
+      const script = /<script data-carpus-design-locale>([\s\S]*?)<\/script>/.exec(html)?.[1]
       expect(script).toBeDefined()
       const { context } = boot([], 'en-US', 'zh-CN')
       runInContext(script!, context)
       expect((context.__appifact_i18n as { lang: string }).lang).toBe('zh-CN')
       const share = await readFile(join(target, 'share-ui.js'), 'utf8')
-      expect(share).toContain('/^zh\\b/i.test(globalThis.__gammaDesignLocale||navigator.language)')
+      expect(share).toContain('/^zh\\b/i.test(globalThis.__carpusDesignLocale||navigator.language)')
     }
   })
   for (const skill of DESIGN_LOCALE_SKILLS) {
