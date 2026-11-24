@@ -268,7 +268,17 @@ export async function importLegacyCookieProfiles(profiles: readonly LegacyCookie
     for (const cookie of profile.cookies) {
       if (cookie.expirationDate !== undefined && cookie.expirationDate <= Date.now() / 1000) continue
       const details = legacyCookieSetDetails(cookie)
-      await browserSession.cookies.set(details)
+      try {
+        await browserSession.cookies.set(details)
+      } catch (error) {
+        if (cookie.secure || !(error instanceof Error) || !error.message.includes('EXCLUDE_OVERWRITE_SECURE')) throw error
+        // Chromium 拒绝从 HTTP 设置与 Secure Cookie 路径重叠的同名记录。
+        // 从 HTTPS 恢复旧属性，同时避免覆盖同一身份的 Secure Cookie。
+        const secureUrl = details.url.replace(/^http:/, 'https:')
+        const existing = await browserSession.cookies.get({ url: secureUrl, name: cookie.name })
+        if (existing.some((value) => value.secure && value.domain === cookie.domain && value.path === details.path)) throw error
+        await browserSession.cookies.set({ ...details, url: secureUrl, secure: false })
+      }
       const imported = await browserSession.cookies.get({ url: details.url, name: cookie.name })
       if (!imported.some((value) => matches(value, cookie))) throw new Error('浏览器登录状态迁移校验失败，旧数据已保留。')
       expected.push(cookie)

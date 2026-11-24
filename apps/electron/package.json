@@ -1,6 +1,6 @@
 {
   "name": "@carpus/electron",
-  "version": "0.19.305",
+  "version": "0.19.306",
   "description": "Carpus，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
