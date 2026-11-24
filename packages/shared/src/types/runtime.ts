@@ -410,6 +410,8 @@ export const IPC_CHANNELS = {
   GET_UNTRACKED_CONTENT: 'git:get-untracked-content',
   /** 还原文件变更 */
   REVERT_FILE: 'git:revert-file',
+  TURN_FILE_CHANGES: 'agent:turn-file-changes',
+  UNDO_TURN_FILE_CHANGES: 'agent:undo-turn-file-changes',
   GET_DIFF_CONTENTS: 'git:get-diff-contents',
   /** 列出 Git Worktree */
   LIST_WORKTREES: 'git:list-worktrees',
@@ -471,3 +473,22 @@ export const SCREENSHOT_LIMITS = {
   /** 输出图片宽度上限。渲染端与主进程统一 */
   MAX_WIDTH: 1600,
 } as const
+
+export interface TurnFileChangesRequest {
+  sessionId: string
+  toolIds: string[]
+}
+
+export interface TurnFileChangeSummary {
+  path: string
+  additions?: number
+  deletions?: number
+  created: boolean
+}
+
+export interface TurnFileChangesResult {
+  files: TurnFileChangeSummary[]
+  coveredToolIds: string[]
+  canUndo: boolean
+  undone: boolean
+}

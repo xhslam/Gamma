@@ -1,3 +1,4 @@
+import { turnFileChangeStore } from './turn-file-changes'
 import { getDesignAgentContext } from './design-agent-context'
 import type { AgentContextRef } from '@carpus/shared'
 import { captureReferenceSnapshotOrEmpty } from './conversation-reference/send-snapshot'
@@ -1727,6 +1728,7 @@ export class AgentOrchestrator {
           maxBudgetUsd: appSettings.agentMaxBudgetUsd,
         }),
         ...(piCustomTools.length > 0 && { customTools: piCustomTools as PiAgentQueryOptions['customTools'] }),
+        onFileEdit: (edit) => { turnFileChangeStore.record(sessionId, edit) },
         onSessionId: handleSessionId,
         onPiEntryBindings: (bindings) => {
           const latest = getAgentSessionMeta(sessionId)

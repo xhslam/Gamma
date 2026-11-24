@@ -1,3 +1,4 @@
+import type { TurnFileChangesRequest, TurnFileChangesResult } from '@carpus/shared'
 import { DESIGN_WORKBENCH_IPC } from '@carpus/shared'
 import type { DesignWorkbenchAPI } from '@carpus/shared'
 import { DESIGN_IPC_CHANNELS } from '@carpus/shared'
@@ -256,6 +257,8 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 获取未追踪文件内容 */
   getUntrackedContent: (input: import('@carpus/shared').GetFileDiffInput) => Promise<string>
   /** 还原文件变更 */
+  getTurnFileChanges: (input: TurnFileChangesRequest) => Promise<TurnFileChangesResult>
+  undoTurnFileChanges: (input: TurnFileChangesRequest) => Promise<TurnFileChangesResult>
   revertFile: (input: import('@carpus/shared').RevertFileInput) => Promise<void>
   /** 获取文件新旧版本内容 */
   getDiffContents: (input: import('@carpus/shared').GetFileDiffInput) => Promise<{ oldContent: string; newContent: string } | null>
@@ -1396,6 +1399,8 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_UNTRACKED_CONTENT, input)
   },
 
+  getTurnFileChanges: (input) => ipcRenderer.invoke(IPC_CHANNELS.TURN_FILE_CHANGES, input),
+  undoTurnFileChanges: (input) => ipcRenderer.invoke(IPC_CHANNELS.UNDO_TURN_FILE_CHANGES, input),
   revertFile: (input: import('@carpus/shared').RevertFileInput) => {
     return ipcRenderer.invoke(IPC_CHANNELS.REVERT_FILE, input)
   },

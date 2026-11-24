@@ -146,6 +146,8 @@ import { acknowledgeTerminalOutput, attachTerminalOutputConsumer, closeTerminals
 import { saveTerminalPastedImage, getTerminalClipboardContent } from './lib/terminal-clipboard-service'
 import { getMainWindow } from './lib/main-window-store'
 import { resolveBrowserProfileKey } from './lib/browser-profile-policy'
+import { turnFileChangeStore } from './lib/turn-file-changes'
+import type { TurnFileChangesRequest } from '@carpus/shared'
 import { getUnstagedChanges, invalidateGitDiffCache, getFileDiff, getUntrackedContent, revertFile, getDiffContents, listWorktrees, getWorktreeChanges, getMainRepoRoot } from './lib/git-diff-service'
 import { registerCarpusDirectoryPath, registerCarpusFilePath } from './lib/local-file-protocol'
 import { registerUpdaterIpc } from './lib/updater/updater-ipc'
@@ -1498,6 +1500,36 @@ export function registerIpcHandlers(): void {
       return getUntrackedContent(dirPath, filePath, gitRoot)
     }
   )
+
+  async function authorizeTurnFileChanges(senderId: number, input: TurnFileChangesRequest) {
+    if (getMainWindow()?.webContents.id !== senderId) throw new Error('仅主窗口可以访问会话文件变更。')
+    if (typeof input?.sessionId !== 'string' || !Array.isArray(input.toolIds) || input.toolIds.length > 1024
+      || !input.toolIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 1024)
+      || !getAgentSessionMeta(input.sessionId)) throw new Error('无效的会话文件变更请求。')
+    const access = normalizeFileAccessOptions({ sessionId: input.sessionId })
+    const { files } = turnFileChangeStore.select(input.sessionId, input.toolIds)
+    const allowed = new Set<string>()
+    await Promise.all(files.map(async ({ path }) => {
+      if (await ensurePathAllowedWithWorktree(path, access)
+        || (!existsSync(path) && await ensurePathAllowedWithWorktree(dirname(path), access))) allowed.add(path)
+    }))
+    return allowed
+  }
+
+  ipcMain.handle(IPC_CHANNELS.TURN_FILE_CHANGES, async (event, input: TurnFileChangesRequest) => {
+    const allowed = await authorizeTurnFileChanges(event.sender.id, input)
+    return turnFileChangeStore.summarize(input.sessionId, input.toolIds, allowed)
+  })
+  ipcMain.handle(IPC_CHANNELS.UNDO_TURN_FILE_CHANGES, async (event, input: TurnFileChangesRequest) => {
+    const allowed = await authorizeTurnFileChanges(event.sender.id, input)
+    if (isAgentSessionBusy(input.sessionId)) throw new Error('请等当前任务结束再撤销。')
+    try {
+      turnFileChangeStore.undo(input.sessionId, input.toolIds, allowed)
+    } finally {
+      for (const path of allowed) invalidateGitDiffCache(path)
+    }
+    return turnFileChangeStore.summarize(input.sessionId, input.toolIds, allowed)
+  })
 
   // 还原文件变更
   ipcMain.handle(

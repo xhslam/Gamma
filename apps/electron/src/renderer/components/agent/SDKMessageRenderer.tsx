@@ -628,7 +628,7 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
         )}
         </TurnFileMapProvider>
       </MessageContent>
-      {/* 完成态汇总：Skill 使用记录与文件改动 chip */}
+      {/* 完成态汇总：Skill 使用记录与文件变更卡片 */}
       {!isStreaming && (
         <>
           <TurnSkillUsageSummary

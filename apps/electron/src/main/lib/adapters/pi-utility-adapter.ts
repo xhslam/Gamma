@@ -1,3 +1,4 @@
+import type { TurnFileEdit } from '../turn-file-changes'
 import { randomUUID } from 'node:crypto'
 import { computerController } from '../computer-service'
 import type {
@@ -257,6 +258,12 @@ export class PiUtilityAdapter {
       }
     }
 
+    if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_RECORD_FILE_EDIT) {
+      if (ownerQueryId !== pending.queryId || request.sessionId !== pending.sessionId) throw new Error('文件快照不属于该会话')
+      await pending.input.onFileEdit?.(payload?.edit as TurnFileEdit)
+      return { accepted: true }
+    }
+
     if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_CODEX_OAUTH_REFRESHED) {
       await pending.input.onCodexOAuthCredentialsRefreshed?.(payload?.credentials as never)
       return { accepted: true }
@@ -361,6 +368,7 @@ function serializeQueryInput(input: PiAgentQueryOptions): Record<string, unknown
     getComputerObservations: _getComputerObservations,
     validateComputerLease: _validateComputerLease,
     customTools,
+    onFileEdit: _onFileEdit,
     onSessionId: _onSessionId,
     onPiEntryBindings: _onPiEntryBindings,
     onModelResolved: _onModelResolved,
@@ -378,6 +386,7 @@ function serializeQueryInput(input: PiAgentQueryOptions): Record<string, unknown
   })
   return {
     ...serializable,
+    trackFileEdits: !!input.onFileEdit,
     ...(serializedCustomTools.length > 0 ? { customTools: serializedCustomTools } : {}),
   }
 }

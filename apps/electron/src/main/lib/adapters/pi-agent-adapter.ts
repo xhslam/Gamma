@@ -9,6 +9,7 @@ import { classifyComputerValidationFailure } from './pi-computer-validation-log'
  * JSONL 持久化和历史会话展示在 SDK 迁移时一起改名。
  */
 
+import { captureTurnFileEdit, type TurnFileEdit } from '../turn-file-changes'
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence, hasComputerObservationContent, stripComputerObservationContent, withComputerSharingFence, installComputerInterruptionHooks, computerPermissionInterruption } from './pi-computer-context'
@@ -154,6 +155,7 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   piAgentDir: string
   piSessionDir: string
   customTools?: ToolDefinition[]
+  onFileEdit?: (edit: TurnFileEdit) => void | Promise<void>
   onSessionId?: (sdkSessionId: string, sessionFile?: string) => void
   /** Pi final assistant UI UUID → 持久树状 session entry ID。 */
   onPiEntryBindings?: (bindings: Record<string, string>) => void
@@ -1451,6 +1453,7 @@ function buildBuiltinToolDefinitions(
   cwd: string,
   canUseTool: PiAgentQueryOptions['canUseTool'],
   runtimeEnv: AgentRuntimeEnv | undefined,
+  onFileEdit: PiAgentQueryOptions['onFileEdit'],
 ): ToolDefinition[] {
   const shellTool = selectPiBuiltinShellTool(process.platform, runtimeEnv)
   const definitions = [
@@ -1468,8 +1471,17 @@ function buildBuiltinToolDefinitions(
     sdk.createLsToolDefinition(cwd),
   ] as unknown as ToolDefinition[]
 
-  return definitions.map((tool) =>
-    wrapToolWithPermission(tool as unknown as ToolDefinition<TSchema, unknown, unknown>, { canUseTool }) as ToolDefinition)
+  return definitions.map((tool) => {
+    const definition = tool as unknown as ToolDefinition<TSchema, unknown, unknown>
+    const tracked: typeof definition = onFileEdit && (tool.name === 'edit' || tool.name === 'write') ? {
+      ...definition,
+      async execute(...args) {
+        const [toolId, params] = args
+        return captureTurnFileEdit(args[4]?.cwd || cwd, toolId, (params as Record<string, unknown>).path, () => definition.execute(...args), onFileEdit)
+      },
+    } : definition
+    return wrapToolWithPermission(tracked, { canUseTool }) as ToolDefinition
+  })
 }
 
 function appendWindowsBaseModeInstruction(systemPrompt: string, runtimeEnv: AgentRuntimeEnv | undefined): string {
@@ -1631,6 +1643,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           cwd,
           input.canUseTool,
           input.runtimeEnv,
+          input.onFileEdit,
         ),
         ...buildCarpusProductToolDefinitions(sdk, input.canUseTool, taskProgress.tasks),
         ...wrapCustomToolDefinitions(input.customTools, input.canUseTool),

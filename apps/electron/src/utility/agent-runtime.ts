@@ -188,6 +188,9 @@ function handleQueryStart(request: RuntimeRequest): void {
       { queryId, sessionId, toolName, input: toolInput, options: serializeCanUseToolOptions(options) },
       options.signal as AbortSignal | undefined,
     ),
+    ...(queryInput.trackFileEdits === true && {
+      onFileEdit: async (edit: unknown) => { await requestParent(AGENT_RUNTIME_METHODS.CAPABILITY_RECORD_FILE_EDIT, { queryId, sessionId, edit }) },
+    }),
     onSessionId: (sdkSessionId: string, sessionFile?: string) => sendCallback(active, 'session_id', { sdkSessionId, sessionFile }),
     onPiEntryBindings: (bindings: Record<string, string>) => sendCallback(active, 'pi_entry_bindings', { bindings }),
     onModelResolved: (model: string) => sendCallback(active, 'model_resolved', { model }),
