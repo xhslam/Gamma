@@ -15,7 +15,7 @@ Carpus 把 [Pi Coding Agent SDK](https://github.com/earendil-works/pi/tree/main/
 
 ![Carpus macOS 实拍：项目导航、Agent 会话与文件工作区](./docs/assets/screenshots/carpus-desktop-macos.jpg)
 
-*截图来自 macOS 上实际运行的 Carpus v0.19.242，个人资料和其他项目名称已遮盖。*
+*截图来自 macOS 上实际运行的 Carpus v0.19.305，使用示例项目。*
 
 | 你想做的事 | 在 Carpus 里怎么做 |
 | --- | --- |
@@ -37,7 +37,7 @@ Carpus 把 [Pi Coding Agent SDK](https://github.com/earendil-works/pi/tree/main/
 
 当前 GitHub Release 的 macOS 安装包使用临时签名，未经过 Apple 公证；自动更新安装尚未验证。请以各版本发布说明为准。
 
-**从 Proma 迁移：**首次启动 Carpus 前先退出旧版 Proma。符合迁移条件时，Carpus 会复制受管数据到 `~/.carpus/`，保留原 `~/.proma/`。如果两个目录都已有数据，请先备份，不要手动覆盖。
+**从 Gamma 或 Proma 迁移。** 首次启动 Carpus 前先退出旧版应用。Carpus 会尝试把受管数据复制到 `~/.carpus/`，原目录可用作备份。若 Gamma 和 Proma 同时存在，优先迁移 Gamma。若 Carpus 中已有数据，迁移会停止，避免覆盖。
 
 ## 快速开始
 

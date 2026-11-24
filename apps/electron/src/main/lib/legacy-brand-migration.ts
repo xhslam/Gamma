@@ -6,6 +6,7 @@ import { constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readF
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { writeTextFileAtomic } from './safe-file'
 
 export const LEGACY_MIGRATION_MARKER = 'carpus-brand-migration.json'
@@ -301,8 +302,12 @@ export function prepareLegacyBrandMigration(paths: LegacyBrandMigrationPaths): P
     }
     if (configNeedsMigration) {
       stagingConfigDirectory = mkdtempSync(join(dirname(paths.configDirectory), '.carpus-config-migration-'))
-      // 文件系统支持时使用写时复制，避免大型工作区在迁移时占用两倍空间。
-      cpSync(paths.legacyConfigDirectory, stagingConfigDirectory, { recursive: true, mode: constants.COPYFILE_FICLONE, dereference: false, verbatimSymlinks: true })
+      if (process.platform === 'darwin') {
+        // Electron 内置的 libuv 在 macOS 不支持 FICLONE；用系统 cp 保留链接并在 APFS 进行写时复制。
+        execFileSync('/bin/cp', ['-cRP', `${paths.legacyConfigDirectory}/.`, stagingConfigDirectory], { stdio: ['ignore', 'ignore', 'pipe'] })
+      } else {
+        cpSync(paths.legacyConfigDirectory, stagingConfigDirectory, { recursive: true, mode: constants.COPYFILE_FICLONE, dereference: false, verbatimSymlinks: true })
+      }
       migrateCopiedMetadata(stagingConfigDirectory, paths.legacyConfigDirectory, paths.configDirectory)
       migrateCopiedGitPointers(stagingConfigDirectory, paths.legacyConfigDirectory, paths.configDirectory)
     }
