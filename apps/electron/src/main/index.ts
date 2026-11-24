@@ -31,8 +31,8 @@ if (!runComputerUseDiagnostics({ app, resourcesPath: process.resourcesPath, pare
 
 
 function bootstrapCarpus(): void {
-  const isDevelopment = !app.isPackaged || process.env.CARPUS_DEV === '1'
-  const instance = isDevelopment ? process.env.CARPUS_DEV_INSTANCE?.replace(/[^a-zA-Z0-9_-]/g, '') : undefined
+  const isDevelopment = !app.isPackaged || (process.env.CARPUS_DEV ?? process.env.GAMMA_DEV) === '1'
+  const instance = isDevelopment ? (process.env.CARPUS_DEV_INSTANCE ?? process.env.GAMMA_DEV_INSTANCE)?.replace(/[^a-zA-Z0-9_-]/g, '') : undefined
   const paths = getLegacyBrandMigrationPaths({ homeDirectory: homedir(), appDataDirectory: app.getPath('appData'), isDevelopment, instance })
   // 错误弹窗也会等待 ready；失败时必须使用空的隔离 profile，不能初始化旧浏览器目录。
   const bootstrapProfile = mkdtempSync(join(app.getPath('temp'), 'carpus-bootstrap-'))
@@ -59,8 +59,10 @@ function bootstrapCarpus(): void {
     ])
     if (process.platform === 'win32') app.commandLine.appendSwitch('disable-lcd-text')
     const migration = prepared
-    const preferredIdentity = instance ? `Proma-${instance}` : migration.legacyProfileDirectory && basename(migration.legacyProfileDirectory) === 'Proma' ? 'Proma' : '@proma/electron'
-    const identities = [...new Set([preferredIdentity, '@proma/electron', 'Proma'])]
+    const brand = paths.legacyBrand === 'gamma' ? 'Gamma' : 'Proma'
+    const packageIdentity = `@${brand.toLowerCase()}/electron`
+    const preferredIdentity = isDevelopment ? (instance ? `${brand}-${instance}` : brand) : migration.legacyProfileDirectory ? basename(migration.legacyProfileDirectory) : brand
+    const identities = [...new Set([preferredIdentity, brand, packageIdentity])]
     void app.whenReady().then(async () => {
       await completeBrandMigration(migration, {
         identities,

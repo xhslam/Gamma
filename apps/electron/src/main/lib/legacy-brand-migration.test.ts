@@ -271,3 +271,23 @@ describe('旧身份凭据与发布顺序', () => {
     expect(prepare(paths).profileNeedsMigration).toBe(true)
   })
 })
+
+test('Given Gamma 与 Proma 并存 When 迁移 Then 只复制 Gamma 并保持旧原文与分区', () => {
+  const home = dirname(fixture().configDirectory)
+  const appData = join(home, 'appData')
+  const old = join(home, '.gamma')
+  const partition = 'gamma-browser-' + 'b'.repeat(32)
+  const data = { filePath: join(old, 'notes.md'), src: 'gamma-file://token', content: 'Gamma 原文', outputMode: 'gamma-input', gammaLogoId: 'logo' }
+  write(join(old, 'settings.json'), data)
+  write(join(home, '.proma', 'settings.json'), { unrelated: true })
+  write(join(appData, 'Proma', 'Local State'), '{}')
+  write(join(appData, 'Gamma', 'Partitions', partition, 'Preferences'), '{}')
+  const paths = getLegacyBrandMigrationPaths({ homeDirectory: home, appDataDirectory: appData, isDevelopment: false })
+  const migration = prepare(paths)
+  expect(migration.legacyProfileDirectory).toBe(join(appData, 'Gamma'))
+  migration.commit()
+  expect(JSON.parse(readFileSync(join(paths.configDirectory, 'settings.json'), 'utf8'))).toEqual({ filePath: join(paths.configDirectory, 'notes.md'), src: 'carpus-file://token', content: data.content, outputMode: 'carpus-input', carpusLogoId: 'logo' })
+  expect(JSON.parse(readFileSync(join(old, 'settings.json'), 'utf8'))).toEqual(data)
+  expect(existsSync(join(paths.profileDirectory, 'Partitions', partition.replace('gamma', 'carpus'), 'Preferences'))).toBe(true)
+  expect(prepare(paths).configNeedsMigration).toBe(false)
+})

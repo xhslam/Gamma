@@ -10,7 +10,7 @@ static NSURL *CarpusPlanningIdentityURL(NSString *entity, NSString *identity) {
 // 只识别严格 UUID marker，用户的任意 URL 不得通过 DTO 透出到 JS。
 static NSString *CarpusPlanningIdentity(NSString *entity, NSURL *url) {
   NSString *absolute = url.absoluteString;
-  for (NSString *scheme in @[@"carpus", @"proma"]) {
+  for (NSString *scheme in @[@"carpus", @"gamma", @"proma"]) {
     NSString *prefix = [NSString stringWithFormat:@"%@://planning/%@/", scheme, entity];
     if (![absolute hasPrefix:prefix]) continue;
     NSString *identity = [absolute substringFromIndex:prefix.length];

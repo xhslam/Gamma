@@ -56,7 +56,7 @@ export function buildWorkspaceKnowledgeBootstrapPrompt(): string {
 ${AGENTS_MD_TEMPLATE}
 \`\`\`
 
-2. 确保包含固定的“记忆分工”区块。若已有旧协议标记 \`<!-- proma:knowledge-maintenance:start -->\` 或 \`<!-- carpus:knowledge-maintenance:start -->\`，做最小修订并保留原标记。
+2. 确保包含固定的“记忆分工”区块。若已有旧协议标记 \`<!-- proma:knowledge-maintenance:start -->\` 、\`<!-- gamma:knowledge-maintenance:start -->\` 或 \`<!-- carpus:knowledge-maintenance:start -->\`，做最小修订并保留原标记。
 
 ## 第二阶段：建立项目协作约定
 项目规则完成后，不要读取历史会话。只在当前回复末尾提出**一个**与本次项目协作约定有关的简短问题（例如代码改动前是否先出方案、测试验收要求等）。

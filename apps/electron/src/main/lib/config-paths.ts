@@ -34,7 +34,7 @@ export function setConfigHomeForTest(homeDirectory?: string): string | undefined
 
 export function getConfigDirName(): string {
   if (_configDirName === undefined) {
-    if (process.env.CARPUS_DEV === '1') {
+    if ((process.env.CARPUS_DEV ?? process.env.GAMMA_DEV) === '1') {
       _configDirName = '.carpus-dev'
     } else {
       try {

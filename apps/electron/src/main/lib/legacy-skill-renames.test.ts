@@ -109,7 +109,7 @@ describe('历史内置 Skills 改名', () => {
   test('Given 四个旧模板与自建同前缀 Skill When 迁移 Then 逐个改名、完整备份且不碰自建 Skill', async () => {
     const { migrateLegacyBuiltinSkillDirectories, LEGACY_BUILTIN_SKILL_RENAMES } = await import('./legacy-skill-renames')
     const parent = join(fixtureRoot, 'skills-inactive')
-    const historical = LEGACY_BUILTIN_SKILL_RENAMES.slice(1)
+    const historical = LEGACY_BUILTIN_SKILL_RENAMES.filter(({ legacySlug }) => legacySlug.startsWith('proma-') && legacySlug !== 'proma-coach')
     for (const { legacySlug } of historical) createCoach(parent, legacySlug)
     const custom = createCoach(parent, 'proma-my-own-tool')
     const results = migrateLegacyBuiltinSkillDirectories(parent)

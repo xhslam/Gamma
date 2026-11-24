@@ -37,12 +37,14 @@ async function verifyPlanningMigration(phases: string[]): Promise<void> {
     const now = 1_700_000_000_000
     const userTitle = '用户原文 Proma / promaIdentity'
     const userNotes = 'proma://planning/calendar/ 自定义备注'
-    const nativeSnapshot = { calendarItemIdentifier: 'native-locator', title: userTitle, notes: userNotes, promaIdentity: nativeId, startAt: now, endAt: now + 60_000, allDay: false, lastModifiedAt: now }
-    const profileSnapshot = { ...nativeSnapshot, calendarItemIdentifier: 'profile-recovered-locator', promaIdentity: eventId }
+    const oldBrand = phase === 'seed-gamma' ? 'gamma' : 'proma'
+    const oldIdentity = oldBrand + 'Identity'
+    const nativeSnapshot = { calendarItemIdentifier: 'native-locator', title: userTitle, notes: userNotes, [oldIdentity]: nativeId, startAt: now, endAt: now + 60_000, allDay: false, lastModifiedAt: now }
+    const profileSnapshot = { ...nativeSnapshot, calendarItemIdentifier: 'profile-recovered-locator', [oldIdentity]: eventId }
     const carpusNativeSnapshot = { calendarItemIdentifier: 'native-locator', title: userTitle, notes: userNotes, carpusIdentity: nativeId, startAt: now, endAt: now + 60_000, allDay: false, lastModifiedAt: now }
     const carpusProfileSnapshot = { ...carpusNativeSnapshot, calendarItemIdentifier: 'profile-recovered-locator', carpusIdentity: eventId }
 
-    if (phase === 'seed' || phase === 'seed-failure') {
+    if (phase === 'seed' || phase === 'seed-failure' || phase === 'seed-gamma') {
       // 先创建全部现有约束，再恢复 v9 列名，得到独立旧版本数据库；下一进程执行真实升级。
       manager.listTodos()
       const db = new DatabaseSync(databasePath)
@@ -61,10 +63,11 @@ async function verifyPlanningMigration(phases: string[]): Promise<void> {
       db.prepare('INSERT INTO planning_native_bindings (connection_id,carpus_entity_id,calendar_item_identifier,last_native_hash) VALUES (:connection,:id,:locator,:payload)').run({ connection: 'connection', id: 'invalid-json', locator: 'invalid-json-locator', payload: '{"promaIdentity":broken' })
       for (const table of tables) {
         if (phase === 'seed-failure' && table === 'planning_sync_profile_conflicts') continue
-        db.exec('ALTER TABLE ' + table + ' RENAME COLUMN carpus_entity_id TO proma_entity_id')
+        db.exec('ALTER TABLE ' + table + ' RENAME COLUMN carpus_entity_id TO ' + oldBrand + '_entity_id')
       }
-      db.exec('PRAGMA user_version = 9; COMMIT')
-      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9)
+      const oldVersion = oldBrand === 'gamma' ? 10 : 9
+      db.exec('PRAGMA user_version = ' + oldVersion + '; COMMIT')
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, oldVersion)
       db.close()
     } else if (phase === 'verify-failure') {
       assert.throws(() => manager.listTodos(), /proma_entity_id/)
@@ -79,7 +82,7 @@ async function verifyPlanningMigration(phases: string[]): Promise<void> {
     } else {
       manager.listTodos()
       const db = new DatabaseSync(databasePath)
-      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 10)
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 11)
       for (const table of tables) {
         const columns = db.prepare('PRAGMA table_info(' + table + ')').all().map((column) => column.name)
         assert.ok(columns.includes('carpus_entity_id'), table)
@@ -138,4 +141,8 @@ test('Given Proma v9 计划数据库 When Carpus 连续启动 Then 映射、出�
 
 test('Given 旧计划数据库存在不兼容列 When Carpus 升级失败 Then 整个迁移事务回滚并保留 v9 数据', async () => {
   await verifyPlanningMigration(['seed-failure', 'verify-failure'])
+})
+
+test('Given Gamma v10 计划数据库 When Carpus 升级 Then 保留同步关系和原文', async () => {
+  await verifyPlanningMigration(['seed-gamma', 'verify', 'behavior'])
 })

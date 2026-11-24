@@ -142,7 +142,7 @@ function withPlanningTransaction<T>(work: () => T): T {
   }
 }
 
-const PLANNING_SCHEMA_VERSION = 10
+const PLANNING_SCHEMA_VERSION = 11
 
 interface PlanningNativeIdentityPayloadRow {
   row_id: number
@@ -155,11 +155,12 @@ function migrateLegacyNativeIdentityJSON(serialized: string): string {
   try { parsed = JSON.parse(serialized) } catch { return serialized }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return serialized
   const payload = parsed as Record<string, unknown>
-  if (!Object.prototype.hasOwnProperty.call(payload, 'promaIdentity')) return serialized
+  const legacyKey = Object.hasOwn(payload, 'gammaIdentity') ? 'gammaIdentity' : 'promaIdentity'
+  if (!Object.hasOwn(payload, legacyKey)) return serialized
   const hasCarpusIdentity = Object.prototype.hasOwnProperty.call(payload, 'carpusIdentity')
   const entries = Object.entries(payload)
-    .filter(([key]) => !hasCarpusIdentity || key !== 'promaIdentity')
-    .map(([key, value]) => [key === 'promaIdentity' ? 'carpusIdentity' : key, value])
+    .filter(([key]) => !hasCarpusIdentity || key !== legacyKey)
+    .map(([key, value]) => [key === legacyKey ? 'carpusIdentity' : key, value])
   return JSON.stringify(Object.fromEntries(entries))
 }
 
@@ -403,6 +404,16 @@ function migrateDatabase(db: SqliteDatabase): void {
         'planning_native_bindings', 'planning_native_outbox', 'planning_native_sync_conflicts',
         'planning_sync_profile_conflicts',
       ]) db.exec(`ALTER TABLE ${table} RENAME COLUMN proma_entity_id TO carpus_entity_id`)
+    }
+    if (version < 11) {
+      for (const table of [
+        'planning_sync_bindings', 'planning_sync_outbox', 'planning_sync_cleanup',
+        'planning_native_bindings', 'planning_native_outbox', 'planning_native_sync_conflicts',
+        'planning_sync_profile_conflicts',
+      ]) {
+        const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+        if (columns.some(({ name }) => name === 'gamma_entity_id')) db.exec(`ALTER TABLE ${table} RENAME COLUMN gamma_entity_id TO carpus_entity_id`)
+      }
       for (const { table, column } of [
         { table: 'planning_native_bindings', column: 'last_native_hash' },
         { table: 'planning_native_sync_conflicts', column: 'native_item_json' },
@@ -414,7 +425,7 @@ function migrateDatabase(db: SqliteDatabase): void {
           if (migrated !== row.payload) db.prepare(`UPDATE ${table} SET ${column}=:payload WHERE rowid=:rowId`).run({ payload: migrated, rowId: row.row_id })
         }
       }
-      db.exec('PRAGMA user_version = 10')
+      db.exec('PRAGMA user_version = 11')
     }
     db.exec('COMMIT')
   } catch (error) {

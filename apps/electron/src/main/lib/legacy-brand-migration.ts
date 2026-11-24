@@ -1,5 +1,5 @@
 /**
- * 首次从 Proma 升级到 Carpus 时复制应用拥有的数据。
+ * 首次从 Gamma 或 Proma 升级到 Carpus 时复制应用拥有的数据。
  * 旧目录始终保留；只有完成凭据与浏览器迁移的 staging 才会成为正式配置。
  */
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
@@ -22,6 +22,7 @@ export interface LegacyBrandMigrationOptions {
 }
 
 export interface LegacyBrandMigrationPaths {
+  legacyBrand?: 'gamma' | 'proma'
   legacyConfigDirectory: string
   configDirectory: string
   profileDirectory: string
@@ -58,11 +59,18 @@ export interface PreparedLegacyBrandMigration {
 export function getLegacyBrandMigrationPaths(options: LegacyBrandMigrationOptions): LegacyBrandMigrationPaths {
   const suffix = options.isDevelopment ? '-dev' : ''
   const instanceSuffix = options.isDevelopment && options.instance ? `-${options.instance}` : ''
-  const oldNames = options.isDevelopment
+  const gammaConfig = join(options.homeDirectory, `.gamma${suffix}`)
+  const promaConfig = join(options.homeDirectory, `.proma${suffix}`)
+  const gammaNames = options.isDevelopment ? [`@gamma/electron-dev${instanceSuffix}`] : ['Gamma', '@gamma/electron']
+  const promaNames = options.isDevelopment
     ? [`@proma/electron-dev${instanceSuffix}`]
     : ['@proma/electron', 'Proma']
+  const hasEntry = (path: string): boolean => Boolean(lstatSync(path, { throwIfNoEntry: false }))
+  const legacyBrand = hasEntry(gammaConfig) || (!hasEntry(promaConfig) && gammaNames.some((name) => hasEntry(join(options.appDataDirectory, name)))) ? 'gamma' : 'proma'
+  const oldNames = legacyBrand === 'gamma' ? gammaNames : promaNames
   return {
-    legacyConfigDirectory: join(options.homeDirectory, `.proma${suffix}`),
+    legacyBrand,
+    legacyConfigDirectory: legacyBrand === 'gamma' ? gammaConfig : promaConfig,
     configDirectory: join(options.homeDirectory, `.carpus${suffix}`),
     profileDirectory: join(options.appDataDirectory, options.isDevelopment ? `@carpus/electron-dev${instanceSuffix}` : 'Carpus'),
     legacyProfileCandidates: oldNames.map((name) => join(options.appDataDirectory, name)),
@@ -87,15 +95,15 @@ function assertPlainDirectory(directory: string): void {
 }
 
 export function findLegacyProfileDirectory(paths: LegacyBrandMigrationPaths): string | undefined {
-  const candidates = paths.legacyProfileCandidates.filter((candidate) => existsSync(candidate))
+  const candidates = paths.legacyProfileCandidates.filter((candidate) => Boolean(lstatSync(candidate, { throwIfNoEntry: false })))
   for (const candidate of candidates) assertPlainDirectory(candidate)
-  if (candidates.length > 1) throw new Error('发现多个 Proma 浏览器数据目录；请先保留备份并整理旧目录，Carpus 不会自动合并它们。')
+  if (candidates.length > 1) throw new Error('发现多个同品牌的旧浏览器数据目录；请先保留备份并整理旧目录，Carpus 不会自动合并它们。')
   return candidates[0]
 }
 
 /** 只更新实际位于旧受管根内的绝对路径，用户项目根和消息正文由上层排除。 */
 export function migrateLegacyManagedPath(value: string, sourceRoot: string, targetRoot: string): string {
-  if (value.startsWith('proma-file://')) return `carpus-file://${value.slice('proma-file://'.length)}`
+  if (/^(gamma|proma)-file:\/\//.test(value)) return value.replace(/^(gamma|proma)-file:/, 'carpus-file:')
   if (value.startsWith('file://')) {
     try {
       const path = fileURLToPath(value)
@@ -114,25 +122,26 @@ export function migrateLegacyManagedPath(value: string, sourceRoot: string, targ
 export function migrateLegacyMetadata(value: unknown, sourceRoot: string, targetRoot: string, parentKey = ''): unknown {
   if (Array.isArray(value)) return value.map((item) => migrateLegacyMetadata(item, sourceRoot, targetRoot, parentKey))
   if (typeof value === 'string') {
-    if (parentKey === 'outputMode' && value === 'proma-input') return 'carpus-input'
+    if (parentKey === 'outputMode' && ['gamma-input', 'proma-input'].includes(value)) return 'carpus-input'
     if (/path|directory|dir$|^cwd$|^url$|^src$|^piSessionFile$|^parentSession$|^mainRepoRoot$|^attachedFiles$|^attachedDirectories$/i.test(parentKey)) return migrateLegacyManagedPath(value, sourceRoot, targetRoot)
     return value
   }
   if (!value || typeof value !== 'object') return value
   const record = value as Record<string, unknown>
   const migrated: Record<string, unknown> = {}
-  const ownedCoachActivation = parentKey === 'skill_activations' && record.slug === 'proma-coach' && (
+  const ownedCoachActivation = parentKey === 'skill_activations' && (record.slug === 'proma-coach' || record.slug === 'gamma-coach') && (
     typeof record.filePath === 'string' && migrateLegacyManagedPath(record.filePath, sourceRoot, targetRoot) !== record.filePath ||
-    typeof record.workspaceSlug === 'string' && typeof record.workspaceSkillPath === 'string' && /^proma-coach[\\/]/.test(record.workspaceSkillPath)
+    typeof record.workspaceSlug === 'string' && typeof record.workspaceSkillPath === 'string' && /^(?:gamma|proma)-coach[\\/]/.test(record.workspaceSkillPath)
   )
   for (const [key, item] of Object.entries(record)) {
-    const nextKey = key.startsWith('_proma') ? `_carpus${key.slice('_proma'.length)}` : key === 'promaLogoId' ? 'carpusLogoId' : key === 'isPromaManaged' ? 'isCarpusManaged' : key
+    const nextKey = key.replace(/^_(?:gamma|proma)/, '_carpus').replace(/^(?:gamma|proma)LogoId$/, 'carpusLogoId').replace(/^is(?:Gamma|Proma)Managed$/, 'isCarpusManaged')
+    if (nextKey !== key && Object.hasOwn(record, nextKey)) continue
     // 内容块、工具参数和用户指定的项目根不属于应用元数据。
-    if (ownedCoachActivation && (key === 'slug' || key === 'name') && item === 'proma-coach') migrated[nextKey] = 'carpus-coach'
-    else if (ownedCoachActivation && key === 'workspaceSkillPath' && typeof item === 'string') migrated[nextKey] = item.replace(/^proma-coach([\\/])/, 'carpus-coach$1')
-    else if (ownedCoachActivation && key === 'filePath' && typeof item === 'string') migrated[nextKey] = migrateLegacyManagedPath(item, sourceRoot, targetRoot).replace(/([\\/](?:skills|skills-inactive)[\\/])proma-coach([\\/])/, '$1carpus-coach$2')
+    if (ownedCoachActivation && (key === 'slug' || key === 'name') && item === record.slug) migrated[nextKey] = 'carpus-coach'
+    else if (ownedCoachActivation && key === 'workspaceSkillPath' && typeof item === 'string') migrated[nextKey] = item.replace(/^(?:gamma|proma)-coach([\\/])/, 'carpus-coach$1')
+    else if (ownedCoachActivation && key === 'filePath' && typeof item === 'string') migrated[nextKey] = migrateLegacyManagedPath(item, sourceRoot, targetRoot).replace(/([\\/](?:skills|skills-inactive)[\\/])(?:gamma|proma)-coach([\\/])/, '$1carpus-coach$2')
     else if (USER_CONTENT_KEYS.has(key)) migrated[nextKey] = item
-    else if (key === 'kind' && item === 'proma_event' && (parentKey === 'runtimeEnvelope' || 'event' in record)) migrated[nextKey] = 'carpus_event'
+    else if (key === 'kind' && (item === 'proma_event' || item === 'gamma_event') && (parentKey === 'runtimeEnvelope' || 'event' in record)) migrated[nextKey] = 'carpus_event'
     else migrated[nextKey] = migrateLegacyMetadata(item, sourceRoot, targetRoot, key)
   }
   return migrated
@@ -242,8 +251,8 @@ function migrateProfilePartitionDirectories(profile: string): void {
   if (!existsSync(partitions)) return
   assertPlainDirectory(partitions)
   for (const entry of readdirSync(partitions, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith('proma-browser-')) continue
-    const target = join(partitions, `carpus-browser-${entry.name.slice('proma-browser-'.length)}`)
+    if (!entry.isDirectory() || !/^(?:gamma|proma)-browser-/.test(entry.name)) continue
+    const target = join(partitions, `carpus-browser-${entry.name.replace(/^(?:gamma|proma)-browser-/, '')}`)
     if (existsSync(target)) throw new Error('旧浏览器 partition 与新名称冲突，迁移已停止。')
     renameSync(join(partitions, entry.name), target)
   }
@@ -334,7 +343,7 @@ export function withLegacyProfileLock<T>(adapter: LegacyProfileLockAdapter, prof
   try {
     adapter.setPath('userData', profile)
     acquired = adapter.requestSingleInstanceLock()
-    if (!acquired) throw new Error('Proma 仍在运行。请退出旧应用后重新启动 Carpus；旧数据没有被复制或改写。')
+    if (!acquired) throw new Error('旧应用仍在运行。请退出旧应用后重新启动 Carpus；旧数据没有被复制或改写。')
     return copySnapshot()
   } finally {
     if (acquired) adapter.releaseSingleInstanceLock()

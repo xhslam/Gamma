@@ -103,3 +103,12 @@ describe('Carpus 渲染层旧缓存迁移', () => {
     expect(() => migrateLegacyRendererStorage(storage)).not.toThrow()
   })
 })
+
+test('Given 两代缓存与 Carpus 已有值 When 迁移 Then Gamma 优先且支持冒号键', () => {
+  const storage = new TestStorage({ 'proma-theme': 'light', 'gamma-theme': 'dark', 'gamma:layout': 'grid', 'gamma-model': 'old', 'carpus-model': 'new' })
+  migrateLegacyRendererStorage(storage)
+  expect(storage.getItem('carpus-theme')).toBe('dark')
+  expect(storage.getItem('carpus:layout')).toBe('grid')
+  expect(storage.getItem('carpus-model')).toBe('new')
+  expect(storage.getItem('gamma-theme')).toBe('dark')
+})

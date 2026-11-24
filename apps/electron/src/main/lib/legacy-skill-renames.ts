@@ -15,6 +15,7 @@ export interface LegacyBuiltinSkillRename {
 
 /** 只处理应用曾分发的明确标识，不按 proma-* 通配改名用户 Skill。 */
 export const LEGACY_BUILTIN_SKILL_RENAMES: readonly LegacyBuiltinSkillRename[] = [
+  ...['coach', 'build-ai-app', 'cloud-sdk', 'generate-image', 'gpt-image-2'].map((suffix) => ({ legacySlug: `gamma-${suffix}`, currentSlug: `carpus-${suffix}` })),
   { legacySlug: LEGACY_COACH_SKILL_SLUG, currentSlug: CARPUS_COACH_SKILL_SLUG },
   { legacySlug: 'proma-build-ai-app', currentSlug: 'carpus-build-ai-app' },
   { legacySlug: 'proma-cloud-sdk', currentSlug: 'carpus-cloud-sdk' },
@@ -32,7 +33,7 @@ export function isLegacyBuiltinSkillSlug(slug: string): boolean {
 
 /** 已移出 bundle 的历史模板仅在原有安装处保留，不再注入新工作区。 */
 export function isHistoricalBuiltinSkillSlug(slug: string): boolean {
-  return LEGACY_BUILTIN_SKILL_RENAMES.some((item) => item.legacySlug !== LEGACY_COACH_SKILL_SLUG && item.currentSlug === slug)
+  return LEGACY_BUILTIN_SKILL_RENAMES.some((item) => item.currentSlug !== CARPUS_COACH_SKILL_SLUG && item.currentSlug === slug)
 }
 
 export interface LegacyCoachSkillMigrationOptions {
@@ -136,7 +137,8 @@ export function migrateLegacyCoachSkillDirectory(
   parentDir: string,
   options: LegacyCoachSkillMigrationOptions = {},
 ): LegacyCoachSkillMigrationResult {
-  const { originalPath, ...result } = migrateLegacySkillDirectory(parentDir, LEGACY_BUILTIN_SKILL_RENAMES[0]!, options)
+  const legacySlug = pathExists(join(parentDir, 'gamma-coach')) ? 'gamma-coach' : LEGACY_COACH_SKILL_SLUG
+  const { originalPath, ...result } = migrateLegacySkillDirectory(parentDir, { legacySlug, currentSlug: CARPUS_COACH_SKILL_SLUG }, options)
   if (result.status === 'migrated') cleanupOriginal(originalPath)
   return result
 }

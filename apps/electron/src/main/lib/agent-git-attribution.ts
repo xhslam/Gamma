@@ -48,6 +48,6 @@ export function buildGitAttributionPromptSection(enabled: boolean): string {
 
   return `## Git / PR 标识
 当你代用户创建 commit 或 PR/MR 时，除非用户当次明确拒绝：
-- commit 的 message 末尾追加唯一的 \`${CARPUS_COMMIT_TRAILER}\` trailer；不要使用 \`Co-Authored-By\`，不要改 author/committer。
+- commit 的 message 末尾追加唯一的 \`${CARPUS_COMMIT_TRAILER}\` trailer；旧有 \`Made-with: Gamma\` 算作已有品牌归因，更新时替换而非叠加；不要使用 \`Co-Authored-By\`，不要改 author/committer。
 - PR/MR 描述末尾追加唯一的 \`${CARPUS_PR_ATTRIBUTION}\`。`
 }

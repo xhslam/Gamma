@@ -15,7 +15,7 @@ const PRESERVED_CONTRACTS = /(https?:\/\/[^\s<>"'`]+|mcp__(?:proma-cloud|proma_c
 
 function rewriteTemplateText(content: string, availableCurrentSlugs?: ReadonlySet<string>): string {
   return content
-    .replace(/(?<![\w-])proma-(coach|build-ai-app|cloud-sdk|generate-image|gpt-image-2)(?![\w-])/g,
+    .replace(/(?<![\w-])(?:gamma|proma)-(coach|build-ai-app|cloud-sdk|generate-image|gpt-image-2)(?![\w-])/g,
       (legacyReference: string, suffix: string) => {
         const currentReference = `carpus-${suffix}`
         return availableCurrentSlugs === undefined || availableCurrentSlugs.has(currentReference) ? currentReference : legacyReference
@@ -24,11 +24,13 @@ function rewriteTemplateText(content: string, availableCurrentSlugs?: ReadonlySe
     .replace(/\bProma[ \t]+Cloud[ \t]+LLM\b/g, '云端 LLM')
     .replace(/\bProma[ \t]+Cloud[ \t]+API\b/g, '云端 API')
     .replace(/\bProma[ \t]+Cloud\b/g, '云端服务')
+    .replace(/\bGamma(?=[ \t]+(?:Agent\b|Coach\b|AI 应用生成器|客户端|设置|Chat\b))/g, 'Carpus')
     .replace(/\bProma(?=[ \t]+(?:Agent\b|Coach\b|AI 应用生成器|客户端|设置|Chat\b))/g, 'Carpus')
     .replace(/\bProma[ \t]+API\b/g, '云端 API')
     .replace(/\bProma[ \t]+平台/g, '云端平台')
     .replace(/\bProma[ \t]+积分体系/g, '云端积分体系')
     .replace(/\bProma[ \t]+余额不足/g, '云端服务余额不足')
+    .replace(/\bGamma(?=[ \t]+(?:Agent\b|Coach\b|AI 应用生成器|客户端|设置|Chat\b))/g, 'Carpus')
     .replace(/\bProma(?=[ \t]+会在响应头返回|[ \t]+会按模型配置自动计费|[ \t]+已通过 API Key 记账|[ \t]+层)/g, '云端服务')
     .replace(/\bPROMA([ \t]*·[ \t]*AI TOOL)\b/g, 'CARPUS$1')
     .replace(/\bPROMA_(API_KEY|API_BASE|MODEL)\b/g, 'CARPUS_$1')
@@ -46,7 +48,7 @@ export function migrateLegacyBuiltinSkillContent(
   currentSlug: string,
   availableCurrentSlugs?: ReadonlySet<string>,
 ): string {
-  const suffix = legacySlug.startsWith('proma-') ? legacySlug.slice('proma-'.length) : ''
+  const suffix = legacySlug.match(/^(?:gamma|proma)-(.+)$/)?.[1] ?? ''
   if (!LEGACY_BUILTIN_SUFFIXES.has(suffix) || currentSlug !== `carpus-${suffix}`) return content
 
   // 自身已进入改名流程；姐妹 Skill 仅在新路径确实可用时更新引用。

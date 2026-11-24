@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import type { LegacyCookieProfile } from './legacy-credential-helper'
 
 const CHROME_EPOCH_OFFSET_MICROSECONDS = 11_644_473_600_000_000n
-const LEGACY_BROWSER_PARTITION = /^proma-browser-[a-f\d]{32}$/
+const LEGACY_BROWSER_PARTITION = /^(?:gamma|proma)-browser-[a-f\d]{32}$/
 
 interface CookieInventoryStatement {
   all(...parameters: Array<string | bigint>): unknown[]

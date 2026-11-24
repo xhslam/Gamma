@@ -12,15 +12,16 @@ export function migrateLegacyRendererStorage(storage: LegacyStorageMigrationTarg
   try {
     for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index)
-      if (key?.startsWith('proma-')) legacyKeys.push(key)
+      if (key && /^(?:gamma|proma)[-:]/.test(key)) legacyKeys.push(key)
     }
   } catch {
     return
   }
 
+  legacyKeys.sort((a, b) => Number(b.startsWith('gamma')) - Number(a.startsWith('gamma')))
   for (const legacyKey of legacyKeys) {
     try {
-      const currentKey = `carpus-${legacyKey.slice('proma-'.length)}`
+      const currentKey = legacyKey.replace(/^(?:gamma|proma)/, 'carpus')
       if (storage.getItem(currentKey) !== null) continue
       const value = storage.getItem(legacyKey)
       if (value !== null) storage.setItem(currentKey, value)
