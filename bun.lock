@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "gamma",
+      "name": "carpus",
       "dependencies": {
         "jotai": "^2.17.1",
         "jotai-family": "^1.1.0",

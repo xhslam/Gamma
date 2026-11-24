@@ -1,7 +1,7 @@
 ---
 name: tool-builder
 description: Carpus Agent 外部工具接入指南。当用户要添加 API 能力、配置 MCP、创建或调试自定义工具，或沿用旧版 HTTP 工具配置时触发。优先复用已有 Agent 工具或 MCP；不创建已退役的 Chat 工具配置。
-version: "1.0.3"
+version: "1.0.4"
 ---
 
 # Tool Builder

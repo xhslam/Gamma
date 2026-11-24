@@ -1,6 +1,6 @@
 {
   "name": "@carpus/session-core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "AGPL-3.0-only",
   "description": "Headless core for reading, grouping, searching and rendering Carpus agent sessions. Single source of truth shared by the Electron app, the carpus CLI and future query surfaces.",
   "type": "module",

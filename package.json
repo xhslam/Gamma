@@ -1,6 +1,6 @@
 {
   "name": "carpus",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Carpus，为专业用户设计的 Agent",
   "type": "module",
   "private": true,

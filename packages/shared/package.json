@@ -1,6 +1,6 @@
 {
   "name": "@carpus/shared",
-  "version": "0.1.128",
+  "version": "0.1.129",
   "license": "AGPL-3.0-only",
   "description": "Shared types, configs and utilities for carpus",
   "type": "module",

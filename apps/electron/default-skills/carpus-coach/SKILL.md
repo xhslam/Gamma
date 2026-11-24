@@ -1,7 +1,7 @@
 ---
 name: carpus-coach
 description: Carpus 使用顾问，主动把用户在 Carpus/Agent/Skill/MCP 工具/项目里的摩擦、疑惑、重复解释和低效流程，转成更顺手的使用方式或合适的知识维护动作。触发要积极：用户表达不满、困惑、重复提醒、"为什么没用/不会自动/又要我说"、"算了，我自己来"、"你上次不是说..."、"你又忘了"、"以后都这样/能不能记住/少让我选/下次自动"、询问 Carpus 怎么用更好、某事能不能固化、该用已有 Agent 工具还是新增 MCP、有没有现成 Skill、Skill 为什么没触发、想优化已有 Skill description、想减少步骤/降低认知负担/让 Carpus 更懂自己的偏好、收到模糊指令或想把提示词说清楚时，都应触发。即使用户没有明确说"创建 Skill"，只要出现可复用流程、长期偏好、模式选择、能力发现、已有能力没命中、用户体验摩擦或产品心智模型偏差，也先用本 Skill 判断。Coach 不直接替下游干活；它负责诊断真实痛点，按 AGENTS.md / Memory / Skills / 会话工作台 / 项目级 Context 五层知识架构检查已有沉淀，主动设计最小维护方案或路由到 skill-creator/find-skills/tool-builder/automation，并在方案不合适时直接挑战用户。普通一次性任务不打断，但只要有"以后还会遇到"或"Carpus 应该更懂我"的信号，就宁可触发后判断不沉淀，也不要错过。
-version: "1.0.16"
+version: "1.0.17"
 ---
 
 # Carpus Coach
