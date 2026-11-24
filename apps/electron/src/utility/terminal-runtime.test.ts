@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import * as shared from '@gamma/shared'
+import * as shared from '@carpus/shared'
 import { loadIsolatedModule } from '../test-utils/isolated-module'
 
 interface FakePty {
@@ -29,7 +29,7 @@ function setup() {
   loadIsolatedModule(`${import.meta.dir}/terminal-runtime.ts`, {
     'node:fs': { existsSync: () => true, statSync: () => ({ isDirectory: () => true }) },
     'node:os': { homedir: () => '/project' },
-    '@gamma/shared': shared,
+    '@carpus/shared': shared,
     './terminal-shell-resolver': { resolveTerminalShell: () => ({ file: '/bin/zsh', args: ['-l'], title: 'zsh' }) },
     './agy-terminal-launch': {
       resolveAgyTerminalLaunch: () => {
@@ -58,7 +58,7 @@ function setup() {
     clearTimeout: (id: number) => timers.delete(id),
     console: { error() {} },
   })
-  bootstrap({ data: { type: 'gamma-terminal-runtime-port' }, ports: [port] })
+  bootstrap({ data: { type: 'carpus-terminal-runtime-port' }, ports: [port] })
   const request = (data: unknown): void => receive({ data })
   const create = (terminalId = 't1') => request({ type: 'terminal.create', attemptId: ptys.length + 1, input: { terminalId, sessionId: 's1', cwd: '/project', cols: 80, rows: 24 } })
   const flush = (): void => { const pending = [...timers.values()]; timers.clear(); pending.forEach((callback) => callback()) }

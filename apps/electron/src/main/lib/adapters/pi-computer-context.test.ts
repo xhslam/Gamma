@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { createAssistantMessageEventStream, normalizeContext, type Model } from '@earendil-works/pi-ai'
-import type { ComputerPrivateObservation } from '@gamma/shared'
+import type { ComputerPrivateObservation } from '@carpus/shared'
 import { compactComputerScreenshots, injectComputerObservationContext, stripComputerObservationContent, withComputerRequestFence, withComputerSharingFence } from './pi-computer-context'
 const observation: ComputerPrivateObservation = { observationId: 'opaque-id', epoch: 1, image: { data: 'IMAGE_PRIVATE_CANARY', mimeType: 'image/png', width: 1, height: 1 }, ax: 'AX_PRIVATE_CANARY' }
 describe('Given 桌面观察请求前临时注入', () => {

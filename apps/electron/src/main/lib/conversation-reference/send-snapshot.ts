@@ -1,6 +1,6 @@
-import type { AgentContextRef } from '@gamma/shared'
+import type { AgentContextRef } from '@carpus/shared'
 import { getAgentContextRefs, getAgentSessionSDKMessages } from '../agent-session-manager'
-import type { AgentReferenceWarningNotice } from '@gamma/shared'
+import type { AgentReferenceWarningNotice } from '@carpus/shared'
 
 export type ReferenceWarningNotice = AgentReferenceWarningNotice
 

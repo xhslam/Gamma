@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createStore, Provider } from 'jotai'
 import { MarkdownEditorSettingsPage } from './MarkdownEditorSettings'
 import { markdownEditorPreferencesAtom } from '@/atoms/markdown-editor-preferences'
-import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@gamma/shared'
+import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@carpus/shared'
 
 describe('MarkdownEditorSettingsPage 全量文档设置页', () => {
   test('Given 默认偏好 When 渲染全量文档设置页 Then 平铺展示所有配置区块且无固定高度弹窗卡片包裹', () => {
@@ -24,7 +24,7 @@ describe('MarkdownEditorSettingsPage 全量文档设置页', () => {
 
     // 验证主要设置区块
     expect(html).toContain('主题与外观')
-    expect(html).toContain('跟随 Gamma 外观')
+    expect(html).toContain('跟随 Carpus 外观')
     expect(html).toContain('排版效果实时预览')
     expect(html).toContain('排版与字体')
     expect(html).toContain('编辑器与 Markdown')

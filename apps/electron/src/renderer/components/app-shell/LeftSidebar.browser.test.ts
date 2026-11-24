@@ -9,7 +9,7 @@ beforeAll(async () => {
 }, 180_000)
 afterAll(async () => { await renderer?.dispose() })
 
-describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
+describe('Given 真实 Chromium 中的 Carpus 左侧栏', () => {
   test('When Windows 夹具挂载完成 Then 内容视口、字体和侧栏动画均已稳定，普通标题完整显示', async () => {
     const result = await renderer.run<{ viewport: number[]; width: number; opacity: string; fonts: string; titleFits: boolean }>(`
       const fixture = await window.leftSidebarRegression.mount({ platform: 'Win32', width: 256 });
@@ -20,7 +20,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         opacity: getComputedStyle(content).opacity, fonts: document.fonts.status,
         titleFits: title.clientWidth > 0 && title.scrollWidth <= title.clientWidth };
       if (!result.titleFits) {
-        const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+        const scroll = document.querySelector('.carpus-sidebar .overflow-y-auto');
         throw new Error('普通标题空间不足：' + JSON.stringify({ ...result, titleWidth: title.clientWidth, titleScroll: title.scrollWidth,
           font: getComputedStyle(title).font, gutter: scroll.offsetWidth - scroll.clientWidth,
           rowWidth: fixture.row('parent').clientWidth }));
@@ -33,7 +33,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
   test('When 为经典滚动条预留至少 12px 宽度 Then 普通标题仍完整显示且操作按钮不重叠', async () => {
     const result = await renderer.run<{ reserved: number; titleWidth: number; titleScroll: number; separated: boolean }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ platform: 'Win32', width: 256 });
-      const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+      const scroll = document.querySelector('.carpus-sidebar .overflow-y-auto');
       // macOS overlay 不占据布局宽度；补足相同预算，不能让本机验证忽略 Windows 的经典滚动条。
       const nativeGutter = scroll.offsetWidth - scroll.clientWidth;
       scroll.style.paddingInlineEnd = Math.max(0, 12 - nativeGutter) + 'px';
@@ -144,7 +144,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         })) });
         const entry = [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档'));
         const entryBounds = entry.getBoundingClientRect(), accountBounds = fixture.button('个人资料与设置').getBoundingClientRect();
-        const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+        const scroll = document.querySelector('.carpus-sidebar .overflow-y-auto');
         results.push({ entryVisible: entryBounds.height > 20 && entryBounds.bottom <= 480,
           accountVisible: accountBounds.height > 20 && accountBounds.bottom <= 480,
           scrollable: scroll.scrollHeight > scroll.clientHeight });
@@ -166,7 +166,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
           ] });
           const row = fixture.row('parent');
           for (const hints of [false, true]) {
-            const sidebar = document.querySelector('.gamma-sidebar');
+            const sidebar = document.querySelector('.carpus-sidebar');
             sidebar.setAttribute('data-session-switch-hints', String(hints));
             row.setAttribute('data-quick-switch-label', '1');
             await api.delay();
@@ -202,15 +202,15 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const fixture = await api.mount({ agents });
       const count = () => agents.filter(agent => !!fixture.row(agent.id)).length;
       await api.until(() => count() === 7);
-      const preview = count(), control = fixture.button('查看「Gamma 项目」的全部会话');
+      const preview = count(), control = fixture.button('查看「Carpus 项目」的全部会话');
       control.click(); await api.until(() => count() === 12);
       const all = count();
-      fixture.button('收起「Gamma 项目」的全部会话').click(); await api.until(() => count() === 7);
+      fixture.button('收起「Carpus 项目」的全部会话').click(); await api.until(() => count() === 7);
       const restored = count();
-      const project = fixture.button('项目：Gamma 项目');
-      fixture.button('收起项目「Gamma 项目」').click(); await api.until(() => !fixture.row('history-0'));
-      const collapsed = project.getAttribute('aria-expanded') === 'false' && fixture.button('查看「Gamma 项目」的全部会话') === null;
-      fixture.button('展开项目「Gamma 项目」').click(); await api.until(() => count() === 7);
+      const project = fixture.button('项目：Carpus 项目');
+      fixture.button('收起项目「Carpus 项目」').click(); await api.until(() => !fixture.row('history-0'));
+      const collapsed = project.getAttribute('aria-expanded') === 'false' && fixture.button('查看「Carpus 项目」的全部会话') === null;
+      fixture.button('展开项目「Carpus 项目」').click(); await api.until(() => count() === 7);
       const independent = project.getAttribute('aria-expanded') === 'true' && count() === 7;
       fixture.root.unmount(); return { preview, all, restored, collapsed, independent };
     `)
@@ -226,14 +226,14 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
           workspaceId: 'project-a', createdAt: now - index * 86400000, updatedAt: now - index * 86400000,
         }));
         const fixture = await api.mount({ platform: 'Win32', width: 200, dark, agents });
-        fixture.button('查看「Gamma 项目」的全部会话').click();
+        fixture.button('查看「Carpus 项目」的全部会话').click();
         await api.until(() => fixture.row('win-39'));
-        const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+        const scroll = document.querySelector('.carpus-sidebar .overflow-y-auto');
         const scrollable = scroll.scrollHeight > scroll.clientHeight;
         scroll.scrollTop = scroll.scrollHeight; scroll.dispatchEvent(new Event('scroll'));
         await api.delay(60);
         const bounds = scroll.getBoundingClientRect(), last = fixture.row('win-39').getBoundingClientRect();
-        const hasControls = !!fixture.button('收起「Gamma 项目」的全部会话');
+        const hasControls = !!fixture.button('收起「Carpus 项目」的全部会话');
         results.push({ scrollable, lastVisible: last.top >= bounds.top && last.bottom <= bounds.bottom + 1,
           fits: scroll.scrollWidth <= scroll.clientWidth && last.right <= bounds.right, hasControls });
         fixture.root.unmount(); await api.delay();
@@ -250,9 +250,9 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         id: 'key-' + index, title: '键盘会话 ' + index, workspaceId: 'project-a', createdAt: now, updatedAt: now - index,
       }));
       const fixture = await api.mount({ platform: 'Win32', agents });
-      fixture.button('查看「Gamma 项目」的全部会话').click();
+      fixture.button('查看「Carpus 项目」的全部会话').click();
       await api.until(() => fixture.row('key-39'));
-      const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+      const scroll = document.querySelector('.carpus-sidebar .overflow-y-auto');
       scroll.scrollTop = scroll.scrollHeight; scroll.dispatchEvent(new Event('scroll'));
       await api.delay(60);
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', code: 'ControlLeft', ctrlKey: true, bubbles: true }));
@@ -279,7 +279,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       components: string[]; session: string; project: string; view: string; hasLegacyPromotion: boolean
     }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
-      const brand = document.querySelector('.gamma-sidebar-topbar').textContent.trim();
+      const brand = document.querySelector('.carpus-sidebar-topbar').textContent.trim();
       const title = [...fixture.row('parent').querySelectorAll('span')].find(span => span.textContent === '整理研究资料');
       const titleFits = title.clientWidth > 0 && title.scrollWidth <= title.clientWidth;
       const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
@@ -294,7 +294,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       return { brand, titleFits, labels, states, components: state.componentTabs, session: state.agent, project: state.workspace, view: state.view, hasLegacyPromotion };
     `)
     expect(result).toEqual({
-      brand: 'Gamma', titleFits: true, labels: ['搜索', '项目', 'Design', 'Code', 'MCP/skills', '定时任务', 'Markdown'],
+      brand: 'Carpus', titleFits: true, labels: ['搜索', '项目', 'Design', 'Code', 'MCP/skills', '定时任务', 'Markdown'],
       states: [
         { label: 'Markdown', tab: 'markdown', current: 'page' },
         { label: '定时任务', tab: 'automations', current: 'page' }, { label: 'MCP/skills', tab: 'skills', current: 'page' },
@@ -348,14 +348,14 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       brandBaselineDelta: number
     }>(`
       const api = window.leftSidebarRegression, fixture = await api.mount({ platform: 'MacIntel' });
-      const topbar = document.querySelector('.gamma-sidebar-topbar');
-      const brand = topbar.querySelector('.gamma-sidebar-brand');
+      const topbar = document.querySelector('.carpus-sidebar-topbar');
+      const brand = topbar.querySelector('.carpus-sidebar-brand');
       const brandStyle = getComputedStyle(brand);
       const navStyle = getComputedStyle(fixture.button('搜索'));
       const collapse = fixture.button('收起侧边栏').getBoundingClientRect();
       const brandBox = brand.getBoundingClientRect();
       const topbarBox = topbar.getBoundingClientRect();
-      const dividerTop = topbarBox.top + parseFloat(getComputedStyle(document.querySelector('.gamma-sidebar'), '::after').top);
+      const dividerTop = topbarBox.top + parseFloat(getComputedStyle(document.querySelector('.carpus-sidebar'), '::after').top);
       // macOS 红绿灯由主进程固定在 y=8，直径 12px；顶栏分隔线必须落在其下方。
       const trafficLightBottom = 8 + 12;
       const result = {
@@ -365,7 +365,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       };
       fixture.root.unmount(); return result;
     `)
-    expect(result.brandText).toBe('Gamma')
+    expect(result.brandText).toBe('Carpus')
     expect(result.brandFamily).toContain('Source Serif 4')
     expect(result.brandSize).toBe('19px')
     expect(result.navFamily).toContain('Inter')
@@ -390,8 +390,8 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
       const top = header.getBoundingClientRect().top === 0 && header.textContent.includes('整理研究资料');
       fixture.button('展开侧边栏').focus(); fixture.button('展开侧边栏').click();
       await api.until(() => fixture.button('收起侧边栏'));
-      await api.until(() => Math.round(document.querySelector('.gamma-sidebar')?.getBoundingClientRect().width ?? 0) === 256);
-      const expanded = !fixture.state().collapsed && Math.round(document.querySelector('.gamma-sidebar').getBoundingClientRect().width) === 256;
+      await api.until(() => Math.round(document.querySelector('.carpus-sidebar')?.getBoundingClientRect().width ?? 0) === 256);
+      const expanded = !fixture.state().collapsed && Math.round(document.querySelector('.carpus-sidebar').getBoundingClientRect().width) === 256;
       fixture.button('Design').click(); await api.until(() => fixture.state().view === 'design');
       const tab = fixture.state().view;
       await api.openMenu(fixture.button('个人资料与设置'));
@@ -417,7 +417,7 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
         const absent = !sidebarContainer || sidebarContainer.getBoundingClientRect().width === 0;
         results.push({ absent, fits: header.scrollWidth <= header.clientWidth,
           focusable: document.activeElement === fixture.button('展开侧边栏'), height: header.getBoundingClientRect().height,
-          fallback: !empty || header.textContent.includes('Gamma') });
+          fallback: !empty || header.textContent.includes('Carpus') });
         fixture.root.unmount(); await api.delay();
       }
       return results;
@@ -435,11 +435,11 @@ describe('Given 真实 Chromium 中的 Gamma 左侧栏', () => {
           workspaces: [{ id: 'long-project', name: long, slug: 'long-project', createdAt: now, updatedAt: now }],
           update: { status: 'available', version: '1.2.3' },
         });
-        const sidebar = document.querySelector('.gamma-sidebar');
+        const sidebar = document.querySelector('.carpus-sidebar');
         const overflow = [sidebar, ...sidebar.querySelectorAll('nav, [data-session-switch-id], [class*="overflow-y-auto"]')]
           .filter(node => node.scrollWidth > node.clientWidth + 1)
           .map(node => node.getAttribute('aria-label') || node.dataset.sessionSwitchId || node.className);
-        const footer = sidebar.querySelector('.gamma-sidebar-footer');
+        const footer = sidebar.querySelector('.carpus-sidebar-footer');
         const footerBounds = footer.getBoundingClientRect();
         const controls = !!fixture.button('新建') && ['个人资料与设置', '设置'].every(label => {
           const button = fixture.button(label);
@@ -469,10 +469,10 @@ describe('Given 使用 disclosure 标记的项目列表', () => {
         { id: 'b', title: 'B的会话', workspaceId: 'project-b', createdAt: now, updatedAt: now },
         { id: 'old', title: '已归档会话', workspaceId: 'project-b', archived: true, createdAt: now, updatedAt: now },
       ] });
-      const project = name => [...document.querySelectorAll('.gamma-sidebar-project-row')].find(button => button.textContent.includes(name));
-      const current = project('Gamma 项目').getAttribute('aria-current') === 'true';
+      const project = name => [...document.querySelectorAll('.carpus-sidebar-project-row')].find(button => button.textContent.includes(name));
+      const current = project('Carpus 项目').getAttribute('aria-current') === 'true';
       fixture.row('b').click(); await api.until(() => fixture.state().workspace === 'project-b');
-      const switched = project('第二个项目').getAttribute('aria-current') === 'true' && !project('Gamma 项目').hasAttribute('aria-current');
+      const switched = project('第二个项目').getAttribute('aria-current') === 'true' && !project('Carpus 项目').hasAttribute('aria-current');
       const controls = !!fixture.button('在「第二个项目」中新建会话') && !!fixture.button('项目菜单');
       [...document.querySelectorAll('button')].find(button => button.textContent.includes('已归档 (')).click();
       await api.until(() => document.body.textContent.includes('已归档会话'));
@@ -481,7 +481,7 @@ describe('Given 使用 disclosure 标记的项目列表', () => {
       archivedProject.click(); await api.until(() => archivedProject.getAttribute('aria-expanded') === 'true');
       archivedProject.click(); await api.until(() => archivedProject.getAttribute('aria-expanded') === 'false');
       const collapsed = archivedProject.getAttribute('aria-expanded') === 'false';
-      const disclosure = !!document.querySelector('.gamma-sidebar-project-chevron[data-disclosure-chevron]');
+      const disclosure = !!document.querySelector('.carpus-sidebar-project-chevron[data-disclosure-chevron]');
       const noLegacyTriangle = !document.querySelector('.workspace-selected-triangle');
       fixture.root.unmount(); return { disclosure, noLegacyTriangle, current, switched, controls, archived, collapsed };
     `)
@@ -514,9 +514,9 @@ describe('Given 可滚动且可收起的项目分组', () => {
       const fixture = await api.mount({ agents: Array.from({ length: 30 }, (_, i) => ({
         id: 'scroll-test-' + i, title: '长列表会话 ' + i, workspaceId: 'project-a', createdAt: now, updatedAt: now - i,
       })) });
-      fixture.button('查看「Gamma 项目」的全部会话').click();
+      fixture.button('查看「Carpus 项目」的全部会话').click();
       await api.until(() => fixture.row('scroll-test-29'));
-      const scroll = document.querySelector('.gamma-sidebar .overflow-y-auto');
+      const scroll = document.querySelector('.carpus-sidebar .overflow-y-auto');
       const collapseBtn = fixture.button('折叠所有项目');
       const insideScroll = scroll.contains(collapseBtn);
       scroll.scrollTop = 200;
@@ -546,19 +546,19 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
         id: 'project-thread-' + index, title: '项目会话 ' + index, workspaceId: 'project-a',
         createdAt: now, updatedAt: now - index,
       })) });
-      const project = () => fixture.button('项目：Gamma 项目');
-      await api.openMenu(project().closest('.gamma-sidebar-project').querySelector('[aria-label="项目菜单"]'));
+      const project = () => fixture.button('项目：Carpus 项目');
+      await api.openMenu(project().closest('.carpus-sidebar-project').querySelector('[aria-label="项目菜单"]'));
       await api.chooseMenu('置顶项目');
       await api.until(() => fixture.button('收起已置顶'));
       const heading = document.querySelector('[data-sidebar-projects]');
       const aboveHeading = !!(project().compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING);
-      const preview = fixture.button('查看「Gamma 项目」的全部会话');
+      const preview = fixture.button('查看「Carpus 项目」的全部会话');
       const count = document.querySelectorAll('[data-session-switch-id^="project-thread-"]').length;
       fixture.button('收起已置顶').click();
       await api.until(() => !project());
       fixture.button('展开已置顶').click();
       await api.until(project);
-      await api.openMenu(project().closest('.gamma-sidebar-project').querySelector('[aria-label="项目菜单"]'));
+      await api.openMenu(project().closest('.carpus-sidebar-project').querySelector('[aria-label="项目菜单"]'));
       await api.chooseMenu('取消置顶项目');
       await api.until(() => project() && !fixture.button('收起已置顶'));
       const restored = !!(heading.compareDocumentPosition(project()) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -589,7 +589,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       const fixture = await api.mount({ agents });
       const labels = [...document.querySelectorAll('nav[aria-label="工作区"] button')].map(button => button.getAttribute('aria-label'));
       await api.until(() => fixture.row('pinned-project'));
-      const pinnedIcon = !!fixture.row('pinned-project').querySelector('.gamma-sidebar-pinned-root > span > svg');
+      const pinnedIcon = !!fixture.row('pinned-project').querySelector('.carpus-sidebar-pinned-root > span > svg');
       await api.until(() => fixture.row('lesson-6'));
       const pinnedPreviewCount = document.querySelectorAll('[data-session-switch-id^="lesson-"]').length;
       await api.until(() => fixture.button('查看「11月21日学习内容」的全部会话'));
@@ -601,10 +601,10 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       await api.until(() => !fixture.row('lesson-7'));
       const pinnedRestoredCount = document.querySelectorAll('[data-session-switch-id^="lesson-"]').length;
       const child = fixture.row('lesson-0');
-      const childWrapper = child.closest('.gamma-sidebar-delegation-children');
+      const childWrapper = child.closest('.carpus-sidebar-delegation-children');
       const railX = childWrapper.getBoundingClientRect().left;
-      const marker = child.querySelector('.gamma-sidebar-thread-marker').getBoundingClientRect();
-      const sidebar = document.querySelector('.gamma-sidebar');
+      const marker = child.querySelector('.carpus-sidebar-thread-marker').getBoundingClientRect();
+      const sidebar = document.querySelector('.carpus-sidebar');
       const sidebarLeft = sidebar.getBoundingClientRect().left;
       const sidebarStyle = getComputedStyle(sidebar);
       const scroller = child.closest('[data-sidebar-scroll]');
@@ -616,19 +616,19 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       if (!railAligned) throw new Error('树线几何异常：' + JSON.stringify({ railX, markerCenter: marker.left + marker.width / 2,
         expectedRail: sidebarLeft + contentInset + railInset, expectedMarker: sidebarLeft + contentInset + markerInset,
         contentInset, railInset, markerInset, wrapperClass: childWrapper.className }));
-      const markerStyle = getComputedStyle(child.querySelector('.gamma-sidebar-thread-marker'));
+      const markerStyle = getComputedStyle(child.querySelector('.carpus-sidebar-thread-marker'));
       const markerHollow = markerStyle.fill === 'none' && markerStyle.backgroundColor !== 'rgba(0, 0, 0, 0)';
-      const preview = document.querySelector('.gamma-sidebar-preview-boundary');
+      const preview = document.querySelector('.carpus-sidebar-preview-boundary');
       const previewButton = preview.querySelector('button').getBoundingClientRect();
       const railEnd = preview.getBoundingClientRect().bottom - parseFloat(getComputedStyle(preview).getPropertyValue('--sidebar-thread-rail-end'));
       const railEndsAtPreview = Math.abs(railEnd - previewButton.bottom) < 1;
-      const heights = [...document.querySelectorAll('.gamma-sidebar-nav-item, .gamma-sidebar-project-row, .session-quick-switch-row')].map(row => row.getBoundingClientRect().height);
-      const border = getComputedStyle(document.querySelector('.gamma-sidebar')).borderRightWidth;
+      const heights = [...document.querySelectorAll('.carpus-sidebar-nav-item, .carpus-sidebar-project-row, .session-quick-switch-row')].map(row => row.getBoundingClientRect().height);
+      const border = getComputedStyle(document.querySelector('.carpus-sidebar')).borderRightWidth;
       const padding = getComputedStyle(sidebar).paddingInline;
       fixture.button('收起子会话').click(); await api.until(() => !fixture.row('lesson-0'));
       const childCollapsed = !fixture.row('lesson-0');
       fixture.button('收起已置顶').click(); await api.until(() => !fixture.row('pinned-project'));
-      const pinnedCollapsed = !fixture.row('pinned-project') && !!fixture.button('项目：Gamma 项目');
+      const pinnedCollapsed = !fixture.row('pinned-project') && !!fixture.button('项目：Carpus 项目');
       fixture.button('展开已置顶').click(); await api.until(() => fixture.row('pinned-project'));
       const restored = !!fixture.row('pinned-project');
       fixture.root.unmount();
@@ -676,7 +676,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       await api.delay(40);
       const control = fixture.button('收起「置顶学习项目」的全部会话');
       const controlBefore = !!control;
-      const continuousRail = [...document.querySelectorAll('.gamma-sidebar-preview-tree')].every(node => getComputedStyle(node, '::before').width === '1px');
+      const continuousRail = [...document.querySelectorAll('.carpus-sidebar-preview-tree')].every(node => getComputedStyle(node, '::before').width === '1px');
       control.click();
       await api.until(() => count() === 7);
       const restored = count();
@@ -718,7 +718,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       const api = window.leftSidebarRegression, fixture = await api.mount({ userName: 'Charlie' });
       const account = fixture.button('个人资料与设置');
       const name = account.textContent.includes('Charlie'), local = account.textContent.includes('· 本地');
-      const initial = account.querySelector('.gamma-sidebar-avatar').textContent.trim();
+      const initial = account.querySelector('.carpus-sidebar-avatar').textContent.trim();
       await api.openMenu(account);
       const noPlan = !/Free|Pro|升级|云端账户/.test(document.querySelector('[role="menu"]').textContent);
       await api.chooseMenu('个人资料');
@@ -753,7 +753,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       const blank = blankFixture.state().workspace === 'created-project';
       const blankCalls = [...blankFixture.calls];
       blankFixture.root.unmount();
-      const folderFixture = await api.mount({ folder: { path: '/tmp/gamma-local-project', name: '本地文件夹项目' } });
+      const folderFixture = await api.mount({ folder: { path: '/tmp/carpus-local-project', name: '本地文件夹项目' } });
       await api.openMenu(folderFixture.button('新建项目'));
       await api.chooseMenu('从本地文件夹创建项目');
       await api.until(() => folderFixture.state().workspace === 'created-project');
@@ -766,7 +766,7 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
     expect(result.folder).toBe(true)
     expect(result.calls).toEqual([
       { createProject: { name: '新的本地项目' } },
-      { createProject: { name: '本地文件夹项目', projectRootPath: '/tmp/gamma-local-project' } },
+      { createProject: { name: '本地文件夹项目', projectRootPath: '/tmp/carpus-local-project' } },
     ])
   }, 30_000)
 
@@ -775,8 +775,8 @@ describe('Given 参考图中的侧栏层级与账户区', () => {
       const api = window.leftSidebarRegression, results = [];
       for (const dark of [false, true]) for (const empty of [false, true]) {
         const fixture = await api.mount({ dark, width: 200, agents: empty ? [] : undefined, userName: 'Charlie' });
-        const sidebar = document.querySelector('.gamma-sidebar');
-        const nodes = [sidebar, ...sidebar.querySelectorAll('nav, .gamma-sidebar-footer, [data-sidebar-scroll], [data-session-switch-id]')];
+        const sidebar = document.querySelector('.carpus-sidebar');
+        const nodes = [sidebar, ...sidebar.querySelectorAll('nav, .carpus-sidebar-footer, [data-sidebar-scroll], [data-session-switch-id]')];
         const fits = nodes.every(node => node.scrollWidth <= node.clientWidth + 1);
         const footer = fixture.button('个人资料与设置').getBoundingClientRect().right < fixture.button('设置').getBoundingClientRect().left;
         const emptyState = !empty || document.body.textContent.includes('暂无会话');

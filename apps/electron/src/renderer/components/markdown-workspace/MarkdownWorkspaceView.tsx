@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { BookOpen, FileText, Search, Save, PanelLeft, FolderTree, ListTree, Loader2, MoreHorizontal, Lock, Unlock, Type, Code2, Columns2, X, SlidersHorizontal, Plus, FilePlus, FolderOpen } from 'lucide-react'
-import type { MarkdownWorkspaceContext, MarkdownWorkspaceOperation, MarkdownWorkspaceResult, MarkdownWorkspaceEntry } from '@gamma/shared'
+import type { MarkdownWorkspaceContext, MarkdownWorkspaceOperation, MarkdownWorkspaceResult, MarkdownWorkspaceEntry } from '@carpus/shared'
 import { currentAgentWorkspaceIdAtom } from '../../atoms/agent-atoms'
 import {
   markdownWorkspaceStateAtomFamily,
@@ -461,7 +461,7 @@ export function MarkdownWorkspaceView(props: Props): React.ReactElement {
                   <div className="inline-flex items-center justify-center size-12 rounded-2xl bg-muted/70 text-foreground mb-1 shadow-sm">
                     <BookOpen className="size-6 stroke-[1.75]" />
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Gamma Markdown</h1>
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Carpus Markdown</h1>
                   <p className="text-sm text-muted-foreground">专注、优雅的本地 Markdown 写作与阅读</p>
                 </div>
 

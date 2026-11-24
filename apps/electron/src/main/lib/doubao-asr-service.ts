@@ -166,7 +166,7 @@ function buildClientRequest(settings: VoiceDictationSettings): Buffer {
 
   const request = {
     user: {
-      uid: 'gamma-desktop',
+      uid: 'carpus-desktop',
     },
     audio,
     request: requestOptions,

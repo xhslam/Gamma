@@ -23,13 +23,13 @@ export function CollapsedSidebarHeader(): React.ReactElement {
     : activeView === 'agent-skills' ? 'MCP / Skills'
       : activeView === 'agy-terminal' ? '终端工作台'
       : activeView === 'markdown' ? 'Markdown'
-        : session?.title || activeTab?.title || 'Gamma'
+        : session?.title || activeTab?.title || 'Carpus'
 
   return (
     <header
       data-testid="collapsed-sidebar-header"
       className={cn(
-        'gamma-topbar relative z-[60] flex items-center gap-2 pr-4 titlebar-drag-region',
+        'carpus-topbar relative z-[60] flex items-center gap-2 pr-4 titlebar-drag-region',
         detectIsMac() ? 'pl-20' : 'pl-3',
       )}
     >

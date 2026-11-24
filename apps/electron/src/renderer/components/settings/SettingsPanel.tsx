@@ -104,9 +104,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps): React.ReactEleme
   }, [handleClose, pendingAction, query])
 
   return (
-    <div className="gamma-settings-shell flex h-full min-h-0 text-foreground">
-      <aside data-panel="settings-nav" className="gamma-settings-nav flex min-h-0 shrink-0 flex-col">
-        <div className="gamma-settings-titlebar titlebar-drag-region" aria-hidden="true" />
+    <div className="carpus-settings-shell flex h-full min-h-0 text-foreground">
+      <aside data-panel="settings-nav" className="carpus-settings-nav flex min-h-0 shrink-0 flex-col">
+        <div className="carpus-settings-titlebar titlebar-drag-region" aria-hidden="true" />
         <div className="mx-3 mb-2 flex h-[26px] items-center border-b border-border/70">
           <input
             ref={searchRef}
@@ -143,11 +143,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps): React.ReactEleme
         </nav>
       </aside>
       <section className="flex min-w-0 flex-1 flex-col" aria-label={categories[activeTab].label}>
-        <header className="gamma-settings-titlebar titlebar-drag-region flex shrink-0 items-center justify-center">
+        <header className="carpus-settings-titlebar titlebar-drag-region flex shrink-0 items-center justify-center">
           {isMac && <h1 className="translate-y-1.5 text-[13px] font-medium">设置</h1>}
         </header>
         <ScrollArea ref={contentRef} data-panel="settings-content" className="min-h-0 min-w-0 flex-1">
-          <div className="gamma-settings-page mx-auto w-full max-w-[880px] px-6 pb-6 pt-6">
+          <div className="carpus-settings-page mx-auto w-full max-w-[880px] px-6 pb-6 pt-6">
             <Page key={activeTab} />
           </div>
         </ScrollArea>

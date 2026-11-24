@@ -18,7 +18,7 @@ export function SidebarTransition({ collapsed, width, children, resizing = false
       data-sidebar-region={region}
       data-collapsed={collapsed}
       data-resizing={resizing}
-      className="gamma-sidebar-transition relative z-[60] min-h-0 shrink-0 overflow-hidden crt-sidebar"
+      className="carpus-sidebar-transition relative z-[60] min-h-0 shrink-0 overflow-hidden crt-sidebar"
       style={{ width: collapsed ? 0 : width }}
     >
       <div

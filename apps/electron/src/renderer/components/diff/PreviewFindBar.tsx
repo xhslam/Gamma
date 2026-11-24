@@ -15,8 +15,8 @@ interface PreviewFindBarProps {
 
 type FindOptions = LiveMarkdownFindOptions
 
-const MATCH_SELECTOR = 'mark[data-gamma-find-match]'
-const SHADOW_STYLE_ID = 'gamma-find-highlight-style'
+const MATCH_SELECTOR = 'mark[data-carpus-find-match]'
+const SHADOW_STYLE_ID = 'carpus-find-highlight-style'
 const CONTROLLED_CONTENT_SELECTOR = [
   '.tiptap[contenteditable="true"]',
   '[data-tiptap-editor][contenteditable="true"]',
@@ -67,7 +67,7 @@ function injectShadowStyle(root: ParentNode): void {
       border-radius: 2px;
       padding: 0 1px;
     }
-    ${MATCH_SELECTOR}[data-gamma-find-active="true"] {
+    ${MATCH_SELECTOR}[data-carpus-find-active="true"] {
       background: hsl(var(--primary) / 0.3);
       box-shadow: 0 0 0 1px hsl(var(--primary) / 0.55);
     }
@@ -79,7 +79,7 @@ function shouldSkipTextNode(node: Text): boolean {
   if (!node.nodeValue?.trim()) return true
   const parent = node.parentElement
   if (!parent) return true
-  if (parent.closest('[data-gamma-find-ignore]')) return true
+  if (parent.closest('[data-carpus-find-ignore]')) return true
   if (parent.closest(MATCH_SELECTOR)) return true
   if (parent.closest('script, style, input, textarea, select, button')) return true
   if (parent.closest(CONTROLLED_CONTENT_SELECTOR)) return true
@@ -135,7 +135,7 @@ function markMatchesInTextNode(node: Text, matcher: RegExp): HTMLElement[] {
       fragment.appendChild(document.createTextNode(text.slice(offset, item.index)))
     }
     const mark = document.createElement('mark')
-    mark.dataset.gammaFindMatch = 'true'
+    mark.dataset.carpusFindMatch = 'true'
     mark.textContent = item.text
     applyMatchStyle(mark, false)
     fragment.appendChild(mark)
@@ -173,7 +173,7 @@ function applyHighlights(container: HTMLElement, query: string, options: FindOpt
   }
 
   marks.forEach((mark, index) => {
-    mark.dataset.gammaFindIndex = String(index)
+    mark.dataset.carpusFindIndex = String(index)
   })
   return marks
 }
@@ -181,11 +181,11 @@ function applyHighlights(container: HTMLElement, query: string, options: FindOpt
 function setActiveMatch(marks: HTMLElement[], activeIndex: number): void {
   marks.forEach((mark, index) => {
     if (index === activeIndex) {
-      mark.dataset.gammaFindActive = 'true'
+      mark.dataset.carpusFindActive = 'true'
       applyMatchStyle(mark, true)
       mark.scrollIntoView({ block: 'center', inline: 'nearest' })
     } else {
-      delete mark.dataset.gammaFindActive
+      delete mark.dataset.carpusFindActive
       applyMatchStyle(mark, false)
     }
   })
@@ -401,7 +401,7 @@ export function PreviewFindBar({ open, rootRef, contentKey, unsupportedReason, m
 
   return (
     <div
-      data-gamma-find-ignore
+      data-carpus-find-ignore
       role="search"
       aria-label="文件内查找"
       className="absolute right-3 top-2 z-30 flex max-w-[min(390px,calc(100%-24px))] items-center gap-0.5 rounded-lg bg-popover/95 px-1.5 py-1 text-popover-foreground shadow-lg ring-1 ring-border/40 backdrop-blur"

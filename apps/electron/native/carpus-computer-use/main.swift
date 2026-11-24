@@ -21,7 +21,7 @@ final class ComponentDelegate: NSObject, NSApplicationDelegate {
                 signals.append(source)
             }
         } catch {
-            FileHandle.standardError.write(Data("gammaComputerUse：\(error)\n".utf8))
+            FileHandle.standardError.write(Data("carpusComputerUse：\(error)\n".utf8))
             exit(70)
         }
     }
@@ -32,7 +32,7 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 if arguments.first == "--client" || arguments.first == "--ping" || arguments.first == "--stop-session" {
     do { exit(try runClient(arguments)) }
     catch {
-        FileHandle.standardError.write(Data("gammaComputerUse transport：\(error)\n".utf8))
+        FileHandle.standardError.write(Data("carpusComputerUse transport：\(error)\n".utf8))
         exit(70)
     }
 } else if arguments.isEmpty || arguments.allSatisfy({ $0.hasPrefix("-psn_") }) {
@@ -42,6 +42,6 @@ if arguments.first == "--client" || arguments.first == "--ping" || arguments.fir
     app.delegate = delegate
     withExtendedLifetime(delegate) { app.run() }
 } else {
-    FileHandle.standardError.write(Data("用法：gammaComputerUse [--ping | --client <CLI命令...> | --stop-session <64hex>]\n".utf8))
+    FileHandle.standardError.write(Data("用法：carpusComputerUse [--ping | --client <CLI命令...> | --stop-session <64hex>]\n".utf8))
     exit(64)
 }

@@ -34,14 +34,14 @@ beforeAll(async () => {
         apply();
         return store.sub(chatWallpaperAtom,apply);
       },[]);
-      return h('div',{className:'gamma-workbench flex'},h('div',{className:'gamma-workbench-frame'},
+      return h('div',{className:'carpus-workbench flex'},h('div',{className:'carpus-workbench-frame'},
         h('nav',{'data-sidebar-region':'navigation'},
-          h('aside',{className:'gamma-panel','data-panel':'sidebar'},
-            h('header',{className:'gamma-topbar gamma-sidebar-topbar',id:'sidebar-topbar'},'Gamma'))),
+          h('aside',{className:'carpus-panel','data-panel':'sidebar'},
+            h('header',{className:'carpus-topbar carpus-sidebar-topbar',id:'sidebar-topbar'},'Carpus'))),
         h('div',{'data-workspace-pane':'agent',className:'relative z-[60] flex min-h-0 min-w-0 flex-col overflow-hidden',style:{width,height:540}},
           h(Panel,null,h('article',{'data-agent-conversation-root':'',className:'relative isolate flex h-full flex-col overflow-hidden'},
             h(ChatWallpaper,{reveal,onRevealComplete:done}),
-            h('header',{className:'gamma-topbar'},'聊天'),
+            h('header',{className:'carpus-topbar'},'聊天'),
             h('div',{className:'flex-1',id:'transcript'},'一条历史消息'),
             h(ThemeFloatingDock,{open,onOpenChange:setOpen,onCloseAutoFocus:()=>{},onSelect:(style,point,previousStyle)=>{if(point && style!=='default')setReveal({style,point,previousStyle});setOpen(false)}},
               h('div',{style:{height:80}},h(RichTextInput,{value:draft,onChange:setDraft,onSubmit:()=>sent++,workspaceSlug:'demo',enableMentions:true,

@@ -9,7 +9,7 @@ beforeAll(async () => {
     import { MarkdownWorkspaceView } from '@/components/markdown-workspace/MarkdownWorkspaceView';
     import { MarkdownEditorSettings } from '@/components/settings/MarkdownEditorSettings';
     import { markdownEditorPreferencesAtom, updateMarkdownEditorPreferencesAtom } from '@/atoms/markdown-editor-preferences';
-    import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES, mergeMarkdownEditorPreferences } from '@gamma/shared';
+    import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES, mergeMarkdownEditorPreferences } from '@carpus/shared';
     import '@/styles/globals.css';
     const delay=(ms=50)=>new Promise(resolve=>setTimeout(resolve,ms));
     const until=async(fn)=>{for(let i=0;i<150;i++){if(fn())return;await delay(10)}throw new Error('等待 UI 失败：'+document.body.innerHTML.slice(-4000))};

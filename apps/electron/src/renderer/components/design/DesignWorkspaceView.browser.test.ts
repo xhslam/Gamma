@@ -46,7 +46,7 @@ beforeAll(async () => {
       browser:()=>{const id=store.get(currentAgentSessionIdAtom);return {session:id,workspace:store.get(currentAgentWorkspaceIdAtom),open:store.get(browserPanelOpenMapAtom).get(id)===true,minimized:store.get(browserPanelMinimizedMapAtom).get(id)===true,panel:store.get(currentSessionSidePanelOpenAtom),tab:store.get(agentDiffPanelTabAtom).get(id),focus:store.get(browserFocusRequestMapAtom).get(id),view:store.get(activeViewAtom)}},
     };
   `, { moduleStubs: {
-    'components/agent/AgentView.tsx': `import React from 'react';export function AgentView({sessionId,embedded}){return React.createElement('div',{'data-testid':'design-agent','data-session':sessionId,'data-embedded':String(embedded)},'复用 Gamma AgentView')}`,
+    'components/agent/AgentView.tsx': `import React from 'react';export function AgentView({sessionId,embedded}){return React.createElement('div',{'data-testid':'design-agent','data-session':sessionId,'data-embedded':String(embedded)},'复用 Carpus AgentView')}`,
     'components/browser/BrowserPanel.tsx': `import React from 'react';export function BrowserPanel({sessionId,tabId}){return React.createElement('div',{'data-testid':'design-editor','data-session':sessionId,'data-tab':tabId},'原版本地编辑器')}`,
   } })
 }, 120_000)
@@ -90,7 +90,7 @@ describe('Given 完整 design 作品库和创作工作台', () => {
     `)
     expect(result).toEqual({ created: { workspaceId: 'a', sessionId: 'session-a', title: '阅读应用', kind: 'canvas' }, agent: 'session-a', inlineEditors: 0, browser: {session:'session-a',workspace:'a',open:true,minimized:false,panel:true,tab:'browser:editor-new',focus:'editor-new',view:'conversations'}, model: 'my-chat-model', newSession: false })
   }, 30_000)
-  test('When 创建白板 Then 复用 Gamma 聊天且不再挂载内联编辑器', async () => {
+  test('When 创建白板 Then 复用 Carpus 聊天且不再挂载内联编辑器', async () => {
     const result = await renderer.run(`
       const t=window.designTest;await t.mount();[...document.querySelectorAll('button')].find(button=>button.textContent.startsWith('白板')).click();
       await t.until(()=>document.querySelector('input[id^="design-name"]'));t.fill('input[id^="design-name"]','架构白板');await new Promise(r=>setTimeout(r,20));t.button('创建并打开').click();
@@ -202,7 +202,7 @@ describe('Given 完整 design 作品库和创作工作台', () => {
     `)
     expect(result).toEqual({ canvas: false, slides: false, dashboard: true, motion: true, notice: true })
   }, 30_000)
-  test('When Gamma 切换深色、特殊主题和强调色 Then 向已打开的原版编辑器实时同步实际令牌', async () => {
+  test('When Carpus 切换深色、特殊主题和强调色 Then 向已打开的原版编辑器实时同步实际令牌', async () => {
     const result = await renderer.run<{ light: string; dark: string; radius: number; changed: boolean }>(`
       const t=window.designTest;await t.mount({artifacts:[t.make('theme')]});
       [...document.querySelectorAll('button')].find(button=>button.textContent.includes('已有作品')).click();

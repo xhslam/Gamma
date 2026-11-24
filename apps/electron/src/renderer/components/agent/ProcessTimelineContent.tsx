@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { SDKToolUseBlock } from '@gamma/shared'
+import type { SDKToolUseBlock } from '@carpus/shared'
 import { FileText, Search, Terminal } from 'lucide-react'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 import { cn } from '@/lib/utils'

@@ -18,8 +18,8 @@ import { getModelLogo, resolveModelProvider } from '@/lib/model-logo'
 import { channelsAtom } from '@/atoms/channel-atoms'
 import { useShortcut } from '@/hooks/useShortcut'
 import { cn } from '@/lib/utils'
-import { MAX_SEARCH_QUERY_SOURCE_LENGTH } from '@gamma/shared'
-import type { SessionMessageSearchResponse, SessionMessageSearchResult } from '@gamma/shared'
+import { MAX_SEARCH_QUERY_SOURCE_LENGTH } from '@carpus/shared'
+import type { SessionMessageSearchResponse, SessionMessageSearchResult } from '@carpus/shared'
 import type { SessionMessageSearch } from '@/lib/session-message-search'
 
 export interface MinimapItem {

@@ -1,5 +1,5 @@
 /* 布局先让位，面板随后淡入，内容最后显现；关闭时反向收束。 */
-.gamma-on-demand-slot {
+.carpus-on-demand-slot {
   flex: 0 0 auto;
   min-width: 0;
   width: 0;
@@ -9,43 +9,43 @@
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1) 90ms,
     margin-right 220ms cubic-bezier(0.22, 1, 0.36, 1) 90ms;
 }
-.gamma-on-demand-slot[data-state="open"] {
+.carpus-on-demand-slot[data-state="open"] {
   width: clamp(12rem, 30%, 22rem);
   margin-right: 12px;
   transition-delay: 0ms;
 }
-:root .gamma-panel.gamma-on-demand-panel {
+:root .carpus-panel.carpus-on-demand-panel {
   opacity: 1;
   translate: 0 0;
   transition: opacity 160ms ease-out 45ms, translate 220ms ease-out 45ms;
 }
-:root .gamma-panel.gamma-on-demand-panel[data-state="closed"] {
+:root .carpus-panel.carpus-on-demand-panel[data-state="closed"] {
   opacity: 0;
   translate: 4px 0;
   pointer-events: none;
   transition-delay: 0ms;
 }
-.gamma-on-demand-content {
-  animation: gamma-on-demand-content-in 170ms ease-out 85ms backwards;
+.carpus-on-demand-content {
+  animation: carpus-on-demand-content-in 170ms ease-out 85ms backwards;
 }
 @starting-style {
-  .gamma-on-demand-slot[data-state="open"] {
+  .carpus-on-demand-slot[data-state="open"] {
     width: 0;
     margin-right: 0;
   }
-  :root .gamma-panel.gamma-on-demand-panel[data-state="open"] {
+  :root .carpus-panel.carpus-on-demand-panel[data-state="open"] {
     opacity: 0;
     translate: 4px 0;
   }
 }
-@keyframes gamma-on-demand-content-in {
+@keyframes carpus-on-demand-content-in {
   from { opacity: 0; translate: 0 3px; }
   to { opacity: 1; translate: 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .gamma-on-demand-slot,
-  :root .gamma-panel.gamma-on-demand-panel[data-state],
-  .gamma-on-demand-content {
+  .carpus-on-demand-slot,
+  :root .carpus-panel.carpus-on-demand-panel[data-state],
+  .carpus-on-demand-content {
     transition: none;
     animation: none;
     translate: none;

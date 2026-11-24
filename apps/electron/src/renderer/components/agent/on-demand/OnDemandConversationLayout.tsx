@@ -43,7 +43,7 @@ export function OnDemandConversationLayout({ sessionId, embedded = false, childr
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="conversation-layout-main">{children}</div>
       <div
-        className="gamma-on-demand-slot"
+        className="carpus-on-demand-slot"
         data-state={open ? 'open' : 'closed'}
         onTransitionEnd={(event) => {
           if (event.target === event.currentTarget && event.propertyName === 'width' && !open) {

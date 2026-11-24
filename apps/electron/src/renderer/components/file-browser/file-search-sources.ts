@@ -1,4 +1,4 @@
-import type { FileIndexEntry } from '@gamma/shared'
+import type { FileIndexEntry } from '@carpus/shared'
 
 export function hasMixedFileSources(entries: readonly FileIndexEntry[]): boolean {
   let hasSession = false

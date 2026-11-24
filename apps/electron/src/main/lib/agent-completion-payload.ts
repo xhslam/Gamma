@@ -1,8 +1,8 @@
-import { AGENT_IPC_CHANNELS } from '@gamma/shared'
+import { AGENT_IPC_CHANNELS } from '@carpus/shared'
 import type {
   AgentSendInput,
   AgentStreamCompletePayload,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 export type AgentStreamCompletionDetails = Omit<
   AgentStreamCompletePayload,

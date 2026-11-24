@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { MarkdownEditorPreferences } from '@gamma/shared'
+import type { MarkdownEditorPreferences } from '@carpus/shared'
 
 interface EditorStyle extends CSSProperties { [key: `--${string}`]: string | number }
 interface DocumentTheme { id: MarkdownEditorPreferences['theme']; label: string; background: string; surface: string; text: string; secondary: string; accent: string; border: string; dark: boolean }

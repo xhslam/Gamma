@@ -11,7 +11,7 @@ import type { ExtensionAPI, ExtensionToolContext, ToolDefinition } from '@earend
 describe('自动记录的只读文件视图', () => {
   let root: string
   let store: AutomaticMemoryStore
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'gamma-memory-view-')); mkdirSync(join(root, 'w')); store = new AutomaticMemoryStore({ resolveWorkspaceRoot: () => join(root, 'w') }); store.updateSettings('w', { enabled: true }) })
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'carpus-memory-view-')); mkdirSync(join(root, 'w')); store = new AutomaticMemoryStore({ resolveWorkspaceRoot: () => join(root, 'w') }); store.updateSettings('w', { enabled: true }) })
   afterEach(() => rmSync(root, { recursive: true, force: true }))
   const add = (sensitive = false): void => {
     const content = sensitive ? '我有医疗病史' : '我使用 Bun'

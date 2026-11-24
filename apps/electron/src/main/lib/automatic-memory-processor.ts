@@ -1,4 +1,4 @@
-import type { AutomaticMemoryCandidate, AutomaticMemoryChange, AutomaticMemorySnapshot, AutomaticMemorySource } from '@gamma/shared'
+import type { AutomaticMemoryCandidate, AutomaticMemoryChange, AutomaticMemorySnapshot, AutomaticMemorySource } from '@carpus/shared'
 import { buildAutomaticMemoryExtractionPrompt, getAutomaticMemoryUserText, parseAutomaticMemoryCandidates } from './automatic-memory-extraction'
 
 export interface AutomaticMemoryJob {

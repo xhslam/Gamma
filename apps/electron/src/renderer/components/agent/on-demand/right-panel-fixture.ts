@@ -66,9 +66,9 @@ export const rightPanelFixture = String.raw`
   store.set(agentSidePanelOpenAtomFamily(sessionId), false)
   store.set(currentAgentWorkspaceIdAtom, 'ws-1')
   store.set(agentWorkspacesAtom, [
-    { id: 'ws-1', name: 'Gamma', slug: 'gamma', projectRootPath: '/workspace/gamma', createdAt: 1, updatedAt: 1 }
+    { id: 'ws-1', name: 'Carpus', slug: 'carpus', projectRootPath: '/workspace/carpus', createdAt: 1, updatedAt: 1 }
   ])
-  store.set(agentSessionPathMapAtom, new Map([[sessionId, '/workspace/gamma']]))
+  store.set(agentSessionPathMapAtom, new Map([[sessionId, '/workspace/carpus']]))
   store.set(agentSidePanelLayoutAtomFamily(sessionId), {
     width: 460,
     hasOpenedWideWorkspace: false,
@@ -114,13 +114,13 @@ export const rightPanelFixture = String.raw`
   const initialDiff = {
     isGitRepo: true,
     files: [
-      { filePath: 'src/index.ts', additions: 15, deletions: 3, gitRoot: '/workspace/gamma', status: 'modified' },
-      { filePath: 'src/components/Nav.tsx', additions: 8, deletions: 0, gitRoot: '/workspace/gamma', status: 'added' },
+      { filePath: 'src/index.ts', additions: 15, deletions: 3, gitRoot: '/workspace/carpus', status: 'modified' },
+      { filePath: 'src/components/Nav.tsx', additions: 8, deletions: 0, gitRoot: '/workspace/carpus', status: 'added' },
     ],
     untrackedFiles: [
-      { filePath: 'docs/plan.md', additions: 25, deletions: 0, gitRoot: '/workspace/gamma', status: 'untracked' },
+      { filePath: 'docs/plan.md', additions: 25, deletions: 0, gitRoot: '/workspace/carpus', status: 'untracked' },
     ],
-    gitRootNames: ['gamma'],
+    gitRootNames: ['carpus'],
   }
   store.set(agentDiffDataAtom, new Map([
     [sessionId + ':session', initialDiff],
@@ -133,7 +133,7 @@ export const rightPanelFixture = String.raw`
   // 模拟真实完整 electronAPI；未声明的能力返回空值，避免后台effect噪声。
   const defaultElectronAPI = {
     createTerminal: async (input) => { terminalCreates.push(input.terminalId) },
-    getTerminalSnapshot: async () => ({ output: 'GAMMA_TERMINAL_HISTORY', sequence: 0 }),
+    getTerminalSnapshot: async () => ({ output: 'CARPUS_TERMINAL_HISTORY', sequence: 0 }),
     updateAgentSessionTitle: async (id, title) => ({ id, title, updatedAt: Date.now() }),
     listAgentSessions: async () => store.get(agentSessionsAtom),
     getWorkspaceDirectories: async () => [],
@@ -141,26 +141,26 @@ export const rightPanelFixture = String.raw`
     getAgentBrowserState: async () => null,
     onAttachedDirectoryChanged: () => () => {},
     onWorkspaceFilesChanged: () => () => {},
-    getWorkspaceFilesPath: async () => '/workspace/gamma',
+    getWorkspaceFilesPath: async () => '/workspace/carpus',
     getWorktreeRepos: async () => [
-      { repoPath: '/workspace/gamma', worktrees: [{ path: '/workspace/gamma', branch: 'main', isCurrent: true }] }
+      { repoPath: '/workspace/carpus', worktrees: [{ path: '/workspace/carpus', branch: 'main', isCurrent: true }] }
     ],
     getUnstagedChanges: async () => { diffFetchCount += 1; return initialDiff },
     getWorktreeChanges: async () => initialDiff,
-    getDiffContents: async () => ({ oldContent: 'export const answer = 41;', newContent: 'export const answer = 42; // GAMMA_DIFF_READY' }),
-    resolveAndReadFile: async (path) => { fileReads.push(path); return { resolvedPath: path, content: 'export const answer = 42; // GAMMA_FILE_READY' } },
+    getDiffContents: async () => ({ oldContent: 'export const answer = 41;', newContent: 'export const answer = 42; // CARPUS_DIFF_READY' }),
+    resolveAndReadFile: async (path) => { fileReads.push(path); return { resolvedPath: path, content: 'export const answer = 42; // CARPUS_FILE_READY' } },
     listDirectory: async (dirPath) => {
       if (dirPath.includes('src')) {
         return [
-          { name: 'index.ts', path: '/workspace/gamma/src/index.ts', isDirectory: false },
-          { name: 'components', path: '/workspace/gamma/src/components', isDirectory: true, children: [] },
+          { name: 'index.ts', path: '/workspace/carpus/src/index.ts', isDirectory: false },
+          { name: 'components', path: '/workspace/carpus/src/components', isDirectory: true, children: [] },
         ]
       }
       return [
-        { name: 'src', path: '/workspace/gamma/src', isDirectory: true },
-        { name: 'docs', path: '/workspace/gamma/docs', isDirectory: true },
-        { name: 'package.json', path: '/workspace/gamma/package.json', isDirectory: false },
-        { name: 'README.md', path: '/workspace/gamma/README.md', isDirectory: false },
+        { name: 'src', path: '/workspace/carpus/src', isDirectory: true },
+        { name: 'docs', path: '/workspace/carpus/docs', isDirectory: true },
+        { name: 'package.json', path: '/workspace/carpus/package.json', isDirectory: false },
+        { name: 'README.md', path: '/workspace/carpus/README.md', isDirectory: false },
       ]
     },
     searchWorkspaceFiles: async (_base, q) => ({
@@ -169,7 +169,7 @@ export const rightPanelFixture = String.raw`
         { name: 'Nav.tsx', path: 'src/components/Nav.tsx', type: 'file' },
       ].filter(e => e.name.toLowerCase().includes(q.toLowerCase()))
     }),
-    readFile: async (p) => '// Content of ' + p + '\nexport const answer = 42;\nconsole.log("Gamma Right Panel Validated");',
+    readFile: async (p) => '// Content of ' + p + '\nexport const answer = 42;\nconsole.log("Carpus Right Panel Validated");',
     getFileContent: async (p) => '// Content of ' + p,
     getFileMetadata: async () => ({ size: 1024, mtime: Date.now() }),
     showInFolder: async () => {},
@@ -284,7 +284,7 @@ export const rightPanelFixture = String.raw`
     getActiveOverlay: () => store.get(activeOnDemandOverlayAtom),
     getIsBigPanelOpen: () => store.get(currentSessionSidePanelOpenAtom),
     setMarkdownLayout: ({ side, split } = {}) => {
-      const file = { filePath: 'src/index.ts', dirPath: '/workspace/gamma', previewOnly: true }
+      const file = { filePath: 'src/index.ts', dirPath: '/workspace/carpus', previewOnly: true }
       store.set(agentSidePanelLayoutAtomFamily(sessionId), previous => ({ ...previous, workspaceSide: side ?? 'right' }))
       store.set(previewFilesMapAtom, split ? new Map([[sessionId, [file]]]) : new Map())
       store.set(agentSidePanelSplitMapAtom, split
@@ -318,7 +318,7 @@ export const rightPanelFixture = String.raw`
         status: i % 4 === 0 ? 'untracked' : 'modified',
         additions: (i % 20) + 1,
         deletions: i % 5,
-        gitRoot: '/workspace/gamma',
+        gitRoot: '/workspace/carpus',
         source: 'workspace',
       }))
       const tracked = files.filter(f => f.status !== 'untracked')
@@ -332,7 +332,7 @@ export const rightPanelFixture = String.raw`
         isGitRepo: true,
         files: tracked,
         untrackedFiles: untracked,
-        gitRootNames: ['gamma'],
+        gitRootNames: ['carpus'],
       }
       store.set(agentDiffDataAtom, new Map([
         [sessionId + ':session', result],
@@ -341,10 +341,10 @@ export const rightPanelFixture = String.raw`
     },
     inject1181Files: () => {
       const original = window.electronAPI.listDirectory
-      window.electronAPI.listDirectory = async path => path === '/workspace/gamma'
+      window.electronAPI.listDirectory = async path => path === '/workspace/carpus'
         ? Array.from({length: 1181}, (_, i) => ({
             name: i === 1 ? 'very-long-file-title-'.repeat(16) + '.ts' : i < 3 ? 'folder-' + i : 'source-' + i + '.ts',
-            path: '/workspace/gamma/' + (i === 1 ? 'very-long-file-title-'.repeat(16) + '.ts' : i < 3 ? 'folder-' + i : 'source-' + i + '.ts'),
+            path: '/workspace/carpus/' + (i === 1 ? 'very-long-file-title-'.repeat(16) + '.ts' : i < 3 ? 'folder-' + i : 'source-' + i + '.ts'),
             isDirectory: i === 0 || i === 2,
           }))
         : original(path)
@@ -352,11 +352,11 @@ export const rightPanelFixture = String.raw`
     // 注入附加文件
     injectAttachedFiles: () => {
       store.set(agentAttachedFilesMapAtom, new Map([[sessionId, [
-        '/workspace/gamma/docs/architecture.md',
-        '/workspace/gamma/docs/right-panel.md',
+        '/workspace/carpus/docs/architecture.md',
+        '/workspace/carpus/docs/right-panel.md',
       ]]]))
       store.set(agentAttachedDirectoriesMapAtom, new Map([[sessionId, [
-        '/workspace/gamma/packages/core',
+        '/workspace/carpus/packages/core',
       ]]]))
     },
   }

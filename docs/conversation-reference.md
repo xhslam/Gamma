@@ -4,7 +4,7 @@
 - `AgentSessionMeta.contextRefs?: AgentContextRef[]` 持久在会话索引；旧会话缺字段视为空，无需迁移。
 - 引用字段为 `refId, sourceConversationId, sourceProjectId, titleAtAttach, mode, snapshotUpToMessageId?, snapshotAt?, messageCount?, estTokens?`。
 - 默认 snapshot；Main 校验源存在、禁止自引、去重并限制最多 5 个。ID、标题、项目及截止点由 Main 权威生成，忽略 renderer 伪造字段。
-- 附加时将规范化内容原子冻结到 `~/.gamma/conversation-ref-cache/snapshots/<refId>.json`（开发模式使用 `.gamma-dev`）。再次附加或切换模式生成新 ID；同模式旧引用保持原快照。
+- 附加时将规范化内容原子冻结到 `~/.carpus/conversation-ref-cache/snapshots/<refId>.json`（开发模式使用 `.carpus-dev`）。再次附加或切换模式生成新 ID；同模式旧引用保持原快照。
 - live 每次请求读取最新完整消息；切回 snapshot 在切换时重新冻结。末尾未完成/取消的 assistant 不纳入，保留已完成工具链。
 - 快照读取校验身份、归属、截止点和内容 hash。缓存缺失、损坏、源已删除或项目归属不符时拒绝内容，绝不以源当前内容重建；预算允许时注入明确不可用原因，而非假装资料可用。
 - 源消息只读，不递归展开其引用；仅列出源会话曾引用的标题。缓存独立于全局/工作区记忆。

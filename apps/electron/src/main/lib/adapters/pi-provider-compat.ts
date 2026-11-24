@@ -1,4 +1,4 @@
-import type { ProviderType } from '@gamma/shared'
+import type { ProviderType } from '@carpus/shared'
 
 /**
  * 某些 OpenAI 兼容接口只接受 system、user、assistant 和 tool 角色。

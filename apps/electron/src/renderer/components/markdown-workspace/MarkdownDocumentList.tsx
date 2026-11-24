@@ -13,7 +13,7 @@ import {
   X,
   Search,
 } from 'lucide-react'
-import type { MarkdownWorkspaceContext, MarkdownWorkspaceEntry, MarkdownWorkspaceSource } from '@gamma/shared'
+import type { MarkdownWorkspaceContext, MarkdownWorkspaceEntry, MarkdownWorkspaceSource } from '@carpus/shared'
 import type { MarkdownOutlineEntry } from './markdown-reading-tools'
 import {
   markdownExpandedFoldersAtom,

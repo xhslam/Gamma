@@ -485,7 +485,7 @@ export function TerminalFocusWorkspace({ bridge, ready = true, visible = true }:
           {columnWeights.slice(0, -1).map((_, index) => <TrackSeparator key={`column-${index}`} axis="column" index={index} weights={columnWeights} singlePane={singlePane} onResize={(weights) => setLayout((previous) => ({ ...previous, columnWeights: weights }))} />)}
           {rowWeights.slice(0, -1).map((_, index) => <TrackSeparator key={`row-${index}`} axis="row" index={index} weights={rowWeights} singlePane={singlePane} onResize={(weights) => setLayout((previous) => ({ ...previous, rowWeights: weights }))} />)}
         </div>
-        {!sessions.length && <div className="terminal-focus__empty"><TerminalWindow size={32} /><h2>{!ready ? "正在连接桌面终端…" : terminal.isRestoring ? "正在恢复终端会话…" : bridge ? "开始一个终端会话" : "终端仅在 Gamma 桌面端可用"}</h2>
+        {!sessions.length && <div className="terminal-focus__empty"><TerminalWindow size={32} /><h2>{!ready ? "正在连接桌面终端…" : terminal.isRestoring ? "正在恢复终端会话…" : bridge ? "开始一个终端会话" : "终端仅在 Carpus 桌面端可用"}</h2>
           <p>{bridge ? "选择文件夹或最近项目，在对应目录启动本机默认 Shell。" : "请在桌面应用中打开终端模式。"}</p>
           {bridge && <button type="button" disabled={terminal.isRestoring} onClick={() => setProjectPickerOpen(true)}>新建终端</button>}
         </div>}

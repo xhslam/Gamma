@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { ArrowLeft, Pencil, RefreshCw, Search, Trash2, X } from 'lucide-react'
-import type { AutomaticMemoryCategory, AutomaticMemoryEntry, AutomaticMemorySettings, AutomaticMemorySnapshot } from '@gamma/shared'
+import type { AutomaticMemoryCategory, AutomaticMemoryEntry, AutomaticMemorySettings, AutomaticMemorySnapshot } from '@carpus/shared'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'

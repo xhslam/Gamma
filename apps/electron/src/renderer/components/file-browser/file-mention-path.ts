@@ -1,4 +1,4 @@
-import type { FileIndexEntry } from '@gamma/shared'
+import type { FileIndexEntry } from '@carpus/shared'
 
 type MentionSelection = Pick<FileIndexEntry, 'path' | 'source'>
 

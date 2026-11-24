@@ -27,7 +27,7 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        "gamma-panel",
+        "carpus-panel",
         // 面板几何统一来自 panels.css，不叠加装饰阴影。
         "z-[100] w-72 rounded-lg border border-border/50 bg-popover p-4 text-popover-foreground shadow-lg outline-none titlebar-no-drag",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",

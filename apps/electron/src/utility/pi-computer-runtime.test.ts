@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import * as shared from '@gamma/shared'
+import * as shared from '@carpus/shared'
 import { loadIsolatedModule } from '../test-utils/isolated-module'
 
 describe('Given utility 的 Agent 查询', () => {
@@ -21,13 +21,13 @@ describe('Given utility 的 Agent 查询', () => {
     }
     loadIsolatedModule(`${import.meta.dir}/agent-runtime.ts`, {
       'node:crypto': { randomUUID },
-      '@gamma/shared': shared,
+      '@carpus/shared': shared,
       '../main/lib/adapters/pi-agent-adapter': { PiAgentAdapter: FakePiAdapter },
       './agent-runtime-request-timeout': { getParentRequestTimeoutMs: () => 1000 },
       '../main/lib/computer-logger': { logComputerUseEvent: (entry: Record<string, unknown>) => { ready = entry } },
-    }, { process: { parentPort, pid: 1234, env: { GAMMA_APP_VERSION: '1.2.3' } }, AbortController })
+    }, { process: { parentPort, pid: 1234, env: { CARPUS_APP_VERSION: '1.2.3' } }, AbortController })
     expect(ready).toMatchObject({ event: 'logger-ready', process: 'utility', version: '1.2.3', pid: 1234 })
-    parentListener({ data: { type: 'gamma-agent-runtime-port', protocolVersion: shared.AGENT_RUNTIME_PROTOCOL_VERSION }, ports: [port] })
+    parentListener({ data: { type: 'carpus-agent-runtime-port', protocolVersion: shared.AGENT_RUNTIME_PROTOCOL_VERSION }, ports: [port] })
     const bootId = sent[0]?.bootId
     expect(typeof bootId).toBe('string')
     portListener({ data: {

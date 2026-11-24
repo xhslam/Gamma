@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** 独立组件：只构建专用产物，不参与 Gamma 日常签名或安装。 */
+/** 独立组件：只构建专用产物，不参与 Carpus 日常签名或安装。 */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -7,11 +7,11 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const COMPONENT_VERSION = '1.0.2'
-export const BUNDLE_ID = 'com.gamma.computeruse'
-const ICON_FILE = 'gamma-computer-use.icns'
+export const BUNDLE_ID = 'com.carpus.computeruse'
+const ICON_FILE = 'carpus-computer-use.icns'
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-export const DEFAULT_OUTPUT = join(appRoot, 'out/gamma-computer-use/gammaComputerUse.app')
-export const INSTALL_TARGET = '/Applications/gammaComputerUse.app'
+export const DEFAULT_OUTPUT = join(appRoot, 'out/carpus-computer-use/carpusComputerUse.app')
+export const INSTALL_TARGET = '/Applications/carpusComputerUse.app'
 interface SourceManifest { version: string; files: Record<string, string> }
 export interface BuildOptions { output?: string }
 
@@ -40,7 +40,7 @@ export function verifyComponent(path: string): void {
   if (icon !== ICON_FILE || !lstatSync(join(path, 'Contents/Resources', ICON_FILE)).isFile()) {
     throw new Error('组件图标无效')
   }
-  const binary = join(path, 'Contents/MacOS/gammaComputerUse')
+  const binary = join(path, 'Contents/MacOS/carpusComputerUse')
   if (!lstatSync(binary).isFile() || lstatSync(binary).isSymbolicLink()) throw new Error('组件 executable 无效')
 }
 
@@ -52,7 +52,7 @@ export function buildComponent(options: BuildOptions = {}): string {
   verifyPinnedEngine(source)
   mkdirSync(dirname(output), { recursive: true })
   const work = mkdtempSync(join(dirname(output), '.build-'))
-  const staged = join(work, 'gammaComputerUse.app')
+  const staged = join(work, 'carpusComputerUse.app')
   try {
     mkdirSync(join(staged, 'Contents/MacOS'), { recursive: true })
     mkdirSync(join(staged, 'Contents/Resources'), { recursive: true })
@@ -62,9 +62,9 @@ export function buildComponent(options: BuildOptions = {}): string {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
-<key>CFBundleName</key><string>gammaComputerUse</string>
-<key>CFBundleDisplayName</key><string>gammaComputerUse</string>
-<key>CFBundleExecutable</key><string>gammaComputerUse</string>
+<key>CFBundleName</key><string>carpusComputerUse</string>
+<key>CFBundleDisplayName</key><string>carpusComputerUse</string>
+<key>CFBundleExecutable</key><string>carpusComputerUse</string>
 <key>CFBundleIconFile</key><string>${ICON_FILE}</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>${COMPONENT_VERSION}</string>
@@ -76,8 +76,8 @@ export function buildComponent(options: BuildOptions = {}): string {
 </dict></plist>\n`
     // 构建临时产物不是用户持久化配置；整个已校验 app 随后才进入输出目录。
     writeFileSync(join(staged, 'Contents/Info.plist'), plist)
-    const native = join(appRoot, 'native/gamma-computer-use')
-    command('/usr/bin/xcrun', ['swiftc', '-swift-version', '5', '-O', '-target', `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.0`, ...['Protocol.swift', 'Identity.swift', 'Executor.swift', 'Service.swift', 'main.swift'].map(file => join(native, file)), '-o', join(staged, 'Contents/MacOS/gammaComputerUse')])
+    const native = join(appRoot, 'native/carpus-computer-use')
+    command('/usr/bin/xcrun', ['swiftc', '-swift-version', '5', '-O', '-target', `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.0`, ...['Protocol.swift', 'Identity.swift', 'Executor.swift', 'Service.swift', 'main.swift'].map(file => join(native, file)), '-o', join(staged, 'Contents/MacOS/carpusComputerUse')])
     for (const file of ['agent-desktop', 'agent-desktop-macos-helper']) {
       const path = join(staged, 'Contents/Resources/agent-desktop', file)
       chmodSync(path, 0o755)
@@ -100,10 +100,10 @@ export function assertInstallDestinationAbsent(target: string): void {
 
 /** 首次安装：拒绝已有同名目录；staging 校验完成后用 RENAME_EXCL 原子移动。 */
 export function installComponent(source = DEFAULT_OUTPUT, target = INSTALL_TARGET): void {
-  if (target !== INSTALL_TARGET) throw new Error('安装目标固定为 /Applications/gammaComputerUse.app')
+  if (target !== INSTALL_TARGET) throw new Error('安装目标固定为 /Applications/carpusComputerUse.app')
   assertInstallDestinationAbsent(target)
   verifyComponent(source)
-  const stagingRoot = mkdtempSync(join(dirname(target), '.gamma-computer-use-install-'))
+  const stagingRoot = mkdtempSync(join(dirname(target), '.carpus-computer-use-install-'))
   const staged = join(stagingRoot, basename(target))
   try {
     cpSync(source, staged, { recursive: true, errorOnExist: true, force: false })
@@ -121,6 +121,6 @@ if (import.meta.main) {
   } else if (args.length === 0) {
     console.log(buildComponent())
   } else {
-    throw new Error('用法：bun build-gamma-computer-use.ts [--install]')
+    throw new Error('用法：bun build-carpus-computer-use.ts [--install]')
   }
 }

@@ -11,7 +11,7 @@ import type { LegacyBrandMigrationPaths, PreparedLegacyBrandMigration } from './
 const fixtures: string[] = []
 const preparedMigrations: PreparedLegacyBrandMigration[] = []
 function fixture(): LegacyBrandMigrationPaths {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-brand-test-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-brand-test-'))
   fixtures.push(root)
   return getLegacyBrandMigrationPaths({ homeDirectory: root, appDataDirectory: join(root, 'appData'), isDevelopment: false })
 }
@@ -29,7 +29,7 @@ afterEach(() => {
   for (const path of fixtures.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
-describe('Gamma 首次启动复制迁移', () => {
+describe('Carpus 首次启动复制迁移', () => {
   test('Given 全新用户 When 准备迁移 Then 不创建空配置或旧身份数据', () => {
     const paths = fixture()
     const value = prepare(paths)
@@ -55,7 +55,7 @@ describe('Gamma 首次启动复制迁移', () => {
       expect(readFileSync(join(paths.legacyConfigDirectory, relativePath), 'utf8')).toBe(text)
     }
   })
-  test('Given 旧会话与受管路径 When 发布 Gamma 副本 Then 保留原文与旧文件并更新父会话和工作区路径', () => {
+  test('Given 旧会话与受管路径 When 发布 Carpus 副本 Then 保留原文与旧文件并更新父会话和工作区路径', () => {
     const paths = fixture()
     const oldSession = join(paths.legacyConfigDirectory, 'agent-sessions', 'a', 'pi.jsonl')
     const data = { piSessionFile: oldSession, parentSession: oldSession, mainRepoRoot: join(paths.legacyConfigDirectory, 'repos', 'a'), content: 'Proma 用户原文', prompt: oldSession, projectRootPath: oldSession, _promaTrace: true, outputMode: 'proma-input' }
@@ -68,13 +68,13 @@ describe('Gamma 首次启动复制迁移', () => {
     value.commit()
     const text = readFileSync(join(paths.configDirectory, 'agent-sessions', 'a', 'session.jsonl'), 'utf8')
     const next = JSON.parse(text.split('\n')[0]!)
-    expect(next.piSessionFile).toBe(oldSession.replace('.proma', '.gamma'))
+    expect(next.piSessionFile).toBe(oldSession.replace('.proma', '.carpus'))
     expect(next.parentSession).toBe(next.piSessionFile)
-    expect(next._gammaTrace).toBe(true)
+    expect(next._carpusTrace).toBe(true)
     expect(next.content).toBe(data.content)
     expect(next.prompt).toBe(oldSession)
     expect(next.projectRootPath).toBe(oldSession)
-    expect(next.outputMode).toBe('gamma-input')
+    expect(next.outputMode).toBe('carpus-input')
     expect(text).toContain('\n损坏行\n')
     const config = JSON.parse(readFileSync(join(paths.configDirectory, 'agent-workspaces', 'a', 'config.json'), 'utf8'))
     expect(config.attachedFiles).toEqual([next.piSessionFile])
@@ -98,7 +98,7 @@ describe('Gamma 首次启动复制迁移', () => {
     expect(JSON.parse(readFileSync(join(paths.configDirectory, 'settings.json'), 'utf8'))).toEqual({ new: true })
   })
 
-  test('Given 旧浏览器 partition When 迁移中断后重试 Then Gamma 保留 LocalStorage 并清理瞬态锁', () => {
+  test('Given 旧浏览器 partition When 迁移中断后重试 Then Carpus 保留 LocalStorage 并清理瞬态锁', () => {
     const paths = fixture()
     const source = paths.legacyProfileCandidates[0]!
     const partition = 'proma-browser-' + 'a'.repeat(32)
@@ -108,7 +108,7 @@ describe('Gamma 首次启动复制迁移', () => {
     first.dispose()
     const second = prepare(paths)
     expect(second.profileNeedsMigration).toBe(true)
-    expect(readFileSync(join(paths.profileDirectory, 'Partitions', partition.replace('proma-', 'gamma-'), 'Local Storage', 'value'), 'utf8')).toBe('登录偏好')
+    expect(readFileSync(join(paths.profileDirectory, 'Partitions', partition.replace('proma-', 'carpus-'), 'Local Storage', 'value'), 'utf8')).toBe('登录偏好')
     expect(existsSync(join(paths.profileDirectory, 'SingletonLock'))).toBe(false)
     second.commit()
     expect(existsSync(join(source, 'SingletonLock'))).toBe(true)
@@ -146,11 +146,11 @@ describe('Gamma 首次启动复制迁移', () => {
     git(['init'])
     write(join(repository, 'file.txt'), 'repo')
     git(['add', 'file.txt'])
-    git(['-c', 'user.name=Gamma Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture'])
+    git(['-c', 'user.name=Carpus Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture'])
     git(['worktree', 'add', '-b', 'fixture-worktree', worktree])
     prepare(paths).commit()
-    const newWorktree = worktree.replace('.proma', '.gamma')
-    expect(git(['rev-parse', '--absolute-git-dir'], newWorktree)).toBe(join(realpathSync(repository.replace('.proma', '.gamma')), '.git', 'worktrees', 'b'))
+    const newWorktree = worktree.replace('.proma', '.carpus')
+    expect(git(['rev-parse', '--absolute-git-dir'], newWorktree)).toBe(join(realpathSync(repository.replace('.proma', '.carpus')), '.git', 'worktrees', 'b'))
     expect(git(['status', '--porcelain'], worktree)).toBe('')
   })
 
@@ -164,13 +164,13 @@ describe('Gamma 首次启动复制迁移', () => {
     expect(existsSync(paths.configDirectory)).toBe(false)
   })
 
-  test('Given 旧进程仍持有锁 When 获取迁移快照 Then 不执行复制且恢复 Gamma 路径', () => {
-    let path = '/gamma'
+  test('Given 旧进程仍持有锁 When 获取迁移快照 Then 不执行复制且恢复 Carpus 路径', () => {
+    let path = '/carpus'
     let copied = false
     const adapter = { getPath: () => path, setPath: (_name: string, value: string) => { path = value }, requestSingleInstanceLock: () => false, releaseSingleInstanceLock: () => { throw new Error('不应释放别人的锁') } }
     expect(() => withLegacyProfileLock(adapter, '/proma', () => { copied = true })).toThrow('仍在运行')
     expect(copied).toBe(false)
-    expect(path).toBe('/gamma')
+    expect(path).toBe('/carpus')
   })
 
   test('Given Coach 受管激活与外部自定义 Skill When 更新元数据 Then 仅改受管旧标识', () => {
@@ -178,8 +178,8 @@ describe('Gamma 首次启动复制迁移', () => {
     const activation = { slug: 'proma-coach', name: 'proma-coach', filePath: join(paths.legacyConfigDirectory, 'agent-workspaces', 'a', 'skills', 'proma-coach', 'SKILL.md') }
     const external = { slug: 'proma-coach', name: 'proma-coach', filePath: '/user-project/proma-coach/SKILL.md' }
     const result = migrateLegacyMetadata({ skill_activations: [activation, external] }, paths.legacyConfigDirectory, paths.configDirectory) as { skill_activations: typeof activation[] }
-    expect(result.skill_activations[0]!.slug).toBe('gamma-coach')
-    expect(result.skill_activations[0]!.filePath).toContain('/skills/gamma-coach/')
+    expect(result.skill_activations[0]!.slug).toBe('carpus-coach')
+    expect(result.skill_activations[0]!.filePath).toContain('/skills/carpus-coach/')
     expect(result.skill_activations[1]).toEqual(external)
   })
 })
@@ -189,7 +189,7 @@ describe('旧身份凭据与发布顺序', () => {
   function services(events: string[]): BrandMigrationServices {
     return {
       identities: ['@proma/electron', 'Proma'], encryptionAvailable: () => true,
-      encrypt: (value) => { events.push('encrypt'); return Buffer.from('v10Gamma:' + value) },
+      encrypt: (value) => { events.push('encrypt'); return Buffer.from('v10Carpus:' + value) },
       startHelper: async (identity) => ({ profileCopy: '/temporary', decrypt: async (values) => values.map(() => identity === 'Proma' ? 'secret-fixture' : null), getCookies: async () => [{ partition: null, cookies: [] }], stop: async () => { events.push('stop:' + identity) } }),
       importCookies: async () => { events.push('cookies') },
     }
@@ -205,7 +205,7 @@ describe('旧身份凭据与发布顺序', () => {
     expect(collectLegacyCredentialSlots(paths.legacyConfigDirectory)).toHaveLength(7)
   })
 
-  test('Given 第一个旧身份解密失败 When 第二个成功 Then 仅将重新加密的配置发布到 Gamma', async () => {
+  test('Given 第一个旧身份解密失败 When 第二个成功 Then 仅将重新加密的配置发布到 Carpus', async () => {
     const paths = fixture()
     const source = join(paths.legacyConfigDirectory, 'channels.json')
     write(source, { channels: [{ apiKey: ciphertext }] })
@@ -213,7 +213,7 @@ describe('旧身份凭据与发布顺序', () => {
     await completeBrandMigration(prepare(paths), services(events))
     const text = readFileSync(join(paths.configDirectory, 'channels.json'), 'utf8')
     expect(text).not.toContain('secret-fixture')
-    expect(Buffer.from(JSON.parse(text).channels[0].apiKey, 'base64').toString()).toBe('v10Gamma:secret-fixture')
+    expect(Buffer.from(JSON.parse(text).channels[0].apiKey, 'base64').toString()).toBe('v10Carpus:secret-fixture')
     expect(JSON.parse(readFileSync(source, 'utf8')).channels[0].apiKey).toBe(ciphertext)
     expect(events).toEqual(['stop:@proma/electron', 'encrypt', 'stop:Proma'])
   })

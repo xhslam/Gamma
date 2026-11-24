@@ -7,7 +7,7 @@ import { getGlobalAgentsMdPath, readAgentsMdFile, readGlobalAgentsInstruction } 
 
 const roots: string[] = []
 function fixture(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-global-agents-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-global-agents-'))
   roots.push(root)
   return root
 }

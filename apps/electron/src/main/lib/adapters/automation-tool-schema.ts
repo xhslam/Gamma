@@ -1,5 +1,5 @@
 import { Type } from 'typebox'
-import type { CreateAutomationInput, UpdateAutomationInput } from '@gamma/shared'
+import type { CreateAutomationInput, UpdateAutomationInput } from '@carpus/shared'
 
 export type AutomationScheduleType = CreateAutomationInput['scheduleType']
 

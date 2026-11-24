@@ -4,7 +4,7 @@ import {
   resolveReasoningProfile,
   type AgentThinkingLevel,
   type ReasoningProfile,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 type ProviderPayload = Record<string, unknown>
 

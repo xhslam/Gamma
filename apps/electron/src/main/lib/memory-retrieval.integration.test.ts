@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 import { patchMemoryMetadata } from './memory-metadata'
 
@@ -19,7 +19,7 @@ function seed(root: string, name: string, description: string, aliases: string[]
   writeFileSync(join(root, `areas/${name}.md`), patchMemoryMetadata(body, { name: `${name}.md`, description, sources: [], aliases }))
 }
 async function runFixture(query: string, respond: (request: RequestBody, index: number) => Response, nextRound?: { update?: boolean }): Promise<{ requests: RequestBody[]; events: SDKMessage[] }> {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-memory-runtime-')); const global = join(root, 'global'); const workspace = join(root, 'workspace')
+  const root = mkdtempSync(join(tmpdir(), 'carpus-memory-runtime-')); const global = join(root, 'global'); const workspace = join(root, 'workspace')
   seed(global, 'exam', '秋考的截止日期和复习安排，安排秋考时读', ['秋考'], '- [stated] 截止日期是11月15日。\n')
   seed(workspace, 'exam', '秋考的当前科目与复习安排，安排秋考时读', ['秋考'], '- [stated] 科目是微积分。\n')
   const requests: RequestBody[] = []; const events: SDKMessage[] = []

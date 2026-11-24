@@ -14,7 +14,7 @@
 
 import { execSync } from 'child_process'
 import { app } from 'electron'
-import type { ShellEnvResult } from '@gamma/shared'
+import type { ShellEnvResult } from '@carpus/shared'
 import { loadWindowsEnv } from './windows-env'
 
 /**
@@ -87,7 +87,7 @@ function parseEnvOutput(output: string): Record<string, string> {
 export async function getShellEnv(shell: string): Promise<Record<string, string>> {
   // 使用标记来定位环境变量输出的开始位置
   // 这样可以过滤掉 Shell 启动时的其他输出
-  const marker = '__GAMMA_ENV_START__'
+  const marker = '__CARPUS_ENV_START__'
   const command = `echo ${marker} && env`
 
   const output = execSync(`${shell} -l -i -c '${command}'`, {

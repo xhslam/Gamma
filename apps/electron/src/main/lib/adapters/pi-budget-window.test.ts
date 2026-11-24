@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { inferBudgetContextWindow } from '@gamma/shared'
+import { inferBudgetContextWindow } from '@carpus/shared'
 import { buildModel, resolvePiBudgetContextWindow } from './pi-model-registry'
 import type { PiAgentQueryOptions } from './pi-agent-adapter'
 
@@ -14,7 +14,7 @@ describe('Given 引用预算的实际模型注册链路', () => {
       registerProvider: (_name: string, provider: ProbeProvider) => { registered = provider.models[0] },
       getModel: () => registered,
     }) } } as unknown as PiSdk
-    const modelId = 'gamma-test-unknown-budget-model'
+    const modelId = 'carpus-test-unknown-budget-model'
     const result = await buildModel(sdk, {
       provider: 'custom', model: modelId, sessionId: 'budget-test-session',
       apiKey: 'fixture-not-a-secret', baseUrl: 'http://127.0.0.1:9',

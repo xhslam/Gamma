@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentContextRef, AgentSendOutboxEntry } from '@gamma/shared'
+import type { AgentContextRef, AgentSendOutboxEntry } from '@carpus/shared'
 import { setConfigHomeForTest } from '../config-paths'
 import { appendSDKMessages, createAgentSession, updateAgentContextRefs } from '../agent-session-manager'
 import { AgentSendOutbox } from '../agent-send-outbox'
@@ -14,7 +14,7 @@ import { injectConversationReferencesContext } from './context-injector'
 let root: string, previous: string | undefined, target: string, sourceA: string, sourceB: string
 let a: AgentContextRef[], b: AgentContextRef[]
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), 'gamma-reference-send-')); previous = setConfigHomeForTest(root)
+  root = mkdtempSync(join(tmpdir(), 'carpus-reference-send-')); previous = setConfigHomeForTest(root)
   sourceA = (await createAgentSession('旧资料A')).id
   sourceB = (await createAgentSession('新资料B')).id
   target = (await createAgentSession('目标')).id

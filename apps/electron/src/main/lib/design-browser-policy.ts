@@ -27,7 +27,7 @@ export function parseDesignEditorScope(value: string): DesignEditorScope {
  * 固定 revision 的六种编辑器都通过 POST /__share 的 action:lan 打开 LAN；
  * hub 会剥掉 /<kind>/<token>/ 前缀，也会按 Referer 转交根路径 /__share。
  * POST /__hub 的 mount 可携带 lan:true，因此一并封锁该 origin 的全局控制入口。
- * 不读取正文，也没有页面可用的“已经同意”开关。未来共享授权须由 Gamma 独立实现。
+ * 不读取正文，也没有页面可用的“已经同意”开关。未来共享授权须由 Carpus 独立实现。
  * /__share/archive 与 /__share/save 是本地导出，不是授权变化，必须继续可用。
  */
 export function shouldBlockDesignBrowserRequest(request: DesignBrowserRequest, scopes: Iterable<DesignEditorScope>): boolean {

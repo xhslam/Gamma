@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai'
-import type { AutomaticMemoryChange, AutomaticMemoryEntry } from '@gamma/shared'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS } from '@gamma/shared'
+import type { AutomaticMemoryChange, AutomaticMemoryEntry } from '@carpus/shared'
+import { AUTOMATIC_MEMORY_IPC_CHANNELS } from '@carpus/shared'
 import { readFileSync } from 'node:fs'
 import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom, automaticMemoryPanelStateAtomFamily } from '../atoms/automatic-memory-atoms'
 import { appendAutomaticMemoryChange, AUTOMATIC_MEMORY_CATEGORIES, filterAutomaticMemoryEntries, selectAutomaticMemoryChanges } from './automatic-memory-presentation'
@@ -47,10 +47,10 @@ describe('Given 当前运行期的真实自动记忆提交事件', () => {
 describe('Given 工作区记忆浏览状态', () => {
   test('When 搜索标题或正文 Then 忽略首尾空格与大小写，不修改原始条目', () => {
     const entries: AutomaticMemoryEntry[] = [
-      { id: 'a', category: 'profile', title: 'Gamma UI', content: '喜欢紧凑布局', facts: [], revision: 1, createdAt: 1, updatedAt: 2, manuallyEdited: false },
+      { id: 'a', category: 'profile', title: 'Carpus UI', content: '喜欢紧凑布局', facts: [], revision: 1, createdAt: 1, updatedAt: 2, manuallyEdited: false },
       { id: 'b', category: 'areas', title: '工程约定', content: '使用 Bun', facts: [], revision: 1, createdAt: 1, updatedAt: 2, manuallyEdited: true },
     ]
-    expect(filterAutomaticMemoryEntries(entries, ' gamma ')).toEqual(entries.slice(0, 1))
+    expect(filterAutomaticMemoryEntries(entries, ' carpus ')).toEqual(entries.slice(0, 1))
     expect(filterAutomaticMemoryEntries(entries, '紧凑')).toEqual(entries.slice(0, 1))
     expect(filterAutomaticMemoryEntries(entries, 'BUN')).toEqual(entries.slice(1, 2))
     expect(filterAutomaticMemoryEntries(entries, 'missing')).toEqual([])

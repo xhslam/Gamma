@@ -1,4 +1,4 @@
-// 移植自 Auris 1.0.17 @ 5d972ccd57dd3707d0d71f62a4cf0209e97c7829；适配 Gamma 的 Tiptap、主题与公式存储。
+// 移植自 Auris 1.0.17 @ 5d972ccd57dd3707d0d71f62a4cf0209e97c7829；适配 Carpus 的 Tiptap、主题与公式存储。
 /** One observer per editor; offscreen formulas stay cheap until near the viewport. */
 import { createRenderQueue, distanceToVisible, type RenderQueue } from "./math-render-queue";
 interface Job { target: HTMLElement; render: () => void; root: HTMLElement; block: HTMLElement; distance: number; measuredAt: number; queued: boolean; running: boolean }

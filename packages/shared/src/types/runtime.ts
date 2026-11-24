@@ -228,7 +228,7 @@ export interface FileAccessOptions {
   unrestricted?: boolean
 }
 
-/** 已授权本地文件的 gamma-file URL */
+/** 已授权本地文件的 carpus-file URL */
 export interface ResolvedFileUrl {
   url: string
 }

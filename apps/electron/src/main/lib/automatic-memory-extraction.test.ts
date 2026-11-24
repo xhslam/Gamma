@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AutomaticMemoryCandidate, AutomaticMemorySnapshot } from '@gamma/shared'
+import type { AutomaticMemoryCandidate, AutomaticMemorySnapshot } from '@carpus/shared'
 import { buildAutomaticMemoryExtractionPrompt, getAutomaticMemoryUserText, parseAutomaticMemoryCandidates } from './automatic-memory-extraction'
 
 const snapshot: AutomaticMemorySnapshot = { settings: { enabled: true, includeSensitive: false }, entries: [], revision: 1 }

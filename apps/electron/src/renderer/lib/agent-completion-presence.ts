@@ -1,4 +1,4 @@
-import type { AgentSessionMeta, AgentStreamCompletePayload } from '@gamma/shared'
+import type { AgentSessionMeta, AgentStreamCompletePayload } from '@carpus/shared'
 import type { TabItem } from '@/atoms/tab-atoms'
 import { isDelegationObservationVisible } from '@/lib/agent-session-list'
 

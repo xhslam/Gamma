@@ -25,7 +25,7 @@ import {
   calculatePiAutoCompactionThresholdTokens,
   type ChannelPlanQuotaWindow,
   type ProviderType,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { fetchChannelPlanQuota } from '@/lib/channel-plan-quota'
 import { currentPlanQuota, formatPlanQuotaWindowValue, getPlanQuotaPillDisplay, planQuotaAccountKey } from '@/lib/channel-plan-quota-display'
 import type { LoadedPlanQuota } from '@/lib/channel-plan-quota-display'

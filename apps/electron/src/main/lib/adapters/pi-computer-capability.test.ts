@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import * as shared from '@gamma/shared'
-import type { AgentRuntimeEvent, AgentRuntimeRequest, ComputerPrivateObservation } from '@gamma/shared'
+import * as shared from '@carpus/shared'
+import type { AgentRuntimeEvent, AgentRuntimeRequest, ComputerPrivateObservation } from '@carpus/shared'
 import type { PiAgentQueryOptions } from './pi-agent-adapter'
 import { loadIsolatedModule } from '../../../test-utils/isolated-module'
 
@@ -35,7 +35,7 @@ function setup() {
     }
   }
   const { PiUtilityAdapter } = loadIsolatedModule<AdapterModule>(`${import.meta.dir}/pi-utility-adapter.ts`, {
-    'node:crypto': { randomUUID }, '@gamma/shared': shared,
+    'node:crypto': { randomUUID }, '@carpus/shared': shared,
     '../agent-runtime-client': { AgentRuntimeClient: FakeClient },
     '../computer-service': { computerController: { stopForSession: async (sessionId: string) => { stops.push(sessionId) } } },
   }, { AbortController })

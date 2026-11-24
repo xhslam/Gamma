@@ -1,4 +1,4 @@
-import type { ComputerAXContext, ComputerRiskLevel, ComputerRiskPolicy } from '@gamma/shared'
+import type { ComputerAXContext, ComputerRiskLevel, ComputerRiskPolicy } from '@carpus/shared'
 import type { ComputerExecuteParams } from './computer-controller'
 
 export interface RiskEvaluationResult {

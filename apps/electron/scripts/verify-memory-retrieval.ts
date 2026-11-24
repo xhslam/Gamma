@@ -3,7 +3,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 import { patchMemoryMetadata } from '../src/main/lib/memory-metadata'
 import { setConfigHomeForTest } from '../src/main/lib/config-paths'
 import { writeTextFileAtomic } from '../src/main/lib/safe-file'
@@ -66,14 +66,14 @@ function seed(root: string, relative: string, description: string, aliases: stri
 }
 async function main(): Promise<void> {
   if (process.argv.includes('--help')) {
-    console.log('GAMMA_MEMORY_EVAL_API_KEY=<安全注入> GAMMA_MEMORY_EVAL_MODEL=<实际模型ID> GAMMA_MEMORY_EVAL_PROVIDER=google|openai GAMMA_MEMORY_EVAL_BASE_URL=<可选> bun run apps/electron/scripts/verify-memory-retrieval.ts --output <report.json>\n默认每场景3次，共13类39次（含本轮冲突）；只使用临时合成事实，禁止文件写入和其他副作用。--check仅检查场景清单，不请求模型。')
+    console.log('CARPUS_MEMORY_EVAL_API_KEY=<安全注入> CARPUS_MEMORY_EVAL_MODEL=<实际模型ID> CARPUS_MEMORY_EVAL_PROVIDER=google|openai CARPUS_MEMORY_EVAL_BASE_URL=<可选> bun run apps/electron/scripts/verify-memory-retrieval.ts --output <report.json>\n默认每场景3次，共13类39次（含本轮冲突）；只使用临时合成事实，禁止文件写入和其他副作用。--check仅检查场景清单，不请求模型。')
     return
   }
   if (process.argv.includes('--check')) { console.log(JSON.stringify({ mode: 'configuration-check-only', cases: scenarios.length, repetitions: 3, total: scenarios.length * 3, modelTested: false })); return }
-  const apiKey = process.env.GAMMA_MEMORY_EVAL_API_KEY
-  const model = process.env.GAMMA_MEMORY_EVAL_MODEL
-  const provider = process.env.GAMMA_MEMORY_EVAL_PROVIDER ?? 'google'
-  if (!apiKey || !model) throw new Error('未配置模型凭据或实际模型ID；未运行模型验收。请安全注入GAMMA_MEMORY_EVAL_API_KEY和GAMMA_MEMORY_EVAL_MODEL。')
+  const apiKey = process.env.CARPUS_MEMORY_EVAL_API_KEY
+  const model = process.env.CARPUS_MEMORY_EVAL_MODEL
+  const provider = process.env.CARPUS_MEMORY_EVAL_PROVIDER ?? 'google'
+  if (!apiKey || !model) throw new Error('未配置模型凭据或实际模型ID；未运行模型验收。请安全注入CARPUS_MEMORY_EVAL_API_KEY和CARPUS_MEMORY_EVAL_MODEL。')
   if (provider !== 'google' && provider !== 'openai') throw new Error('验收仅支持google原生或openai兼容渠道')
   const outputIndex = process.argv.indexOf('--output')
   const output = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
@@ -83,7 +83,7 @@ async function main(): Promise<void> {
   process.env.NODE_ENV = 'test'
   const results: Array<ReturnType<typeof assess> & { id: string; run: number }> = []
   for (const scenario of scenarios) for (let run = 1; run <= 3; run++) {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-evaluation-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-evaluation-'))
     const global = join(root, 'global'); const workspace = join(root, 'workspace')
     const previousHome = setConfigHomeForTest(root)
     const { PiAgentAdapter } = await import('../src/main/lib/adapters/pi-agent-adapter')
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
       seed(global, 'topics/shared.md', '双域项目的全局约定，涉及双域项目时读取', ['双域项目'], '- [stated] 全局约定是中文注释。\n')
       seed(workspace, 'topics/shared.md', '双域项目的工作区约定，涉及双域项目时读取', ['双域项目'], '- [stated] 工作区约定是周五验收。\n')
       const events: SDKMessage[] = []
-      for await (const event of adapter.query({ sessionId: `${scenario.id}-${run}`, prompt: scenario.query, memoryUserMessage: scenario.query, model, provider, apiKey, baseUrl: process.env.GAMMA_MEMORY_EVAL_BASE_URL, abortSignal: AbortSignal.timeout(90_000), cwd: root, piAgentDir: join(root, 'agent'), piSessionDir: join(root, 'sessions'), systemPrompt: '你是简洁的中文助手。本轮是只读回答，不执行记忆写入或其他副作用。', permissionMode: 'default', canUseTool: async () => ({ behavior: 'deny', message: '此合成验收只允许独立记忆读取工具，禁止其他副作用。' }), maxTurns: 12, memoryEnabled: true, memoryRoot: global, memoryWorkspaceRoot: workspace })) events.push(event)
+      for await (const event of adapter.query({ sessionId: `${scenario.id}-${run}`, prompt: scenario.query, memoryUserMessage: scenario.query, model, provider, apiKey, baseUrl: process.env.CARPUS_MEMORY_EVAL_BASE_URL, abortSignal: AbortSignal.timeout(90_000), cwd: root, piAgentDir: join(root, 'agent'), piSessionDir: join(root, 'sessions'), systemPrompt: '你是简洁的中文助手。本轮是只读回答，不执行记忆写入或其他副作用。', permissionMode: 'default', canUseTool: async () => ({ behavior: 'deny', message: '此合成验收只允许独立记忆读取工具，禁止其他副作用。' }), maxTurns: 12, memoryEnabled: true, memoryRoot: global, memoryWorkspaceRoot: workspace })) events.push(event)
       results.push({ id: scenario.id, run, ...assess(events, scenario) })
       console.log(`${scenario.id} #${run}: ${results.at(-1)!.passed ? '通过' : '未通过'}`)
     } catch {

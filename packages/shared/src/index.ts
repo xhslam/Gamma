@@ -1,5 +1,5 @@
 /**
- * @gamma/shared - Shared types, configs and utilities
+ * @carpus/shared - Shared types, configs and utilities
  */
 
 export * from './types/index'

@@ -9,8 +9,8 @@ import { atom } from 'jotai'
 import type { Getter } from 'jotai'
 import { atomWithStorage, createJSONStorage, selectAtom } from 'jotai/utils'
 import { atomFamily } from 'jotai-family'
-import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, GammaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult } from '@gamma/shared'
-import { GAMMA_DEFAULT_PERMISSION_MODE } from '@gamma/shared'
+import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, CarpusPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult } from '@carpus/shared'
+import { CARPUS_DEFAULT_PERMISSION_MODE } from '@carpus/shared'
 import { calculateDockBadgeCount, countPendingRequests } from '@/lib/dock-badge-count'
 import type { AgentQueuedMessage } from '@/lib/agent-message-queue'
 import type { SessionFileChange } from '@/lib/session-file-changes'
@@ -536,7 +536,7 @@ const sidePanelOpenStorage = {
 
 /** 侧面板是否打开：按 Agent 会话持久化，未存储的会话默认收起，保持首次进入界面简洁。 */
 export const agentSidePanelOpenMapAtom = atomWithStorage<Record<string, boolean>>(
-  'gamma-agent-sidepanel-open-by-session',
+  'carpus-agent-sidepanel-open-by-session',
   {},
   sidePanelOpenStorage,
   { getOnInit: true },
@@ -605,7 +605,7 @@ export function pruneAgentSidePanelLayouts(
 
 /** 右侧工作区布局：按 Agent Session 持久化，包含普通与宽视图的尺寸。 */
 export const agentSidePanelLayoutMapAtom = atomWithStorage<Record<string, AgentSidePanelLayout>>(
-  'gamma-agent-workspace-layout-by-session',
+  'carpus-agent-workspace-layout-by-session',
   {},
   undefined,
   { getOnInit: true },
@@ -637,7 +637,7 @@ export const agentSidePanelLayoutAtomFamily = atomFamily((sessionId: string) => 
 /** 文件来源选择：按会话持久化，未存储的会话默认显示项目文件。 */
 export type AgentFileSourceFilter = 'session' | 'project'
 export const agentFileSourceFilterMapAtom = atomWithStorage<Record<string, AgentFileSourceFilter>>(
-  'gamma-agent-file-source-filter-map',
+  'carpus-agent-file-source-filter-map',
   {},
   undefined,
   { getOnInit: true },
@@ -757,9 +757,9 @@ export function isUserPriorityWorkspaceComponentTab(
 
 /** Pi `/tree` 探索分支在右侧工作区的展示信息。 */
 export interface AgentExplorationBranchTab {
-  /** Pi 原生 fork 生成的独立 Gamma session。 */
+  /** Pi 原生 fork 生成的独立 Carpus session。 */
   sessionId: string
-  /** 作为分叉锚点的 Gamma assistant message UUID。 */
+  /** 作为分叉锚点的 Carpus assistant message UUID。 */
   sourceMessageId: string
   /** 给用户看的分叉来源。 */
   sourceLabel: string
@@ -851,7 +851,7 @@ export const currentSessionSidePanelOpenAtom = atom(
  * 但同一 workspace 的后台会话不得改变彼此的右侧 Tab，避免抢走用户焦点。
  */
 export const agentSessionComponentOpenMapAtom = atomWithStorage<Record<string, WorkspaceComponentTab[]>>(
-  'gamma-agent-session-component-tabs',
+  'carpus-agent-session-component-tabs',
   {},
   undefined,
   { getOnInit: true },
@@ -877,7 +877,7 @@ export const agentSidePanelSplitMapAtom = atom<Map<string, RightWorkspaceSplitSt
 
 /** 双 Pane 分隔比例按 Session 持久化，但不持久化可能在重启后失效的动态 Tab ID。 */
 export const agentSidePanelSplitRatioMapAtom = atomWithStorage<Record<string, number>>(
-  'gamma-agent-workspace-split-ratio-by-session',
+  'carpus-agent-workspace-split-ratio-by-session',
   {},
   undefined,
   { getOnInit: true },
@@ -1036,14 +1036,14 @@ export const RECENTLY_MODIFIED_TTL_MS = 60_000
 // ===== 权限系统 Atoms =====
 
 /** 新会话默认权限模式 */
-export const agentDefaultPermissionModeAtom = atom<GammaPermissionMode>(GAMMA_DEFAULT_PERMISSION_MODE)
+export const agentDefaultPermissionModeAtom = atom<CarpusPermissionMode>(CARPUS_DEFAULT_PERMISSION_MODE)
 
-/** Per-session 权限模式 Map — sessionId → GammaPermissionMode */
-export const agentPermissionModeMapAtom = atom<Map<string, GammaPermissionMode>>(new Map())
+/** Per-session 权限模式 Map — sessionId → CarpusPermissionMode */
+export const agentPermissionModeMapAtom = atom<Map<string, CarpusPermissionMode>>(new Map())
 
 /**
  * 按 sessionId 派生该 session 的持久化权限模式。
- * 返回 `undefined`（session 不存在或未设置）或具体的 GammaPermissionMode 字符串，
+ * 返回 `undefined`（session 不存在或未设置）或具体的 CarpusPermissionMode 字符串，
  * jotai 用 === 比较，只有值真正变化时才通知下游——避免流式中无关字段更新引发 re-render。
  */
 export const sessionPersistedPermissionModeAtom = atomFamily((sessionId: string) =>

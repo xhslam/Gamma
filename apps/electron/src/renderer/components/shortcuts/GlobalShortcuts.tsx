@@ -178,7 +178,7 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'focus-input',
     useCallback(() => {
-      window.dispatchEvent(new CustomEvent('gamma:focus-input'))
+      window.dispatchEvent(new CustomEvent('carpus:focus-input'))
     }, []),
   )
 
@@ -213,7 +213,7 @@ export function GlobalShortcuts(): null {
             activeDelegationSessionId ? { type: 'agent', sessionId: activeDelegationSessionId } : null,
           )
       if (target) {
-        window.dispatchEvent(new CustomEvent('gamma:stop-generation', { detail: target }))
+        window.dispatchEvent(new CustomEvent('carpus:stop-generation', { detail: target }))
       }
     }, [activeAgentSidePanelSplit, activeAgentSidePanelTab, activeDelegationSessionId, activeTab, agentSessions, isActiveAgentSidePanelOpen]),
   )
@@ -312,7 +312,7 @@ export function GlobalShortcuts(): null {
     return cleanup
   }, [store])
 
-  // ===== 语音输入 → 写入当前 Gamma 输入框 =====
+  // ===== 语音输入 → 写入当前 Carpus 输入框 =====
 
   useEffect(() => {
     const cleanupPreview = window.electronAPI.onVoiceDictationPreviewText((data) => {
@@ -335,13 +335,13 @@ export function GlobalShortcuts(): null {
         return
       }
 
-      const insertedAtCursor = !window.dispatchEvent(new CustomEvent('gamma:insert-voice-dictation-text', {
+      const insertedAtCursor = !window.dispatchEvent(new CustomEvent('carpus:insert-voice-dictation-text', {
         cancelable: true,
         detail: { ...data, text: trimmed },
       }))
       if (insertedAtCursor) {
         acknowledgeDelivery(true)
-        window.dispatchEvent(new CustomEvent('gamma:focus-input'))
+        window.dispatchEvent(new CustomEvent('carpus:focus-input'))
         return
       }
 
@@ -385,7 +385,7 @@ export function GlobalShortcuts(): null {
           map.set(sessionId, (map.get(sessionId) ?? 0) + 1)
           return map
         })
-        window.dispatchEvent(new CustomEvent('gamma:focus-input'))
+        window.dispatchEvent(new CustomEvent('carpus:focus-input'))
         acknowledgeDelivery(true)
         return
       }

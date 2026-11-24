@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AgyActivityEvent } from '@gamma/shared'
+import type { AgyActivityEvent } from '@carpus/shared'
 import { agyEventStateLabel, formatAgyDuration, groupAgyActivity } from './agy-activity-presentation'
 
 const event = (sequence: number, value: Partial<AgyActivityEvent>): AgyActivityEvent => ({ sequence, timestamp: sequence, kind: 'text', ...value })

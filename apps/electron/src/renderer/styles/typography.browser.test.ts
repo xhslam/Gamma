@@ -7,7 +7,7 @@ beforeAll(async () => {
   renderer = await createElectronRendererHarness(`
     import React from 'react';
     import {createRoot} from 'react-dom/client';
-    import {DEFAULT_MARKDOWN_EDITOR_PREFERENCES} from '@gamma/shared';
+    import {DEFAULT_MARKDOWN_EDITOR_PREFERENCES} from '@carpus/shared';
     import {MessageResponse,UserMessageContent} from '@/components/ai-elements/message';
     import {RichTextInput} from '@/components/ai-elements/rich-text-input';
     import {LiveMarkdownEditor} from '@/components/markdown/LiveMarkdownEditor';
@@ -25,7 +25,7 @@ beforeAll(async () => {
       async mount(theme='',width=900){
         document.documentElement.className=theme;applyMarkdownFontSizeToDOM('medium');
         root.render(React.createElement(TooltipProvider,null,React.createElement('main',{id:'fixture',style:{width,maxWidth:'100vw'}},
-          React.createElement('aside',{className:'gamma-sidebar'},React.createElement('button',{id:'ui'},'新建会话')),
+          React.createElement('aside',{className:'carpus-sidebar'},React.createElement('button',{id:'ui'},'新建会话')),
           React.createElement('section',{id:'assistant'},React.createElement(MessageResponse,null,message)),
           React.createElement('section',{id:'user'},React.createElement(UserMessageContent,null,paragraph)),
           React.createElement('section',{id:'composer'},React.createElement(RichTextInput,{value:'编辑一段中文和 English prose',onChange:()=>{}})),

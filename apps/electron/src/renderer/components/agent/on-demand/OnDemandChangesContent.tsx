@@ -29,7 +29,7 @@ import { openInBigPanelAtom, agentDiffStatusAtom } from '@/atoms/on-demand-panel
 import { WorktreeSelector } from '@/components/diff/WorktreeSelector'
 import { formatBadgeNumber, calculateDiffBadgeStats } from '@/lib/right-panel-badge'
 import { diffBadgeClasses } from '@/lib/right-panel-theme'
-import type { WorktreeInfo } from '@gamma/shared'
+import type { WorktreeInfo } from '@carpus/shared'
 
 interface FlattenedChangeFile {
   filePath: string
@@ -344,7 +344,7 @@ export function OnDemandChangesContent({
                     onClick={() => handleOpenItem(file)}
                     onMouseEnter={() => setSelectedIndex(virtualRow.index)}
                     className={cn(
-                      'gamma-list-row group flex h-full w-full items-center gap-2 rounded-md px-2 text-left text-xs transition-colors',
+                      'carpus-list-row group flex h-full w-full items-center gap-2 rounded-md px-2 text-left text-xs transition-colors',
                       isSelected ? 'bg-primary/10 text-foreground' : 'hover:bg-muted/60 text-muted-foreground',
                     )}
                     role="option"

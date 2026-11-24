@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { ComputerState } from '@gamma/shared'
+import type { ComputerState } from '@carpus/shared'
 import { projectComputerState } from '../components/computer-use/computer-use-model'
 import type { ComputerUseView } from '../components/computer-use/computer-use-model'
 

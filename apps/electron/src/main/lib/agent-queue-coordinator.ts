@@ -5,7 +5,7 @@ import type {
   AgentQueuedMessageSnapshot,
   AgentQueuedMessageControlInput,
   AgentQueuedMessageStatus,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 type DispatchedQueueRunInput = AgentDeferredQueueMessageInput & { runGeneration: number }
 

@@ -13,7 +13,7 @@
 
 import { shell } from 'electron'
 import type { Credential, CredentialStore } from '@earendil-works/pi-ai'
-import type { CodexOAuthCredentials, CodexOAuthDeviceCode, CodexOAuthLoginMethod } from '@gamma/shared'
+import type { CodexOAuthCredentials, CodexOAuthDeviceCode, CodexOAuthLoginMethod } from '@carpus/shared'
 import { runWithOAuthProxyScope } from './oauth-proxy-scope'
 
 /** 只加载授权所需模块，避免在 Electron 主进程初始化 CLI/TUI 和平台工具依赖。 */
@@ -28,7 +28,7 @@ async function createCodexModels(credentials: CredentialStore) {
 }
 
 /**
- * Pi AI 使用 CredentialStore 的结构契约。OAuth 凭据仍由 Gamma
+ * Pi AI 使用 CredentialStore 的结构契约。OAuth 凭据仍由 Carpus
  * channel-manager 加密持久化；这里使用内存 store，避免 Pi 写入自己的 ~/.pi 配置。
  */
 function createEphemeralCredentialStore(initial?: Credential) {
@@ -63,7 +63,7 @@ function normalizeCredentials(value: unknown): CodexOAuthCredentials {
 /** 进行中的登录流程的取消控制器（同一时刻只允许一个登录流程）。 */
 let activeLoginAbort: AbortController | undefined
 
-/** Pi OAuth 使用全局 fetch；登录和刷新均由 runWithOAuthProxyScope 绑定 Gamma 代理。 */
+/** Pi OAuth 使用全局 fetch；登录和刷新均由 runWithOAuthProxyScope 绑定 Carpus 代理。 */
 
 export interface CodexLoginCallbacks {
   /** SDK 生成授权 URL 后回调，用于（除自动开浏览器外）通知渲染层展示 URL。 */

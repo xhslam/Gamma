@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
-import type { AgentContextRef } from '@gamma/shared'
+import type { AgentContextRef } from '@carpus/shared'
 import {
   reconcileReferenceSummaries,
   MAX_GLOBAL_SUMMARY_CONCURRENCY,

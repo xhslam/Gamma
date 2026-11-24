@@ -1,6 +1,6 @@
 /**
- * Shared configuration for gamma
+ * Shared configuration for carpus
  */
 
 // Placeholder - will be expanded as needed
-export const APP_NAME = 'Gamma'
+export const APP_NAME = 'Carpus'

@@ -19,7 +19,7 @@ import {
   X,
   RefreshCw,
 } from 'lucide-react'
-import type { SkillFileNode, SkillFileContent } from '@gamma/shared'
+import type { SkillFileNode, SkillFileContent } from '@carpus/shared'
 import { Button } from '@/components/ui/button'
 import { SettingsCard } from './primitives'
 import { cn } from '@/lib/utils'
@@ -545,7 +545,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
     <li>
       <div data-disclosure-group=""
         className={cn(
-          'gamma-list-row group flex items-center gap-1 px-1 rounded text-xs cursor-pointer select-none',
+          'carpus-list-row group flex items-center gap-1 px-1 rounded text-xs cursor-pointer select-none',
           isSelected ? 'bg-accent text-foreground' : 'hover:bg-accent/60 text-foreground/80',
         )}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
@@ -553,7 +553,7 @@ function TreeNode(props: TreeNodeProps): React.ReactElement {
       >
         <span className="shrink-0 w-3.5">
           {node.type === 'directory' ? (
-            <button type="button" data-disclosure-trigger="" className="gamma-disclosure-button" style={{ width: 12 }} aria-expanded={isExpanded} aria-label={(isExpanded ? '收起目录 ' : '展开目录 ') + node.name} onClick={(event) => { event.stopPropagation(); if (!isRenaming) props.onSelect(node) }}><DisclosureChevron expanded={isExpanded} size={12} /></button>
+            <button type="button" data-disclosure-trigger="" className="carpus-disclosure-button" style={{ width: 12 }} aria-expanded={isExpanded} aria-label={(isExpanded ? '收起目录 ' : '展开目录 ') + node.name} onClick={(event) => { event.stopPropagation(); if (!isRenaming) props.onSelect(node) }}><DisclosureChevron expanded={isExpanded} size={12} /></button>
           ) : null}
         </span>
         <span className="shrink-0 text-muted-foreground">

@@ -8,7 +8,7 @@ beforeAll(async () => {
     import React from 'react'
     import { createRoot } from 'react-dom/client'
     import { Provider, createStore } from 'jotai'
-    import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@gamma/shared'
+    import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@carpus/shared'
     import { MarkdownWorkspaceView } from '@/components/markdown-workspace/MarkdownWorkspaceView'
     import { markdownWorkspaceStateAtomFamily } from '@/atoms/markdown-workspace-atoms'
     import { markdownEditorPreferencesErrorAtom } from '@/atoms/markdown-editor-preferences'

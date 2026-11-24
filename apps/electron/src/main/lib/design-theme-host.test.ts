@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { DesignThemeSnapshot } from '@gamma/shared'
+import type { DesignThemeSnapshot } from '@carpus/shared'
 import { createDesignThemeHost } from './design-theme-host'
 import type { DesignThemeWebContents } from './design-theme-host'
 

@@ -1,4 +1,4 @@
-import type { SDKContentBlock, SDKMessage, SDKToolUseBlock, SDKUserMessage } from '@gamma/shared'
+import type { SDKContentBlock, SDKMessage, SDKToolUseBlock, SDKUserMessage } from '@carpus/shared'
 import { getProcessActionLabel } from './process-timeline-presentation'
 
 export interface ProcessLiveStatus {

@@ -8,7 +8,7 @@ beforeAll(async () => {
     import React from 'react'
     import { createRoot } from 'react-dom/client'
     import { undo } from '@codemirror/commands'
-    import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@gamma/shared'
+    import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@carpus/shared'
     import { MarkdownWorkspaceEditor } from '@/components/markdown-workspace/MarkdownWorkspaceEditor'
     import { MarkdownSourceEditor } from '@/components/markdown-workspace/MarkdownSourceEditor'
     import { initShortcutRegistry, registerShortcut, updateShortcutOverrides } from '@/lib/shortcut-registry'

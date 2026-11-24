@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
 
-export interface GammaTaskItem {
+export interface CarpusTaskItem {
   id: string
   subject: string
   status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'cancelled' | 'error' | 'deleted'
@@ -20,12 +20,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isTaskStatus(value: unknown): value is GammaTaskItem['status'] {
+function isTaskStatus(value: unknown): value is CarpusTaskItem['status'] {
   return value === 'pending' || value === 'in_progress' || value === 'completed'
     || value === 'blocked' || value === 'cancelled' || value === 'error' || value === 'deleted'
 }
 
-function parseTask(value: unknown): GammaTaskItem | undefined {
+function parseTask(value: unknown): CarpusTaskItem | undefined {
   if (!isRecord(value) || (typeof value.id !== 'string' && typeof value.id !== 'number')
     || !String(value.id).trim()
     || typeof value.subject !== 'string' || !isTaskStatus(value.status)) return undefined
@@ -40,7 +40,7 @@ function parseTask(value: unknown): GammaTaskItem | undefined {
   }
 }
 
-function taskFromResult(result: unknown): GammaTaskItem | undefined {
+function taskFromResult(result: unknown): CarpusTaskItem | undefined {
   if (!isRecord(result)) return undefined
   if (isRecord(result.details)) {
     const task = parseTask(result.details.task)
@@ -60,13 +60,13 @@ function taskFromResult(result: unknown): GammaTaskItem | undefined {
   }
 }
 
-function isOpenTask(task: GammaTaskItem): boolean {
+function isOpenTask(task: CarpusTaskItem): boolean {
   return task.status === 'pending' || task.status === 'in_progress' || task.status === 'blocked'
 }
 
 /** 每次 query 独立维护任务表，仅从当前会话分支的实际结果恢复。 */
-export class GammaTaskProgressController {
-  readonly tasks = new Map<string, GammaTaskItem>()
+export class CarpusTaskProgressController {
+  readonly tasks = new Map<string, CarpusTaskItem>()
   private workToolsSinceUpdate = 0
 
   constructor(messages: readonly unknown[] = []) {
@@ -105,7 +105,7 @@ export class GammaTaskProgressController {
         return {
           messages: [...event.messages, {
             role: 'user' as const,
-            content: `Gamma 进度同步提醒：已连续执行多个工作工具，请核对任务表是否仍对应当前实际阶段。下面仅列出已成功任务工具确认的状态，并不代表最新实际进展：\n${JSON.stringify(snapshot)}\n若已完成一个阶段或正在进入下一阶段，立即用 TaskUpdate 同步对应任务的 status 和 activeForm；仍在同一阶段则继续工作。不得根据工具数量推断阶段、自动标记完成或伪造进度。`,
+            content: `Carpus 进度同步提醒：已连续执行多个工作工具，请核对任务表是否仍对应当前实际阶段。下面仅列出已成功任务工具确认的状态，并不代表最新实际进展：\n${JSON.stringify(snapshot)}\n若已完成一个阶段或正在进入下一阶段，立即用 TaskUpdate 同步对应任务的 status 和 activeForm；仍在同一阶段则继续工作。不得根据工具数量推断阶段、自动标记完成或伪造进度。`,
             timestamp: Date.now(),
           }],
         }

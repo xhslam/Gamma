@@ -9,7 +9,7 @@ import { PiAgentAdapter } from './pi-agent-adapter'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 
 describe('Given Pi 真正工具执行循环发生电脑安全暂停', () => {
   test('When 同批次还有工具 Then 后续工具不执行、不再请求模型、终态不得报告成功', async () => {
@@ -54,7 +54,7 @@ describe('Given Pi 真正工具执行循环发生电脑安全暂停', () => {
   test('When 真实适配器的权限门禁先拒绝computer Then 不执行工具、不再请求模型且留下持久化暂停说明', async () => {
     let requests = 0
     let executions = 0
-    const root = mkdtempSync(join(tmpdir(), 'gamma-computer-gate-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-computer-gate-'))
     const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => {
       requests++
       const delta = requests === 1

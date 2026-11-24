@@ -9,7 +9,7 @@ import type {
   EnvironmentCheckResult,
   RuntimeStatus,
   InstallerManifest,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 /**
  * 单个安装包的下载状态

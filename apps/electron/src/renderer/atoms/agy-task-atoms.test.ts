@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai'
-import type { AgyTask } from '@gamma/shared'
+import type { AgyTask } from '@carpus/shared'
 import { AGY_EVENT_LIMIT, agyTaskKey, agyTaskViewsAtom, agyOpenTaskIdsAtom, applyAgyTaskUpdateAtom, openAgyTaskAtom, closeAgyTaskAtom, mergeAgyTaskView } from './agy-task-atoms'
 
 const task: AgyTask = { id: 'one', sessionId: 'parent', title: '抽取', prompt: '输入', cwd: '/work', status: 'running', startedAt: 1, lastSequence: 3 }

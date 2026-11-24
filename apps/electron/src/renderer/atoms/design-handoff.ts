@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { DesignHandoffResult } from '@gamma/shared'
+import type { DesignHandoffResult } from '@carpus/shared'
 import { agentSessionDraftHtmlAtom, agentSessionDraftsAtom, agentSessionDraftSyncVersionsAtom, agentSessionPendingFilesAtom } from './agent-atoms'
 import { queuedTextToParagraphHtml } from '@/lib/agent-message-queue'
 

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentSession, ResourceLoader } from '@earendil-works/pi-coding-agent'
 import { Agent } from '@earendil-works/pi-agent-core'
-import type { SDKMessage, SDKUserMessageInput } from '@gamma/shared'
+import type { SDKMessage, SDKUserMessageInput } from '@carpus/shared'
 import { PiAgentAdapter, PiQueuedMessageAdmissionGate, PiQueuedMessageReceiptTracker, recoverUnconsumedPiQueuedMessages } from './pi-agent-adapter'
 import { PendingPromptSkillActivationTracker } from './pi-skill-activation-tracker'
 import { isStaleActiveQueueError } from '../agent-queue-routing'
@@ -260,7 +260,7 @@ describe('Given Pi 运行期间追加消息', () => {
   })
 
   test('When 真实 Pi prompt 结束后 SDK 才完成入队 Then 同一 query 续跑一次并保留最终完成信号', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-pi-queue-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-pi-queue-'))
     const requests: Array<{ messages: Array<{ role: string; content: unknown }> }> = []
     const firstRequest = deferred<void>()
     const firstResponse = deferred<void>()
@@ -331,7 +331,7 @@ describe('Given Pi 运行期间追加消息', () => {
   }, 20_000)
 
   test('When 真实 Pi 已持久化用户输入后提交报错 Then 提交保持成功且恢复历史中的输入只出现一次', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-pi-accepted-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-pi-accepted-'))
     const requests: Array<{ messages: Array<{ role: string; content: unknown }> }> = []
     const firstRequest = deferred<void>()
     const releaseResponse = deferred<void>()

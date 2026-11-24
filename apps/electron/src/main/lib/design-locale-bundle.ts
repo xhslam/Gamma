@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { DESIGN_ZH_MESSAGES } from './design-locale-zh'
 import { DESIGN_LOCALE_STORAGE_KEY } from './design-locale-policy'
 export const DESIGN_LOCALE_SKILLS = ['claude-slides', 'claude-design', 'claude-design-system', 'claude-dashboard', 'claude-motion', 'claude-whiteboard'] as const
-const SCRIPT_NAME = 'gamma-design-locale.js'
+const SCRIPT_NAME = 'carpus-design-locale.js'
 const SCRIPT_BLOCK = /<script data-gamma-design-locale>[\s\S]*?<\/script>\s*/g
 
 export interface DesignSourceMessage { id: string; defaultMessage: string }
@@ -38,10 +38,10 @@ export function buildDesignChineseMessages(messages: readonly DesignSourceMessag
 
 export function buildDesignLocaleBootstrap(messages: readonly DesignSourceMessage[]): string {
   // 原生入口拒绝空词典。哨兵只用于激活语言；英文和未覆盖项始终用各自 descriptor 的 defaultMessage。
-  const english = { '__gamma_locale_active__': '1' }
+  const english = { '__carpus_locale_active__': '1' }
   const chinese = buildDesignChineseMessages(messages)
   const serialize = (value: unknown): string => JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029')
-  return `/* Gamma: only explicit upstream UI messages, never artwork text. */
+  return `/* Carpus: only explicit upstream UI messages, never artwork text. */
 (()=>{
   const english=${serialize(english)},chinese=${serialize(chinese)};
   let stored;try{stored=sessionStorage.getItem(${serialize(DESIGN_LOCALE_STORAGE_KEY)})}catch{}

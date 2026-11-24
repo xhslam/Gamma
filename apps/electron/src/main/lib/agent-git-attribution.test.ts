@@ -1,22 +1,22 @@
 import { describe, expect, test } from 'bun:test'
 import {
   buildGitAttributionPromptSection,
-  GAMMA_COMMIT_TRAILER,
-  GAMMA_GITHUB_URL,
-  GAMMA_PR_ATTRIBUTION,
+  CARPUS_COMMIT_TRAILER,
+  CARPUS_GITHUB_URL,
+  CARPUS_PR_ATTRIBUTION,
   isGitAttributionEnabled,
 } from './agent-git-attribution'
 
-describe('Gamma Git / PR 归因', () => {
-  test('Given 默认启用归因 When 创建 commit 或 PR Then 仅使用 Gamma 名称与当前项目地址', () => {
+describe('Carpus Git / PR 归因', () => {
+  test('Given 默认启用归因 When 创建 commit 或 PR Then 仅使用 Carpus 名称与当前项目地址', () => {
     expect(isGitAttributionEnabled()).toBe(true)
-    expect(GAMMA_COMMIT_TRAILER).toBe('Made-with: Gamma')
-    expect(GAMMA_GITHUB_URL).toBe('https://github.com/xhslam/Gamma')
-    expect(GAMMA_PR_ATTRIBUTION).toBe('Made with [Gamma](https://github.com/xhslam/Gamma)')
+    expect(CARPUS_COMMIT_TRAILER).toBe('Made-with: Carpus')
+    expect(CARPUS_GITHUB_URL).toBe('https://github.com/xhslam/Carpus')
+    expect(CARPUS_PR_ATTRIBUTION).toBe('Made with [Carpus](https://github.com/xhslam/Carpus)')
 
     const section = buildGitAttributionPromptSection(true)
-    expect(section).toContain(GAMMA_COMMIT_TRAILER)
-    expect(section).toContain(GAMMA_PR_ATTRIBUTION)
+    expect(section).toContain(CARPUS_COMMIT_TRAILER)
+    expect(section).toContain(CARPUS_PR_ATTRIBUTION)
     expect(section.match(/https:\/\//g)).toHaveLength(1)
     expect(section).not.toMatch(/proma/i)
   })
@@ -26,9 +26,9 @@ describe('Gamma Git / PR 归因', () => {
     expect(isGitAttributionEnabled({ enabled: false })).toBe(false)
 
     const section = buildGitAttributionPromptSection(false)
-    expect(section).toContain('用户已关闭 Gamma 标识')
-    expect(section).not.toContain(GAMMA_GITHUB_URL)
-    expect(section).not.toContain(GAMMA_COMMIT_TRAILER)
+    expect(section).toContain('用户已关闭 Carpus 标识')
+    expect(section).not.toContain(CARPUS_GITHUB_URL)
+    expect(section).not.toContain(CARPUS_COMMIT_TRAILER)
     expect(section).not.toMatch(/proma/i)
   })
 })

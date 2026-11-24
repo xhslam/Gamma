@@ -15,7 +15,7 @@ describe('AGY 交互 PTY 的平台启动契约', () => {
       expect(launch.env.PATH?.split(':')).not.toContain('.')
       expect(launch.env.NODE_OPTIONS).toBeUndefined()
       expect(launch.env.API_KEY).toBeUndefined()
-      expect(launch.env.TERM_PROGRAM).toBe('Gamma')
+      expect(launch.env.TERM_PROGRAM).toBe('Carpus')
     })
   }
   test('Given macOS 已配置中文语言 When 启动 Then 不覆盖用户的 locale', () => {

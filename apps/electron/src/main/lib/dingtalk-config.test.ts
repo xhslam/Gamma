@@ -12,23 +12,23 @@ let dingtalkConfig: DingTalkConfigModule
 let configPaths: ConfigPathsModule
 let tempHome: string
 let originalHome: string | undefined
-let originalGammaDev: string | undefined
+let originalCarpusDev: string | undefined
 let previousConfigHome: string | undefined
 
 beforeAll(async () => {
   originalHome = process.env.HOME
-  originalGammaDev = process.env.GAMMA_DEV
-  tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-dingtalk-config-'))
+  originalCarpusDev = process.env.CARPUS_DEV
+  tempHome = mkdtempSync(join(os.tmpdir(), 'carpus-dingtalk-config-'))
   process.env.HOME = tempHome
   previousConfigHome = setConfigHomeForTest(tempHome)
-  process.env.GAMMA_DEV = '0'
+  process.env.CARPUS_DEV = '0'
   configPaths = await import('./config-paths')
   dingtalkConfig = await import('./dingtalk-config')
 })
 
 beforeEach(() => {
-  rmSync(join(tempHome, '.gamma'), { recursive: true, force: true })
-  mkdirSync(join(tempHome, '.gamma'), { recursive: true })
+  rmSync(join(tempHome, '.carpus'), { recursive: true, force: true })
+  mkdirSync(join(tempHome, '.carpus'), { recursive: true })
 })
 
 afterAll(() => {
@@ -38,10 +38,10 @@ afterAll(() => {
   } else {
     process.env.HOME = originalHome
   }
-  if (originalGammaDev === undefined) {
-    delete process.env.GAMMA_DEV
+  if (originalCarpusDev === undefined) {
+    delete process.env.CARPUS_DEV
   } else {
-    process.env.GAMMA_DEV = originalGammaDev
+    process.env.CARPUS_DEV = originalCarpusDev
   }
   rmSync(tempHome, { recursive: true, force: true })
 })

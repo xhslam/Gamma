@@ -76,7 +76,7 @@ describe('Given 原生 agy 活动面板', () => {
       const background={tab:f.tab(),panel:f.panel(),ids:f.ids('background')};
       f.emit({task,events:[],reveal:true});const front={tab:f.tab(),panel:f.panel(),ids:f.ids('parent')};
       f.close();const closeStops=f.stops.length;
-      window.dispatchEvent(new CustomEvent('gamma:stop-generation',{detail:{kind:'agy',sessionId:'parent',taskId:'one'}}));await window.controls.delay();
+      window.dispatchEvent(new CustomEvent('carpus:stop-generation',{detail:{kind:'agy',sessionId:'parent',taskId:'one'}}));await window.controls.delay();
       const result={background,front,closeStops,stops:f.stops};f.root.unmount();return result;
     `)
     expect(result).toEqual({ background: { panel: false }, front: { tab: 'agy:one', panel: true, ids: ['one'] }, closeStops: 0, stops: [['parent', 'one']] })

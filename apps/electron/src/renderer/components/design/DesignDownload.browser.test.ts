@@ -3,17 +3,17 @@ import { build } from 'esbuild'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DESIGN_BUNDLE_REVISION } from '@gamma/shared'
+import { DESIGN_BUNDLE_REVISION } from '@carpus/shared'
 import { createElectronRendererHarness } from '../../../test-utils/electron-renderer'
 import type { ElectronRendererHarness } from '../../../test-utils/electron-renderer'
 
 let renderer: ElectronRendererHarness
 let directory: string
 beforeAll(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'gamma-native-design-download-'))
+  directory = await mkdtemp(join(tmpdir(), 'carpus-native-design-download-'))
   const module = join(directory, 'controller.cjs')
   await build({
-    stdin: { contents: 'export { BrowserController } from "./browser-controller";export {flushDesignEditor} from "./design-editor-flush"; export { registerDesignEditorOrigin } from "./design-browser-policy"; export { buildGammaBrowserUserAgent } from "./browser-identity";', resolveDir: resolve(import.meta.dir, '../../../main/lib'), loader: 'ts' },
+    stdin: { contents: 'export { BrowserController } from "./browser-controller";export {flushDesignEditor} from "./design-editor-flush"; export { registerDesignEditorOrigin } from "./design-browser-policy"; export { buildCarpusBrowserUserAgent } from "./browser-identity";', resolveDir: resolve(import.meta.dir, '../../../main/lib'), loader: 'ts' },
     outfile: module, bundle: true, platform: 'node', format: 'cjs', external: ['electron'],
     plugins: [{ name: 'isolated-design-settings', setup(builder) { builder.onLoad({ filter: /[/\\]settings-service\.ts$/ }, () => ({ contents: 'export const getSettings = () => ({browserRiskDisclaimerVersion:999})', loader: 'ts' })) } }],
   })
@@ -22,7 +22,7 @@ beforeAll(async () => {
     preloadSource: `const{contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('designDownloads',{run:kind=>ipcRenderer.invoke('download:run',kind)});`,
     mainProcessSetup: `
       const {ipcMain,WebContentsView,session}=require('electron');const fs=require('node:fs');const path=require('node:path');const http=require('node:http');
-      const {BrowserController,registerDesignEditorOrigin,buildGammaBrowserUserAgent,flushDesignEditor}=require(${JSON.stringify(module)});
+      const {BrowserController,registerDesignEditorOrigin,buildCarpusBrowserUserAgent,flushDesignEditor}=require(${JSON.stringify(module)});
       const controller=new BrowserController();const traces=[];controller.trace=(...args)=>traces.push(args.slice(2));
       const payload=Buffer.from('complete design bytes');const requests=[];let view;let profile;let currentKind;let complete;let dialogOptions;
       const server=http.createServer((req,res)=>{
@@ -53,7 +53,7 @@ beforeAll(async () => {
     `,
     mainProcessReady: `await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));`,
     mainWindowSetup: `
-      profile=session.fromPartition('design-download-test');profile.setUserAgent(buildGammaBrowserUserAgent(profile.getUserAgent(),'test'));
+      profile=session.fromPartition('design-download-test');profile.setUserAgent(buildCarpusBrowserUserAgent(profile.getUserAgent(),'test'));
       view=new WebContentsView({webPreferences:{session:profile,sandbox:true,nodeIntegration:false,contextIsolation:true}});
       const tab={tabId:'editor',view};const record={sessionId:'session',browserSession:profile,tabs:new Map([['editor',tab]])};controller.sessions.set('session',record);
       controller.installSessionGuards(profile);controller.installDownloadGuard(profile);

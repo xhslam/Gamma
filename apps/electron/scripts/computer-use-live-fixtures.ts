@@ -12,7 +12,7 @@ function validateToken(token: string): void { if (!/^[a-f0-9-]{36}$/.test(token)
 /** 网页自身只生成测试场景并回报真实状态，不调用click/focus或替原生工具设置输入值。 */
 export function createComputerLiveFixture(token: string): { title: string; html: string } {
   validateToken(token)
-  const title = `Gamma Computer Use Local Acceptance ${token}`
+  const title = `Carpus Computer Use Local Acceptance ${token}`
   const nested = '<div role="group">'.repeat(20)
   const html = `<!doctype html><html lang="zh"><meta charset="utf-8"><title>${title}</title><style>body{font:20px system-ui;padding:60px;background:#faf8f4;color:#312b27}textarea{display:block;margin:20px 0;width:650px;height:110px;font:24px system-ui}button{padding:14px 24px;margin:8px;font:18px system-ui}#space{height:1600px}#clock{position:fixed;right:8px;top:8px;font-size:12px}</style><h1>电脑交互本地验收</h1><p>仅本地夹具；页面计时和标题持续变化。</p><output id="clock"></output>${nested}<textarea aria-label="中文输入验收框" id="input"></textarea>${'</div>'.repeat(20)}<button aria-label="单击验收按钮" id="click">单击验收按钮</button><button aria-label="安排目标移动" id="move">安排目标移动</button><p id="result">点击次数：0</p><div id="space"></div><script>
 const input=document.getElementById('input');let clicks=0,key='',ticks=0,moved=false;
@@ -29,8 +29,8 @@ setInterval(()=>{ticks++;document.getElementById('clock').textContent='动态更
 export function buildComputerAppKitFixture(directory: string, token: string): { appPath: string; executable: string; bundleId: string; title: string } {
   validateToken(token)
   if (process.platform !== 'darwin') throw new Error('AppKit夹具仅支持macOS')
-  const title = `Gamma Native Acceptance ${token}`
-  const bundleId = `com.gamma.computer-fixture.${token}`
+  const title = `Carpus Native Acceptance ${token}`
+  const bundleId = `com.carpus.computer-fixture.${token}`
   const appPath = resolve(directory, `${title}.app`)
   const executable = resolve(appPath, 'Contents/MacOS/fixture')
   mkdirSync(resolve(appPath, 'Contents/MacOS'), { recursive: true })

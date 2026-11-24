@@ -31,7 +31,7 @@ export function useAgyTaskListeners(): void {
         .then(task => store.set(applyAgyTaskUpdateAtom, { task, events: [] }))
         .catch(error => toast.error('停止 agy 任务失败', { description: error instanceof Error ? error.message : '未知错误' }))
     }
-    window.addEventListener('gamma:stop-generation', stop)
-    return () => { unsubscribe(); window.removeEventListener('gamma:stop-generation', stop) }
+    window.addEventListener('carpus:stop-generation', stop)
+    return () => { unsubscribe(); window.removeEventListener('carpus:stop-generation', stop) }
   }, [store])
 }

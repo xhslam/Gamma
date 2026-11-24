@@ -10,7 +10,7 @@ const owners = new WeakMap<HTMLElement, MentionComboboxBinding>()
 
 export function bindMentionCombobox(editor: HTMLElement, popupRole: 'tree' | 'listbox'): MentionComboboxBinding {
   owners.get(editor)?.dispose()
-  const listId = `gamma-mention-list-${crypto.randomUUID()}`
+  const listId = `carpus-mention-list-${crypto.randomUUID()}`
   const preserved = new Map(['role', 'aria-haspopup', 'aria-autocomplete', 'aria-busy']
     .map((name) => [name, editor.getAttribute(name)]))
   let loading = false

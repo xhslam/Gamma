@@ -44,7 +44,7 @@ export const leftSidebarFixtureSource = `
   const nativeUserAgentData = navigator.userAgentData;
   const now = Date.now();
   const workspaces = [
-    { id: 'project-a', name: 'Gamma 项目', slug: 'gamma-project', createdAt: now, updatedAt: now },
+    { id: 'project-a', name: 'Carpus 项目', slug: 'carpus-project', createdAt: now, updatedAt: now },
     { id: 'project-b', name: '第二个项目', slug: 'second-project', createdAt: now, updatedAt: now },
   ];
   const agents = [
@@ -55,8 +55,8 @@ export const leftSidebarFixtureSource = `
 
   function Layout({ width = 256 }) {
     const collapsed = useAtomValue(sidebarCollapsedAtom);
-    return React.createElement('div', { className: 'gamma-workbench flex h-full w-full', 'data-workbench-density': 'comfortable' },
-      React.createElement('div', { className: 'gamma-workbench-frame' },
+    return React.createElement('div', { className: 'carpus-workbench flex h-full w-full', 'data-workbench-density': 'comfortable' },
+      React.createElement('div', { className: 'carpus-workbench-frame' },
         React.createElement(SidebarTransition, { collapsed, width },
           React.createElement(LeftSidebar, { width, noTransition: true })),
         React.createElement('main', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } },
@@ -96,7 +96,7 @@ export const leftSidebarFixtureSource = `
       const fixtureAgents = (options.agents ?? agents).map(session => ({ ...session }));
       const fixtureWorkspaces = (options.workspaces ?? workspaces).map(workspace => ({ ...workspace }));
       const activeAgent = options.activeAgent === undefined ? (fixtureAgents[0]?.id ?? null) : options.activeAgent;
-      const profile = { userName: options.userName ?? 'Gamma 用户', avatar: options.avatar ?? '🌱' };
+      const profile = { userName: options.userName ?? 'Carpus 用户', avatar: options.avatar ?? '🌱' };
       let computerState = options.computerState ?? { supported: true, phase: 'disabled' };
       let computerListener = () => {};
       window.electronAPI = {
@@ -161,7 +161,7 @@ export const leftSidebarFixtureSource = `
       store.set(activeTabIdAtom, activeId);
       root.render(React.createElement(Provider, { store }, React.createElement(TooltipProvider, null,
         React.createElement(Layout, { width: options.width ?? 256 }))));
-      await until(() => document.querySelector(options.collapsed ? '[data-testid="collapsed-sidebar-header"]' : '.gamma-sidebar'));
+      await until(() => document.querySelector(options.collapsed ? '[data-testid="collapsed-sidebar-header"]' : '.carpus-sidebar'));
       // 80ms 早于真实 220ms 入场动画；等待最终几何和字体，不依赖机器渲染速度。
       await document.fonts.ready;
       await until(() => {

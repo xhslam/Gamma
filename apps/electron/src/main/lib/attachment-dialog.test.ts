@@ -13,7 +13,7 @@ async function runDialogScenario(scenario: string): Promise<unknown> {
       showMessageBox:async()=>({response:0})
     }}));
     const {openFileOrFolderDialog}=await import(${JSON.stringify(new URL('./attachment-service.ts', import.meta.url).pathname)});
-    const directory=mkdtempSync(join(tmpdir(),'gamma-attachment-dialog-'));
+    const directory=mkdtempSync(join(tmpdir(),'carpus-attachment-dialog-'));
     try {const output=await(async()=>{${scenario}})();console.log('DIALOG_RESULT:'+JSON.stringify(output));}
     finally{rmSync(directory,{recursive:true,force:true});}
   `

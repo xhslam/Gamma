@@ -9,7 +9,7 @@ import type {
   TerminalOutputEvent,
   TerminalResizeInput,
   TerminalState,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 type RuntimePort = Pick<MessagePortMain, 'close' | 'postMessage' | 'start'> & {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -156,7 +156,7 @@ export class TerminalRuntimeClient {
     const entryPath = join(__dirname, 'terminal-runtime.cjs')
     const isCurrentStartup = () => generation === this.generation
     const runtimeProcess = await startUtilityProcessWithRetry(
-      () => utilityProcess.fork(entryPath, [], { serviceName: 'Gamma Terminal Runtime' }),
+      () => utilityProcess.fork(entryPath, [], { serviceName: 'Carpus Terminal Runtime' }),
       { shouldContinue: isCurrentStartup },
     )
     if (!isCurrentStartup()) {
@@ -199,7 +199,7 @@ export class TerminalRuntimeClient {
       runtimeProcess.on('error', (type) => fail(new Error(`终端运行时错误：${type}`)))
       const processEvents = runtimeProcess as unknown as { on(event: 'exit', listener: (code: number) => void): void }
       processEvents.on('exit', (code) => fail(new Error(`终端运行时已退出（${code}）`)))
-      runtimeProcess.postMessage({ type: 'gamma-terminal-runtime-port' }, [channel.port1])
+      runtimeProcess.postMessage({ type: 'carpus-terminal-runtime-port' }, [channel.port1])
     })
   }
 

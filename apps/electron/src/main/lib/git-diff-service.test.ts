@@ -14,8 +14,8 @@ function git(...args: string[]): void {
 function createRepository(prefix: string, fileName: string): string {
   const path = mkdtempSync(join(tmpdir(), prefix))
   execFileSync('git', ['init'], { cwd: path, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', 'test@gamma.local'], { cwd: path, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', 'Gamma Test'], { cwd: path, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'test@carpus.local'], { cwd: path, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.name', 'Carpus Test'], { cwd: path, stdio: 'pipe' })
   writeFileSync(join(path, fileName), 'base\n')
   execFileSync('git', ['add', fileName], { cwd: path, stdio: 'pipe' })
   execFileSync('git', ['commit', '-m', 'initial'], { cwd: path, stdio: 'pipe' })
@@ -23,7 +23,7 @@ function createRepository(prefix: string, fileName: string): string {
 }
 
 beforeEach(() => {
-  repoPath = createRepository('gamma-git-diff-', 'tracked.txt')
+  repoPath = createRepository('carpus-git-diff-', 'tracked.txt')
 })
 
 afterEach(() => {
@@ -49,7 +49,7 @@ describe('git diff scan cache', () => {
   })
 
   test('refreshes a linked worktree when its symbolic HEAD ref changes outside the watcher', async () => {
-    const linkedParentPath = mkdtempSync(join(tmpdir(), 'gamma-git-diff-linked-parent-'))
+    const linkedParentPath = mkdtempSync(join(tmpdir(), 'carpus-git-diff-linked-parent-'))
     const linkedWorktreePath = join(linkedParentPath, 'linked')
     try {
       execFileSync('git', ['worktree', 'add', '-b', 'linked-cache-test', linkedWorktreePath], { cwd: repoPath, stdio: 'pipe' })
@@ -75,7 +75,7 @@ describe('git diff scan cache', () => {
   })
 
   test('keeps another repository cache valid after targeted invalidation', async () => {
-    const secondRepo = createRepository('gamma-git-diff-second-', 'other.txt')
+    const secondRepo = createRepository('carpus-git-diff-second-', 'other.txt')
     try {
       writeFileSync(join(repoPath, 'tracked.txt'), 'base\nfirst\n')
       writeFileSync(join(secondRepo, 'other.txt'), 'base\nfirst\n')
@@ -101,7 +101,7 @@ describe('git diff scan cache', () => {
 
 describe('untracked file line counting', () => {
   test('counts text lines and skips binary content without reporting bogus additions', async () => {
-    writeFileSync(join(repoPath, 'notes.txt'), 'alpha\nbeta\ngamma\n')
+    writeFileSync(join(repoPath, 'notes.txt'), 'alpha\nbeta\ncarpus\n')
     writeFileSync(join(repoPath, 'blob.bin'), Buffer.from([0x41, 0x00, 0x42, 0x0a]))
     invalidateGitDiffCache(repoPath)
 

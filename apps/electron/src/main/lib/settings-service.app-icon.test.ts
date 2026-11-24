@@ -40,7 +40,7 @@ async function runSettingsScenario(settingsPath: string, scenario: string): Prom
 
 describe('应用图标偏好的读取与原子保存', () => {
   test('Given 旧图标偏好与其他设置 When 切换并重新读取 Then 回退默认、保存新款且保留其他字段与备份', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'gamma-app-icon-settings-'))
+    const tempDir = mkdtempSync(join(tmpdir(), 'carpus-app-icon-settings-'))
     const settingsPath = join(tempDir, 'settings.json')
     try {
       writeJsonFileAtomic(settingsPath, { appIconVariant: 'black', themeMode: 'dark', sendWithCmdEnter: true })
@@ -71,7 +71,7 @@ describe('应用图标偏好的读取与原子保存', () => {
   })
 
   test('Given 缺失或损坏的配置 When 读取图标偏好 Then 返回默认米白蓝绿', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'gamma-app-icon-settings-'))
+    const tempDir = mkdtempSync(join(tmpdir(), 'carpus-app-icon-settings-'))
     const settingsPath = join(tempDir, 'settings.json')
     const scenario = `console.log(JSON.stringify({ initialVariant: getSettings().appIconVariant }))`
     try {
@@ -84,7 +84,7 @@ describe('应用图标偏好的读取与原子保存', () => {
   })
 
   test('Given 原子写入临时文件不可写 When 保存新图标 Then 抛出错误且磁盘中的旧偏好完整保留', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'gamma-app-icon-settings-'))
+    const tempDir = mkdtempSync(join(tmpdir(), 'carpus-app-icon-settings-'))
     const settingsPath = join(tempDir, 'settings.json')
     try {
       writeJsonFileAtomic(settingsPath, { appIconVariant: 'default', themeMode: 'dark' })

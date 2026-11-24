@@ -1,4 +1,4 @@
-/* 正文、按需格式栏与底部状态栏沿用 VMark 的空间层级，颜色仍由 Gamma 主题提供。 */
+/* 正文、按需格式栏与底部状态栏沿用 VMark 的空间层级，颜色仍由 Carpus 主题提供。 */
 .markdown-workspace-view { container-type: inline-size; container-name: markdown-workspace; }
 .markdown-workspace-editor { container-type: inline-size; container-name: markdown-editor; }
 .markdown-workspace-panes > div { height: 100%; }
@@ -184,7 +184,7 @@
   .markdown-document-tab { max-width: 128px; }
 }
 
-/* 设置采用 VMark 的左侧分类与安静的横向设置行，复用 Gamma 的可访问控件。 */
+/* 设置采用 VMark 的左侧分类与安静的横向设置行，复用 Carpus 的可访问控件。 */
 .markdown-settings-sidebar { width: 184px; }
 .markdown-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; }
 .markdown-setting-control { flex-shrink: 0; max-width: 210px; }

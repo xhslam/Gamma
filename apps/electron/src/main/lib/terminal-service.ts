@@ -12,7 +12,7 @@ import {
   type TerminalResizeInput,
   type TerminalSnapshot,
   type TerminalState,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { getMainWindow } from './main-window-store'
 import {
   appendTerminalOutput,

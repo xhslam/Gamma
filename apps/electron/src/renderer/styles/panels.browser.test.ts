@@ -26,15 +26,15 @@ beforeAll(async () => {
     const framePanels=()=>[document.querySelector('[data-sidebar-content]').parentElement,document.querySelector('[data-scroll="agent"]').parentElement,document.querySelector('[data-scroll="workspace"]').parentElement];
     window.panelsFixture={wait,mounts,metrics,framePanels,
       async mount(options={}){
-        document.documentElement.className='gamma-main-window '+(options.theme??'');
+        document.documentElement.className='carpus-main-window '+(options.theme??'');
         const collapsed=!!options.collapsed,width=options.width??1100,height=options.height??520;
         const workspaceWidth=clampRightPanelWidth(280,width,240,collapsed?0:256,true);
         const content=name=>React.createElement(React.Fragment,null,
           React.createElement('header',{style:{height:40,flexShrink:0}},name),
           React.createElement('div',{'data-scroll':name,className:'min-h-0 flex-1 overflow-y-auto'},React.createElement('div',{style:{height:1800}},name==='agent'?React.createElement('p',{className:'reading-body'},'正文 ',React.createElement('code',null,'inline_code')):'长文件列表')),
           React.createElement(Draft,{name}));
-        root.render(React.createElement('div',{className:'gamma-workbench flex h-full w-full '+(options.windows?'pt-8':''),'data-sidebar-collapsed':collapsed,style:{width,height}},
-          React.createElement('div',{className:'gamma-workbench-frame'},
+        root.render(React.createElement('div',{className:'carpus-workbench flex h-full w-full '+(options.windows?'pt-8':''),'data-sidebar-collapsed':collapsed,style:{width,height}},
+          React.createElement('div',{className:'carpus-workbench-frame'},
             React.createElement(SidebarTransition,{collapsed,width:256},React.createElement(Panel,{variant:'shrink',width:256},React.createElement('span',{'data-sidebar-content':true},'导航'))),
             React.createElement('main',{className:'flex min-h-0 min-w-0 flex-1 flex-col'},React.createElement(WorkspacePanels,{workspaceSide:options.side??'right',workspaceOpen:options.open!==false,workspaceWidth,minimumWidth:240,maximumWidth:600,onResizeStart:()=>{},onResizeKeyDown:()=>{},agent:React.createElement(Panel,null,content('agent')),workspace:React.createElement(Panel,{variant:'shrink',width:workspaceWidth},content('workspace'))})))));
         await wait(300);await document.fonts.ready;
@@ -80,15 +80,15 @@ describe('Given 第4步面板与布局规范', () => {
     for (const theme of ['', 'dark', 'dark theme-terminal-dark']) {
       const result = await renderer.run<{ panels: PanelStyle[]; frameRadius: string; frameOutline: string; gaps: number[]; insets: number[]; codeRadius: string; background: string }>(`
         const f=window.panelsFixture;await f.mount({theme:${JSON.stringify(theme)}});
-        const outer=document.querySelector('.gamma-workbench').getBoundingClientRect();
-        const frame=document.querySelector('.gamma-workbench-frame'),frameBounds=frame.getBoundingClientRect();
+        const outer=document.querySelector('.carpus-workbench').getBoundingClientRect();
+        const frame=document.querySelector('.carpus-workbench-frame'),frameBounds=frame.getBoundingClientRect();
         const frameStyle=getComputedStyle(frame),panels=f.framePanels();
         const rects=panels.map(e=>e.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
         return {panels:panels.map(f.metrics),frameRadius:frameStyle.borderRadius,frameOutline:frameStyle.outlineStyle,
           gaps:rects.slice(1).map((r,i)=>r.left-rects[i].right),
           insets:[frameBounds.left-outer.left,frameBounds.top-outer.top,outer.right-frameBounds.right,outer.bottom-frameBounds.bottom],
           codeRadius:getComputedStyle(document.querySelector('code')).borderRadius,
-          background:getComputedStyle(document.querySelector('.gamma-workbench')).backgroundColor};
+          background:getComputedStyle(document.querySelector('.carpus-workbench')).backgroundColor};
       `)
       expect(result.panels).toHaveLength(3)
       for (const panel of result.panels) {
@@ -114,12 +114,12 @@ describe('Given 第4步面板与布局规范', () => {
           const panels=f.framePanels();
           panels.forEach((panel,index)=>{
             const header=document.createElement('header');
-            header.className='gamma-topbar'+(index===0?' gamma-sidebar-topbar':'');
+            header.className='carpus-topbar'+(index===0?' carpus-sidebar-topbar':'');
             panel.prepend(header);
           });
           const sorted=panels.map(p=>p.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
           return panels.map(panel=>{
-            const header=panel.querySelector('.gamma-topbar'),style=getComputedStyle(header),line=getComputedStyle(panel,'::after');
+            const header=panel.querySelector('.carpus-topbar'),style=getComputedStyle(header),line=getComputedStyle(panel,'::after');
             const bounds=panel.getBoundingClientRect();
             return {left:line.left,right:line.right,height:style.height,border:style.borderBottomColor,pointer:line.pointerEvents,
               lineColor:line.backgroundColor,dividerColor:style.getPropertyValue('--workbench-divider').trim(),gap:sorted[1].left-sorted[0].right,
@@ -147,7 +147,7 @@ describe('Given 第4步面板与布局规范', () => {
       const f=window.panelsFixture,results=[];
       for(const side of ['left','right'])for(const collapsed of [false,true]){
         await f.mount({width:760,height:360,side,collapsed});
-        const outer=document.querySelector('.gamma-workbench').getBoundingClientRect(),agent=document.querySelector('[data-workspace-pane="agent"]'),input=agent.querySelector('input');input.focus();
+        const outer=document.querySelector('.carpus-workbench').getBoundingClientRect(),agent=document.querySelector('[data-workspace-pane="agent"]'),input=agent.querySelector('input');input.focus();
         const rect=input.getBoundingClientRect(),scroll=agent.querySelector('[data-scroll]');scroll.scrollTop=100;
         const left=[...document.querySelector('[data-testid="agent-workspace-layout"]').children].map(e=>e.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
         results.push({fits:document.documentElement.scrollWidth<=innerWidth&&left.at(-1).right<=outer.right,input:rect.bottom<=outer.bottom&&document.activeElement===input,scroll:scroll.scrollTop>0,mainWidth:agent.getBoundingClientRect().width,gap:left[1].left-left[0].right});
@@ -167,7 +167,7 @@ describe('Given 第4步面板与布局规范', () => {
       const f=window.panelsFixture;await f.mount();const draft=document.querySelector('[aria-label="agent草稿"]');draft.value='尚未发送';const before=f.mounts.agent;
       await f.mount({side:'left'});const retained=draft===document.querySelector('[aria-label="agent草稿"]')&&draft.value==='尚未发送';
       await f.mount({open:false,collapsed:true,windows:true});const pane=document.querySelector('[data-workspace-pane="workspace"]');
-      return {retained,mounts:f.mounts.agent-before,workspaceWidth:pane.getBoundingClientRect().width,gap:getComputedStyle(document.querySelector('[data-testid="agent-workspace-layout"]')).columnGap,top:getComputedStyle(document.querySelector('.gamma-workbench')).paddingTop};
+      return {retained,mounts:f.mounts.agent-before,workspaceWidth:pane.getBoundingClientRect().width,gap:getComputedStyle(document.querySelector('[data-testid="agent-workspace-layout"]')).columnGap,top:getComputedStyle(document.querySelector('.carpus-workbench')).paddingTop};
     `)
     expect(result).toEqual({ retained: true, mounts: 0, workspaceWidth: 0, gap: '0px', top: '32px' })
   }, 30_000)

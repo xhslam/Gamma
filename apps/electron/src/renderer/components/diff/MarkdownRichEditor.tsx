@@ -7,7 +7,7 @@ import Link from '@tiptap/extension-link'
 import { Markdown } from 'tiptap-markdown'
 import type { MarkdownStorage } from 'tiptap-markdown'
 import { TextSelection } from '@tiptap/pm/state'
-import type { FileAccessOptions } from '@gamma/shared'
+import type { FileAccessOptions } from '@carpus/shared'
 import type { MarkdownEditorSelection, MarkdownScrollPosition } from '@/lib/markdown-editor-state'
 import { cn } from '@/lib/utils'
 import {
@@ -365,15 +365,15 @@ export function MarkdownRichEditor({
           editing ? 'min-h-0 flex-1 overflow-auto scrollbar-thin' : 'h-full min-h-full flex-1',
           showMermaidPreview
             ? [
-                '[&_.gamma-code-block--mermaid]:overflow-visible',
-                '[&_.gamma-code-block--mermaid]:rounded-none',
-                '[&_.gamma-code-block--mermaid]:border-0',
-                '[&_.gamma-code-block--mermaid]:bg-transparent',
-                '[&_.gamma-code-block--mermaid_.gamma-code-header]:hidden',
-                '[&_.gamma-code-block--mermaid_.gamma-mermaid-preview]:block',
-                '[&_.gamma-code-block--mermaid_.gamma-code-source-body]:hidden',
+                '[&_.carpus-code-block--mermaid]:overflow-visible',
+                '[&_.carpus-code-block--mermaid]:rounded-none',
+                '[&_.carpus-code-block--mermaid]:border-0',
+                '[&_.carpus-code-block--mermaid]:bg-transparent',
+                '[&_.carpus-code-block--mermaid_.carpus-code-header]:hidden',
+                '[&_.carpus-code-block--mermaid_.carpus-mermaid-preview]:block',
+                '[&_.carpus-code-block--mermaid_.carpus-code-source-body]:hidden',
               ]
-            : '[&_.gamma-mermaid-preview]:hidden [&_.gamma-code-source-body]:block',
+            : '[&_.carpus-mermaid-preview]:hidden [&_.carpus-code-source-body]:block',
         )}
       />
       {editing && editor && <TableBubbleMenu editor={editor} />}

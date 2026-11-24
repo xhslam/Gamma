@@ -89,8 +89,8 @@ async function stopWindowsCursorOverlay(
   identity: AgentDesktopRunIdentity,
   track: (child: ChildProcess) => void,
 ): Promise<void> {
-  // Gamma 分配的 ID 也可仅用作引用命名空间。没有 manifest 时，上游使用默认关闭的
-  // overlay，且 Gamma 不允许启用 overlay 的参数；无需向并不存在的会话请求停止。
+  // Carpus 分配的 ID 也可仅用作引用命名空间。没有 manifest 时，上游使用默认关闭的
+  // overlay，且 Carpus 不允许启用 overlay 的参数；无需向并不存在的会话请求停止。
   try {
     lstatSync(join(identity.root, 'state', 'sessions', identity.sessionId, 'session.json'))
   } catch (error) {
@@ -298,7 +298,7 @@ class RunHost {
     // 上游 session 只允许 1–64 个安全字符；完整摘要避免直接替换或截断造成碰撞。
     // 原始 namespace 仍由 AgentDesktopHost 管理，停止和隔离语义不变。
     this.desktopSessionId = createHash('sha256').update(namespace).digest('hex')
-    const raw = mkdtempSync(join(tmpdir(), 'gamma-ad-'))
+    const raw = mkdtempSync(join(tmpdir(), 'carpus-ad-'))
     this.root = existsSync(raw) ? realpathSync(raw) : raw
     try {
       chmodSync(this.root, 0o700)

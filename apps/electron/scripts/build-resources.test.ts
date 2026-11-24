@@ -6,7 +6,7 @@ import { buildResources } from './build-resources'
 
 const directories: string[] = []
 function createApp(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'gamma resources 中文 '))
+  const directory = mkdtempSync(join(tmpdir(), 'carpus resources 中文 '))
   directories.push(directory)
   return directory
 }

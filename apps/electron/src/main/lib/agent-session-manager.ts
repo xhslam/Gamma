@@ -2,8 +2,8 @@
  * Agent 会话管理器
  *
  * 负责 Agent 会话的 CRUD 操作和消息持久化。
- * - 会话索引：~/.gamma/agent-sessions.json（轻量元数据）
- * - 消息存储：~/.gamma/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
+ * - 会话索引：~/.carpus/agent-sessions.json（轻量元数据）
+ * - 消息存储：~/.carpus/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
  *
  * 会话索引与消息使用独立 JSON/JSONL 文件持久化。
  */
@@ -47,17 +47,17 @@ import type {
   AgentContextRef,
   AgentContextRefDetail,
   AgentContextRefMode,
-} from '@gamma/shared'
-import { MAX_CONTEXT_REFS } from '@gamma/shared'
+} from '@carpus/shared'
+import { MAX_CONTEXT_REFS } from '@carpus/shared'
 import {
   defaultTokenEstimator,
   normalizeCompleteSDKMessages,
   formatNormalizedMessage,
 } from './conversation-reference/context-builder'
 import { saveSnapshotToCache, computeSnapshotHash } from './conversation-reference/ref-cache'
-import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@gamma/shared'
-// 旧格式 → SDKMessage 的转换逻辑下沉到 @gamma/session-core 作为唯一真源，避免主进程与渲染层各存一份。
-import { convertLegacyMessage } from '@gamma/session-core'
+import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@carpus/shared'
+// 旧格式 → SDKMessage 的转换逻辑下沉到 @carpus/session-core 作为唯一真源，避免主进程与渲染层各存一份。
+import { convertLegacyMessage } from '@carpus/session-core'
 import { normalizeLegacyBuiltinSkillActivation } from './legacy-skill-activations'
 import { assertEnabledModelForChannel } from './agent-model-selection'
 import { copyForkWorkspaceFiles } from './agent-fork-workspace-copy'
@@ -221,7 +221,7 @@ function migrateLegacyOpenAIThinkingDefault(index: AgentSessionsIndex): boolean 
 }
 
 /**
- * Claude runtime 已退役。历史 transcript 仍由 Gamma JSONL 展示，但 Claude session
+ * Claude runtime 已退役。历史 transcript 仍由 Carpus JSONL 展示，但 Claude session
  * artifact 不能交给 Pi SessionManager 恢复，否则会被误识别为 Pi JSONL。
  */
 function migrateRetiredClaudeRuntime(index: AgentSessionsIndex): boolean {
@@ -409,7 +409,7 @@ export function resolveSessionWorkbenchContextDir(
   return layout === 'root' ? sessionDir : join(sessionDir, '.context')
 }
 
-/** Agent 运行 cwd 与 Gamma 会话 sidecar 工作台目录解析。 */
+/** Agent 运行 cwd 与 Carpus 会话 sidecar 工作台目录解析。 */
 export function resolveAgentCwd(
   workspace: Pick<AgentWorkspace, 'slug'> | undefined,
   sessionId: string,
@@ -472,7 +472,7 @@ export function createAgentSession(
   // 确保消息目录存在
   getAgentSessionsDir()
 
-  // 若有工作区，创建 session 级别子文件夹和 Gamma 工作台目录。
+  // 若有工作区，创建 session 级别子文件夹和 Carpus 工作台目录。
   if (workspaceId) {
     const ws = getAgentWorkspace(workspaceId)
     if (ws) {
@@ -640,7 +640,7 @@ export function getAgentSessionSDKMessages(id: string): SDKMessage[] {
 }
 
 /**
- * convertLegacyMessage 已迁移至 @gamma/session-core（本文件从该包 import 使用）。
+ * convertLegacyMessage 已迁移至 @carpus/session-core（本文件从该包 import 使用）。
  */
 
 /**
@@ -860,13 +860,13 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
 
 /**
  * Pi 的 session 是 append-only tree。分叉必须由 SessionManager 导出目标 branch，
- * 不能只复制 Gamma 的展示 JSONL，否则下一轮 resume 仍会看到被截断的上下文。
+ * 不能只复制 Carpus 的展示 JSONL，否则下一轮 resume 仍会看到被截断的上下文。
  */
 async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessionInput): Promise<AgentSessionMeta> {
   const targetUuid = input.upToMessageUuid
   if (!targetUuid) throw new Error('Pi 分叉需要指定一条已完成的 assistant 消息')
   const entryId = sourceMeta.piEntryBindings?.[targetUuid]
-  if (!entryId) throw new Error('该 Pi 历史消息尚无 entry ID 映射，无法安全分叉；请在新版 Gamma 中继续一次对话后再试')
+  if (!entryId) throw new Error('该 Pi 历史消息尚无 entry ID 映射，无法安全分叉；请在新版 Carpus 中继续一次对话后再试')
   if (!sourceMeta.piSessionFile || !existsSync(sourceMeta.piSessionFile)) {
     throw new Error('未找到 Pi session artifact，无法安全分叉')
   }
@@ -946,7 +946,7 @@ async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessi
 /**
  * 将当前 Pi 会话切换到指定 assistant turn 的新 branch artifact（持久化回退）。
  *
- * Gamma JSONL 和 Pi branch artifact 是两个事实源：先完整校验 JSONL，再创建 branch；
+ * Carpus JSONL 和 Pi branch artifact 是两个事实源：先完整校验 JSONL，再创建 branch；
  * JSONL 写入成功后才提交 metadata。metadata 写入失败时会恢复原 JSONL，避免两边分叉。
  */
 export async function rewindPiAgentSession(sessionId: string, assistantMessageUuid: string): Promise<number> {

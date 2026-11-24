@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { TerminalCreateInput, TerminalSnapshot, TerminalState } from '@gamma/shared'
+import type { TerminalCreateInput, TerminalSnapshot, TerminalState } from '@carpus/shared'
 import { ProjectAgyTerminalService } from './project-agy-terminal-service'
 
 function setup() {

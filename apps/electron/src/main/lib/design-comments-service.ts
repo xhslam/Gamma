@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
-import type { DesignArtifact } from '@gamma/shared'
+import type { DesignArtifact } from '@carpus/shared'
 import { runDesignArtifactCommand, getDesignBundleSkillPath } from './design-bundle'
 import { getAgentSessionMeta, isAgentSessionDeleting } from './agent-session-manager'
 import { getAgentWorkspace } from './agent-workspace-manager'
@@ -12,13 +12,13 @@ import { submitOrEnqueueAgentMessage } from './agent-service'
 import { createDesignCommentsBridge, designCommentDigest } from './design-comments-bridge'
 import type { DesignCommentsState } from './design-comments-bridge'
 
-/** 去重状态位于 Gamma 私有会话目录，不信任作品目录中的同名文件/符号链接。 */
+/** 去重状态位于 Carpus 私有会话目录，不信任作品目录中的同名文件/符号链接。 */
 function statePath(artifact: DesignArtifact): string {
   const workspace = getAgentWorkspace(artifact.workspaceId)
   if (!workspace) throw new Error('作品关联工作区不存在')
   const directory = getAgentSessionWorkspacePath(workspace.slug, artifact.sessionId)
   const key = designCommentDigest({ artifactId: artifact.id, root: artifact.rootPath })
-  return join(directory, `.gamma-design-comments-${key}.json`)
+  return join(directory, `.carpus-design-comments-${key}.json`)
 }
 function loadState(artifact: DesignArtifact): DesignCommentsState {
   const path = statePath(artifact)

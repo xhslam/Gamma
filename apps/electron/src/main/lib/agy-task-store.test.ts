@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgyTask } from '@gamma/shared'
+import type { AgyTask } from '@carpus/shared'
 import { AgyTaskStore } from './agy-task-store'
 
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 function setup() {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-agy-store-')); roots.push(root)
+  const root = mkdtempSync(join(tmpdir(), 'carpus-agy-store-')); roots.push(root)
   const store = new AgyTaskStore(join(root, 'tasks'))
   const task: AgyTask = { id: 'test-task', sessionId: 'owner', title: '测试', prompt: 'hello', cwd: root, status: 'completed', startedAt: 1, lastSequence: 301 }
   return { root, store, task }

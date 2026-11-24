@@ -1,10 +1,10 @@
 import { realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, sep } from 'node:path'
-import type { AgentSendOutboxEntry, AgentSubmitOrEnqueueInput, GammaPermissionMode } from '@gamma/shared'
+import type { AgentSendOutboxEntry, AgentSubmitOrEnqueueInput, CarpusPermissionMode } from '@carpus/shared'
 
 interface CurrentRetryContext {
   workspaceId: string
-  permissionMode: GammaPermissionMode
+  permissionMode: CarpusPermissionMode
   directories: string[]
   files: string[]
 }

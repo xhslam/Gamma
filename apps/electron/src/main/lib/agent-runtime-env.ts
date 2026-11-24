@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { delimiter, dirname, join, win32 } from 'node:path'
-import type { RuntimeStatus, WindowsShellPreference } from '@gamma/shared'
+import type { RuntimeStatus, WindowsShellPreference } from '@carpus/shared'
 import { getBundledCliPath } from './config-paths'
 import { selectWindowsShell, type WindowsShellKind } from './windows-shell-selection'
 
@@ -32,12 +32,12 @@ const CASE_INSENSITIVE_MERGE_KEYS = new Set([
   'https_proxy',
   'all_proxy',
   'no_proxy',
-  'gamma_cli',
+  'carpus_cli',
   'proma_cli',
   'claude_code_shell',
   'shell',
-  'gamma_windows_shell',
-  'gamma_wsl_distro',
+  'carpus_windows_shell',
+  'carpus_wsl_distro',
 ])
 
 function getCaseInsensitiveEnvValue(env: NodeJS.ProcessEnv, key: string): string | undefined {
@@ -128,10 +128,10 @@ function collectWindowsShellEnv(
 
   if (shellKind === 'wsl' && shellStatus?.wsl.available) {
     const wslCommand = getWslCommandPath(processEnv, pathExists)
-    env.GAMMA_WINDOWS_SHELL = 'wsl'
+    env.CARPUS_WINDOWS_SHELL = 'wsl'
     env.SHELL = wslCommand
     if (shellStatus.wsl.defaultDistro) {
-      env.GAMMA_WSL_DISTRO = shellStatus.wsl.defaultDistro
+      env.CARPUS_WSL_DISTRO = shellStatus.wsl.defaultDistro
     }
     return {
       env,
@@ -143,7 +143,7 @@ function collectWindowsShellEnv(
 
   if (shellKind === 'git-bash' && shellStatus?.gitBash.path) {
     const shellPath = shellStatus.gitBash.path
-    env.GAMMA_WINDOWS_SHELL = 'git-bash'
+    env.CARPUS_WINDOWS_SHELL = 'git-bash'
     env.SHELL = shellPath
     return {
       env,
@@ -190,7 +190,7 @@ export function buildAgentRuntimeEnv(options: BuildAgentRuntimeEnvOptions = {}):
   const env: Record<string, string> = {}
 
   if (bundledCliPath) {
-    env.GAMMA_CLI = bundledCliPath
+    env.CARPUS_CLI = bundledCliPath
     // 迁移后用户自定义 Skill 可能仍引用旧变量；别改写用户文件。
     env.PROMA_CLI = bundledCliPath
   }

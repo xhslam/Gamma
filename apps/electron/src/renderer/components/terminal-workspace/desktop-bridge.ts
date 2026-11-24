@@ -7,7 +7,7 @@ import type {
   DesktopTerminalDataEvent,
   DesktopTerminalExitEvent,
   DesktopTerminalAgentStateEvent,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 export type {
   DesktopTerminalBridge,

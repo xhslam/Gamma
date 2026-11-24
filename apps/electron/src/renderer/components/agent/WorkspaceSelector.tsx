@@ -24,7 +24,7 @@ import { projectListHeightAtom } from '@/atoms/sidebar-atoms'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { LocalProjectBadge } from './LocalProjectBadge'
 import { agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
-import type { AgentWorkspace } from '@gamma/shared'
+import type { AgentWorkspace } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 export function WorkspaceSelector(): React.ReactElement {

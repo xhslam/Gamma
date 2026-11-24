@@ -1,6 +1,6 @@
 import { lstatSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
-import type { SkillActivation } from '@gamma/shared'
+import type { SkillActivation } from '@carpus/shared'
 import { getRenamedBuiltinSkillSlug } from './legacy-skill-renames'
 
 function exists(path: string): boolean {

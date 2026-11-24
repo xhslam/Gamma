@@ -2,8 +2,8 @@ import * as React from 'react'
 import { ChevronDown, GitBranch, RotateCw, SquareTerminal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorktreeInfo, WorkspaceWorktreeRepo } from '@gamma/shared'
-import { normalizePathForCompare } from '@gamma/shared'
+import type { WorktreeInfo, WorkspaceWorktreeRepo } from '@carpus/shared'
+import { normalizePathForCompare } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 interface WorktreeSelectorProps {

@@ -7,7 +7,7 @@ import { MarkdownWorkspaceService } from './markdown-workspace-service'
 const directories: string[] = []
 afterEach(() => { for (const path of directories.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-markdown-test-')); directories.push(root)
+  const root = mkdtempSync(join(tmpdir(), 'carpus-markdown-test-')); directories.push(root)
   const file = join(root, 'test.md'); writeFileSync(file, '\uFEFF# 标题\r\n正文\r\n'); chmodSync(file, 0o640)
   const service = new MarkdownWorkspaceService()
   const source = service.grant('owner', root, 'directory')
@@ -42,7 +42,7 @@ describe('Given Markdown 原子文件服务', () => {
     expect(service.read('owner', source.id, '').status).toBe('document')
   })
   test('When 目录 symlink 越出来源 Then 不可读取且不列出', () => {
-    const { root, service, source } = fixture(); const outside = mkdtempSync(join(tmpdir(), 'gamma-md-out-')); directories.push(outside)
+    const { root, service, source } = fixture(); const outside = mkdtempSync(join(tmpdir(), 'carpus-md-out-')); directories.push(outside)
     writeFileSync(join(outside, 'outside.md'), '秘密'); symlinkSync(join(outside, 'outside.md'), join(root, 'escape.md'))
     expect(service.read('owner', source.id, 'escape.md')).toMatchObject({ status: 'error', code: 'denied' })
     const list = service.list('owner', source.id, '')

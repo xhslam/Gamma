@@ -43,7 +43,7 @@ afterAll(async () => { await renderer?.dispose(); await visual?.dispose() })
 describe('Given 文件与对话共用的真实编辑器引用框', () => {
   for (const dark of [false, true]) {
     test(`When ${dark ? '深色' : '浅色'}主题显示对话页签 Then 共用框的头尾均在视口内`, async () => {
-      const directory = process.env.GAMMA_REFERENCE_SCREENSHOT_DIR
+      const directory = process.env.CARPUS_REFERENCE_SCREENSHOT_DIR
       expect(await visual.run<{single:boolean;tabs:number;inside:boolean;noDialog:boolean}>(`
         document.documentElement.classList.toggle('dark',${dark});
         document.getElementById('root').style.cssText='position:fixed;bottom:24px;left:24px;width:600px';

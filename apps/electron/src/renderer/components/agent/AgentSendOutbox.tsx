@@ -1,5 +1,5 @@
 import { RotateCcw, TriangleAlert } from 'lucide-react'
-import type { AgentSendOutboxEntry } from '@gamma/shared'
+import type { AgentSendOutboxEntry } from '@carpus/shared'
 import { Button } from '@/components/ui/button'
 import { getQueuedMessageDisplayParts } from '@/lib/agent-message-queue'
 

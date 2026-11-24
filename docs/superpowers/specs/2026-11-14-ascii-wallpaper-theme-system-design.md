@@ -1,10 +1,10 @@
-# Gamma 外观设计选项改造 — 完整复刻 ASCII 壁纸主题系统
+# Carpus 外观设计选项改造 — 完整复刻 ASCII 壁纸主题系统
 
-> 参考素材：`/Users/apple/Desktop/gamma-video-frames`（来自 [x.com/handsher_NGU/status/2115618341675319417](https://x.com/handsher_NGU/status/2115618341675319417)）
+> 参考素材：`/Users/apple/Desktop/carpus-video-frames`（来自 [x.com/handsher_NGU/status/2115618341675319417](https://x.com/handsher_NGU/status/2115618341675319417)）
 
 ## 1. 概述
 
-将 Gamma 的外观系统从当前 7 款静态配色方案（ocean-light/dark、forest-light/dark、slate-light/dark、terminal-dark）升级为 8 款 ASCII 字符艺术动态壁纸主题，同时新增聊天区底部浮动 `/theme` 选择 Dock 与圆形揭幕（Circle Reveal）切换过渡动画。
+将 Carpus 的外观系统从当前 7 款静态配色方案（ocean-light/dark、forest-light/dark、slate-light/dark、terminal-dark）升级为 8 款 ASCII 字符艺术动态壁纸主题，同时新增聊天区底部浮动 `/theme` 选择 Dock 与圆形揭幕（Circle Reveal）切换过渡动画。
 
 ### 1.1 交付范围
 
@@ -21,7 +21,7 @@
 
 - 不引入本地数据库，持久化仍使用 `safe-file.ts` 原子写 JSON。
 - 不引入外部动画库（GSAP、Lottie 等），纯 Canvas 2D + CSS clip-path。
-- 不更改 Gamma 的 Agent 运行时、IPC 协议或会话数据结构。
+- 不更改 Carpus 的 Agent 运行时、IPC 协议或会话数据结构。
 
 ---
 

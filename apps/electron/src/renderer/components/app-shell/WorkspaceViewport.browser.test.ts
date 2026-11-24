@@ -10,7 +10,7 @@ beforeAll(async () => {
     import { WorkspacePanels } from '@/components/app-shell/WorkspacePanels'
     import { Panel } from '@/components/app-shell/Panel'
     import '@/styles/globals.css'
-    document.documentElement.classList.add('gamma-main-window');
+    document.documentElement.classList.add('carpus-main-window');
     const delay = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     window.viewportRegression = async options => {
       document.documentElement.classList.toggle('dark', !!options.dark);

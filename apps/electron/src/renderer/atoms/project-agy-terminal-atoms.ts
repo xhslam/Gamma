@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import type { ProjectAgyTerminalState } from '@gamma/shared'
+import type { ProjectAgyTerminalState } from '@carpus/shared'
 
 export interface ProjectAgyTerminalEntry {
   accepted: boolean
@@ -11,7 +11,7 @@ export interface ProjectAgyTerminalEntry {
 }
 
 /** 仅标记说明条是否展示过，不保存或改变 AGY 的权限确认状态。 */
-export const agyPermissionNoticeSeenAtom = atomWithStorage('gamma-agy-permission-notice-seen-v1', false, undefined, { getOnInit: true })
+export const agyPermissionNoticeSeenAtom = atomWithStorage('carpus-agy-permission-notice-seen-v1', false, undefined, { getOnInit: true })
 
 /** 仅保存本次 App 生命周期内的项目交互实例，绝不混入 Agent 会话终端。 */
 export const projectAgyTerminalsAtom = atom(new Map<string, ProjectAgyTerminalEntry>())

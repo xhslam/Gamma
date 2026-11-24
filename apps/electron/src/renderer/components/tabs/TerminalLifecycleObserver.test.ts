@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import type { AgentTerminalCloseEvent, AgentTerminalOpenEvent } from '@gamma/shared'
+import type { AgentTerminalCloseEvent, AgentTerminalOpenEvent } from '@carpus/shared'
 import { loadIsolatedModule } from '../../../test-utils/isolated-module'
 
 function setup() {

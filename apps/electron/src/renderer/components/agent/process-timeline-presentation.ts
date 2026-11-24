@@ -1,4 +1,4 @@
-import type { SDKToolUseBlock } from '@gamma/shared'
+import type { SDKToolUseBlock } from '@carpus/shared'
 import { getToolPhrase } from './tool-phrase'
 
 export interface ProcessActionLabel {

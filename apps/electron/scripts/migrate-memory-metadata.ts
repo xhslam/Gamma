@@ -8,7 +8,7 @@
  *    bun run apps/electron/scripts/migrate-memory-metadata.ts --workspace-slug my-project --plan ./migration-plan.json
  *
  * 2. 启用 LLM 自动补全/重写空泛 description：
- *    GAMMA_MEMORY_MIGRATION_API_KEY=sk-xxx bun run apps/electron/scripts/migrate-memory-metadata.ts --rewrite-descriptions --model gpt-4o-mini
+ *    CARPUS_MEMORY_MIGRATION_API_KEY=sk-xxx bun run apps/electron/scripts/migrate-memory-metadata.ts --rewrite-descriptions --model gpt-4o-mini
  *
  * 3. 执行原子落盘应用迁移：
  *    bun run apps/electron/scripts/migrate-memory-metadata.ts --apply ./migration-plan.json --confirm
@@ -85,7 +85,7 @@ function parseCliArgs(args: string[]): CliOptions {
 
 function printHelp(): void {
   console.log(`
-记忆元数据迁移脚本 (Gamma Memory Metadata Migration CLI)
+记忆元数据迁移脚本 (Carpus Memory Metadata Migration CLI)
 
 用法:
   bun run apps/electron/scripts/migrate-memory-metadata.ts [选项]
@@ -104,7 +104,7 @@ function printHelp(): void {
   --help, -h                  显示帮助信息
 
 环境变量:
-  GAMMA_MEMORY_MIGRATION_API_KEY  LLM API Key（安全读取，绝不输出到日志或控制台）
+  CARPUS_MEMORY_MIGRATION_API_KEY  LLM API Key（安全读取，绝不输出到日志或控制台）
 
 注意:
   - 迁移工具绝不修改正文字节与未知 frontmatter 字段，绝不删除任何文件。
@@ -339,9 +339,9 @@ async function main(): Promise<void> {
   let rewriter: MemoryDescriptionRewriter | undefined
 
   if (options.rewriteDescriptions) {
-    const apiKey = process.env.GAMMA_MEMORY_MIGRATION_API_KEY
+    const apiKey = process.env.CARPUS_MEMORY_MIGRATION_API_KEY
     if (!apiKey || apiKey.trim().length === 0) {
-      console.error(`❌ 错误：显式指定了 --rewrite-descriptions，但未配置环境变量 GAMMA_MEMORY_MIGRATION_API_KEY。`)
+      console.error(`❌ 错误：显式指定了 --rewrite-descriptions，但未配置环境变量 CARPUS_MEMORY_MIGRATION_API_KEY。`)
       console.error(`出于安全规范，API Key 仅通过环境变量读取，禁止在 CLI 参数或日志中暴露。`)
       process.exit(1)
     }
@@ -374,7 +374,7 @@ async function main(): Promise<void> {
   if (plan.summary.blocked > 0) {
     console.warn(`\n⚠️ 注意: 计划中有 ${plan.summary.blocked} 个文件存在缺失或空泛的 description。`)
     console.warn(`未配置 LLM 改写或改写未通过，apply 操作将被拒绝。`)
-    console.warn(`若要通过 LLM 自动改写，请设置 GAMMA_MEMORY_MIGRATION_API_KEY 并传入 --rewrite-descriptions。`)
+    console.warn(`若要通过 LLM 自动改写，请设置 CARPUS_MEMORY_MIGRATION_API_KEY 并传入 --rewrite-descriptions。`)
   } else if (plan.summary.pending > 0) {
     console.log(`\n💡 若确认应用更新，请运行以下命令进行原子落盘:`)
     console.log(`   bun run apps/electron/scripts/migrate-memory-metadata.ts --apply "${targetPlanPath}" --confirm\n`)

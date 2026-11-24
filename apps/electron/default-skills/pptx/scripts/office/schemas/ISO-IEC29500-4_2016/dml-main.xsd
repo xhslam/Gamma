@@ -292,8 +292,8 @@
   <xsd:complexType name="CT_ComplementTransform"/>
   <xsd:complexType name="CT_InverseTransform"/>
   <xsd:complexType name="CT_GrayscaleTransform"/>
-  <xsd:complexType name="CT_GammaTransform"/>
-  <xsd:complexType name="CT_InverseGammaTransform"/>
+  <xsd:complexType name="CT_CarpusTransform"/>
+  <xsd:complexType name="CT_InverseCarpusTransform"/>
   <xsd:group name="EG_ColorTransform">
     <xsd:choice>
       <xsd:element name="tint" type="CT_PositiveFixedPercentage" minOccurs="1" maxOccurs="1"/>
@@ -322,8 +322,8 @@
       <xsd:element name="blue" type="CT_Percentage" minOccurs="1" maxOccurs="1"/>
       <xsd:element name="blueOff" type="CT_Percentage" minOccurs="1" maxOccurs="1"/>
       <xsd:element name="blueMod" type="CT_Percentage" minOccurs="1" maxOccurs="1"/>
-      <xsd:element name="gamma" type="CT_GammaTransform" minOccurs="1" maxOccurs="1"/>
-      <xsd:element name="invGamma" type="CT_InverseGammaTransform" minOccurs="1" maxOccurs="1"/>
+      <xsd:element name="carpus" type="CT_CarpusTransform" minOccurs="1" maxOccurs="1"/>
+      <xsd:element name="invCarpus" type="CT_InverseCarpusTransform" minOccurs="1" maxOccurs="1"/>
     </xsd:choice>
   </xsd:group>
   <xsd:complexType name="CT_ScRgbColor">

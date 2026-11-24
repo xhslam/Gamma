@@ -7,7 +7,7 @@ import { resolveUpdateConfigPath } from './update-config'
 
 const directories: string[] = []
 function fixture(): { resources: string; userData: string } {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-update-config-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-update-config-'))
   directories.push(root)
   const resources = join(root, 'resources'), userData = join(root, 'user-data')
   mkdirSync(resources)
@@ -21,7 +21,7 @@ describe('Given 本地目录打包可能缺少更新配置', () => {
     const { resources, userData } = fixture()
     const path = resolveUpdateConfigPath(resources, userData)
     expect(path).toBe(join(userData, 'updater-fallback.yml'))
-    expect(YAML.parse(readFileSync(path, 'utf8'))).toEqual({ provider: 'github', owner: 'xhslam', repo: 'Gamma', updaterCacheDirName: 'gamma-updater' })
+    expect(YAML.parse(readFileSync(path, 'utf8'))).toEqual({ provider: 'github', owner: 'xhslam', repo: 'Carpus', updaterCacheDirName: 'carpus-updater' })
     expect(existsSync(join(resources, 'app-update.yml'))).toBe(false)
   })
   test('When 打包器已生成配置 Then 使用原配置且不创建回退配置', () => {
@@ -50,6 +50,6 @@ describe('Given 本地目录打包可能缺少更新配置', () => {
     const path = resolveUpdateConfigPath(resources, userData)
     writeFileSync(path, 'provider: generic\nurl: https://example.com\n')
     resolveUpdateConfigPath(resources, userData)
-    expect(YAML.parse(readFileSync(path, 'utf8'))).toHaveProperty('repo', 'Gamma')
+    expect(YAML.parse(readFileSync(path, 'utf8'))).toHaveProperty('repo', 'Carpus')
   })
 })

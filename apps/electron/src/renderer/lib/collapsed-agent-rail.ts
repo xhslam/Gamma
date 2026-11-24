@@ -1,4 +1,4 @@
-import type { AgentSessionMeta } from '@gamma/shared'
+import type { AgentSessionMeta } from '@carpus/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import {
   getAgentSessionTreeIndicatorStatus,

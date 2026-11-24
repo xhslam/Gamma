@@ -73,14 +73,14 @@ import { openSettingsToTabAtom, settingsOpenAtom, settingsTabAtom } from './atom
 import { Toaster } from './components/ui/sonner'
 import { toast } from 'sonner'
 import { ArrowRight } from 'lucide-react'
-import { diffCapabilities } from '@gamma/shared'
-import type { WorkspaceCapabilities } from '@gamma/shared'
+import { diffCapabilities } from '@carpus/shared'
+import type { WorkspaceCapabilities } from '@carpus/shared'
 import { showCapabilityChangeToasts } from './lib/capabilities-toast'
 import { GlobalShortcuts } from './components/shortcuts/GlobalShortcuts'
 import { VoiceDictationApp } from './components/voice-dictation/VoiceDictationApp'
 import { TabSwitcher } from './components/tabs/TabSwitcher'
 import { restoreAgentOnlyTabState } from './lib/agent-only-state'
-import { GammaLogo } from './lib/model-logo'
+import { CarpusLogo } from './lib/model-logo'
 import { initShortcutRegistry, updateShortcutOverrides } from './lib/shortcut-registry'
 import { initializePerformanceMonitor } from './lib/performance-monitor'
 import { createUpdateReminderScheduler, type UpdateReminderScheduler } from './lib/update-reminder-scheduler'
@@ -100,7 +100,7 @@ initializePerformanceMonitor()
 
 // 主窗口与记忆窗口均由内部面板管理滚动，避免页面本身出现第二层滚动。
 if (isMainWindow || isWorkspaceMemoryWindow || isSettingsWindow) {
-  document.documentElement.classList.add('gamma-main-window')
+  document.documentElement.classList.add('carpus-main-window')
 }
 
 /**
@@ -337,10 +337,10 @@ function UpdaterInitializer(): null {
     readyToastIdRef.current = toast.custom((toastId) => (
       <div className="w-[344px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_hsl(var(--shadow-ink)/0.14)] ring-1 ring-border/5 backdrop-blur-xl dark:ring-border/10">
         <div className="flex items-center gap-2.5">
-          <img src={GammaLogo} alt="Gamma" className="size-8 rounded-lg" />
+          <img src={CarpusLogo} alt="Carpus" className="size-8 rounded-lg" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-sm leading-5">
-              <span className="font-semibold tracking-tight">Gamma 更新已下载</span>
+              <span className="font-semibold tracking-tight">Carpus 更新已下载</span>
               <span className="text-xs text-primary">{versionLabel}</span>
             </div>
             <p className="text-xs leading-4 text-muted-foreground">{manualInstallReason || '选择空闲更新后，将在所有 Agent 完成时安装。'}</p>
@@ -386,7 +386,7 @@ function UpdaterInitializer(): null {
                     scheduledToastIdRef.current = toast.custom((scheduledToastId) => (
                       <div className="w-[312px] max-w-[calc(100vw-32px)] rounded-xl bg-background/95 p-3 text-foreground shadow-[0_12px_32px_hsl(var(--shadow-ink)/0.14)] ring-1 ring-border/5 backdrop-blur-xl dark:ring-border/10">
                         <div className="flex items-center gap-2.5">
-                          <img src={GammaLogo} alt="Gamma" className="size-7 rounded-md" />
+                          <img src={CarpusLogo} alt="Carpus" className="size-7 rounded-md" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold tracking-tight">已安排空闲时更新</p>
                             <p className="text-xs leading-4 text-muted-foreground">当前任务结束后会自动重启安装。</p>

@@ -29,7 +29,7 @@ import {
   type AskUserQuestionDraft,
   type AskUserRequestDraft,
 } from '@/atoms/agent-atoms'
-import type { AskUserQuestion } from '@gamma/shared'
+import type { AskUserQuestion } from '@carpus/shared'
 
 const EMPTY_ANSWER: AskUserQuestionDraft = { selected: [], customText: '', showCustom: false }
 
@@ -239,7 +239,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
       {/* 头部 + Tab 栏 */}
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-foreground">Gamma Agent 需要你的输入</span>
+          <span className="text-sm font-medium text-foreground">Carpus Agent 需要你的输入</span>
           <div className="flex items-center gap-1.5">
             {requests.length > 1 && (
               <span className="text-xs text-muted-foreground">(+{requests.length - 1})</span>

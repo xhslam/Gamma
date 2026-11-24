@@ -5,7 +5,7 @@ import { createVisualRendererHarness } from '../../../test-utils/visual-renderer
 import type { VisualRendererHarness } from '../../../test-utils/visual-renderer'
 
 let renderer: VisualRendererHarness
-const artifacts = process.env.GAMMA_VISUAL_ARTIFACT_DIR
+const artifacts = process.env.CARPUS_VISUAL_ARTIFACT_DIR
 beforeAll(async () => {
   if (artifacts) await mkdir(artifacts, { recursive: true })
   renderer = await createVisualRendererHarness(`
@@ -27,14 +27,14 @@ beforeAll(async () => {
           React.createElement(Conversation, null, React.createElement(ConversationContent, {className:'h-full'},
             React.createElement('div', {className:'welcome-empty-state flex h-full items-center justify-center'},
               React.createElement('h1', {className:'text-3xl font-medium tracking-tight'}, '下午好，今天想做些什么？'))))),
-        React.createElement('input', {id:'input',placeholder:'输入消息…',className:'gamma-composer bg-background',style:{padding:24}}))));
+        React.createElement('input', {id:'input',placeholder:'输入消息…',className:'carpus-composer bg-background',style:{padding:24}}))));
     };
     function FullField() {
       const [container, setContainer] = React.useState(null);
-      return React.createElement('div',{className:'gamma-workbench flex',style:{height:'100vh'}},
-        React.createElement('div',{className:'gamma-workbench-frame'},
+      return React.createElement('div',{className:'carpus-workbench flex',style:{height:'100vh'}},
+        React.createElement('div',{className:'carpus-workbench-frame'},
         React.createElement('aside',{id:'sidebar',style:{width:208,flexShrink:0}}),
-        React.createElement('main',{id:'panel','data-panel':'content',className:'gamma-panel h-full min-w-0 flex-1 overflow-hidden'},
+        React.createElement('main',{id:'panel','data-panel':'content',className:'carpus-panel h-full min-w-0 flex-1 overflow-hidden'},
         React.createElement('div', {ref:setContainer,'data-agent-conversation-root':'',className:'relative isolate flex h-full flex-col overflow-hidden'},
         React.createElement('header', {style:{height:40,flexShrink:0}}, '新会话'),
         React.createElement('div', {id:'column',className:'flex min-h-0 flex-1 flex-col w-full mx-auto',style:{maxWidth:560}},
@@ -43,7 +43,7 @@ beforeAll(async () => {
             React.createElement(Conversation, null, React.createElement(ConversationContent, {className:'h-full'},
               React.createElement('div', {className:'welcome-empty-state flex h-full items-center justify-center'},
                 React.createElement('h1', null, '下午好'))))),
-          React.createElement('div', {id:'input',tabIndex:0,className:'gamma-composer bg-background',style:{padding:24}}, '输入消息…'))))));
+          React.createElement('div', {id:'input',tabIndex:0,className:'carpus-composer bg-background',style:{padding:24}}, '输入消息…'))))));
     }
     window.mountFullField = () => flushSync(() => root.render(React.createElement(FullField)));
     window.fieldSample = () => {
@@ -117,7 +117,7 @@ describe('Given 逐源帧驱动的新会话字符背景', () => {
         const peak = window.fieldSample();
         await new Promise(resolve => setTimeout(resolve, 100));
         return {before,peak,later:window.fieldSample()};
-      `, { screenshot: artifacts ? join(artifacts, `gamma-motion-${dark ? 'dark' : 'light'}.png`) : undefined })
+      `, { screenshot: artifacts ? join(artifacts, `carpus-motion-${dark ? 'dark' : 'light'}.png`) : undefined })
       expect(result.before.pixels).toBeGreaterThan(1000)
       expect(result.before.blue).toBe(0)
       expect(result.peak.blue).toBeGreaterThan(1000)

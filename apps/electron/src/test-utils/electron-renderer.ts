@@ -27,8 +27,8 @@ interface ElectronRendererHarnessOptions {
 
 /** 用应用真实的 Vite 构建与 Chromium DOM 检查 renderer，避免模拟 DOM 掩盖 xterm 原生事件顺序。 */
 export async function createElectronRendererHarness(entrySource: string, options: ElectronRendererHarnessOptions = {}): Promise<ElectronRendererHarness> {
-  const directory = await mkdtemp(join(tmpdir(), 'gamma-renderer-regression-'))
-  const entry = 'gamma-electron-renderer-regression'
+  const directory = await mkdtemp(join(tmpdir(), 'carpus-renderer-regression-'))
+  const entry = 'carpus-electron-renderer-regression'
   try {
     const tailwindConfig = loadTailwindConfig(resolve(import.meta.dir, '../../tailwind.config.js'))
     const result = await build({
@@ -94,7 +94,7 @@ export async function createElectronRendererHarness(entrySource: string, options
   return {
     async run<T>(scenario: string, reloadScenario?: string): Promise<T> {
       const mainPath = join(directory, `main-${++runId}.cjs`)
-      const marker = 'GAMMA_RENDERER_RESULT:'
+      const marker = 'CARPUS_RENDERER_RESULT:'
       // 不连接真实 PTY/剪贴板；结果只来自该次场景提供的 mock 数据。
       // Windows Runner 使用真实 Chromium 离屏绘制，避免隐藏 HWND 的动画帧依赖桌面合成器。
       await writeFile(mainPath, `

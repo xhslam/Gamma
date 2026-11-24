@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { spawn as spawnProcess } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process'
 import { join } from 'node:path'
-import type { AgyActivityEvent, AgyTask, AgyTaskStartInput, AgyTaskStatus, AgyTaskUpdate } from '@gamma/shared'
+import type { AgyActivityEvent, AgyTask, AgyTaskStartInput, AgyTaskStatus, AgyTaskUpdate } from '@carpus/shared'
 import { AgyTaskStore, AGY_MAX_EVENTS, AGY_MAX_LOG_BYTES } from './agy-task-store'
 import { AgyStreamParser, redactAgyText, redactAgyValue } from './agy-stream-parser'
 import { resolveAgentTerminalCwd } from './terminal-agent-policy'
@@ -64,7 +64,7 @@ export class AgyTaskService {
       for (const task of store.list(sessionId)) {
         if (ACTIVE.has(task.status) && !this.live.has(task.id)) {
           task.status = 'interrupted'
-          task.error = 'Gamma 上次运行已结束，外部任务未自动续跑；无法确认服务端工作状态。'
+          task.error = 'Carpus 上次运行已结束，外部任务未自动续跑；无法确认服务端工作状态。'
           task.completedAt = Date.now()
           store.save(task, [])
         }

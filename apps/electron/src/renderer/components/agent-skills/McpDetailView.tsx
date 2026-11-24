@@ -10,7 +10,7 @@ import { ArrowLeft, CheckCircle2, CircleDashed, Plug, XCircle } from 'lucide-rea
 import { Button } from '@/components/ui/button'
 import { McpServerForm } from '@/components/settings/McpServerForm'
 import { cn } from '@/lib/utils'
-import type { McpServerEntry } from '@gamma/shared'
+import type { McpServerEntry } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface McpDetailViewProps {

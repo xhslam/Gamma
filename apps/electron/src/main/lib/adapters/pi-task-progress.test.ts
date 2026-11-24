@@ -11,12 +11,12 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolResultMessage } from '@earendil-works/pi-ai'
-import { buildGammaProductToolDefinitions } from './pi-agent-adapter'
-import { GammaTaskProgressController, type GammaTaskItem } from './pi-task-progress'
+import { buildCarpusProductToolDefinitions } from './pi-agent-adapter'
+import { CarpusTaskProgressController, type CarpusTaskItem } from './pi-task-progress'
 import { sanitizePiMessageImageContent } from '../image-content-validation'
 import { normalizePiToolResultDetails } from './pi-tool-result-json'
 
-function taskResult(toolName: string, task: GammaTaskItem, isError = false): ToolResultMessage {
+function taskResult(toolName: string, task: CarpusTaskItem, isError = false): ToolResultMessage {
   return {
     role: 'toolResult',
     toolName,
@@ -32,14 +32,14 @@ function branchMessages(manager: SessionManager): unknown[] {
   return manager.getBranch().filter((entry) => entry.type === 'message').map((entry) => entry.message)
 }
 
-async function executeTaskTool(controller: GammaTaskProgressController, name: string, input: Record<string, unknown>): Promise<unknown> {
-  const tool = buildGammaProductToolDefinitions({ defineTool }, undefined, controller.tasks).find((definition) => definition.name === name)
+async function executeTaskTool(controller: CarpusTaskProgressController, name: string, input: Record<string, unknown>): Promise<unknown> {
+  const tool = buildCarpusProductToolDefinitions({ defineTool }, undefined, controller.tasks).find((definition) => definition.name === name)
   if (!tool) throw new Error(`测试工具未注册: ${name}`)
   const result = await tool.execute(`call-${name}`, input, undefined, undefined, {} as ExtensionToolContext)
   return result.details
 }
 
-function extensionHarness(controller: GammaTaskProgressController): {
+function extensionHarness(controller: CarpusTaskProgressController): {
   emit: (name: string, event: Record<string, unknown>) => unknown
 } {
   const handlers = new Map<string, (event: Record<string, unknown>) => unknown>()
@@ -53,7 +53,7 @@ function extensionHarness(controller: GammaTaskProgressController): {
   return { emit: (name, event) => handlers.get(name)?.(event) }
 }
 
-function realExtensionRunner(controller: GammaTaskProgressController, manager: SessionManager): ExtensionRunner {
+function realExtensionRunner(controller: CarpusTaskProgressController, manager: SessionManager): ExtensionRunner {
   const extension: Extension = {
     path: '<task-progress-test>',
     resolvedPath: '<task-progress-test>',
@@ -75,7 +75,7 @@ function realExtensionRunner(controller: GammaTaskProgressController, manager: S
   return new ExtensionRunner([extension], createExtensionRuntime(), process.cwd(), manager, {} as ModelRegistry)
 }
 
-const activeTask: GammaTaskItem = {
+const activeTask: CarpusTaskItem = {
   id: 'task-1',
   subject: '调查任务进度',
   status: 'in_progress',
@@ -85,7 +85,7 @@ const activeTask: GammaTaskItem = {
 
 describe('Pi 任务进度同步', () => {
   test('Given 已执行的创建和更新 When 从当前分支恢复 Then 保留最新任务状态和标题', () => {
-    const controller = new GammaTaskProgressController([
+    const controller = new CarpusTaskProgressController([
       taskResult('TaskCreate', { ...activeTask, status: 'pending' }),
       taskResult('TaskUpdate', activeTask),
     ])
@@ -95,30 +95,30 @@ describe('Pi 任务进度同步', () => {
   test('Given 已保存任务的续跑会话 When 执行真实 TaskList、TaskGet 和 TaskUpdate Then 共用恢复后的任务表', async () => {
     const manager = SessionManager.inMemory()
     manager.appendMessage(taskResult('TaskCreate', activeTask))
-    const controller = new GammaTaskProgressController(branchMessages(manager))
+    const controller = new CarpusTaskProgressController(branchMessages(manager))
     expect(await executeTaskTool(controller, 'TaskList', {})).toEqual({ tasks: [activeTask] })
     expect(await executeTaskTool(controller, 'TaskGet', { taskId: 'task-1' })).toEqual({ task: activeTask })
-    const updated = await executeTaskTool(controller, 'TaskUpdate', { taskId: 'task-1', activeForm: '正在运行验证' }) as { task: GammaTaskItem }
+    const updated = await executeTaskTool(controller, 'TaskUpdate', { taskId: 'task-1', activeForm: '正在运行验证' }) as { task: CarpusTaskItem }
     expect(updated.task.subject).toBe(activeTask.subject)
     expect(updated.task.activeForm).toBe('正在运行验证')
-    expect((await executeTaskTool(controller, 'TaskGet', { taskId: 'task-1' }) as { task: GammaTaskItem }).task.activeForm).toBe('正在运行验证')
+    expect((await executeTaskTool(controller, 'TaskGet', { taskId: 'task-1' }) as { task: CarpusTaskItem }).task.activeForm).toBe('正在运行验证')
   })
 
   test('Given 已恢复三个阶段 When 仅更新中间任务 Then 三项任务仍独立保存在任务表中', async () => {
-    const tasks: [GammaTaskItem, GammaTaskItem, GammaTaskItem] = [
+    const tasks: [CarpusTaskItem, CarpusTaskItem, CarpusTaskItem] = [
       { id: 'research', subject: '排查原因', status: 'completed' },
       { id: 'fix', subject: '实现修复', status: 'pending' },
       { id: 'verify', subject: '回归验证', status: 'pending' },
     ]
-    const controller = new GammaTaskProgressController(tasks.map((task) => taskResult('TaskCreate', task)))
+    const controller = new CarpusTaskProgressController(tasks.map((task) => taskResult('TaskCreate', task)))
     const result = await executeTaskTool(controller, 'TaskUpdate', { taskId: 'fix', status: 'in_progress' })
     expect(result).toMatchObject({ task: { ...tasks[1], status: 'in_progress' } })
     expect([...controller.tasks.values()]).toEqual([tasks[0], { ...tasks[1], status: 'in_progress' }, tasks[2]])
   })
 
   test('Given 多次真实创建调用 When 创建第二项 Then 两项 ID 独立且不会互相覆盖', async () => {
-    const controller = new GammaTaskProgressController()
-    const tool = buildGammaProductToolDefinitions({ defineTool }, undefined, controller.tasks).find((item) => item.name === 'TaskCreate')!
+    const controller = new CarpusTaskProgressController()
+    const tool = buildCarpusProductToolDefinitions({ defineTool }, undefined, controller.tasks).find((item) => item.name === 'TaskCreate')!
     await tool.execute('create-1', { subject: '排查原因' }, undefined, undefined, {} as ExtensionToolContext)
     const result = await tool.execute('create-2', { subject: '实现修复' }, undefined, undefined, {} as ExtensionToolContext)
     expect(result.details).toMatchObject({ task: { id: 'create-2', subject: '实现修复', status: 'pending' } })
@@ -135,29 +135,29 @@ describe('Pi 任务进度同步', () => {
     manager.appendMessage(taskResult('TaskUpdate', { ...activeTask, status: 'completed' }))
     manager.branch(initialEntryId)
     manager.appendCompaction('压缩摘要省略了任务表', null, 100)
-    const controller = new GammaTaskProgressController(branchMessages(manager))
+    const controller = new CarpusTaskProgressController(branchMessages(manager))
     expect(controller.tasks.get('task-1')).toEqual(activeTask)
   })
 
   test('Given 失败任务更新和无任务的全新 query When 恢复 Then 不应用失败状态或串入旧会话任务', () => {
-    const controller = new GammaTaskProgressController([
+    const controller = new CarpusTaskProgressController([
       taskResult('TaskCreate', activeTask),
       taskResult('TaskUpdate', { ...activeTask, status: 'completed' }, true),
     ])
     expect(controller.tasks.get('task-1')).toEqual(activeTask)
-    expect(new GammaTaskProgressController().tasks.size).toBe(0)
+    expect(new CarpusTaskProgressController().tasks.size).toBe(0)
   })
 
   test('Given 只有文本的旧工具结果和数字任务 ID When 恢复 Then 规范化 ID 供真实 TaskGet 读取', async () => {
     const legacyTask = { ...activeTask, id: 42 }
-    const controller = new GammaTaskProgressController([
+    const controller = new CarpusTaskProgressController([
       { role: 'toolResult', toolName: 'TaskCreate', isError: false, content: JSON.stringify({ task: legacyTask }) },
     ])
     expect(await executeTaskTool(controller, 'TaskGet', { taskId: '42' })).toEqual({ task: { ...legacyTask, id: '42' } })
   })
 
   test('Given 连续多个工作工具已执行但任务未更新 When 请求下一次模型 context Then 注入真实快照和更新提醒', () => {
-    const controller = new GammaTaskProgressController([taskResult('TaskCreate', activeTask)])
+    const controller = new CarpusTaskProgressController([taskResult('TaskCreate', activeTask)])
     const harness = extensionHarness(controller)
     const messages = [{ role: 'user', content: '继续修复', timestamp: 1 }]
     for (let index = 0; index < 3; index += 1) {
@@ -175,7 +175,7 @@ describe('Pi 任务进度同步', () => {
   test('Given Pi 真实 extension runner 和 adapter 图片校验 When 构造 provider context Then 保留系统消息和刷新提醒且不污染会话历史', async () => {
     const manager = SessionManager.inMemory()
     manager.appendMessage(taskResult('TaskCreate', activeTask))
-    const controller = new GammaTaskProgressController(branchMessages(manager))
+    const controller = new CarpusTaskProgressController(branchMessages(manager))
     const runner = realExtensionRunner(controller, manager)
     const errors: string[] = []
     runner.onError((error) => { errors.push(error.error) })
@@ -196,7 +196,7 @@ describe('Pi 任务进度同步', () => {
   })
 
   test('Given 成功 TaskUpdate When 下一次模型请求 Then 重置工作计数并在后续提醒中显示新阶段', () => {
-    const controller = new GammaTaskProgressController([taskResult('TaskCreate', activeTask)])
+    const controller = new CarpusTaskProgressController([taskResult('TaskCreate', activeTask)])
     const harness = extensionHarness(controller)
     const work = { toolName: 'Read', isError: false, result: { content: [] } }
     for (let index = 0; index < 3; index += 1) harness.emit('tool_execution_end', work)
@@ -210,7 +210,7 @@ describe('Pi 任务进度同步', () => {
   })
 
   test('Given TaskUpdate 执行失败 When 已连续执行多个工作工具 Then 不消除同步提醒或改变任务状态', () => {
-    const controller = new GammaTaskProgressController([taskResult('TaskCreate', activeTask)])
+    const controller = new CarpusTaskProgressController([taskResult('TaskCreate', activeTask)])
     const harness = extensionHarness(controller)
     for (let index = 0; index < 3; index += 1) harness.emit('tool_execution_end', { toolName: 'Read', isError: false, result: { content: [] } })
     harness.emit('tool_execution_end', { toolName: 'TaskUpdate', isError: true, result: taskResult('TaskUpdate', { ...activeTask, status: 'completed' }) })
@@ -219,7 +219,7 @@ describe('Pi 任务进度同步', () => {
   })
 
   test('Given 仅查询任务表或不足 3 个工作工具 When 请求模型 Then 不产生高频更新提醒', () => {
-    const controller = new GammaTaskProgressController([taskResult('TaskCreate', activeTask)])
+    const controller = new CarpusTaskProgressController([taskResult('TaskCreate', activeTask)])
     const harness = extensionHarness(controller)
     for (let index = 0; index < 5; index += 1) harness.emit('tool_execution_end', { toolName: 'TaskList', isError: false, result: { content: [] } })
     for (let index = 0; index < 2; index += 1) harness.emit('tool_execution_end', { toolName: 'Read', isError: false, result: { content: [] } })
@@ -228,7 +228,7 @@ describe('Pi 任务进度同步', () => {
 
   test.each(['completed', 'cancelled', 'error', 'deleted'] as const)(
     'Given 只有 %s 终态任务 When 后续工作工具完成 Then 不注入历史任务快照', (status) => {
-      const controller = new GammaTaskProgressController([taskResult('TaskUpdate', { ...activeTask, status })])
+      const controller = new CarpusTaskProgressController([taskResult('TaskUpdate', { ...activeTask, status })])
       const harness = extensionHarness(controller)
       for (let index = 0; index < 3; index += 1) harness.emit('tool_execution_end', { toolName: 'Read', isError: false, result: { content: [] } })
       expect(harness.emit('context', { type: 'context', messages: [] })).toBeUndefined()

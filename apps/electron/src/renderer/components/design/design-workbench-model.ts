@@ -1,4 +1,4 @@
-import type { DesignArtifact, DesignArtifactKind } from '@gamma/shared'
+import type { DesignArtifact, DesignArtifactKind } from '@carpus/shared'
 
 export const DESIGN_ARTIFACT_TYPES: ReadonlyArray<{ kind: DesignArtifactKind; label: string; hint: string }> = [
   { kind: 'canvas', label: '设计画布', hint: '界面、多画板与交互原型' },

@@ -1,7 +1,7 @@
 /**
  * 会话引用缓存管理 (Conversation Reference Cache Manager)
  *
- * 管理 ~/.gamma/conversation-ref-cache/ 中的规范化快照与结构化模型摘要缓存。
+ * 管理 ~/.carpus/conversation-ref-cache/ 中的规范化快照与结构化模型摘要缓存。
  * 遵循本地优先原则，所有文件写入均使用 safe-file 的原子写保证一致性。
  */
 
@@ -52,7 +52,7 @@ export interface CachedConversationSummary {
 }
 
 /**
- * 获取会话引用缓存主目录：~/.gamma/conversation-ref-cache
+ * 获取会话引用缓存主目录：~/.carpus/conversation-ref-cache
  */
 export function getConversationRefCacheDir(): string {
   const base = join(getConfigDir(), 'conversation-ref-cache')

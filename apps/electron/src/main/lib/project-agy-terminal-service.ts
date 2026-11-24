@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ProjectAgyTerminalInput, ProjectAgyTerminalState, TerminalCreateInput, TerminalSnapshot, TerminalState } from '@gamma/shared'
+import type { ProjectAgyTerminalInput, ProjectAgyTerminalState, TerminalCreateInput, TerminalSnapshot, TerminalState } from '@carpus/shared'
 
 interface ProjectAgyTerminalDependencies {
   resolveCwd(workspaceId: string): string

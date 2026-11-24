@@ -18,7 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
-import type { GlobalMemoryEntry } from '@gamma/shared'
+import type { GlobalMemoryEntry } from '@carpus/shared'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
@@ -234,7 +234,7 @@ export function GlobalMemorySettings(): React.ReactElement {
           <Input
             value={newFilePath}
             onChange={(e) => setNewFilePath(e.target.value)}
-            placeholder="例如: profile.md 或 areas/gamma.md 或 topics/habits.md"
+            placeholder="例如: profile.md 或 areas/carpus.md 或 topics/habits.md"
             className="h-8 flex-1 text-xs"
             autoFocus
           />

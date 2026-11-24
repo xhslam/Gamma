@@ -1,4 +1,4 @@
-// 移植自 Auris 1.0.17 @ 5d972ccd57dd3707d0d71f62a4cf0209e97c7829；适配 Gamma 的 Tiptap、主题与公式存储。
+// 移植自 Auris 1.0.17 @ 5d972ccd57dd3707d0d71f62a4cf0209e97c7829；适配 Carpus 的 Tiptap、主题与公式存储。
 /** Adapted from xiaolai/vmark@662d73d46 src/plugins/shared/renderQueue.ts.
  * ISC License, Copyright (c) 2026 Xiaolai Li. Full notice: docs/vmark-port/UPSTREAM-LICENSE.txt.
  * Auris adds cancellation of scheduled frames and an optional work-count bound. */

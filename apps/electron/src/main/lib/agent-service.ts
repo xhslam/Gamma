@@ -17,7 +17,7 @@ import { mkdir as mkdirAsync, writeFile as writeFileAsync } from 'node:fs/promis
 import { BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import { AGENT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@gamma/shared'
+import { AGENT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@carpus/shared'
 import type {
   AgentSendInput,
   AgentGenerateTitleInput,
@@ -32,12 +32,12 @@ import type {
   AgentSubmitOrEnqueueResult,
   AgentQueuedMessageControlInput,
   AgentMoveQueuedMessageInput,
-  GammaPermissionMode,
+  CarpusPermissionMode,
   AgentExternalRunSource,
   AgentActiveSessionSnapshot,
   AgentQueuedMessageSnapshot,
   AgentMessage,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 import { PiUtilityAdapter } from './adapters/pi-utility-adapter'
 import { AgentEventBus } from './agent-event-bus'
@@ -59,8 +59,8 @@ import { markAgentSendOutboxRunFailed } from './agent-send-outbox-service'
 // ===== 实例创建 =====
 
 const eventBus = new AgentEventBus()
-const useUtilityAgentRuntime = process.env.GAMMA_AGENT_RUNTIME !== 'in-process'
-  && process.env.GAMMA_AGENT_RUNTIME !== 'off'
+const useUtilityAgentRuntime = process.env.CARPUS_AGENT_RUNTIME !== 'in-process'
+  && process.env.CARPUS_AGENT_RUNTIME !== 'off'
 const adapter = useUtilityAgentRuntime ? new PiUtilityAdapter() : new PiAgentAdapter()
 const orchestrator = new AgentOrchestrator(adapter, eventBus)
 
@@ -211,7 +211,7 @@ function publishRunStopped(
 ): void {
   if (!stoppedByUser) return
   eventBus.emit(sessionId, {
-    kind: 'gamma_event',
+    kind: 'carpus_event',
     event: {
       type: 'run_stopped',
       ...(startedAt != null ? { startedAt } : {}),
@@ -325,7 +325,7 @@ export async function runAgent(
           updateAgentSessionMeta(input.sessionId, { automationGraduated: true })
           // 向渲染进程发送毕业事件，触发 toast 提示
           eventBus.emit(input.sessionId, {
-            kind: 'gamma_event',
+            kind: 'carpus_event',
             event: { type: 'automation_graduated' },
           })
         }
@@ -358,7 +358,7 @@ export async function runAgent(
         pendingAgentSessionSnapshots.delete(input.sessionId)
         publishRunStopped(input.sessionId, opts?.stoppedByUser, opts?.startedAt, opts?.runGeneration)
         eventBus.emit(input.sessionId, {
-          kind: 'gamma_event',
+          kind: 'carpus_event',
           event: {
             type: 'run_completed',
             source: 'desktop',
@@ -392,13 +392,13 @@ export async function runAgent(
         preparingAgentSessions.delete(input.sessionId)
         pendingAgentSessionSnapshots.delete(input.sessionId)
         eventBus.emit(input.sessionId, {
-          kind: 'gamma_event',
+          kind: 'carpus_event',
           event: { type: 'run_started', startedAt, runGeneration },
         })
       },
       onTitleUpdated: (title) => {
         eventBus.emit(input.sessionId, {
-          kind: 'gamma_event',
+          kind: 'carpus_event',
           event: { type: 'title_updated', title },
         })
         const target = getRunTarget()
@@ -516,7 +516,7 @@ export async function runAgentHeadless(
         callbacks.onComplete(messages)
         publishRunStopped(runInput.sessionId, opts?.stoppedByUser, opts?.startedAt, opts?.runGeneration)
         eventBus.emit(runInput.sessionId, {
-          kind: 'gamma_event',
+          kind: 'carpus_event',
           event: {
             type: 'run_completed',
             source: callbacks.source ?? 'bridge',
@@ -551,7 +551,7 @@ export async function runAgentHeadless(
       onTitleUpdated: (title) => {
         callbacks.onTitleUpdated(title)
         eventBus.emit(runInput.sessionId, {
-          kind: 'gamma_event',
+          kind: 'carpus_event',
           event: { type: 'title_updated', title },
         })
         const target = route
@@ -569,7 +569,7 @@ export async function runAgentHeadless(
         pendingAgentSessionSnapshots.delete(runInput.sessionId)
         const session = getAgentSessionMeta(runInput.sessionId)
         eventBus.emit(runInput.sessionId, {
-          kind: 'gamma_event',
+          kind: 'carpus_event',
           event: {
             type: 'external_run_started',
             source: callbacks.source ?? 'bridge',
@@ -592,7 +592,7 @@ export async function runAgentHeadless(
     callbacks.onError(errorMessage)
     callbacks.onComplete()
     eventBus.emit(runInput.sessionId, {
-      kind: 'gamma_event',
+      kind: 'carpus_event',
       event: { type: 'run_completed', source: callbacks.source ?? 'bridge', stoppedByUser: false, startedAt },
     })
     const target = route
@@ -662,7 +662,7 @@ setAgentStopper(stopAgent)
 export async function rewindAgentSession(
   sessionId: string,
   assistantMessageUuid: string,
-): Promise<import('@gamma/shared').RewindSessionResult> {
+): Promise<import('@carpus/shared').RewindSessionResult> {
   return orchestrator.rewindSession(sessionId, assistantMessageUuid)
 }
 
@@ -705,9 +705,9 @@ export function stopAllAgents(): void {
 /**
  * 运行中动态切换会话的权限模式
  *
- * 同时更新 Gamma 侧（canUseTool 动态读取）和 SDK 侧（query.setPermissionMode）。
+ * 同时更新 Carpus 侧（canUseTool 动态读取）和 SDK 侧（query.setPermissionMode）。
  */
-export async function updateAgentPermissionMode(sessionId: string, mode: GammaPermissionMode): Promise<void> {
+export async function updateAgentPermissionMode(sessionId: string, mode: CarpusPermissionMode): Promise<void> {
   await orchestrator.updateSessionPermissionMode(sessionId, mode)
 }
 
@@ -851,7 +851,7 @@ const LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE = 'local_project_root_unavailable'
 
 function createLocalProjectRootUnavailableError(projectRootPath: string, status?: string): Error {
   const error = new Error(
-    `本地项目根目录不可用: 本地项目根目录不存在或无法访问：${projectRootPath}。请在 Gamma 中重新选择项目文件夹。`,
+    `本地项目根目录不可用: 本地项目根目录不存在或无法访问：${projectRootPath}。请在 Carpus 中重新选择项目文件夹。`,
   ) as Error & { code?: string; details?: string[] }
   error.code = LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE
   error.details = status ? [`目录状态: ${status}`] : undefined
@@ -881,7 +881,7 @@ function resolveSafeWorkspaceFilePath(workspaceRoot: string, filename: string): 
 /**
  * 保存文件到项目文件根目录
  *
- * 空白项目写入 Gamma 托管的 workspace-files/；本地目录项目直接写入用户选择的原始目录。
+ * 空白项目写入 Carpus 托管的 workspace-files/；本地目录项目直接写入用户选择的原始目录。
  */
 function isFileAlreadyExistsError(error: unknown): boolean {
   return !!error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'

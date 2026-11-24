@@ -1,4 +1,4 @@
-import type { ComputerPhase, ComputerState } from '@gamma/shared'
+import type { ComputerPhase, ComputerState } from '@carpus/shared'
 
 /** renderer 只保留状态与 App 名，不接收窗口标题、截图、AX 或授权凭据。 */
 export interface ComputerUseStatus {

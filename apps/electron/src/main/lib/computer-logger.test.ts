@@ -14,7 +14,7 @@ function makeLogger(options: { failFile?: boolean; failConsole?: boolean } = {})
       appendFileSync: (_path: string, line: string) => { lines.push(line) },
     },
   }, {
-    process: { env: { GAMMA_COMPUTER_LOG_PATH: '/logs/utility.log' } },
+    process: { env: { CARPUS_COMPUTER_LOG_PATH: '/logs/utility.log' } },
     console: { log: () => { if (options.failConsole) throw new Error('console') } },
   })
   return { logger, lines }

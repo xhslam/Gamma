@@ -12,14 +12,14 @@
   --workbench-divider: hsl(var(--foreground) / 0.14);
 }
 
-.gamma-workbench {
+.carpus-workbench {
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
   column-gap: 0;
   background-color: hsl(var(--background));
 }
-.gamma-workbench-frame {
+.carpus-workbench-frame {
   display: flex;
   flex: 1;
   min-width: 0;
@@ -28,7 +28,7 @@
 }
 
 /* 双标记只作用真正的面板，且优先于旧 padding/rounded utility。 */
-.gamma-panel[data-panel] {
+.carpus-panel[data-panel] {
   box-sizing: border-box;
   background-color: hsl(var(--panel));
   border: var(--panel-border-width) solid var(--color-border);
@@ -38,42 +38,42 @@
 }
 
 /* 工作区铺满外壳；编辑器、列表和工具栏自行管理内容间距。 */
-.gamma-panel[data-panel].gamma-workspace-surface {
+.carpus-panel[data-panel].carpus-workspace-surface {
   padding: 0;
   background-color: hsl(var(--content-area));
 }
 /* 快捷侧栏与主对话区仅作轻微明度区分，随主题前景自动适配深浅色。 */
-.gamma-panel[data-panel="quick-sidebar"] {
+.carpus-panel[data-panel="quick-sidebar"] {
   background-color: color-mix(in srgb, hsl(var(--content-area)), hsl(var(--foreground)) 4%);
 }
-:root.theme-terminal-dark .gamma-panel[data-panel] {
+:root.theme-terminal-dark .carpus-panel[data-panel] {
   border-radius: var(--panel-radius) !important;
 }
 
-.gamma-workspace-layout {
+.carpus-workspace-layout {
   column-gap: 0;
 }
-.gamma-workbench .gamma-workbench-frame .gamma-panel[data-panel] {
+.carpus-workbench .carpus-workbench-frame .carpus-panel[data-panel] {
   border-width: 0;
   border-radius: 0 !important;
 }
-.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel[data-panel] {
+.carpus-workbench-frame [data-sidebar-region="navigation"] .carpus-panel[data-panel] {
   border-right-width: var(--panel-border-width);
 }
-.gamma-workbench-frame [data-workspace-side="right"]:not([data-workspace-maximized="true"]) .gamma-panel[data-panel="workspace"],
-.gamma-workbench-frame [data-workspace-side="right"]:not([data-workspace-maximized="true"]) [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
+.carpus-workbench-frame [data-workspace-side="right"]:not([data-workspace-maximized="true"]) .carpus-panel[data-panel="workspace"],
+.carpus-workbench-frame [data-workspace-side="right"]:not([data-workspace-maximized="true"]) [data-sidebar-region="workspace"] .carpus-panel[data-panel] {
   border-left-width: var(--panel-border-width);
 }
-.gamma-workbench-frame [data-workspace-side="left"]:not([data-workspace-maximized="true"]) [data-sidebar-region="workspace"] .gamma-panel[data-panel] {
+.carpus-workbench-frame [data-workspace-side="left"]:not([data-workspace-maximized="true"]) [data-sidebar-region="workspace"] .carpus-panel[data-panel] {
   border-right-width: var(--panel-border-width);
 }
 
-[data-workspace-maximized="true"] .gamma-workspace-mac-topbar {
+[data-workspace-maximized="true"] .carpus-workspace-mac-topbar {
   padding-left: 5rem;
 }
 
 /* 三个区域的顶栏共享高度。 */
-.gamma-topbar {
+.carpus-topbar {
   height: var(--workbench-topbar-height);
   flex-shrink: 0;
   position: relative;
@@ -82,12 +82,12 @@
   background-color: hsl(var(--scene-topbar, var(--content-area)));
 }
 
-.gamma-workbench-frame .gamma-panel[data-panel="sidebar"] {
+.carpus-workbench-frame .carpus-panel[data-panel="sidebar"] {
   background-color: hsl(var(--sidebar-surface));
 }
 
 /* 场景底纹透过导航侧栏，文字和控件保持原本的不透明度。 */
-:root[data-scene-theme] .gamma-workbench-frame [data-sidebar-region="navigation"] {
+:root[data-scene-theme] .carpus-workbench-frame [data-sidebar-region="navigation"] {
   background-color: hsl(var(--scene-background));
   background-image:
     radial-gradient(circle, hsl(var(--foreground) / 0.19) 0.6px, transparent 1px),
@@ -96,15 +96,15 @@
   background-size: 6px 6px, 100% 100%, 100% 100%;
 }
 
-:root[data-scene-theme] .gamma-workbench-frame .gamma-panel[data-panel="sidebar"] {
+:root[data-scene-theme] .carpus-workbench-frame .carpus-panel[data-panel="sidebar"] {
   background-color: hsl(var(--sidebar-surface) / 0.68);
 }
 
-:root[data-scene-theme] .gamma-workbench-frame .gamma-sidebar-topbar {
+:root[data-scene-theme] .carpus-workbench-frame .carpus-sidebar-topbar {
   background-color: hsl(var(--scene-topbar) / 0.62);
 }
 
-.gamma-topbar::after {
+.carpus-topbar::after {
   content: '';
   position: absolute;
   inset-inline: 0;
@@ -114,13 +114,13 @@
   pointer-events: none;
 }
 
-.gamma-workbench-frame .gamma-panel:has(.gamma-topbar) {
+.carpus-workbench-frame .carpus-panel:has(.carpus-topbar) {
   position: relative;
   padding-top: 0;
 }
 
 /* 横线由各面板独立绘制到边缘，避开内容内边距及内部 overflow 裁切。 */
-.gamma-workbench-frame .gamma-panel:has(.gamma-topbar)::after {
+.carpus-workbench-frame .carpus-panel:has(.carpus-topbar)::after {
   content: '';
   position: absolute;
   inset-inline: 0;
@@ -131,102 +131,102 @@
   z-index: 70;
 }
 
-.gamma-workbench-frame .gamma-panel .gamma-topbar::after {
+.carpus-workbench-frame .carpus-panel .carpus-topbar::after {
   content: none;
 }
 
-.gamma-sidebar-topbar,
-.gamma-sidebar-footer {
+.carpus-sidebar-topbar,
+.carpus-sidebar-footer {
   margin-inline: calc(-1 * var(--panel-padding));
 }
 
-.gamma-sidebar-topbar {
+.carpus-sidebar-topbar {
   margin-bottom: 8px;
 }
 
-.gamma-sidebar-footer {
+.carpus-sidebar-footer {
   height: var(--workbench-footer-height);
   margin-bottom: calc(-1 * var(--panel-padding));
   border-top: 1px solid var(--workbench-divider);
 }
 
 /* 持续保留过渡规则，异步输出与切换标签引起的渲染不会中断淡入淡出。 */
-.gamma-sidebar-transition {
+.carpus-sidebar-transition {
   visibility: visible;
   transition: width var(--sidebar-transition-duration) ease-in-out,
     visibility 0s linear;
 }
-.gamma-sidebar-transition[data-collapsed="true"] {
+.carpus-sidebar-transition[data-collapsed="true"] {
   visibility: hidden;
   transition-delay: 0s, var(--sidebar-transition-duration);
 }
-.gamma-sidebar-transition > [data-sidebar-transition-content] {
+.carpus-sidebar-transition > [data-sidebar-transition-content] {
   opacity: 1;
   transition: opacity var(--sidebar-transition-duration) ease-in-out;
 }
-.gamma-sidebar-transition[data-collapsed="true"] > [data-sidebar-transition-content] {
+.carpus-sidebar-transition[data-collapsed="true"] > [data-sidebar-transition-content] {
   opacity: 0;
   pointer-events: none;
 }
-.gamma-sidebar-transition[data-resizing="true"] {
+.carpus-sidebar-transition[data-resizing="true"] {
   transition-property: visibility;
 }
 @starting-style {
   /* 首次打开工作区时外壳刚挂载，也从透明状态进入。 */
-  .gamma-sidebar-transition[data-collapsed="false"] {
+  .carpus-sidebar-transition[data-collapsed="false"] {
     width: 0 !important;
   }
-  .gamma-sidebar-transition[data-collapsed="false"] > [data-sidebar-transition-content] {
+  .carpus-sidebar-transition[data-collapsed="false"] > [data-sidebar-transition-content] {
     opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   /* 减少大幅位移，仍保留短暂的渐隐渐现以传达展开/收起。 */
-  .gamma-sidebar-transition {
+  .carpus-sidebar-transition {
     --sidebar-transition-duration: 120ms;
     transition-duration: 0s, 0s;
   }
-  .gamma-sidebar-transition[data-collapsed="true"] {
+  .carpus-sidebar-transition[data-collapsed="true"] {
     /* 先淡出再释放空间，避免零宽裁切吞掉收起动画。 */
     transition-delay: var(--sidebar-transition-duration), var(--sidebar-transition-duration);
   }
 }
 
-.gamma-settings-shell {
+.carpus-settings-shell {
   background: hsl(var(--background));
 }
 
-.gamma-settings-nav {
+.carpus-settings-nav {
   width: 208px;
   border-inline-end: 1px solid hsl(var(--border) / 0.65);
   background: color-mix(in srgb, hsl(var(--background)), hsl(var(--foreground)) 5%);
 }
 
-.gamma-settings-titlebar {
+.carpus-settings-titlebar {
   height: 40px;
   flex-shrink: 0;
 }
 
-.gamma-settings-shell .gamma-settings-page .settings-card {
+.carpus-settings-shell .carpus-settings-page .settings-card {
   background: transparent;
   border: 0 !important;
   border-radius: 0;
   box-shadow: none;
 }
-.gamma-settings-page .settings-card > [data-orientation="horizontal"] {
+.carpus-settings-page .settings-card > [data-orientation="horizontal"] {
   display: none;
 }
-.gamma-settings-page .settings-card > :where(div) {
+.carpus-settings-page .settings-card > :where(div) {
   padding-inline: 0;
 }
 
 @media (max-width: 650px) {
-  .gamma-settings-nav { width: 174px; }
-  .gamma-settings-page { padding-inline: 18px; }
+  .carpus-settings-nav { width: 174px; }
+  .carpus-settings-page { padding-inline: 18px; }
 }
 
 /* 单行条目实际为34px，多行说明自然增高；不作用 Markdown、消息或任务卡片。 */
-:root .gamma-list-row {
+:root .carpus-list-row {
   min-height: var(--list-row-height);
   height: auto;
   flex-shrink: 0;

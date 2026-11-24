@@ -156,7 +156,7 @@ final class EngineJob {
             posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT))
             posix_spawnattr_setpgroup(&attributes, 0)
             let argv = ([executable] + arguments).map { (value: String) in value.withCString { strdup($0) } } + [nil]
-            // 不继承代理、Gamma 或 launchd 的动态链接器和工具环境。
+            // 不继承代理、Carpus 或 launchd 的动态链接器和工具环境。
             let environment = ["PATH=/usr/bin:/bin:/usr/sbin:/sbin", "HOME=\(NSHomeDirectory())", "LANG=en_US.UTF-8", "TMPDIR=\(try systemTemporaryDirectory())/", "AGENT_DESKTOP_HOME=\(root)/state", "AGENT_DESKTOP_SESSION=\(session)", "AGENT_DESKTOP_NO_UPDATE_NOTIFIER=1"].map { (value: String) in value.withCString { strdup($0) } } + [nil]
             defer { for value in argv + environment { free(value) } }
             var mutableArgv = argv

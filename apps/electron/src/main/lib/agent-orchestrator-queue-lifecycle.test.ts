@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import type { GammaPermissionMode, SDKMessage, SDKUserMessageInput } from '@gamma/shared'
+import type { CarpusPermissionMode, SDKMessage, SDKUserMessageInput } from '@carpus/shared'
 import { isStaleActiveQueueError } from './agent-queue-routing'
 
 interface QueueSubject {
   activeSessions: Map<string, number>
   activeSessionStartedAt: Map<string, number>
-  sessionPermissionModes: Map<string, GammaPermissionMode>
+  sessionPermissionModes: Map<string, CarpusPermissionMode>
   queuedMessageUuids: Map<string, Set<string>>
   adapter: { sendQueuedMessage: (sessionId: string, message: SDKUserMessageInput) => Promise<void> }
   flushPendingUserSkillActivations: (sessionId: string, uuid: string) => void
@@ -66,7 +66,7 @@ function fixture(sendQueuedMessage: QueueSubject['adapter']['sendQueuedMessage']
   const subject = Object.assign(new Subject(), {
     activeSessions: new Map([['session', 7]]),
     activeSessionStartedAt: new Map([['session', 100]]),
-    sessionPermissionModes: new Map<string, GammaPermissionMode>([['session', 'bypassPermissions']]),
+    sessionPermissionModes: new Map<string, CarpusPermissionMode>([['session', 'bypassPermissions']]),
     queuedMessageUuids: new Map([['session', new Set(['earlier-message'])]]),
     adapter: { sendQueuedMessage },
     flushPendingUserSkillActivations: () => {},

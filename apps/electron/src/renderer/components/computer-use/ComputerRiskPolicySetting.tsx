@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { ComputerRiskPolicy } from '@gamma/shared'
+import type { ComputerRiskPolicy } from '@carpus/shared'
 import { Button } from '@/components/ui/button'
 import { SettingsRow } from '@/components/settings/primitives/SettingsRow'
 import { cn } from '@/lib/utils'

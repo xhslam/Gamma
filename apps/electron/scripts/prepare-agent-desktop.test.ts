@@ -7,7 +7,7 @@ import { AGENT_DESKTOP_SOURCE, agentDesktopTarget } from './prepare-agent-deskto
 import { computeSha256, isInstalledAndValid, prepareAgentDesktop, validateSource } from './prepare-agent-desktop'
 
 function temporary(run: (directory: string) => void): void {
-  const directory = mkdtempSync(join(tmpdir(), 'gamma-desktop-source-'))
+  const directory = mkdtempSync(join(tmpdir(), 'carpus-desktop-source-'))
   try { run(directory) } finally { rmSync(directory, { recursive: true, force: true }) }
 }
 

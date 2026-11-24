@@ -17,7 +17,7 @@ import {
 } from '@/atoms/agent-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useOpenSession } from './useOpenSession'
-import type { AgentWorkspace, CreateAgentWorkspaceInput } from '@gamma/shared'
+import type { AgentWorkspace, CreateAgentWorkspaceInput } from '@carpus/shared'
 
 interface UseProjectActionsResult {
   workspaces: AgentWorkspace[]

@@ -1,4 +1,4 @@
-import type { Channel, ChannelPlanQuotaResult, ProviderType } from '@gamma/shared'
+import type { Channel, ChannelPlanQuotaResult, ProviderType } from '@carpus/shared'
 
 const PLAN_QUOTA_PROVIDERS = new Set<ProviderType>([
   'deepseek',

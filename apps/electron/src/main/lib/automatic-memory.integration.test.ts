@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AutomaticMemoryChange } from '@gamma/shared'
+import type { AutomaticMemoryChange } from '@carpus/shared'
 import { AutomaticMemoryStore } from './automatic-memory-store'
 import { AutomaticMemoryProcessor, type AutomaticMemoryJob } from './automatic-memory-processor'
 
 describe('Claude式分类记忆的产品闭环（使用确定性模型替身）', () => {
   let root: string
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gamma-memory-integration-'))
+    root = mkdtempSync(join(tmpdir(), 'carpus-memory-integration-'))
     mkdirSync(join(root, 'study'))
     mkdirSync(join(root, 'other'))
   })

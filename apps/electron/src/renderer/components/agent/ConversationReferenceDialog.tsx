@@ -31,7 +31,7 @@ import {
   type AgentContextRef,
   type AgentContextRefDetail,
   type AgentSessionMeta,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { toast } from 'sonner'
 import { FadeTitle } from '@/components/ui/fade-title'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'

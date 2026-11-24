@@ -77,5 +77,5 @@ export const FadeTitle = React.forwardRef<HTMLElement, FadeTitleProps>(function 
   React.useLayoutEffect(() => {
     if (ref.current) schedule(ref.current)
   })
-  return React.createElement(tag, { ...props, ref: setRef, className: cn('gamma-fade-title', className) }, children)
+  return React.createElement(tag, { ...props, ref: setRef, className: cn('carpus-fade-title', className) }, children)
 })

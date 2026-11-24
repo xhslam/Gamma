@@ -5,7 +5,7 @@
  * 新用户冷启动同样保持 S0。
  */
 
-export const RIGHT_PANEL_MIGRATION_KEY = 'gamma-right-panel-migrated-v1'
+export const RIGHT_PANEL_MIGRATION_KEY = 'carpus-right-panel-migrated-v1'
 
 export interface StorageLike {
   getItem: (key: string) => string | null

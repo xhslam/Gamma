@@ -2,9 +2,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import DOMPurify from 'dompurify'
 import { RangeSetBuilder, StateEffect, StateField, type Extension, type EditorState } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view'
-import { highlightCode, highlightToTokens } from '@gamma/core'
-import type { HighlightTokensResult } from '@gamma/core'
-import { CodeBlock, MermaidBlock } from '@gamma/ui'
+import { highlightCode, highlightToTokens } from '@carpus/core'
+import type { HighlightTokensResult } from '@carpus/core'
+import { CodeBlock, MermaidBlock } from '@carpus/ui'
 import { shouldRenderMermaidCodeBlock } from '@/lib/mermaid-detection'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { renderMarkdownMath } from '@/lib/markdown-math'
@@ -452,7 +452,7 @@ class InlineImageWidget extends WidgetType {
     image.addEventListener('error', () => view.requestMeasure())
     element.appendChild(image)
 
-    if (/^(?:https?:|data:|blob:|gamma-file:)/i.test(this.src)) {
+    if (/^(?:https?:|data:|blob:|carpus-file:)/i.test(this.src)) {
       image.src = this.src
     } else if (this.resolveImageSrc) {
       void this.resolveImageSrc(this.src).then((resolved) => {

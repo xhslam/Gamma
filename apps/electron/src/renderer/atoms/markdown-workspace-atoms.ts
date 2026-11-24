@@ -11,7 +11,7 @@ export const markdownWorkspaceStateAtomFamily = atomFamily((scope: string) => {
 
 /** 侧边栏开启状态，持久化到 localStorage */
 export const markdownSidebarOpenAtom = atomWithStorage<boolean>(
-  'gamma:markdown:sidebar-open',
+  'carpus:markdown:sidebar-open',
   false,
   undefined,
   { getOnInit: true }
@@ -19,7 +19,7 @@ export const markdownSidebarOpenAtom = atomWithStorage<boolean>(
 
 /** 侧边栏视图模式（文件树 vs 目录大纲），持久化到 localStorage */
 export const markdownSidebarViewModeAtom = atomWithStorage<'files' | 'outline'>(
-  'gamma:markdown:sidebar-view-mode',
+  'carpus:markdown:sidebar-view-mode',
   'files',
   undefined,
   { getOnInit: true }
@@ -27,7 +27,7 @@ export const markdownSidebarViewModeAtom = atomWithStorage<'files' | 'outline'>(
 
 /** 文件树展开的目录路径集合，持久化到 localStorage */
 export const markdownExpandedFoldersAtom = atomWithStorage<string[]>(
-  'gamma:markdown:expanded-folders',
+  'carpus:markdown:expanded-folders',
   [],
   undefined,
   { getOnInit: true }
@@ -51,7 +51,7 @@ export interface MarkdownWorkspaceRecentState {
 
 /** 记录各工作区/全局下，最近打开的 vault 及其打开的笔记，持久化到 localStorage */
 export const markdownRecentVaultNoteAtom = atomWithStorage<Record<string, MarkdownWorkspaceRecentState>>(
-  'gamma:markdown:recent-vault-note',
+  'carpus:markdown:recent-vault-note',
   {},
   undefined,
   { getOnInit: true }

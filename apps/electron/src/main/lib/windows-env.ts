@@ -14,7 +14,7 @@
 import { execFileAsync } from './async-command'
 import { existsSync } from 'fs'
 import { app } from 'electron'
-import type { ShellEnvResult } from '@gamma/shared'
+import type { ShellEnvResult } from '@carpus/shared'
 
 const PATH_SEP = ';'
 

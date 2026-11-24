@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import type { SDKAssistantMessage, SDKContentBlock, SDKMessage } from '@gamma/shared'
-import type { AssistantTurn } from '@gamma/session-core'
+import type { SDKAssistantMessage, SDKContentBlock, SDKMessage } from '@carpus/shared'
+import type { AssistantTurn } from '@carpus/session-core'
 import { buildTaskProgressDataForProcess } from './SDKMessageRenderer'
 import { aggregateTaskItems } from './task-progress'
 
 function assistant(uuid: string, blocks: SDKContentBlock[], runGeneration = 1, startedAt = 100): SDKAssistantMessage {
   return {
     type: 'assistant', uuid, parent_tool_use_id: null, message: { content: blocks },
-    _gammaLiveRunGeneration: runGeneration, _gammaLiveRunStartedAt: startedAt,
+    _carpusLiveRunGeneration: runGeneration, _carpusLiveRunStartedAt: startedAt,
   } as SDKAssistantMessage
 }
 function result(id: string, task: Record<string, unknown>): SDKMessage {

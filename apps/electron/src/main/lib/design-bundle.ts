@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import type { DesignArtifactKind } from '@gamma/shared'
-import { DESIGN_BUNDLE_REVISION, DESIGN_SOURCE_REVISION, DESIGN_SOURCE_URL, WHITEBOARD_SOURCE_REVISION } from '@gamma/shared'
+import type { DesignArtifactKind } from '@carpus/shared'
+import { DESIGN_BUNDLE_REVISION, DESIGN_SOURCE_REVISION, DESIGN_SOURCE_URL, WHITEBOARD_SOURCE_REVISION } from '@carpus/shared'
 import { getConfigDir } from './config-paths'
 
 const execFileAsync = promisify(execFile)
@@ -13,7 +13,7 @@ const SKILLS: Record<DesignBundleKind, string> = {
   dashboard: 'claude-dashboard', motion: 'claude-motion', whiteboard: 'claude-whiteboard',
 }
 const ALL_SKILLS = [...Object.values(SKILLS), 'dataviz', 'motion-director']
-const MARKER = '.gamma-design-revision'
+const MARKER = '.carpus-design-revision'
 const MAX_BYTES = 256 * 1024 * 1024
 
 export interface DesignBundleStatus {
@@ -33,7 +33,7 @@ export interface DesignExecutionOptions {
   signal?: AbortSignal
 }
 export interface DesignBundleDependencies {
-  /** 测试和独立宿主可指定缓存根，不触碰真实 Gamma 配置或用户 Skills。 */
+  /** 测试和独立宿主可指定缓存根，不触碰真实 Carpus 配置或用户 Skills。 */
   installRoot?: string
   /** 应用随包资源；只读使用，不复制到用户缓存，也不在运行时下载。 */
   bundledRoot?: string | (() => string)
@@ -267,7 +267,7 @@ export function createDesignBundleService(deps: DesignBundleDependencies = {}) {
   async function getDesignBundleSkillPath(kind: DesignBundleKind): Promise<string> {
     if (!Object.hasOwn(SKILLS, kind)) throw new Error('不支持的 design 类型')
     const status = await getDesignBundleStatus()
-    if (!status.installed || !status.bundlePath) throw new Error('内置 design 资源缺失或不完整，请检查 Gamma 构建产物')
+    if (!status.installed || !status.bundlePath) throw new Error('内置 design 资源缺失或不完整，请检查 Carpus 构建产物')
     return join(status.bundlePath, 'skills', SKILLS[kind])
   }
   async function runDesignArtifactCommand(kind: DesignBundleKind, args: string[], options: DesignCommandOptions = {}): Promise<DesignCommandResult> {

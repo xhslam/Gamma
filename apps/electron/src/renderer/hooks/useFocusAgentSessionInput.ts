@@ -49,7 +49,7 @@ export function useFocusAgentSessionInput(): FocusAgentSessionInput {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (store.get(activeTabIdAtom) !== agentTab.id) return
-        window.dispatchEvent(new CustomEvent('gamma:focus-input'))
+        window.dispatchEvent(new CustomEvent('carpus:focus-input'))
       })
     })
 

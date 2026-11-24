@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { migrateLegacyCoachSkillDirectory } from './legacy-skill-renames'
 
 let fixtureRoot: string
-beforeEach(() => { fixtureRoot = mkdtempSync(join(tmpdir(), 'gamma-coach-migration-')) })
+beforeEach(() => { fixtureRoot = mkdtempSync(join(tmpdir(), 'carpus-coach-migration-')) })
 afterEach(() => { rmSync(fixtureRoot, { recursive: true, force: true }) })
 
 function createCoach(parent: string, slug = 'proma-coach'): string {
@@ -27,16 +27,16 @@ describe('默认 Coach 改名迁移', () => {
 
       expect(result.status).toBe('migrated')
       expect(existsSync(legacyPath)).toBe(false)
-      expect(readFileSync(join(parent, 'gamma-coach', 'SKILL.md'), 'utf-8')).toContain('name: gamma-coach')
-      expect(readFileSync(join(parent, 'gamma-coach', 'custom.txt'), 'utf-8')).toBe('用户补充内容')
+      expect(readFileSync(join(parent, 'carpus-coach', 'SKILL.md'), 'utf-8')).toContain('name: carpus-coach')
+      expect(readFileSync(join(parent, 'carpus-coach', 'custom.txt'), 'utf-8')).toBe('用户补充内容')
       expect(result.backupPath).toBeDefined()
       expect(readFileSync(join(result.backupPath!, 'SKILL.md'), 'utf-8')).toBe(original)
       expect(readFileSync(join(result.backupPath!, 'custom.txt'), 'utf-8')).toBe('用户补充内容')
-      expect(readdirSync(parent)).toEqual(['gamma-coach'])
+      expect(readdirSync(parent)).toEqual(['carpus-coach'])
 
       // 默认内容后续升级不会删除扫描目录之外的定制副本。
-      rmSync(join(parent, 'gamma-coach'), { recursive: true })
-      createCoach(parent, 'gamma-coach')
+      rmSync(join(parent, 'carpus-coach'), { recursive: true })
+      createCoach(parent, 'carpus-coach')
       expect(readFileSync(join(result.backupPath!, 'SKILL.md'), 'utf-8')).toBe(original)
     })
   }
@@ -52,10 +52,10 @@ describe('默认 Coach 改名迁移', () => {
   test('Given 同一目录新旧 Coach 并存 When 迁移 Then 两份内容原样保留且不覆盖', () => {
     const parent = join(fixtureRoot, 'skills')
     const legacy = createCoach(parent)
-    const current = createCoach(parent, 'gamma-coach')
+    const current = createCoach(parent, 'carpus-coach')
     expect(migrateLegacyCoachSkillDirectory(parent).status).toBe('conflict')
     expect(readFileSync(join(legacy, 'SKILL.md'), 'utf-8')).toContain('name: proma-coach')
-    expect(readFileSync(join(current, 'SKILL.md'), 'utf-8')).toContain('name: gamma-coach')
+    expect(readFileSync(join(current, 'SKILL.md'), 'utf-8')).toContain('name: carpus-coach')
     expect(existsSync(join(fixtureRoot, '.legacy-skill-backups'))).toBe(false)
   })
 
@@ -63,10 +63,10 @@ describe('默认 Coach 改名迁移', () => {
     const active = join(fixtureRoot, 'skills')
     const inactive = join(fixtureRoot, 'skills-inactive')
     const legacy = createCoach(active)
-    createCoach(inactive, 'gamma-coach')
+    createCoach(inactive, 'carpus-coach')
     expect(migrateLegacyCoachSkillDirectory(active, { conflictingParentDirs: [inactive] }).status).toBe('conflict')
     expect(existsSync(legacy)).toBe(true)
-    expect(existsSync(join(active, 'gamma-coach'))).toBe(false)
+    expect(existsSync(join(active, 'carpus-coach'))).toBe(false)
   })
 
   test('Given 旧 Coach 是外部目录链接 When 迁移 Then 跳过并不修改链接目标', () => {
@@ -76,7 +76,7 @@ describe('默认 Coach 改名迁移', () => {
     symlinkSync(external, join(parent, 'proma-coach'), 'dir')
     expect(migrateLegacyCoachSkillDirectory(parent).status).toBe('invalid')
     expect(readFileSync(join(external, 'SKILL.md'), 'utf-8')).toContain('name: proma-coach')
-    expect(existsSync(join(parent, 'gamma-coach'))).toBe(false)
+    expect(existsSync(join(parent, 'carpus-coach'))).toBe(false)
   })
 
   test('Given SKILL.md 是链接或目录内容缺失 When 迁移 Then 保留旧目录避免创建无效新 Skill', () => {
@@ -99,7 +99,7 @@ describe('默认 Coach 改名迁移', () => {
     symlinkSync(unrelated, join(fixtureRoot, '.legacy-skill-backups'), 'dir')
     expect(migrateLegacyCoachSkillDirectory(parent).status).toBe('failed')
     expect(existsSync(legacy)).toBe(true)
-    expect(existsSync(join(parent, 'gamma-coach'))).toBe(false)
+    expect(existsSync(join(parent, 'carpus-coach'))).toBe(false)
     expect(readdirSync(unrelated)).toEqual([])
   })
 })
@@ -138,7 +138,7 @@ describe('历史内置 Skills 改名', () => {
     symlinkSync(external, join(legacy, 'references', 'external.md'))
     const result = migrateLegacyBuiltinSkillDirectories(parent).find((item) => item.legacySlug === 'proma-build-ai-app')!
     expect(result.status).toBe('migrated')
-    expect(readFileSync(join(parent, 'gamma-build-ai-app', 'references', 'guide.md'), 'utf8')).toContain('gamma-cloud-sdk')
+    expect(readFileSync(join(parent, 'carpus-build-ai-app', 'references', 'guide.md'), 'utf8')).toContain('carpus-cloud-sdk')
     expect(readFileSync(external, 'utf8')).toContain('proma-cloud-sdk')
     expect(readFileSync(join(result.backupPath!, 'references', 'guide.md'), 'utf8')).toContain('proma-cloud-sdk')
   })
@@ -158,8 +158,8 @@ test('Given 依赖 Skill 的 Markdown 链接无效 When 其余 Skill 改名 Then
   const results = migrateLegacyBuiltinSkillDirectories(parent)
   expect(results.find((item) => item.legacySlug === 'proma-build-ai-app')?.status).toBe('migrated')
   expect(results.find((item) => item.legacySlug === 'proma-cloud-sdk')?.status).toBe('invalid')
-  expect(readFileSync(join(parent, 'gamma-build-ai-app', 'guide.md'), 'utf8')).toContain('`proma-cloud-sdk`')
-  expect(existsSync(join(parent, 'gamma-cloud-sdk'))).toBe(false)
+  expect(readFileSync(join(parent, 'carpus-build-ai-app', 'guide.md'), 'utf8')).toContain('`proma-cloud-sdk`')
+  expect(existsSync(join(parent, 'carpus-cloud-sdk'))).toBe(false)
   expect(readFileSync(external, 'utf8')).toBe('name: proma-cloud-sdk')
 })
 

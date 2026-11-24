@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
-import type { AgyTaskUpdate } from '@gamma/shared'
+import type { AgyTaskUpdate } from '@carpus/shared'
 import { AgyTaskService } from './agy-task-service'
 import { AgyTaskStore } from './agy-task-store'
 
@@ -15,7 +15,7 @@ afterEach(() => {
 })
 const output = (value: object) => `console.log(${JSON.stringify(JSON.stringify(value))});`
 function setup(source: string, options: { executable?: string; missingAtSpawn?: boolean } = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-agy-service-')); roots.push(root)
+  const root = mkdtempSync(join(tmpdir(), 'carpus-agy-service-')); roots.push(root)
   const updates: AgyTaskUpdate[] = []
   let spawnCount = 0
   let args: string[] = []
@@ -74,7 +74,7 @@ describe('Given 受管 agy 外部任务', () => {
     expect(existsSync(fixture.schemaPath!)).toBe(false)
   })
   test('When 显式路径无效或文件在 spawn 前消失 Then 失败原因可操作且不会重试', async () => {
-    const missing = setup(success, { executable: join(tmpdir(), 'gamma-not-installed', 'agy.exe') })
+    const missing = setup(success, { executable: join(tmpdir(), 'carpus-not-installed', 'agy.exe') })
     const notStarted = missing.service.start('owner', { prompt: '测试' }, 'missing')
     expect(notStarted.status).toBe('failed')
     expect(notStarted.error).toContain('AGY_BIN')

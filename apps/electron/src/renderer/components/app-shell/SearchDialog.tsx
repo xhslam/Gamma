@@ -38,8 +38,8 @@ import {
 } from '@/components/session-preview/SessionMiniMapPopover'
 import type {
   AgentMessageSearchResult,
-} from '@gamma/shared'
-import { findBestSearchMatch } from '@gamma/shared'
+} from '@carpus/shared'
+import { findBestSearchMatch } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 /** 标题搜索结果项 */
@@ -327,8 +327,8 @@ export function SearchDialog(): React.ReactElement {
     )
     const channelId = deepseekChannel?.id ?? currentAgentChannelId ?? undefined
 
-    const configDir = import.meta.env.DEV ? '.gamma-dev' : '.gamma'
-    const prompt = `请帮我在 Gamma 的全部会话历史中搜索与以下描述相关的内容：
+    const configDir = import.meta.env.DEV ? '.carpus-dev' : '.carpus'
+    const prompt = `请帮我在 Carpus 的全部会话历史中搜索与以下描述相关的内容：
 
 "${q}"
 
@@ -481,7 +481,7 @@ export function SearchDialog(): React.ReactElement {
           <button
             onClick={() => void handleAgentSearch()}
             disabled={trimmedQuery.length < 2}
-            title="适合在精准搜索找不到的情况下使用，Agent 会帮助你搜索整个 Gamma 会话空间"
+            title="适合在精准搜索找不到的情况下使用，Agent 会帮助你搜索整个 Carpus 会话空间"
             className={cn(
               'flex shrink-0 items-center gap-1 px-2 py-1 rounded text-[12px] font-medium transition-colors',
               trimmedQuery.length >= 2

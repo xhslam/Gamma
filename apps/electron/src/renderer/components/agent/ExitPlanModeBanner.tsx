@@ -23,7 +23,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useOpenPreview } from '@/components/diff/preview-opener'
 import { allPendingExitPlanRequestsAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
-import type { ExitPlanModeAction, ExitPlanAllowedPrompt } from '@gamma/shared'
+import type { ExitPlanModeAction, ExitPlanAllowedPrompt } from '@carpus/shared'
 
 /** 选项定义 */
 interface PlanOption {

@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { copyFile, lstat, mkdir, mkdtemp, open, readdir, realpath, rename, rm } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
-import type { DesignArtifact, DesignHandoffResult } from '@gamma/shared'
+import type { DesignArtifact, DesignHandoffResult } from '@carpus/shared'
 import { writeTextFileAtomic } from './safe-file'
 
 const JUNK = new Set(['.git', '.DS_Store', 'Thumbs.db'])
@@ -97,7 +97,7 @@ export function createDesignDeliveryService(deps: DesignDeliveryDependencies) {
 /** 保存对话框已经负责覆盖确认；先复制到同目录临时文件再替换，失败不损坏旧成稿。 */
 export async function saveDesignArchive(source: string, destination: string): Promise<void> {
   const parent = dirname(destination)
-  const temporary = await mkdtemp(join(parent, '.gamma-design-'))
+  const temporary = await mkdtemp(join(parent, '.carpus-design-'))
   const output = join(temporary, basename(destination))
   try {
     await copyFile(source, output, constants.COPYFILE_EXCL)

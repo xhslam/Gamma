@@ -3,7 +3,7 @@ import type { ModelsStore, ModelsStoreEntry } from '@earendil-works/pi-ai'
 import { getConfigDir } from '../config-paths'
 import { readJsonFileSafe, writeJsonFileAtomic } from '../safe-file'
 
-/** Codex 公共模型目录归 Gamma 管理，不读取或写入全局 ~/.pi 配置。 */
+/** Codex 公共模型目录归 Carpus 管理，不读取或写入全局 ~/.pi 配置。 */
 export class CodexModelStore implements ModelsStore {
   constructor(private readonly configuredPath?: string) {}
 

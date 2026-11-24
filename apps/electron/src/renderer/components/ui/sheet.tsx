@@ -71,7 +71,7 @@ const SheetContent = React.forwardRef<
       <SheetPrimitive.Content
         data-panel="floating"
         ref={ref}
-        className={cn("gamma-panel", sheetVariants({ side }), className)}
+        className={cn("carpus-panel", sheetVariants({ side }), className)}
         {...props}
       >
         {!shouldHideClose && (

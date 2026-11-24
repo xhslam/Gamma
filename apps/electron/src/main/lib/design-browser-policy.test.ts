@@ -96,7 +96,7 @@ test('Given BrowserController 现有 session guard When 注册 design 并请求�
     } }],
   })
   interface GuardController { installSessionGuards(session: Session): void }
-  const temporary = await mkdtemp(join(tmpdir(), 'gamma-design-browser-policy-'))
+  const temporary = await mkdtemp(join(tmpdir(), 'carpus-design-browser-policy-'))
   const modulePath = join(temporary, 'browser-guard.mjs')
   let integration: { BrowserController: new () => GuardController; registerDesignEditorOrigin(url: string): () => void }
   try {

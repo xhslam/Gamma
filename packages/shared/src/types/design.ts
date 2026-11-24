@@ -1,4 +1,4 @@
-/** design 编辑器与 Skill 随应用内置，使用 Gamma 当前会话模型。 */
+/** design 编辑器与 Skill 随应用内置，使用 Carpus 当前会话模型。 */
 export const DESIGN_IPC_CHANNELS = {
   GET_STATUS: 'design:get-status',
   INSTALL: 'design:install',

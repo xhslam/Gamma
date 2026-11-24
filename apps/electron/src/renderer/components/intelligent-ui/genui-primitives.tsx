@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { CodeBlock as GammaCodeBlock } from '@gamma/ui'
+import { CodeBlock as CarpusCodeBlock } from '@carpus/ui'
 import { copyTextToClipboard } from '@/lib/clipboard'
 
-/** 官方组件使用的少量宿主 primitives，统一接到 Gamma 的复制与代码展示。 */
+/** 官方组件使用的少量宿主 primitives，统一接到 Carpus 的复制与代码展示。 */
 export function CodeBlock({ code, lang }: { code: string; lang?: string; copyLabel?: string; copiedLabel?: string }) {
-  return <GammaCodeBlock onCopy={copyTextToClipboard}><code className={`language-${lang ?? 'text'}`}>{code}</code></GammaCodeBlock>
+  return <CarpusCodeBlock onCopy={copyTextToClipboard}><code className={`language-${lang ?? 'text'}`}>{code}</code></CarpusCodeBlock>
 }
 
 export function DiffBlock({ diffs }: { diffs: Array<{ path: string; oldText?: string; newText?: string }>; labels?: unknown }) {

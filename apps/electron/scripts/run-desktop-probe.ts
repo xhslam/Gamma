@@ -87,7 +87,7 @@ export function main(args = process.argv.slice(2)): number {
   try { mkdirSync(lock) }
   catch { throw new Error('探针构建/运行锁已占用，或目录不可写；未执行。异常残留锁须核实无运行进程后人工清理') }
   try {
-    console.error('[desktop-probe] 正在编译；不重签 Gamma、不请求权限')
+    console.error('[desktop-probe] 正在编译；不重签 Carpus、不请求权限')
     try {
       execFileSync('xcrun', ['swiftc', '-O', '-parse-as-library', source, '-o', temporary], { stdio: ['ignore', 'inherit', 'inherit'], timeout: 60_000 })
       chmodSync(temporary, 0o755)

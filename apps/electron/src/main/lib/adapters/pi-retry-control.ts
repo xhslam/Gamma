@@ -1,4 +1,4 @@
-import type { RetryAttempt } from '@gamma/shared'
+import type { RetryAttempt } from '@carpus/shared'
 
 /** 从第一次 Pi native retry 起展示恢复状态，避免把网络故障伪装成执行中。 */
 export const PI_RETRY_VISIBILITY_THRESHOLD = 0
@@ -91,7 +91,7 @@ function shouldExposePiRetry(event: PiNativeRetryDetails): boolean {
 }
 
 /**
- * 将 Pi native retry 生命周期转换为 Gamma UI 已识别的 retry 事件。
+ * 将 Pi native retry 生命周期转换为 Carpus UI 已识别的 retry 事件。
  * 首次退避、恢复成功与最终失败均可见，迟到事件仍由 runStartedAt 隔离。
  */
 export function mapPiNativeRetryEvent(

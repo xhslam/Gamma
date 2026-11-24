@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { WorkspaceMemoryFileChange } from '@gamma/shared'
+import type { WorkspaceMemoryFileChange } from '@carpus/shared'
 
 /** Renderer-lifetime presentation state for the global, current-workspace Memory change dock. */
 export const workspaceMemoryChangesAtom = atom<Map<string, WorkspaceMemoryFileChange[]>>(new Map())

@@ -29,7 +29,7 @@ import {
 import { inputToolbarControlHeightClass } from '@/components/ai-elements/input-toolbar-styles'
 import { getModelLogo, getChannelLogo, DefaultLogo } from '@/lib/model-logo'
 import { cn } from '@/lib/utils'
-import type { Channel, ModelOption, ProviderType } from '@gamma/shared'
+import type { Channel, ModelOption, ProviderType } from '@carpus/shared'
 import { ChannelPlanQuotaBadge } from './ChannelPlanQuotaBadge'
 import { getModelSelectorOptionVisualState } from './model-selector-visual-state'
 import { FadeTitle } from '@/components/ui/fade-title'

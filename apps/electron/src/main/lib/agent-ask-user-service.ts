@@ -15,7 +15,7 @@ import type {
   AskUserRequest,
   AskUserQuestion,
   AskUserQuestionOption,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 /** canUseTool 返回的权限结果 */
 type PermissionResult = {

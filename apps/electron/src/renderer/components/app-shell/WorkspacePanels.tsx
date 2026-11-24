@@ -55,5 +55,5 @@ export function WorkspacePanels({ agent, workspace, workspaceSide, workspaceOpen
   }
   // 列布局中的 flex 子项必须允许纵向收缩；面板再通过 flex 传递剩余高度，
   // 否则 h-full 子树会按长内容计算高度，挤出输入框并使内部滚动失效。
-  return <div className="gamma-workspace-layout flex min-h-0 min-w-0 flex-1 items-stretch" data-workspace-open={workspace !== null && workspaceOpen} data-testid="agent-workspace-layout">{panes}</div>
+  return <div className="carpus-workspace-layout flex min-h-0 min-w-0 flex-1 items-stretch" data-workspace-open={workspace !== null && workspaceOpen} data-testid="agent-workspace-layout">{panes}</div>
 }

@@ -1,7 +1,7 @@
 import { buildDesignAgentContextPrompt } from './design-agent-policy'
 export { buildDesignAgentContextPrompt } from './design-agent-policy'
 import { dirname } from 'node:path'
-import type { DesignArtifact } from '@gamma/shared'
+import type { DesignArtifact } from '@carpus/shared'
 import { getDesignBundleSkillPath } from './design-bundle'
 import { getAgentSessionMeta } from './agent-session-manager'
 

@@ -45,7 +45,7 @@ beforeAll(async () => {
       async toggle(){document.querySelector('[data-process-group-toggle]').click();await this.wait(360);return this.read();}
     };
   `, {
-    mainProcessSetup: `require('electron').ipcMain.handle('trace-capture', async (event, theme) => { const image = await BrowserWindow.fromWebContents(event.sender).webContents.capturePage(); require('node:fs').writeFileSync(require('node:path').join(require('node:os').tmpdir(), 'gamma-trace-' + theme + '.png'), image.toPNG()); });`,
+    mainProcessSetup: `require('electron').ipcMain.handle('trace-capture', async (event, theme) => { const image = await BrowserWindow.fromWebContents(event.sender).webContents.capturePage(); require('node:fs').writeFileSync(require('node:path').join(require('node:os').tmpdir(), 'carpus-trace-' + theme + '.png'), image.toPNG()); });`,
     preloadSource: `require('electron').contextBridge.exposeInMainWorld('traceCapture', theme => require('electron').ipcRenderer.invoke('trace-capture', theme));`,
   })
 }, 60_000)
@@ -398,7 +398,7 @@ describe('Given 计划清单加单行实时状态', () => {
 describe('Given 视频风格的自动执行轨迹', () => {
   test('When 命令和搜索连续执行 Then 当前结果自动展开，下一项出现时旧结果自动收起', async () => {
     const result = await renderer.run<{ open: string[]; clicked: string | null; updated: string | null; newest: string | null; reopened: string | null; finished: string | null }>(`
-      const blocks=[{type:'tool_use',id:'trace-1',name:'Bash',input:{command:'pwd'}},{type:'tool_use',id:'trace-2',name:'WebSearch',input:{query:'Gamma'}},{type:'tool_use',id:'trace-3',name:'Bash',input:{command:'ls'}}];
+      const blocks=[{type:'tool_use',id:'trace-1',name:'Bash',input:{command:'pwd'}},{type:'tool_use',id:'trace-2',name:'WebSearch',input:{query:'Carpus'}},{type:'tool_use',id:'trace-3',name:'Bash',input:{command:'ls'}}];
       await window.timeline.render({blocks,expand:false});
       const open=[...document.querySelectorAll('[data-process-action-row]')].map(e=>e.getAttribute('aria-expanded'));
       document.querySelectorAll('[data-process-action-row]')[2].click();await window.timeline.wait(360);
@@ -423,10 +423,10 @@ describe('Given 视频风格的自动执行轨迹', () => {
 
 test('Given 亮暗主题 When 搜索和命令结果展开 Then 卡片跟随主题且隐藏详情不能获得焦点', async () => {
   const views = await renderer.run<Array<{ background: string; inert: boolean }>>(`
-    const blocks=[{type:'tool_use',id:'a',name:'WebSearch',input:{query:'Gamma 执行轨迹'}},{type:'tool_use',id:'b',name:'Bash',input:{command:'bun run typecheck'}}],views=[];
+    const blocks=[{type:'tool_use',id:'a',name:'WebSearch',input:{query:'Carpus 执行轨迹'}},{type:'tool_use',id:'b',name:'Bash',input:{command:'bun run typecheck'}}],views=[];
     for (const theme of ['light','dark']) {
       document.documentElement.classList.toggle('dark',theme==='dark');
-      await window.timeline.render({blocks,results:[{id:'a',text:'找到 Gamma 项目相关结果'},{id:'b',text:'All packages passed typecheck'}],expand:false});
+      await window.timeline.render({blocks,results:[{id:'a',text:'找到 Carpus 项目相关结果'},{id:'b',text:'All packages passed typecheck'}],expand:false});
       document.querySelectorAll('[data-process-action-row]').forEach(button=>{if(button.getAttribute('aria-expanded')!=='true')button.click()});await window.timeline.wait(360);
       await window.traceCapture(theme);
       const cards=[...document.querySelectorAll('.process-timeline-details')];

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentContextRef, AgentSendInput } from '@gamma/shared'
+import type { AgentContextRef, AgentSendInput } from '@carpus/shared'
 import { setConfigHomeForTest } from '../config-paths'
 import { appendSDKMessages, createAgentSession, updateAgentContextRefs } from '../agent-session-manager'
 import {
@@ -20,7 +20,7 @@ let sourceSessionId: string
 let authorizedRef: AgentContextRef
 
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), 'gamma-ref-zero-impact-'))
+  root = mkdtempSync(join(tmpdir(), 'carpus-ref-zero-impact-'))
   previous = setConfigHomeForTest(root)
   sourceSessionId = (await createAgentSession('源会话')).id
   targetSessionId = (await createAgentSession('目标会话')).id

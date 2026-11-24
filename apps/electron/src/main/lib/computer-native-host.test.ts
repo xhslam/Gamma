@@ -25,10 +25,10 @@ describe('Given 私有原生 helper 通道（使用无桌面能力的 Bun fixtur
     const native = new ComputerNativeHost(() => ({ executable: process.execPath, args: ['-e', `
       require('node:readline').createInterface({input:process.stdin}).on('line', line => {
         const q = JSON.parse(line); if (q.method === 'stop') process.exit(0);
-        process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{path:process.env.GAMMA_COMPUTER_LOG_PATH,version:process.env.GAMMA_APP_VERSION}})+'\\n');
+        process.stdout.write(JSON.stringify({id:q.id,ok:true,result:{path:process.env.CARPUS_COMPUTER_LOG_PATH,version:process.env.CARPUS_APP_VERSION}})+'\\n');
       });
-    `] }), { loggerEnvironment: () => ({ logPath: '/tmp/gamma-test.log', version: '1.2.3' }) })
-    try { await expect(native.call('status')).resolves.toEqual({ path: '/tmp/gamma-test.log', version: '1.2.3' }) }
+    `] }), { loggerEnvironment: () => ({ logPath: '/tmp/carpus-test.log', version: '1.2.3' }) })
+    try { await expect(native.call('status')).resolves.toEqual({ path: '/tmp/carpus-test.log', version: '1.2.3' }) }
     finally { await native.terminate() }
   })
   test('When 读取日志配置失败 Then 仍可启动 helper', async () => {

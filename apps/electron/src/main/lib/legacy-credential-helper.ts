@@ -1,6 +1,6 @@
 /**
  * 旧 Electron 身份的隔离迁移进程。
- * 明文只经匿名管道进入 Gamma 进程，不写文件、不进入日志。
+ * 明文只经匿名管道进入 Carpus 进程，不写文件、不进入日志。
  */
 import { app, safeStorage, session } from 'electron'
 import type { Cookie, CookiesSetDetails, Session } from 'electron'
@@ -29,8 +29,8 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync } fr
 import { basename, join, resolve, sep } from 'node:path'
 import { copyLegacyProfile } from './legacy-brand-migration'
 
-export const LEGACY_HELPER_ARGUMENT = '--gamma-legacy-migration-helper'
-const PIPE_PREFIX = 'GAMMA_LEGACY_PIPE:'
+export const LEGACY_HELPER_ARGUMENT = '--carpus-legacy-migration-helper'
+const PIPE_PREFIX = 'CARPUS_LEGACY_PIPE:'
 const HELPER_TIMEOUT_MS = 30_000
 const MAX_PIPE_BYTES = 64 * 1024 * 1024
 
@@ -99,19 +99,19 @@ export function runLegacyCredentialHelper(): boolean {
     const options = JSON.parse(process.argv[argumentIndex + 1] ?? '') as LegacyHelperOptions
     if (!options || typeof options !== 'object' || !/^(?:@proma\/electron|Proma(?:-[a-zA-Z\d_-]+)?)$/.test(options.identity)) throw new Error('invalid identity')
     const temporaryRoot = resolve(app.getPath('temp')) + sep
-    if (typeof options.profileCopy !== 'string' || !resolve(options.profileCopy).startsWith(temporaryRoot) || !basename(options.profileCopy).startsWith('gamma-legacy-')) throw new Error('invalid temporary profile')
+    if (typeof options.profileCopy !== 'string' || !resolve(options.profileCopy).startsWith(temporaryRoot) || !basename(options.profileCopy).startsWith('carpus-legacy-')) throw new Error('invalid temporary profile')
     if (lstatSync(options.profileCopy).isSymbolicLink()) throw new Error('invalid temporary profile')
     app.setName(options.identity)
     app.disableHardwareAcceleration()
     if (options.sourceProfile) {
       const source = resolve(options.sourceProfile)
       const sourceIsLegacyProfile = source.startsWith(resolve(app.getPath('appData')) + sep) && /^(?:@proma\/electron(?:-dev(?:-[a-zA-Z\d_-]+)?)?|Proma)$/.test(source.slice(resolve(app.getPath('appData')).length + 1))
-      const sourceIsHelperCopy = source.startsWith(temporaryRoot) && basename(source).startsWith('gamma-legacy-')
+      const sourceIsHelperCopy = source.startsWith(temporaryRoot) && basename(source).startsWith('carpus-legacy-')
       if ((!sourceIsLegacyProfile && !sourceIsHelperCopy) || lstatSync(source).isSymbolicLink()) throw new Error('invalid source profile')
       if (options.guard) {
         // 锁住旧目录，但所有 Chromium/OSCrypt 初始化都发生在随后的副本中。
         app.setPath('userData', source)
-        if (!app.requestSingleInstanceLock({ gammaBrandMigration: true })) {
+        if (!app.requestSingleInstanceLock({ carpusBrandMigration: true })) {
           writeResponse({ type: 'failed', reason: 'busy' })
           app.exit(1)
           return true
@@ -157,7 +157,7 @@ export function runLegacyCredentialHelper(): boolean {
 }
 
 export async function startLegacyCredentialHelper(identity: string, sourceProfile?: string, guard = true): Promise<LegacyHelperClient> {
-  const profileCopy = mkdtempSync(join(app.getPath('temp'), 'gamma-legacy-'))
+  const profileCopy = mkdtempSync(join(app.getPath('temp'), 'carpus-legacy-'))
   const options: LegacyHelperOptions = { identity, profileCopy, ...(sourceProfile ? { sourceProfile } : {}), guard }
   const args = [...(app.isPackaged ? [] : [app.getAppPath()]), LEGACY_HELPER_ARGUMENT, JSON.stringify(options)]
   const child: ChildProcessWithoutNullStreams = spawn(process.execPath, args, { stdio: 'pipe', windowsHide: true })
@@ -190,7 +190,7 @@ export async function startLegacyCredentialHelper(identity: string, sourceProfil
       try {
         const response = JSON.parse(line.slice(PIPE_PREFIX.length)) as HelperResponse
         if (response.type === 'ready') readyResolve()
-        else if (response.type === 'failed' && response.id === undefined) rejectAll(response.reason === 'busy' ? 'Proma 仍在运行。请退出旧应用后重新启动 Gamma；旧数据没有被复制或改写。' : '旧凭据迁移进程初始化失败，原数据已保留。')
+        else if (response.type === 'failed' && response.id === undefined) rejectAll(response.reason === 'busy' ? 'Proma 仍在运行。请退出旧应用后重新启动 Carpus；旧数据没有被复制或改写。' : '旧凭据迁移进程初始化失败，原数据已保留。')
         else if (response.id !== undefined) {
           const item = pending.get(response.id)
           if (!item) continue
@@ -253,11 +253,11 @@ export function legacyCookieSetDetails(cookie: Cookie): CookiesSetDetails {
   }
 }
 
-/** Cookie 通过 Electron API 重写，让 Gamma 的 OSCrypt 使用新身份加密。 */
+/** Cookie 通过 Electron API 重写，让 Carpus 的 OSCrypt 使用新身份加密。 */
 export async function importLegacyCookieProfiles(profiles: readonly LegacyCookieProfile[]): Promise<void> {
   for (const profile of profiles) {
     if (profile.partition !== null && !/^proma-browser-[a-f\d]{32}$/.test(profile.partition)) throw new Error('旧浏览器 partition 非法，迁移已停止。')
-    const browserSession = profile.partition === null ? getSession().defaultSession : getSession().fromPartition(`persist:gamma-browser-${profile.partition.slice('proma-browser-'.length)}`)
+    const browserSession = profile.partition === null ? getSession().defaultSession : getSession().fromPartition(`persist:carpus-browser-${profile.partition.slice('proma-browser-'.length)}`)
     const expected: Cookie[] = []
     const matches = (value: Cookie, cookie: Cookie): boolean => value.name === cookie.name && value.value === cookie.value && value.domain === cookie.domain &&
       value.path === (cookie.path || '/') && Boolean(value.hostOnly) === Boolean(cookie.hostOnly) &&

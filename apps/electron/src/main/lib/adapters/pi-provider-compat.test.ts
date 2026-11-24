@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { ProviderType } from '@gamma/shared'
+import type { ProviderType } from '@carpus/shared'
 import { supportsPiDeveloperRole } from './pi-provider-compat'
 
 describe('Pi developer 角色兼容性', () => {

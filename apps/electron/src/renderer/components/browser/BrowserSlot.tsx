@@ -63,7 +63,7 @@ export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: st
     observer.observe(element)
     if (transition) observer.observe(transition)
     // 左侧导航收放会移动左侧工作区，但浏览器自身尺寸可能保持不变。
-    const workspaceLayout = element.closest<HTMLElement>('.gamma-workspace-layout')
+    const workspaceLayout = element.closest<HTMLElement>('.carpus-workspace-layout')
     if (workspaceLayout) observer.observe(workspaceLayout)
     const visibilityObserver = new MutationObserver(() => publishCurrentVisibility(true))
     if (transition) visibilityObserver.observe(transition, { attributes: true, attributeFilter: ['data-collapsed'] })

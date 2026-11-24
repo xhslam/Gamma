@@ -31,7 +31,7 @@ describe('Conversation Reference Summary Service (DI & Resilience)', () => {
   ]
 
   beforeAll(() => {
-    tempHome = mkdtempSync(join(tmpdir(), 'gamma-summary-test-'))
+    tempHome = mkdtempSync(join(tmpdir(), 'carpus-summary-test-'))
     prevHome = setConfigHomeForTest(tempHome)
   })
 

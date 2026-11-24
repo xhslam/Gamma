@@ -1,7 +1,7 @@
-import { DESIGN_WORKBENCH_IPC } from '@gamma/shared'
-import type { DesignWorkbenchAPI } from '@gamma/shared'
-import { DESIGN_IPC_CHANNELS } from '@gamma/shared'
-import type { DesignIntegrationStatus, InstallDesignInput } from '@gamma/shared'
+import { DESIGN_WORKBENCH_IPC } from '@carpus/shared'
+import type { DesignWorkbenchAPI } from '@carpus/shared'
+import { DESIGN_IPC_CHANNELS } from '@carpus/shared'
+import type { DesignIntegrationStatus, InstallDesignInput } from '@carpus/shared'
 import type { SettingsTab } from '../types/settings'
 /**
  * Preload 脚本
@@ -11,8 +11,8 @@ import type { SettingsTab } from '../types/settings'
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS, TERMINAL_WORKBENCH_IPC_CHANNELS } from '@gamma/shared'
-import type { DesktopTerminalBridge } from '@gamma/shared'
+import { AGY_IPC_CHANNELS, AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, TERMINAL_IPC_CHANNELS, TERMINAL_WORKBENCH_IPC_CHANNELS } from '@carpus/shared'
+import type { DesktopTerminalBridge } from '@carpus/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   AgentReferenceWarningNotice,
@@ -77,7 +77,7 @@ import type {
   GitHubReleaseListOptions,
   PermissionRequest,
   PermissionResponse,
-  GammaPermissionMode,
+  CarpusPermissionMode,
   AskUserRequest,
   AskUserResponse,
   ExitPlanModeResponse,
@@ -169,7 +169,7 @@ import type {
   UpdateContextRefsResponse,
   GetContextRefDetailRequest,
   GetContextRefDetailResponse,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import type {
   UserProfile,
   AppSettings,
@@ -202,7 +202,7 @@ import { QUICK_TASK_IPC_CHANNELS, TRAY_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNEL
  * 暴露给渲染进程的 API 接口定义
  */
 export interface ElectronAPI extends DesignWorkbenchAPI {
-  markdownWorkspace: (request: import('@gamma/shared').MarkdownWorkspaceRequest) => Promise<import('@gamma/shared').MarkdownWorkspaceResult>
+  markdownWorkspace: (request: import('@carpus/shared').MarkdownWorkspaceRequest) => Promise<import('@carpus/shared').MarkdownWorkspaceResult>
 
   // ===== 运行时相关 =====
 
@@ -226,7 +226,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
 
   // ===== 本地终端 =====
   terminalWorkbench: DesktopTerminalBridge
-  openProjectAgyTerminal: (input: import('@gamma/shared').ProjectAgyTerminalInput) => Promise<import('@gamma/shared').ProjectAgyTerminalState>
+  openProjectAgyTerminal: (input: import('@carpus/shared').ProjectAgyTerminalInput) => Promise<import('@carpus/shared').ProjectAgyTerminalState>
   createTerminal: (input: TerminalCreateInput) => Promise<TerminalState>
   writeTerminal: (input: TerminalInput) => Promise<void>
   resizeTerminal: (input: TerminalResizeInput) => Promise<void>
@@ -248,59 +248,59 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   getGitRepoStatus: (dirPath: string) => Promise<GitRepoStatus | null>
 
   /** 获取未暂存的变更文件列表 */
-  getUnstagedChanges: (dirPath: string, sessionPath?: string, workspaceFilesPath?: string, extraPaths?: string[], sessionId?: string) => Promise<import('@gamma/shared').UnstagedChangesResult>
+  getUnstagedChanges: (dirPath: string, sessionPath?: string, workspaceFilesPath?: string, extraPaths?: string[], sessionId?: string) => Promise<import('@carpus/shared').UnstagedChangesResult>
   /** 失效 Git Diff 扫描缓存；省略路径时失效全部仓库 */
   invalidateGitDiffCache: (changedPath?: string) => Promise<void>
   /** 获取单个文件的 diff */
-  getFileDiff: (input: import('@gamma/shared').GetFileDiffInput) => Promise<string>
+  getFileDiff: (input: import('@carpus/shared').GetFileDiffInput) => Promise<string>
   /** 获取未追踪文件内容 */
-  getUntrackedContent: (input: import('@gamma/shared').GetFileDiffInput) => Promise<string>
+  getUntrackedContent: (input: import('@carpus/shared').GetFileDiffInput) => Promise<string>
   /** 还原文件变更 */
-  revertFile: (input: import('@gamma/shared').RevertFileInput) => Promise<void>
+  revertFile: (input: import('@carpus/shared').RevertFileInput) => Promise<void>
   /** 获取文件新旧版本内容 */
-  getDiffContents: (input: import('@gamma/shared').GetFileDiffInput) => Promise<{ oldContent: string; newContent: string } | null>
+  getDiffContents: (input: import('@carpus/shared').GetFileDiffInput) => Promise<{ oldContent: string; newContent: string } | null>
   /** 列出 Git Worktree */
-  listWorktrees: (repoPath: string, sessionId: string) => Promise<import('@gamma/shared').WorktreeInfo[]>
+  listWorktrees: (repoPath: string, sessionId: string) => Promise<import('@carpus/shared').WorktreeInfo[]>
   /** 获取 Worktree 相对于基准分支的全量变更 */
-  getWorktreeChanges: (worktreePath: string, baseBranch: string, sessionId: string) => Promise<import('@gamma/shared').UnstagedChangesResult>
+  getWorktreeChanges: (worktreePath: string, baseBranch: string, sessionId: string) => Promise<import('@carpus/shared').UnstagedChangesResult>
   /** 在独立窗口打开当前文件预览 */
   openDetachedPreview: (input: DetachedPreviewWindowInput) => Promise<string | null>
   /** 获取独立预览窗口数据 */
   getDetachedPreviewData: (previewId: string) => Promise<DetachedPreviewWindowData | null>
 
   // ===== 原生桌面控制：仅当前会话可读取临时预览，不进入历史 =====
-  getComputerPreview: (input: import('@gamma/shared').ComputerPreviewRequest) => Promise<import('@gamma/shared').ComputerPreview | null>
-  stopComputerPreview: (sessionId: string, runId: string) => Promise<import('@gamma/shared').ComputerState>
-  getComputerState: (sessionId?: string) => Promise<import('@gamma/shared').ComputerState>
-  armComputer: (input: import('@gamma/shared').ComputerArmInput) => Promise<import('@gamma/shared').ComputerState>
-  stopComputer: () => Promise<import('@gamma/shared').ComputerState>
-  resumeComputer: () => Promise<import('@gamma/shared').ComputerState>
-  requestComputerPermission: (permission: import('@gamma/shared').ComputerPermission) => Promise<import('@gamma/shared').ComputerState>
-  onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => () => void
-  getComputerPreferences: () => Promise<import('@gamma/shared').ComputerUsePreferences>
-  updateComputerPreferences: (partial: Partial<import('@gamma/shared').ComputerUsePreferences>) => Promise<import('@gamma/shared').ComputerUsePreferences>
-  revokeComputerAppAuthorization: (app: string) => Promise<import('@gamma/shared').ComputerUsePreferences>
-  decideComputerAppAuth: (requestId: string, decision: import('@gamma/shared').ComputerAppAuthDecision) => Promise<boolean>
+  getComputerPreview: (input: import('@carpus/shared').ComputerPreviewRequest) => Promise<import('@carpus/shared').ComputerPreview | null>
+  stopComputerPreview: (sessionId: string, runId: string) => Promise<import('@carpus/shared').ComputerState>
+  getComputerState: (sessionId?: string) => Promise<import('@carpus/shared').ComputerState>
+  armComputer: (input: import('@carpus/shared').ComputerArmInput) => Promise<import('@carpus/shared').ComputerState>
+  stopComputer: () => Promise<import('@carpus/shared').ComputerState>
+  resumeComputer: () => Promise<import('@carpus/shared').ComputerState>
+  requestComputerPermission: (permission: import('@carpus/shared').ComputerPermission) => Promise<import('@carpus/shared').ComputerState>
+  onComputerStateChanged: (callback: (state: import('@carpus/shared').ComputerState) => void) => () => void
+  getComputerPreferences: () => Promise<import('@carpus/shared').ComputerUsePreferences>
+  updateComputerPreferences: (partial: Partial<import('@carpus/shared').ComputerUsePreferences>) => Promise<import('@carpus/shared').ComputerUsePreferences>
+  revokeComputerAppAuthorization: (app: string) => Promise<import('@carpus/shared').ComputerUsePreferences>
+  decideComputerAppAuth: (requestId: string, decision: import('@carpus/shared').ComputerAppAuthDecision) => Promise<boolean>
   decideComputerRiskConfirm: (requestId: string, confirmed: boolean) => Promise<boolean>
-  onComputerAppAuthRequested: (callback: (req: import('@gamma/shared').ComputerAppAuthRequest) => void) => () => void
-  onComputerRiskConfirmRequested: (callback: (req: import('@gamma/shared').ComputerRiskConfirmRequest) => void) => () => void
+  onComputerAppAuthRequested: (callback: (req: import('@carpus/shared').ComputerAppAuthRequest) => void) => () => void
+  onComputerRiskConfirmRequested: (callback: (req: import('@carpus/shared').ComputerRiskConfirmRequest) => void) => () => void
 
   // ===== Pi 受管浏览器（主进程 WebContentsView） =====
-  openAgentBrowser: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
-  listAgentBrowserTabs: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
-  createAgentBrowserTab: (input: import('@gamma/shared').BrowserCreateTabInput) => Promise<import('@gamma/shared').BrowserViewState>
-  selectAgentBrowserTab: (input: import('@gamma/shared').BrowserTabInput) => Promise<import('@gamma/shared').BrowserViewState>
-  closeAgentBrowserTab: (input: import('@gamma/shared').BrowserTabInput) => Promise<import('@gamma/shared').BrowserViewState | null>
-  getAgentBrowserState: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState | null>
-  setAgentBrowserLayout: (layout: import('@gamma/shared').BrowserViewLayout) => Promise<void>
+  openAgentBrowser: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState>
+  listAgentBrowserTabs: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState>
+  createAgentBrowserTab: (input: import('@carpus/shared').BrowserCreateTabInput) => Promise<import('@carpus/shared').BrowserViewState>
+  selectAgentBrowserTab: (input: import('@carpus/shared').BrowserTabInput) => Promise<import('@carpus/shared').BrowserViewState>
+  closeAgentBrowserTab: (input: import('@carpus/shared').BrowserTabInput) => Promise<import('@carpus/shared').BrowserViewState | null>
+  getAgentBrowserState: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState | null>
+  setAgentBrowserLayout: (layout: import('@carpus/shared').BrowserViewLayout) => Promise<void>
   minimizeAgentBrowser: (sessionId: string) => Promise<void>
-  navigateAgentBrowser: (input: import('@gamma/shared').BrowserNavigateInput) => Promise<import('@gamma/shared').BrowserViewState>
-  goBackAgentBrowser: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
-  goForwardAgentBrowser: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
-  reloadAgentBrowser: (sessionId: string) => Promise<import('@gamma/shared').BrowserViewState>
+  navigateAgentBrowser: (input: import('@carpus/shared').BrowserNavigateInput) => Promise<import('@carpus/shared').BrowserViewState>
+  goBackAgentBrowser: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState>
+  goForwardAgentBrowser: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState>
+  reloadAgentBrowser: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState>
   closeAgentBrowser: (sessionId: string) => Promise<void>
-  onAgentBrowserStateChanged: (callback: (state: import('@gamma/shared').BrowserStateChange) => void) => () => void
-  onAgentBrowserTabFocused: (callback: (change: import('@gamma/shared').BrowserTabFocusChange) => void) => () => void
+  onAgentBrowserStateChanged: (callback: (state: import('@carpus/shared').BrowserStateChange) => void) => () => void
+  onAgentBrowserTabFocused: (callback: (change: import('@carpus/shared').BrowserTabFocusChange) => void) => () => void
 
   // ===== 通用工具 =====
 
@@ -354,22 +354,22 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   getChannelPlanQuota: (channelId: string) => Promise<ChannelPlanQuotaResult>
 
   /** 发起 ChatGPT (Codex) OAuth 登录，返回序列化凭据（作为 apiKey 存储） */
-  codexOAuthLogin: (method?: import('@gamma/shared').CodexOAuthLoginMethod) => Promise<CodexOAuthLoginResult>
+  codexOAuthLogin: (method?: import('@carpus/shared').CodexOAuthLoginMethod) => Promise<CodexOAuthLoginResult>
 
   /** 取消进行中的 ChatGPT (Codex) OAuth 登录 */
   codexOAuthCancel: () => Promise<void>
 
   /** 订阅登录期间，接收 Codex device code 与授权链接。返回取消订阅函数。 */
-  onCodexOAuthDeviceCode: (callback: (deviceCode: import('@gamma/shared').CodexOAuthDeviceCode) => void) => () => void
+  onCodexOAuthDeviceCode: (callback: (deviceCode: import('@carpus/shared').CodexOAuthDeviceCode) => void) => () => void
 
   /** 发起 GitHub Copilot device-code OAuth 登录。enterpriseUrl 为空时登录 github.com。 */
-  githubCopilotOAuthLogin: (enterpriseUrl?: string) => Promise<import('@gamma/shared').GithubCopilotOAuthLoginResult>
+  githubCopilotOAuthLogin: (enterpriseUrl?: string) => Promise<import('@carpus/shared').GithubCopilotOAuthLoginResult>
 
   /** 取消进行中的 GitHub Copilot OAuth 登录 */
   githubCopilotOAuthCancel: () => Promise<void>
 
   /** 订阅登录期间，接收 GitHub Copilot device code 与授权链接。 */
-  onGithubCopilotOAuthDeviceCode: (callback: (deviceCode: import('@gamma/shared').GithubCopilotOAuthDeviceCode) => void) => () => void
+  onGithubCopilotOAuthDeviceCode: (callback: (deviceCode: import('@carpus/shared').GithubCopilotOAuthDeviceCode) => void) => () => void
 
   /** 发起 xAI（Grok/X 订阅）OAuth 登录 */
   xaiOAuthLogin: () => Promise<XaiOAuthLoginResult>
@@ -519,7 +519,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   updateSessionCodexFastMode: (sessionId: string, enabled: boolean) => Promise<AgentSessionMeta>
 
   /** 查询 Pi catalog 或专属 profile 支持的会话级推理档位 */
-  getPiReasoningCapability: (channelId: string, modelId: string) => Promise<import('@gamma/shared').ReasoningCapability | undefined>
+  getPiReasoningCapability: (channelId: string, modelId: string) => Promise<import('@carpus/shared').ReasoningCapability | undefined>
   getPiImageInputSupport: (channelId: string, modelId: string) => Promise<boolean>
 
   /** 更新当前会话的推理深度 */
@@ -636,7 +636,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   getWorkspaceMcpConfig: (workspaceSlug: string) => Promise<WorkspaceMcpConfig>
 
   /** 保存工作区 MCP 配置；显式关闭的条目会取消进行中的验证。 */
-  saveWorkspaceMcpConfig: (workspaceSlug: string, config: WorkspaceMcpConfig, options?: import('@gamma/shared').SaveWorkspaceMcpConfigOptions) => Promise<void>
+  saveWorkspaceMcpConfig: (workspaceSlug: string, config: WorkspaceMcpConfig, options?: import('@carpus/shared').SaveWorkspaceMcpConfigOptions) => Promise<void>
 
   /** 原子删除单个 MCP，保留其他条目的当前状态。 */
   deleteWorkspaceMcp: (workspaceSlug: string, name: string) => Promise<WorkspaceMcpConfig>
@@ -645,28 +645,28 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   refreshMcpConnections: (workspaceSlug: string) => Promise<WorkspaceMcpConfig>
 
   /** 原子切换 MCP 启用状态，并在启用时条件持久化验证结果。 */
-  setMcpEnabledAndValidate: (workspaceSlug: string, name: string, enabled: boolean) => Promise<import('@gamma/shared').McpConnectionMutationResult>
+  setMcpEnabledAndValidate: (workspaceSlug: string, name: string, enabled: boolean) => Promise<import('@carpus/shared').McpConnectionMutationResult>
 
   /** 原子新增 MCP，并在初始启用时条件持久化验证结果。 */
-  installMcpAndValidate: (workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry) => Promise<import('@gamma/shared').McpInstallMutationResult>
-  startMcpOAuth: (input: import('@gamma/shared').StartMcpOAuthInput) => Promise<import('@gamma/shared').McpOAuthStartResult>
+  installMcpAndValidate: (workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry) => Promise<import('@carpus/shared').McpInstallMutationResult>
+  startMcpOAuth: (input: import('@carpus/shared').StartMcpOAuthInput) => Promise<import('@carpus/shared').McpOAuthStartResult>
   /** 将 OAuth client secret 加密保存到系统 Keychain；不会回传给渲染器或 Agent。 */
-  saveMcpOAuthClientSecret: (input: import('@gamma/shared').SaveMcpOAuthClientSecretInput) => Promise<void>
+  saveMcpOAuthClientSecret: (input: import('@carpus/shared').SaveMcpOAuthClientSecretInput) => Promise<void>
 
   /** 将静态 MCP API Key / Token 加密保存到系统 Keychain。 */
-  saveMcpApiKey: (input: import('@gamma/shared').SaveMcpApiKeyInput) => Promise<void>
+  saveMcpApiKey: (input: import('@carpus/shared').SaveMcpApiKeyInput) => Promise<void>
 
   /** 删除工作区 MCP 对应的系统安全凭据；不返回任何认证值。 */
   deleteMcpCredential: (workspaceSlug: string, serverName: string) => Promise<void>
 
   /** 查询本机 CLI 集成状态；不返回任何认证值。 */
-  getCliIntegrationStatuses: (workspaceSlug: string) => Promise<import('@gamma/shared').CliIntegrationStatus[]>
+  getCliIntegrationStatuses: (workspaceSlug: string) => Promise<import('@carpus/shared').CliIntegrationStatus[]>
 
-  /** 仅切换 Gamma 对工作区 CLI 集成的使用权限；绝不登出或撤销第三方授权。 */
-  setCliIntegrationEnabled: (workspaceSlug: string, id: string, enabled: boolean) => Promise<import('@gamma/shared').CliIntegrationStatus[]>
+  /** 仅切换 Carpus 对工作区 CLI 集成的使用权限；绝不登出或撤销第三方授权。 */
+  setCliIntegrationEnabled: (workspaceSlug: string, id: string, enabled: boolean) => Promise<import('@carpus/shared').CliIntegrationStatus[]>
 
   /** 测试 MCP 服务器连接 */
-  testMcpServer: (workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry) => Promise<{ success: boolean; message: string }>
+  testMcpServer: (workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry) => Promise<{ success: boolean; message: string }>
 
   /** 获取工作区 Skill 列表（含活跃和不活跃） */
   getWorkspaceSkills: (workspaceSlug: string) => Promise<SkillMeta[]>
@@ -686,14 +686,14 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 获取其他工作区的 Skill 列表 */
   getOtherWorkspaceSkills: (currentSlug: string) => Promise<OtherWorkspaceSkillsGroup[]>
 
-  /** 获取默认 Skills 的 slug 列表（来自 ~/.gamma/default-skills/） */
+  /** 获取默认 Skills 的 slug 列表（来自 ~/.carpus/default-skills/） */
   getDefaultSkillSlugs: () => Promise<string[]>
 
   /** 从其他工作区导入 Skill */
   importSkillFromWorkspace: (targetSlug: string, sourceSlug: string, skillSlug: string) => Promise<SkillMeta>
 
   /** 从其他工作区批量导入多个 Skill */
-  batchImportSkillsFromWorkspaces: (targetSlug: string, selections: import('@gamma/shared').BulkImportWorkspaceSelection[]) => Promise<import('@gamma/shared').BulkImportSkillsResult>
+  batchImportSkillsFromWorkspaces: (targetSlug: string, selections: import('@carpus/shared').BulkImportWorkspaceSelection[]) => Promise<import('@carpus/shared').BulkImportSkillsResult>
 
   /** 从源工作区同步更新已导入的 Skill */
   updateSkillFromSource: (targetSlug: string, skillSlug: string) => Promise<SkillMeta>
@@ -705,10 +705,10 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   writeSkillContent: (workspaceSlug: string, skillSlug: string, content: string) => Promise<void>
 
   /** 列出 Skill 目录下的子文件树（不含 SKILL.md） */
-  listSkillFiles: (workspaceSlug: string, skillSlug: string) => Promise<import('@gamma/shared').SkillFileNode[]>
+  listSkillFiles: (workspaceSlug: string, skillSlug: string) => Promise<import('@carpus/shared').SkillFileNode[]>
 
   /** 读取 Skill 目录下的子文件内容 */
-  readSkillFile: (workspaceSlug: string, skillSlug: string, relativePath: string) => Promise<import('@gamma/shared').SkillFileContent>
+  readSkillFile: (workspaceSlug: string, skillSlug: string, relativePath: string) => Promise<import('@carpus/shared').SkillFileContent>
 
   /** 写入 Skill 目录下的子文件内容（文本） */
   writeSkillFile: (workspaceSlug: string, skillSlug: string, relativePath: string, content: string) => Promise<void>
@@ -738,16 +738,16 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   getWorkspaceMemorySummary: (workspaceSlug: string) => Promise<WorkspaceMemorySummary>
 
   /** 读取工作区 AGENTS.md */
-  readWorkspaceAgentsMd: (workspaceSlug: string) => Promise<import('@gamma/shared').SkillFileContent>
+  readWorkspaceAgentsMd: (workspaceSlug: string) => Promise<import('@carpus/shared').SkillFileContent>
 
   /** 写入工作区 AGENTS.md */
   writeWorkspaceAgentsMd: (workspaceSlug: string, content: string, expectedContent?: string) => Promise<void>
 
   /** 列出工作区长期记忆文件树 */
-  listWorkspaceAutoMemoryFiles: (workspaceSlug: string) => Promise<import('@gamma/shared').SkillFileNode[]>
+  listWorkspaceAutoMemoryFiles: (workspaceSlug: string) => Promise<import('@carpus/shared').SkillFileNode[]>
 
   /** 读取工作区长期记忆文件 */
-  readWorkspaceAutoMemoryFile: (workspaceSlug: string, relativePath: string) => Promise<import('@gamma/shared').SkillFileContent>
+  readWorkspaceAutoMemoryFile: (workspaceSlug: string, relativePath: string) => Promise<import('@carpus/shared').SkillFileContent>
 
   /** 写入工作区长期记忆文件 */
   writeWorkspaceAutoMemoryFile: (workspaceSlug: string, relativePath: string, content: string, expectedContent?: string) => Promise<void>
@@ -767,7 +767,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 仅在当前 Memory 页面存活时订阅当前 workspace 的 memory/ 文件变化。 */
   subscribeWorkspaceMemoryChanges: (
     workspaceSlug: string,
-    callback: (change: import('@gamma/shared').WorkspaceMemoryFileChange) => void,
+    callback: (change: import('@carpus/shared').WorkspaceMemoryFileChange) => void,
   ) => () => void
 
   /** 记录用户对 Agent 主动维护两份 AGENTS.md 的明确授权。 */
@@ -797,7 +797,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   respondPermission: (response: PermissionResponse) => Promise<void>
 
   /** 热切换指定会话的权限模式（运行中生效，仅影响该 session） */
-  updateSessionPermissionMode: (sessionId: string, mode: GammaPermissionMode) => Promise<void>
+  updateSessionPermissionMode: (sessionId: string, mode: CarpusPermissionMode) => Promise<void>
 
   // ===== AskUserQuestion 交互式问答 =====
 
@@ -859,11 +859,11 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 获取工作区附加文件列表 */
   getWorkspaceAttachedFiles: (workspaceSlug: string) => Promise<string[]>
   /** 获取工作区 worktree 仓库配置列表 */
-  getWorktreeRepos: (workspaceSlug: string) => Promise<import('@gamma/shared').WorkspaceWorktreeRepo[]>
+  getWorktreeRepos: (workspaceSlug: string) => Promise<import('@carpus/shared').WorkspaceWorktreeRepo[]>
   /** 添加 worktree 仓库到工作区配置 */
-  addWorktreeRepo: (workspaceSlug: string, repo: import('@gamma/shared').WorkspaceWorktreeRepo) => Promise<import('@gamma/shared').WorkspaceWorktreeRepo[]>
+  addWorktreeRepo: (workspaceSlug: string, repo: import('@carpus/shared').WorkspaceWorktreeRepo) => Promise<import('@carpus/shared').WorkspaceWorktreeRepo[]>
   /** 从工作区配置移除 worktree 仓库 */
-  removeWorktreeRepo: (workspaceSlug: string, repoPath: string) => Promise<import('@gamma/shared').WorkspaceWorktreeRepo[]>
+  removeWorktreeRepo: (workspaceSlug: string, repoPath: string) => Promise<import('@carpus/shared').WorkspaceWorktreeRepo[]>
 
   // ===== Agent 文件系统操作 =====
 
@@ -871,90 +871,90 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   getAgentSessionPath: (workspaceId: string, sessionId: string) => Promise<string | null>
 
   /** 列出目录内容 */
-  listDirectory: (dirPath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<FileEntry[]>
+  listDirectory: (dirPath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<FileEntry[]>
 
   /** 删除文件/目录 */
-  deleteFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  deleteFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 用系统默认应用打开文件 */
-  openFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  openFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 将剪贴板文本写入临时预览文件并返回绝对路径 */
   writeClipboardPreview: (filename: string, content: string) => Promise<string>
 
   /** 用系统默认应用打开任意文件（无工作区限制） */
-  systemOpenFile: (filePath: string, appName?: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  systemOpenFile: (filePath: string, appName?: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 扫描系统中可用的编辑器应用（仅 macOS） */
-  scanEditors: () => Promise<import('@gamma/shared').EditorApp[]>
+  scanEditors: () => Promise<import('@carpus/shared').EditorApp[]>
 
   /** 查询本机为该文件类型注册的默认打开应用（含图标 dataURL） */
-  getDefaultAppForFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<import('@gamma/shared').DefaultAppInfo | null>
+  getDefaultAppForFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<import('@carpus/shared').DefaultAppInfo | null>
 
   /** 在系统文件管理器中显示文件 */
-  showInFolder: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  showInFolder: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 使用系统终端打开文件夹 */
-  openFolderInTerminal: (folderPath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  openFolderInTerminal: (folderPath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 在系统文件管理器中显示文件（无工作区限制，支持候选基础目录） */
   showItemInFolder: (filePath: string, candidateBasePaths?: string[]) => Promise<boolean>
 
   /** 解析文件路径并读取内容（供内联预览使用） */
-  resolveAndReadFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<import('@gamma/shared').FilePreviewReadResult | null>
+  resolveAndReadFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<import('@carpus/shared').FilePreviewReadResult | null>
 
   /** 批量检查文件是否仍存在（用于清理已删除的会话文件变更记录） */
-  filterExistingFilePaths: (filePaths: string[], access?: import('@gamma/shared').FileAccessOptions) => Promise<string[]>
+  filterExistingFilePaths: (filePaths: string[], access?: import('@carpus/shared').FileAccessOptions) => Promise<string[]>
 
   /** 写入文本文件（供 Markdown 内联编辑使用） */
-  writeTextFile: (filePath: string, content: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<boolean>
+  writeTextFile: (filePath: string, content: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<boolean>
 
   /** 将图片编辑结果原子写回已授权的 PNG/JPEG/WebP 文件。 */
-  writeImageFile: (filePath: string, dataUrl: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
-  readImageForEdit: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<string>
+  writeImageFile: (filePath: string, dataUrl: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
+  readImageForEdit: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<string>
   saveEditedPngAs: (dataUrl: string, filename: string) => Promise<boolean>
 
-  // 仅解析文件路径（供 PDF/图片等用 gamma-file:// 加载）
-  resolveFilePath: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<(import('@gamma/shared').ResolvedFileUrl & { resolvedPath?: string }) | null>
+  // 仅解析文件路径（供 PDF/图片等用 carpus-file:// 加载）
+  resolveFilePath: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<(import('@carpus/shared').ResolvedFileUrl & { resolvedPath?: string }) | null>
 
   /** 解析当前 Markdown 同目录内的相对媒体文件（仅供 LiveMarkdown 图片使用） */
-  resolveMarkdownMedia: (markdownFilePath: string, src: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<import('@gamma/shared').ResolvedFileUrl | null>
+  resolveMarkdownMedia: (markdownFilePath: string, src: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<import('@carpus/shared').ResolvedFileUrl | null>
 
   /** 解析 HTML 预览路径，并授权加载同目录的相对资源 */
-  resolveHtmlPreviewPath: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<import('@gamma/shared').ResolvedFileUrl | null>
+  resolveHtmlPreviewPath: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<import('@carpus/shared').ResolvedFileUrl | null>
 
   /** 为内联 PDF 预览生成临时 HTML 文件，返回文件路径 */
-  preparePdfPreview: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<{ tmpHtmlUrl: string } | null>
+  preparePdfPreview: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<{ tmpHtmlUrl: string } | null>
 
   /** 读取文件为 base64（带路径校验，供内联图片预览等） */
-  readBinaryBase64: (filePath: string, access?: import('@gamma/shared').FileAccessOptions, maxSize?: number) => Promise<string | null>
+  readBinaryBase64: (filePath: string, access?: import('@carpus/shared').FileAccessOptions, maxSize?: number) => Promise<string | null>
 
   /** Office 文件转高保真 HTML（内联预览） */
-  officeToHtml: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<import('@gamma/shared').OfficePreviewResult | null>
+  officeToHtml: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<import('@carpus/shared').OfficePreviewResult | null>
 
   /** 截图导出：将 HTML 渲染为 PNG 并复制到剪贴板或保存文件 */
   screenshotCapture: (input: { html: string; isDark: boolean; width?: number; mode: 'clipboard' | 'file'; css?: string; themeClass?: string }) => Promise<{ success: boolean; message: string; filePath?: string }>
 
   /** 重命名文件/目录 */
-  renameFile: (filePath: string, newName: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  renameFile: (filePath: string, newName: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 移动文件/目录到目标目录 */
-  moveFile: (filePath: string, targetDir: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  moveFile: (filePath: string, targetDir: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 列出附加目录内容 */
-  listAttachedDirectory: (dirPath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<FileEntry[]>
+  listAttachedDirectory: (dirPath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<FileEntry[]>
 
   /** 读取附加目录文件内容为 base64（限制在已附加目录范围内） */
   readAttachedFile: (filePath: string, sessionId?: string, workspaceSlug?: string) => Promise<string>
 
   /** 在文件管理器中显示附加目录文件 */
-  showAttachedInFolder: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  showAttachedInFolder: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 重命名附加目录文件/目录（无工作区路径限制） */
-  renameAttachedFile: (filePath: string, newName: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  renameAttachedFile: (filePath: string, newName: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 移动附加目录文件/目录（无工作区路径限制） */
-  moveAttachedFile: (filePath: string, targetDir: string, access?: import('@gamma/shared').FileAccessOptions) => Promise<void>
+  moveAttachedFile: (filePath: string, targetDir: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<void>
 
   /** 检查路径类型（文件 or 目录），用于拖拽检测 */
   checkPathsType: (paths: string[]) => Promise<{ directories: string[]; files: string[] }>
@@ -1014,7 +1014,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 保存飞书配置（appSecret 为明文） */
   saveFeishuConfig: (input: FeishuConfigInput) => Promise<FeishuConfig>
   /** 测试飞书连接 */
-  testFeishuConnection: (appId: string, appSecret: string, domain?: import('@gamma/shared').FeishuDomain) => Promise<FeishuTestResult>
+  testFeishuConnection: (appId: string, appSecret: string, domain?: import('@carpus/shared').FeishuDomain) => Promise<FeishuTestResult>
   /** 启动飞书 Bridge */
   startFeishuBridge: () => Promise<void>
   /** 停止飞书 Bridge */
@@ -1035,9 +1035,9 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   // --- 多 Bot v2 API ---
 
   /** 获取多 Bot 配置 */
-  getFeishuMultiConfig: () => Promise<import('@gamma/shared').FeishuMultiBotConfig>
+  getFeishuMultiConfig: () => Promise<import('@carpus/shared').FeishuMultiBotConfig>
   /** 保存单个 Bot 配置 */
-  saveFeishuBotConfig: (input: import('@gamma/shared').FeishuBotConfigInput) => Promise<import('@gamma/shared').FeishuBotConfig>
+  saveFeishuBotConfig: (input: import('@carpus/shared').FeishuBotConfigInput) => Promise<import('@carpus/shared').FeishuBotConfig>
   /** 获取单个 Bot 解密后的 App Secret */
   getDecryptedFeishuBotSecret: (botId: string) => Promise<string>
   /** 删除 Bot */
@@ -1047,18 +1047,18 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 停止单个 Bot */
   stopFeishuBot: (botId: string) => Promise<void>
   /** 获取多 Bot 状态 */
-  getFeishuMultiStatus: () => Promise<import('@gamma/shared').FeishuMultiBridgeState>
+  getFeishuMultiStatus: () => Promise<import('@carpus/shared').FeishuMultiBridgeState>
 
   // --- 扫码注册 ---
 
   /** 启动扫码注册流程，等待用户扫码 + 飞书确认后返回 App ID/Secret */
-  registerFeishuApp: () => Promise<import('@gamma/shared').FeishuRegisterAppResult>
+  registerFeishuApp: () => Promise<import('@carpus/shared').FeishuRegisterAppResult>
   /** 取消正在进行的扫码注册流程 */
   cancelFeishuRegistration: () => Promise<void>
   /** 监听二维码 URL 生成 */
-  onFeishuRegisterQrcode: (callback: (payload: import('@gamma/shared').FeishuRegisterAppQRCode) => void) => () => void
+  onFeishuRegisterQrcode: (callback: (payload: import('@carpus/shared').FeishuRegisterAppQRCode) => void) => () => void
   /** 监听注册流程状态变化 */
-  onFeishuRegisterStatus: (callback: (payload: import('@gamma/shared').FeishuRegisterAppStatus) => void) => () => void
+  onFeishuRegisterStatus: (callback: (payload: import('@carpus/shared').FeishuRegisterAppStatus) => void) => () => void
 
   // ===== 钉钉集成 =====
 
@@ -1082,9 +1082,9 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   // --- 钉钉多 Bot v2 API ---
 
   /** 获取多 Bot 配置 */
-  getDingTalkMultiConfig: () => Promise<import('@gamma/shared').DingTalkMultiBotConfig>
+  getDingTalkMultiConfig: () => Promise<import('@carpus/shared').DingTalkMultiBotConfig>
   /** 保存单个 Bot 配置 */
-  saveDingTalkBotConfig: (input: import('@gamma/shared').DingTalkBotConfigInput) => Promise<import('@gamma/shared').DingTalkBotConfig>
+  saveDingTalkBotConfig: (input: import('@carpus/shared').DingTalkBotConfigInput) => Promise<import('@carpus/shared').DingTalkBotConfig>
   /** 获取单个 Bot 解密后的 Client Secret */
   getDecryptedDingTalkBotSecret: (botId: string) => Promise<string>
   /** 删除 Bot */
@@ -1094,19 +1094,19 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   /** 停止单个 Bot */
   stopDingTalkBot: (botId: string) => Promise<void>
   /** 获取多 Bot 状态 */
-  getDingTalkMultiStatus: () => Promise<import('@gamma/shared').DingTalkMultiBridgeState>
+  getDingTalkMultiStatus: () => Promise<import('@carpus/shared').DingTalkMultiBridgeState>
 
   // ===== Slack 集成 =====
 
-  getSlackConfig: () => Promise<import('@gamma/shared').SlackSettingsConfig>
-  saveSlackBotConfig: (input: import('@gamma/shared').SlackBotConfigInput) => Promise<import('@gamma/shared').SlackBotSettingsConfig>
+  getSlackConfig: () => Promise<import('@carpus/shared').SlackSettingsConfig>
+  saveSlackBotConfig: (input: import('@carpus/shared').SlackBotConfigInput) => Promise<import('@carpus/shared').SlackBotSettingsConfig>
   removeSlackBot: (botId: string) => Promise<boolean>
-  getSlackManifest: (options?: { botName?: string }) => Promise<import('@gamma/shared').SlackAppManifestResult>
-  testSlackConnection: (botToken: string) => Promise<import('@gamma/shared').SlackTestResult>
+  getSlackManifest: (options?: { botName?: string }) => Promise<import('@carpus/shared').SlackAppManifestResult>
+  testSlackConnection: (botToken: string) => Promise<import('@carpus/shared').SlackTestResult>
   startSlackBot: (botId: string) => Promise<void>
   stopSlackBot: (botId: string) => Promise<void>
-  getSlackStatus: () => Promise<import('@gamma/shared').SlackMultiBridgeState>
-  onSlackStatusChanged: (callback: (state: import('@gamma/shared').SlackBotBridgeState) => void) => () => void
+  getSlackStatus: () => Promise<import('@carpus/shared').SlackMultiBridgeState>
+  onSlackStatusChanged: (callback: (state: import('@carpus/shared').SlackBotBridgeState) => void) => () => void
 
   // ===== 微信集成 =====
 
@@ -1165,7 +1165,7 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   cancelVoiceDictation: (input: VoiceDictationStopInput) => Promise<void>
   /** 输出最终语音文本 */
   commitVoiceDictation: (input: VoiceDictationCommitInput) => Promise<VoiceDictationCommitResult>
-  /** 更新 Gamma 输入框中的临时识别文本 */
+  /** 更新 Carpus 输入框中的临时识别文本 */
   previewVoiceDictation: (input: VoiceDictationPreviewInput) => Promise<void>
   /** 隐藏语音输入窗口 */
   hideVoiceDictation: () => Promise<void>
@@ -1346,7 +1346,7 @@ const electronAPI: ElectronAPI = {
     return () => ipcRenderer.removeListener(AGY_IPC_CHANNELS.UPDATE, listener)
   },
 
-  openProjectAgyTerminal: (input: import('@gamma/shared').ProjectAgyTerminalInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.OPEN_PROJECT_AGY, input),
+  openProjectAgyTerminal: (input: import('@carpus/shared').ProjectAgyTerminalInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.OPEN_PROJECT_AGY, input),
   createTerminal: (input: TerminalCreateInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.CREATE, input),
   writeTerminal: (input: TerminalInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.INPUT, input),
   resizeTerminal: (input: TerminalResizeInput) => ipcRenderer.invoke(TERMINAL_IPC_CHANNELS.RESIZE, input),
@@ -1388,19 +1388,19 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.INVALIDATE_GIT_DIFF_CACHE, changedPath)
   },
 
-  getFileDiff: (input: import('@gamma/shared').GetFileDiffInput) => {
+  getFileDiff: (input: import('@carpus/shared').GetFileDiffInput) => {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_FILE_DIFF, input)
   },
 
-  getUntrackedContent: (input: import('@gamma/shared').GetFileDiffInput) => {
+  getUntrackedContent: (input: import('@carpus/shared').GetFileDiffInput) => {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_UNTRACKED_CONTENT, input)
   },
 
-  revertFile: (input: import('@gamma/shared').RevertFileInput) => {
+  revertFile: (input: import('@carpus/shared').RevertFileInput) => {
     return ipcRenderer.invoke(IPC_CHANNELS.REVERT_FILE, input)
   },
 
-  getDiffContents: (input: import('@gamma/shared').GetFileDiffInput) => {
+  getDiffContents: (input: import('@carpus/shared').GetFileDiffInput) => {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_DIFF_CONTENTS, input)
   },
 
@@ -1421,29 +1421,29 @@ const electronAPI: ElectronAPI = {
   },
 
   getComputerState: (sessionId?: string) => ipcRenderer.invoke('computer:get-state', sessionId),
-  getComputerPreview: (input: import('@gamma/shared').ComputerPreviewRequest) => ipcRenderer.invoke('computer:get-preview', input),
+  getComputerPreview: (input: import('@carpus/shared').ComputerPreviewRequest) => ipcRenderer.invoke('computer:get-preview', input),
   stopComputerPreview: (sessionId: string, runId: string) => ipcRenderer.invoke('computer:stop-preview', sessionId, runId),
-  armComputer: (input: import('@gamma/shared').ComputerArmInput) => ipcRenderer.invoke('computer:arm', input),
+  armComputer: (input: import('@carpus/shared').ComputerArmInput) => ipcRenderer.invoke('computer:arm', input),
   stopComputer: () => ipcRenderer.invoke('computer:stop'),
   resumeComputer: () => ipcRenderer.invoke('computer:resume'),
-  requestComputerPermission: (permission: import('@gamma/shared').ComputerPermission) => ipcRenderer.invoke('computer:permission', permission),
-  onComputerStateChanged: (callback: (state: import('@gamma/shared').ComputerState) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: import('@gamma/shared').ComputerState): void => callback(state)
+  requestComputerPermission: (permission: import('@carpus/shared').ComputerPermission) => ipcRenderer.invoke('computer:permission', permission),
+  onComputerStateChanged: (callback: (state: import('@carpus/shared').ComputerState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import('@carpus/shared').ComputerState): void => callback(state)
     ipcRenderer.on('computer:state-changed', listener)
     return () => ipcRenderer.removeListener('computer:state-changed', listener)
   },
-  getComputerPreferences: () => ipcRenderer.invoke('computer:get-preferences') as Promise<import('@gamma/shared').ComputerUsePreferences>,
-  updateComputerPreferences: (partial: Partial<import('@gamma/shared').ComputerUsePreferences>) => ipcRenderer.invoke('computer:update-preferences', partial) as Promise<import('@gamma/shared').ComputerUsePreferences>,
-  revokeComputerAppAuthorization: (app: string) => ipcRenderer.invoke('computer:revoke-app-authorization', app) as Promise<import('@gamma/shared').ComputerUsePreferences>,
-  decideComputerAppAuth: (requestId: string, decision: import('@gamma/shared').ComputerAppAuthDecision) => ipcRenderer.invoke('computer:decide-app-auth', requestId, decision) as Promise<boolean>,
+  getComputerPreferences: () => ipcRenderer.invoke('computer:get-preferences') as Promise<import('@carpus/shared').ComputerUsePreferences>,
+  updateComputerPreferences: (partial: Partial<import('@carpus/shared').ComputerUsePreferences>) => ipcRenderer.invoke('computer:update-preferences', partial) as Promise<import('@carpus/shared').ComputerUsePreferences>,
+  revokeComputerAppAuthorization: (app: string) => ipcRenderer.invoke('computer:revoke-app-authorization', app) as Promise<import('@carpus/shared').ComputerUsePreferences>,
+  decideComputerAppAuth: (requestId: string, decision: import('@carpus/shared').ComputerAppAuthDecision) => ipcRenderer.invoke('computer:decide-app-auth', requestId, decision) as Promise<boolean>,
   decideComputerRiskConfirm: (requestId: string, confirmed: boolean) => ipcRenderer.invoke('computer:decide-risk-confirm', requestId, confirmed) as Promise<boolean>,
-  onComputerAppAuthRequested: (callback: (req: import('@gamma/shared').ComputerAppAuthRequest) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, req: import('@gamma/shared').ComputerAppAuthRequest): void => callback(req)
+  onComputerAppAuthRequested: (callback: (req: import('@carpus/shared').ComputerAppAuthRequest) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, req: import('@carpus/shared').ComputerAppAuthRequest): void => callback(req)
     ipcRenderer.on('computer:app-auth-requested', listener)
     return () => ipcRenderer.removeListener('computer:app-auth-requested', listener)
   },
-  onComputerRiskConfirmRequested: (callback: (req: import('@gamma/shared').ComputerRiskConfirmRequest) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, req: import('@gamma/shared').ComputerRiskConfirmRequest): void => callback(req)
+  onComputerRiskConfirmRequested: (callback: (req: import('@carpus/shared').ComputerRiskConfirmRequest) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, req: import('@carpus/shared').ComputerRiskConfirmRequest): void => callback(req)
     ipcRenderer.on('computer:risk-confirm-requested', listener)
     return () => ipcRenderer.removeListener('computer:risk-confirm-requested', listener)
   },
@@ -1452,30 +1452,30 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_BROWSER, sessionId)
   },
   listAgentBrowserTabs: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_BROWSER_TABS, sessionId),
-  createAgentBrowserTab: (input: import('@gamma/shared').BrowserCreateTabInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_BROWSER_TAB, input),
-  selectAgentBrowserTab: (input: import('@gamma/shared').BrowserTabInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.SELECT_BROWSER_TAB, input),
-  closeAgentBrowserTab: (input: import('@gamma/shared').BrowserTabInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CLOSE_BROWSER_TAB, input),
+  createAgentBrowserTab: (input: import('@carpus/shared').BrowserCreateTabInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_BROWSER_TAB, input),
+  selectAgentBrowserTab: (input: import('@carpus/shared').BrowserTabInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.SELECT_BROWSER_TAB, input),
+  closeAgentBrowserTab: (input: import('@carpus/shared').BrowserTabInput) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CLOSE_BROWSER_TAB, input),
   getAgentBrowserState: (sessionId: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_BROWSER_STATE, sessionId)
   },
-  setAgentBrowserLayout: (layout: import('@gamma/shared').BrowserViewLayout) => {
+  setAgentBrowserLayout: (layout: import('@carpus/shared').BrowserViewLayout) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SET_BROWSER_LAYOUT, layout)
   },
   minimizeAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.MINIMIZE_BROWSER, sessionId),
-  navigateAgentBrowser: (input: import('@gamma/shared').BrowserNavigateInput) => {
+  navigateAgentBrowser: (input: import('@carpus/shared').BrowserNavigateInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.NAVIGATE_BROWSER, input)
   },
   goBackAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.GO_BACK_BROWSER, sessionId),
   goForwardAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.GO_FORWARD_BROWSER, sessionId),
   reloadAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.RELOAD_BROWSER, sessionId),
   closeAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CLOSE_BROWSER, sessionId),
-  onAgentBrowserStateChanged: (callback: (state: import('@gamma/shared').BrowserStateChange) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: import('@gamma/shared').BrowserStateChange) => callback(state)
+  onAgentBrowserStateChanged: (callback: (state: import('@carpus/shared').BrowserStateChange) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import('@carpus/shared').BrowserStateChange) => callback(state)
     ipcRenderer.on(AGENT_IPC_CHANNELS.BROWSER_STATE_CHANGED, listener)
     return () => ipcRenderer.removeListener(AGENT_IPC_CHANNELS.BROWSER_STATE_CHANGED, listener)
   },
-  onAgentBrowserTabFocused: (callback: (change: import('@gamma/shared').BrowserTabFocusChange) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, change: import('@gamma/shared').BrowserTabFocusChange) => callback(change)
+  onAgentBrowserTabFocused: (callback: (change: import('@carpus/shared').BrowserTabFocusChange) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: import('@carpus/shared').BrowserTabFocusChange) => callback(change)
     ipcRenderer.on(AGENT_IPC_CHANNELS.BROWSER_TAB_FOCUSED, listener)
     return () => ipcRenderer.removeListener(AGENT_IPC_CHANNELS.BROWSER_TAB_FOCUSED, listener)
   },
@@ -1553,7 +1553,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.GET_PLAN_QUOTA, channelId)
   },
 
-  codexOAuthLogin: (method?: import('@gamma/shared').CodexOAuthLoginMethod) => {
+  codexOAuthLogin: (method?: import('@carpus/shared').CodexOAuthLoginMethod) => {
     return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_LOGIN, method)
   },
 
@@ -1561,8 +1561,8 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_CANCEL)
   },
 
-  onCodexOAuthDeviceCode: (callback: (deviceCode: import('@gamma/shared').CodexOAuthDeviceCode) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, deviceCode: import('@gamma/shared').CodexOAuthDeviceCode) => callback(deviceCode)
+  onCodexOAuthDeviceCode: (callback: (deviceCode: import('@carpus/shared').CodexOAuthDeviceCode) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, deviceCode: import('@carpus/shared').CodexOAuthDeviceCode) => callback(deviceCode)
     ipcRenderer.on(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_DEVICE_CODE, listener)
     return () => ipcRenderer.removeListener(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_DEVICE_CODE, listener)
   },
@@ -1575,8 +1575,8 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_CANCEL)
   },
 
-  onGithubCopilotOAuthDeviceCode: (callback: (deviceCode: import('@gamma/shared').GithubCopilotOAuthDeviceCode) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, deviceCode: import('@gamma/shared').GithubCopilotOAuthDeviceCode) => callback(deviceCode)
+  onGithubCopilotOAuthDeviceCode: (callback: (deviceCode: import('@carpus/shared').GithubCopilotOAuthDeviceCode) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, deviceCode: import('@carpus/shared').GithubCopilotOAuthDeviceCode) => callback(deviceCode)
     ipcRenderer.on(CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_DEVICE_CODE, listener)
     return () => ipcRenderer.removeListener(CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_DEVICE_CODE, listener)
   },
@@ -1948,7 +1948,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_MCP_CONFIG, workspaceSlug)
   },
 
-  saveWorkspaceMcpConfig: (workspaceSlug: string, config: WorkspaceMcpConfig, options?: import('@gamma/shared').SaveWorkspaceMcpConfigOptions) => {
+  saveWorkspaceMcpConfig: (workspaceSlug: string, config: WorkspaceMcpConfig, options?: import('@carpus/shared').SaveWorkspaceMcpConfigOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SAVE_MCP_CONFIG, workspaceSlug, config, options)
   },
 
@@ -1961,22 +1961,22 @@ const electronAPI: ElectronAPI = {
   },
 
   setMcpEnabledAndValidate: (workspaceSlug: string, name: string, enabled: boolean) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SET_MCP_ENABLED_AND_VALIDATE, workspaceSlug, name, enabled) as Promise<import('@gamma/shared').McpConnectionMutationResult>
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SET_MCP_ENABLED_AND_VALIDATE, workspaceSlug, name, enabled) as Promise<import('@carpus/shared').McpConnectionMutationResult>
   },
 
-  installMcpAndValidate: (workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.INSTALL_MCP_AND_VALIDATE, workspaceSlug, name, entry) as Promise<import('@gamma/shared').McpInstallMutationResult>
+  installMcpAndValidate: (workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.INSTALL_MCP_AND_VALIDATE, workspaceSlug, name, entry) as Promise<import('@carpus/shared').McpInstallMutationResult>
   },
 
-  startMcpOAuth: (input: import('@gamma/shared').StartMcpOAuthInput) => {
+  startMcpOAuth: (input: import('@carpus/shared').StartMcpOAuthInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.START_MCP_OAUTH, input)
   },
 
-  saveMcpOAuthClientSecret: (input: import('@gamma/shared').SaveMcpOAuthClientSecretInput) => {
+  saveMcpOAuthClientSecret: (input: import('@carpus/shared').SaveMcpOAuthClientSecretInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SAVE_MCP_OAUTH_CLIENT_SECRET, input)
   },
 
-  saveMcpApiKey: (input: import('@gamma/shared').SaveMcpApiKeyInput) => {
+  saveMcpApiKey: (input: import('@carpus/shared').SaveMcpApiKeyInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SAVE_MCP_API_KEY, input)
   },
 
@@ -1985,14 +1985,14 @@ const electronAPI: ElectronAPI = {
   },
 
   getCliIntegrationStatuses: (workspaceSlug: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_CLI_INTEGRATION_STATUSES, workspaceSlug) as Promise<import('@gamma/shared').CliIntegrationStatus[]>
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_CLI_INTEGRATION_STATUSES, workspaceSlug) as Promise<import('@carpus/shared').CliIntegrationStatus[]>
   },
 
   setCliIntegrationEnabled: (workspaceSlug: string, id: string, enabled: boolean) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SET_CLI_INTEGRATION_ENABLED, workspaceSlug, id, enabled) as Promise<import('@gamma/shared').CliIntegrationStatus[]>
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SET_CLI_INTEGRATION_ENABLED, workspaceSlug, id, enabled) as Promise<import('@carpus/shared').CliIntegrationStatus[]>
   },
 
-  testMcpServer: (workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry) => {
+  testMcpServer: (workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.TEST_MCP_SERVER, workspaceSlug, name, entry) as Promise<{ success: boolean; message: string }>
   },
 
@@ -2033,7 +2033,7 @@ const electronAPI: ElectronAPI = {
     )
   },
 
-  batchImportSkillsFromWorkspaces: (targetSlug: string, selections: import('@gamma/shared').BulkImportWorkspaceSelection[]) => {
+  batchImportSkillsFromWorkspaces: (targetSlug: string, selections: import('@carpus/shared').BulkImportWorkspaceSelection[]) => {
     return ipcRenderer.invoke(
       AGENT_IPC_CHANNELS.BATCH_IMPORT_SKILLS_FROM_WORKSPACES,
       targetSlug,
@@ -2153,8 +2153,8 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.WORKSPACE_MEMORY_WINDOW_READY, workspaceSlug)
   },
 
-  subscribeWorkspaceMemoryChanges: (workspaceSlug: string, callback: (change: import('@gamma/shared').WorkspaceMemoryFileChange) => void) => {
-    const listener = (_: unknown, payload: { workspaceSlug: string; change: import('@gamma/shared').WorkspaceMemoryFileChange }): void => {
+  subscribeWorkspaceMemoryChanges: (workspaceSlug: string, callback: (change: import('@carpus/shared').WorkspaceMemoryFileChange) => void) => {
+    const listener = (_: unknown, payload: { workspaceSlug: string; change: import('@carpus/shared').WorkspaceMemoryFileChange }): void => {
       if (payload.workspaceSlug === workspaceSlug) callback(payload.change)
     }
     ipcRenderer.on(AGENT_IPC_CHANNELS.WORKSPACE_MEMORY_FILE_CHANGED, listener)
@@ -2209,7 +2209,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.PERMISSION_RESPOND, response)
   },
 
-  updateSessionPermissionMode: (sessionId: string, mode: GammaPermissionMode) => {
+  updateSessionPermissionMode: (sessionId: string, mode: CarpusPermissionMode) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_SESSION_PERMISSION_MODE, sessionId, mode)
   },
 
@@ -2310,7 +2310,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_WORKTREE_REPOS, workspaceSlug)
   },
 
-  addWorktreeRepo: (workspaceSlug: string, repo: import('@gamma/shared').WorkspaceWorktreeRepo) => {
+  addWorktreeRepo: (workspaceSlug: string, repo: import('@carpus/shared').WorkspaceWorktreeRepo) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.ADD_WORKTREE_REPO, workspaceSlug, repo)
   },
 
@@ -2323,15 +2323,15 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_SESSION_PATH, workspaceId, sessionId)
   },
 
-  listDirectory: (dirPath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  listDirectory: (dirPath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_DIRECTORY, dirPath, access)
   },
 
-  deleteFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  deleteFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.DELETE_FILE, filePath, access)
   },
 
-  openFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  openFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FILE, filePath, access)
   },
 
@@ -2339,7 +2339,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.WRITE_CLIPBOARD_PREVIEW, filename, content)
   },
 
-  systemOpenFile: (filePath: string, appName?: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  systemOpenFile: (filePath: string, appName?: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_OPEN_FILE, filePath, appName, access)
   },
 
@@ -2347,15 +2347,15 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.SCAN_EDITORS)
   },
 
-  getDefaultAppForFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke(IPC_CHANNELS.GET_DEFAULT_APP_FOR_FILE, filePath, access) as Promise<import('@gamma/shared').DefaultAppInfo | null>
+  getDefaultAppForFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.GET_DEFAULT_APP_FOR_FILE, filePath, access) as Promise<import('@carpus/shared').DefaultAppInfo | null>
   },
 
-  showInFolder: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  showInFolder: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SHOW_IN_FOLDER, filePath, access)
   },
 
-  openFolderInTerminal: (folderPath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  openFolderInTerminal: (folderPath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FOLDER_IN_TERMINAL, folderPath, access)
   },
 
@@ -2364,63 +2364,63 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.SHOW_ITEM_IN_FOLDER, filePath, candidateBasePaths)
   },
 
-  resolveAndReadFile: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke('file:resolve-and-read', filePath, access) as Promise<import('@gamma/shared').FilePreviewReadResult | null>
+  resolveAndReadFile: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke('file:resolve-and-read', filePath, access) as Promise<import('@carpus/shared').FilePreviewReadResult | null>
   },
 
-  filterExistingFilePaths: (filePaths: string[], access?: import('@gamma/shared').FileAccessOptions) => {
+  filterExistingFilePaths: (filePaths: string[], access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke('file:exists-batch', filePaths, access) as Promise<string[]>
   },
 
-  writeTextFile: (filePath: string, content: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  writeTextFile: (filePath: string, content: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke('file:write-text', filePath, content, access) as Promise<boolean>
   },
 
-  writeImageFile: (filePath: string, dataUrl: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  writeImageFile: (filePath: string, dataUrl: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(IPC_CHANNELS.WRITE_IMAGE_FILE, filePath, dataUrl, access) as Promise<void>
   },
   readImageForEdit: (filePath, access) => ipcRenderer.invoke(IPC_CHANNELS.READ_IMAGE_FOR_EDIT, filePath, access),
   saveEditedPngAs: (dataUrl, filename) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_EDITED_PNG_AS, dataUrl, filename),
 
-  resolveFilePath: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke('file:resolve-path', filePath, access) as Promise<(import('@gamma/shared').ResolvedFileUrl & { resolvedPath?: string }) | null>
+  resolveFilePath: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke('file:resolve-path', filePath, access) as Promise<(import('@carpus/shared').ResolvedFileUrl & { resolvedPath?: string }) | null>
   },
 
-  markdownWorkspace: (request: import('@gamma/shared').MarkdownWorkspaceRequest) => ipcRenderer.invoke(IPC_CHANNELS.MARKDOWN_WORKSPACE, request) as Promise<import('@gamma/shared').MarkdownWorkspaceResult>,
+  markdownWorkspace: (request: import('@carpus/shared').MarkdownWorkspaceRequest) => ipcRenderer.invoke(IPC_CHANNELS.MARKDOWN_WORKSPACE, request) as Promise<import('@carpus/shared').MarkdownWorkspaceResult>,
 
-  resolveMarkdownMedia: (markdownFilePath: string, src: string, access?: import('@gamma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke('file:resolve-markdown-media', markdownFilePath, src, access) as Promise<import('@gamma/shared').ResolvedFileUrl | null>
+  resolveMarkdownMedia: (markdownFilePath: string, src: string, access?: import('@carpus/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke('file:resolve-markdown-media', markdownFilePath, src, access) as Promise<import('@carpus/shared').ResolvedFileUrl | null>
   },
 
-  resolveHtmlPreviewPath: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke('file:resolve-html-preview-path', filePath, access) as Promise<import('@gamma/shared').ResolvedFileUrl | null>
+  resolveHtmlPreviewPath: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke('file:resolve-html-preview-path', filePath, access) as Promise<import('@carpus/shared').ResolvedFileUrl | null>
   },
 
-  preparePdfPreview: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  preparePdfPreview: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke('file:prepare-pdf-preview', filePath, access) as Promise<{ tmpHtmlUrl: string } | null>
   },
 
-  readBinaryBase64: (filePath: string, access?: import('@gamma/shared').FileAccessOptions, maxSize?: number) => {
+  readBinaryBase64: (filePath: string, access?: import('@carpus/shared').FileAccessOptions, maxSize?: number) => {
     return ipcRenderer.invoke('file:read-binary-base64', filePath, access, maxSize) as Promise<string | null>
   },
 
-  officeToHtml: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke('file:office-to-html', filePath, access) as Promise<import('@gamma/shared').OfficePreviewResult | null>
+  officeToHtml: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke('file:office-to-html', filePath, access) as Promise<import('@carpus/shared').OfficePreviewResult | null>
   },
 
   screenshotCapture: (input: { html: string; isDark: boolean; width?: number; mode: 'clipboard' | 'file'; css?: string; themeClass?: string }) => {
     return ipcRenderer.invoke(IPC_CHANNELS.SCREENSHOT_CAPTURE, input) as Promise<{ success: boolean; message: string; filePath?: string }>
   },
 
-  renameFile: (filePath: string, newName: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  renameFile: (filePath: string, newName: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.RENAME_FILE, filePath, newName, access)
   },
 
-  moveFile: (filePath: string, targetDir: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  moveFile: (filePath: string, targetDir: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.MOVE_FILE, filePath, targetDir, access)
   },
 
-  listAttachedDirectory: (dirPath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  listAttachedDirectory: (dirPath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_ATTACHED_DIRECTORY, dirPath, access)
   },
 
@@ -2428,15 +2428,15 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.READ_ATTACHED_FILE, filePath, sessionId, workspaceSlug)
   },
 
-  showAttachedInFolder: (filePath: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  showAttachedInFolder: (filePath: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SHOW_ATTACHED_IN_FOLDER, filePath, access)
   },
 
-  renameAttachedFile: (filePath: string, newName: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  renameAttachedFile: (filePath: string, newName: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.RENAME_ATTACHED_FILE, filePath, newName, access)
   },
 
-  moveAttachedFile: (filePath: string, targetDir: string, access?: import('@gamma/shared').FileAccessOptions) => {
+  moveAttachedFile: (filePath: string, targetDir: string, access?: import('@carpus/shared').FileAccessOptions) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.MOVE_ATTACHED_FILE, filePath, targetDir, access)
   },
 
@@ -2493,7 +2493,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(FEISHU_IPC_CHANNELS.SAVE_CONFIG, input)
   },
 
-  testFeishuConnection: (appId: string, appSecret: string, domain?: import('@gamma/shared').FeishuDomain) => {
+  testFeishuConnection: (appId: string, appSecret: string, domain?: import('@carpus/shared').FeishuDomain) => {
     return ipcRenderer.invoke(FEISHU_IPC_CHANNELS.TEST_CONNECTION, appId, appSecret, domain)
   },
 
@@ -2537,7 +2537,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(FEISHU_IPC_CHANNELS.GET_MULTI_CONFIG)
   },
 
-  saveFeishuBotConfig: (input: import('@gamma/shared').FeishuBotConfigInput) => {
+  saveFeishuBotConfig: (input: import('@carpus/shared').FeishuBotConfigInput) => {
     return ipcRenderer.invoke(FEISHU_IPC_CHANNELS.SAVE_BOT_CONFIG, input)
   },
 
@@ -2571,14 +2571,14 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(FEISHU_IPC_CHANNELS.REGISTER_APP_CANCEL)
   },
 
-  onFeishuRegisterQrcode: (callback: (payload: import('@gamma/shared').FeishuRegisterAppQRCode) => void) => {
-    const listener = (_: unknown, payload: import('@gamma/shared').FeishuRegisterAppQRCode) => callback(payload)
+  onFeishuRegisterQrcode: (callback: (payload: import('@carpus/shared').FeishuRegisterAppQRCode) => void) => {
+    const listener = (_: unknown, payload: import('@carpus/shared').FeishuRegisterAppQRCode) => callback(payload)
     ipcRenderer.on(FEISHU_IPC_CHANNELS.REGISTER_APP_QRCODE, listener)
     return () => { ipcRenderer.removeListener(FEISHU_IPC_CHANNELS.REGISTER_APP_QRCODE, listener) }
   },
 
-  onFeishuRegisterStatus: (callback: (payload: import('@gamma/shared').FeishuRegisterAppStatus) => void) => {
-    const listener = (_: unknown, payload: import('@gamma/shared').FeishuRegisterAppStatus) => callback(payload)
+  onFeishuRegisterStatus: (callback: (payload: import('@carpus/shared').FeishuRegisterAppStatus) => void) => {
+    const listener = (_: unknown, payload: import('@carpus/shared').FeishuRegisterAppStatus) => callback(payload)
     ipcRenderer.on(FEISHU_IPC_CHANNELS.REGISTER_APP_STATUS, listener)
     return () => { ipcRenderer.removeListener(FEISHU_IPC_CHANNELS.REGISTER_APP_STATUS, listener) }
   },
@@ -2587,7 +2587,7 @@ const electronAPI: ElectronAPI = {
 
   getSlackConfig: () => ipcRenderer.invoke(SLACK_IPC_CHANNELS.GET_CONFIG),
 
-  saveSlackBotConfig: (input: import('@gamma/shared').SlackBotConfigInput) =>
+  saveSlackBotConfig: (input: import('@carpus/shared').SlackBotConfigInput) =>
     ipcRenderer.invoke(SLACK_IPC_CHANNELS.SAVE_BOT_CONFIG, input),
 
   removeSlackBot: (botId: string) => ipcRenderer.invoke(SLACK_IPC_CHANNELS.REMOVE_BOT, botId),
@@ -2603,8 +2603,8 @@ const electronAPI: ElectronAPI = {
 
   getSlackStatus: () => ipcRenderer.invoke(SLACK_IPC_CHANNELS.GET_STATUS),
 
-  onSlackStatusChanged: (callback: (state: import('@gamma/shared').SlackBotBridgeState) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: import('@gamma/shared').SlackBotBridgeState): void => callback(state)
+  onSlackStatusChanged: (callback: (state: import('@carpus/shared').SlackBotBridgeState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import('@carpus/shared').SlackBotBridgeState): void => callback(state)
     ipcRenderer.on(SLACK_IPC_CHANNELS.STATUS_CHANGED, listener)
     return () => { ipcRenderer.removeListener(SLACK_IPC_CHANNELS.STATUS_CHANGED, listener) }
   },
@@ -2683,7 +2683,7 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(DINGTALK_IPC_CHANNELS.GET_MULTI_CONFIG)
   },
 
-  saveDingTalkBotConfig: (input: import('@gamma/shared').DingTalkBotConfigInput) => {
+  saveDingTalkBotConfig: (input: import('@carpus/shared').DingTalkBotConfigInput) => {
     return ipcRenderer.invoke(DINGTALK_IPC_CHANNELS.SAVE_BOT_CONFIG, input)
   },
 

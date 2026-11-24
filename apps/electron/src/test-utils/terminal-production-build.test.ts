@@ -11,7 +11,7 @@ interface TerminalModule {
 let bundle: string
 
 beforeAll(async () => {
-  const entry = 'gamma-terminal-build-test'
+  const entry = 'carpus-terminal-build-test'
   // 走应用真实的 Vite resolver、tree-shaking 和压缩，不能用 Bun 的 CJS 入口替代。
   const result = await build({
     configFile: resolve(import.meta.dir, '../../vite.config.ts'),

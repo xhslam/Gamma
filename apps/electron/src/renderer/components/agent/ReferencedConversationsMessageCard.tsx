@@ -5,7 +5,7 @@ import { MessageSquareText } from 'lucide-react'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { messageAttachmentClassName } from '@/components/session/attachment-styles'
-import type { AgentContextRef } from '@gamma/shared'
+import type { AgentContextRef } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface ReferencedConversationsMessageCardProps {

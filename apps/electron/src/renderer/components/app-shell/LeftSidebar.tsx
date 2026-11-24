@@ -145,7 +145,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import type { AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities } from '@gamma/shared'
+import type { AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 
@@ -249,7 +249,7 @@ function WorkspaceComponentSidebarEntry({ label, icon, active, onClick, badge }:
       aria-label={label}
       onClick={onClick}
       className={cn(
-        'gamma-sidebar-nav-item group flex w-full items-center justify-between rounded-lg text-[14px] leading-5 transition-colors duration-150 titlebar-no-drag',
+        'carpus-sidebar-nav-item group flex w-full items-center justify-between rounded-lg text-[14px] leading-5 transition-colors duration-150 titlebar-no-drag',
         active
           ? 'bg-foreground/[0.07] text-foreground font-medium'
           : 'text-foreground hover:bg-foreground/[0.04]',
@@ -281,7 +281,7 @@ function ProjectDisclosureButton({ collapsed, label, onClick, className }: {
       aria-expanded={!collapsed}
       onClick={(event) => { event.stopPropagation(); onClick() }}
       className={cn(
-        'gamma-sidebar-disclosure flex size-5 shrink-0 items-center justify-center rounded-md text-foreground/55 transition-colors hover:bg-foreground/[0.06] hover:text-foreground titlebar-no-drag',
+        'carpus-sidebar-disclosure flex size-5 shrink-0 items-center justify-center rounded-md text-foreground/55 transition-colors hover:bg-foreground/[0.06] hover:text-foreground titlebar-no-drag',
         className,
       )}
     >
@@ -297,7 +297,7 @@ function SidebarGroupHeading({ label, collapsed, onToggle, children }: {
   children?: React.ReactNode
 }): React.ReactElement {
   return (
-    <div className="gamma-sidebar-section-heading flex h-8 items-center gap-2 pl-3.5 pr-1">
+    <div className="carpus-sidebar-section-heading flex h-8 items-center gap-2 pl-3.5 pr-1">
       <button
         type="button"
         data-disclosure-trigger=""
@@ -401,8 +401,8 @@ const noopAsync = async (): Promise<void> => {}
 
 const SESSION_QUICK_SWITCH_HINT_DELAY_MS = 1000
 const SESSION_QUICK_SWITCH_LIMIT = 9
-const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'gamma:session-quick-switch-keydown'
-const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'gamma:session-quick-switch-keyup'
+const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'carpus:session-quick-switch-keydown'
+const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'carpus:session-quick-switch-keyup'
 
 const ACTIVE_SESSION_STATUSES: ReadonlySet<SessionIndicatorStatus> = new Set([
   'blocked',
@@ -2184,7 +2184,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
         <AlertDialogHeader>
           <AlertDialogTitle>确认删除项目</AlertDialogTitle>
           <AlertDialogDescription>
-            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Gamma 中保存的会话、自动任务、MCP、Skills 与 Gamma 工作区配置；空白项目的 Gamma 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
+            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Carpus 中保存的会话、自动任务、MCP、Skills 与 Carpus 工作区配置；空白项目的 Carpus 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -2254,7 +2254,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
         estimateSize: sidebarRowHeight,
         content: (
           <div>
-            <section className="gamma-sidebar-project relative rounded-lg" data-project-collapsed={collapsed} data-project-current={isCurrentProject}>
+            <section className="carpus-sidebar-project relative rounded-lg" data-project-collapsed={collapsed} data-project-current={isCurrentProject}>
               <div className="group/project relative flex items-center">
                 <button data-disclosure-trigger=""
                   type="button"
@@ -2262,7 +2262,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                   aria-current={isCurrentProject ? 'true' : undefined}
                   onClick={() => handleToggleArchivedProject(group.id)}
                   className={cn(
-                    'gamma-sidebar-project-row relative flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1.5 text-left transition-[color,background-color] titlebar-no-drag hover:bg-foreground/[0.04]',
+                    'carpus-sidebar-project-row relative flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1.5 text-left transition-[color,background-color] titlebar-no-drag hover:bg-foreground/[0.04]',
                     'text-[hsl(var(--sidebar-primary-foreground))] hover:text-[hsl(var(--sidebar-primary-foreground))]',
                   )}
                 >
@@ -2278,7 +2278,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                       projectRootStatus={group.workspace?.projectRootStatus}
                     />
                   </span>
-                  <DisclosureChevron expanded={!collapsed} size={12} className="gamma-sidebar-project-chevron ml-auto shrink-0 text-foreground/55" />
+                  <DisclosureChevron expanded={!collapsed} size={12} className="carpus-sidebar-project-chevron ml-auto shrink-0 text-foreground/55" />
                 </button>
               </div>
             </section>
@@ -2297,7 +2297,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
           id: `agent-archived-${item.session.id}`,
           estimateSize: sidebarRowHeight,
           content: (
-            <div className="gamma-sidebar-thread-children">
+            <div className="carpus-sidebar-thread-children">
               <AgentSessionItem
                 session={item.session}
                 active={treeActive}
@@ -2332,7 +2332,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
               id: `agent-archived-child-${childSession.id}`,
               estimateSize: sidebarRowHeight,
               content: (
-            <div className="gamma-sidebar-thread-children gamma-sidebar-delegation-children">
+            <div className="carpus-sidebar-thread-children carpus-sidebar-delegation-children">
                   <DelegatedChildSessionItem
                     session={childSession}
                     activeSessionId={isTerminalPage ? null : activeSessionId}
@@ -2398,7 +2398,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
         content: (
           <div>
             <div
-              className={cn(!isPinnedRoot && 'gamma-sidebar-thread-children')}
+              className={cn(!isPinnedRoot && 'carpus-sidebar-thread-children')}
               onDragOver={projectWorkspaceId ? (event) => handleProjectDragOver(event, projectWorkspaceId) : undefined}
               onDragLeave={projectWorkspaceId ? handleProjectDragLeave : undefined}
               onDrop={projectWorkspaceId ? (event) => handleProjectDrop(event, projectWorkspaceId) : undefined}
@@ -2443,11 +2443,11 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             id: `agent-child-${childSession.id}`,
             estimateSize: sidebarRowHeight,
             content: (
-              <div className={cn(showPreviewBoundary && 'gamma-sidebar-preview-tree')}>
+              <div className={cn(showPreviewBoundary && 'carpus-sidebar-preview-tree')}>
                 <div
                   className={cn(
-                    'gamma-sidebar-thread-children gamma-sidebar-delegation-children',
-                    isPinnedRoot && 'gamma-sidebar-pinned-children',
+                    'carpus-sidebar-thread-children carpus-sidebar-delegation-children',
+                    isPinnedRoot && 'carpus-sidebar-pinned-children',
                   )}
                   onDragOver={projectWorkspaceId ? (event) => handleProjectDragOver(event, projectWorkspaceId) : undefined}
                   onDragLeave={projectWorkspaceId ? handleProjectDragLeave : undefined}
@@ -2479,11 +2479,11 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             id: `agent-preview-${item.session.id}`,
             estimateSize: sidebarRowHeight,
             content: (
-              <div className="gamma-sidebar-preview-tree">
+              <div className="carpus-sidebar-preview-tree">
                 <div
                   className={cn(
-                    'gamma-sidebar-thread-children gamma-sidebar-preview-boundary',
-                    isPinnedRoot && 'gamma-sidebar-pinned-children',
+                    'carpus-sidebar-thread-children carpus-sidebar-preview-boundary',
+                    isPinnedRoot && 'carpus-sidebar-pinned-children',
                   )}
                 >
                   <button
@@ -2491,7 +2491,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
                     aria-label={`${preview.expanded ? '收起' : '查看'}「${preview.label}」的全部会话`}
                     aria-expanded={preview.expanded}
                     onClick={preview.onToggle}
-                    className="gamma-sidebar-thread-row flex w-full items-center rounded-lg text-left text-[14px] text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground titlebar-no-drag"
+                    className="carpus-sidebar-thread-row flex w-full items-center rounded-lg text-left text-[14px] text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground titlebar-no-drag"
                   >
                     <span>{preview.expanded ? '收起' : '查看全部'}</span>
                   </button>
@@ -2568,9 +2568,9 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             id: `agent-project-empty-${group.workspace.id}`,
             estimateSize: sidebarRowHeight,
             content: (
-              <div className="gamma-sidebar-thread-children">
-                <div className="gamma-sidebar-thread-row gamma-sidebar-thread-empty flex items-center text-[13px] text-muted-foreground select-none">
-                  <Circle size={6} strokeWidth={1.5} className="gamma-sidebar-thread-marker shrink-0 text-foreground/30" />
+              <div className="carpus-sidebar-thread-children">
+                <div className="carpus-sidebar-thread-row carpus-sidebar-thread-empty flex items-center text-[13px] text-muted-foreground select-none">
+                  <Circle size={6} strokeWidth={1.5} className="carpus-sidebar-thread-marker shrink-0 text-foreground/30" />
                   <span>暂无会话</span>
                 </div>
               </div>
@@ -2583,13 +2583,13 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
               id: `agent-project-preview-${group.workspace.id}`,
               estimateSize: sidebarRowHeight,
               content: (
-                <div className="gamma-sidebar-thread-children gamma-sidebar-preview-boundary">
+                <div className="carpus-sidebar-thread-children carpus-sidebar-preview-boundary">
                   <button
                     type="button"
                     aria-label={`${previewExpanded ? '收起' : '查看'}「${group.workspace.name}」的全部会话`}
                     aria-expanded={previewExpanded}
                     onClick={() => handleToggleProjectPreview(group.workspace.id)}
-                    className="gamma-sidebar-thread-row flex w-full items-center rounded-lg text-left text-[14px] text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground titlebar-no-drag"
+                    className="carpus-sidebar-thread-row flex w-full items-center rounded-lg text-left text-[14px] text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground titlebar-no-drag"
                   >
                     <span>{previewExpanded ? '收起' : '查看全部'}</span>
                   </button>
@@ -2751,14 +2751,14 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       data-workbench-density={density}
       data-session-switch-hints={quickSwitchHintsVisible ? 'true' : undefined}
       className={cn(
-        'gamma-panel gamma-sidebar relative h-full flex flex-col',
+        'carpus-panel carpus-sidebar relative h-full flex flex-col',
         !noTransition && 'transition-[width] duration-300',
         'bg-[hsl(var(--sidebar-surface))]'
       )}
       style={{ width: width ?? 256, minWidth: 200, flexShrink: 0 }}
     >
       {/* macOS 左上角留给原生窗口按钮。 */}
-      <div className={cn('gamma-topbar gamma-sidebar-topbar flex items-center gap-2 pr-3 titlebar-drag-region', isMac ? 'pl-20' : 'pl-3')}>
+      <div className={cn('carpus-topbar carpus-sidebar-topbar flex items-center gap-2 pr-3 titlebar-drag-region', isMac ? 'pl-20' : 'pl-3')}>
         <Tooltip>
           <TooltipTrigger asChild>
             <button data-icon-button="true"
@@ -2782,7 +2782,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
             </span>
           </TooltipContent>
         </Tooltip>
-        <span className="gamma-sidebar-brand select-none">Gamma</span>
+        <span className="carpus-sidebar-brand select-none">Carpus</span>
       </div>
 
       {/* 新建始终在主导航首位，搜索紧随其后。 */}
@@ -2793,7 +2793,7 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
               type="button"
               aria-label="新建"
               onClick={() => { void createAgentSessionInWorkspace() }}
-              className="gamma-sidebar-new-button group flex h-8 w-full min-w-0 items-center gap-3 rounded-lg bg-foreground/[0.07] pl-3.5 pr-3 text-[14px] font-medium leading-5 text-foreground transition-colors hover:bg-foreground/[0.10] titlebar-no-drag"
+              className="carpus-sidebar-new-button group flex h-8 w-full min-w-0 items-center gap-3 rounded-lg bg-foreground/[0.07] pl-3.5 pr-3 text-[14px] font-medium leading-5 text-foreground transition-colors hover:bg-foreground/[0.10] titlebar-no-drag"
             >
               <span className="flex size-[18px] shrink-0 items-center justify-center">
                 <Plus size={18} strokeWidth={1.6} />
@@ -2958,34 +2958,34 @@ export const LeftSidebar = React.memo(function LeftSidebar({ width, noTransition
       </div>
 
       {/* 账户与设备入口固定在底部，个人资料和设置收纳到同一菜单。 */}
-      <div className="gamma-sidebar-footer shrink-0">
+      <div className="carpus-sidebar-footer shrink-0">
         <div className="flex h-full items-center gap-2 text-foreground titlebar-no-drag">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="个人资料与设置"
-                className="gamma-sidebar-footer-account flex h-10 min-w-0 flex-1 items-center rounded-lg text-left transition-colors hover:bg-foreground/[0.04] data-[state=open]:bg-foreground/[0.04]"
+                className="carpus-sidebar-footer-account flex h-10 min-w-0 flex-1 items-center rounded-lg text-left transition-colors hover:bg-foreground/[0.04] data-[state=open]:bg-foreground/[0.04]"
               >
-                <span className="gamma-sidebar-avatar flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold">
+                <span className="carpus-sidebar-avatar flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold">
                   {userProfile.avatar.startsWith('data:image') || userProfile.avatar.startsWith('http')
                     ? <UserAvatar avatar={userProfile.avatar} size={28} className="rounded-full border-0" />
-                    : getSidebarAvatarInitial(userProfile.userName || 'Gamma')}
+                    : getSidebarAvatarInitial(userProfile.userName || 'Carpus')}
                 </span>
-                <span className="gamma-sidebar-footer-identity flex min-w-0 items-baseline">
-                  <FadeTitle className="min-w-0 truncate text-[14px] font-medium leading-5" title={userProfile.userName || 'Gamma'}>
-                    {userProfile.userName || 'Gamma'}
+                <span className="carpus-sidebar-footer-identity flex min-w-0 items-baseline">
+                  <FadeTitle className="min-w-0 truncate text-[14px] font-medium leading-5" title={userProfile.userName || 'Carpus'}>
+                    {userProfile.userName || 'Carpus'}
                   </FadeTitle>
                   <span className="shrink-0 text-[12px] font-normal text-muted-foreground">· 本地</span>
                 </span>
-                <ChevronDown size={14} strokeWidth={1.6} className="gamma-sidebar-footer-chevron shrink-0 text-muted-foreground" />
+                <ChevronDown size={14} strokeWidth={1.6} className="carpus-sidebar-footer-chevron shrink-0 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
               <div className="flex items-center gap-3 px-2 py-2">
                 <UserAvatar avatar={userProfile.avatar} size={32} className="rounded-full" />
                 <div className="min-w-0">
-                  <FadeTitle className="block truncate text-sm font-medium">{userProfile.userName || 'Gamma'}</FadeTitle>
+                  <FadeTitle className="block truncate text-sm font-medium">{userProfile.userName || 'Carpus'}</FadeTitle>
                   <span className="text-xs text-muted-foreground">本地个人资料</span>
                 </div>
               </div>
@@ -3513,9 +3513,9 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
           }}
           className={cn(
             'session-quick-switch-row group relative flex w-full items-center rounded-lg py-1.5 text-left transition-colors duration-150 titlebar-no-drag',
-            leadingIcon ? 'gamma-sidebar-pinned-root gap-3' : 'gap-0.5',
-            showThreadMarker && 'gamma-sidebar-thread-row',
-            compactActions && 'gamma-sidebar-thread-action-row',
+            leadingIcon ? 'carpus-sidebar-pinned-root gap-3' : 'gap-0.5',
+            showThreadMarker && 'carpus-sidebar-thread-row',
+            compactActions && 'carpus-sidebar-thread-action-row',
             !editing && 'cursor-grab active:cursor-grabbing',
             active && 'agent-session-item-active',
             leftAccent && !showThreadMarker
@@ -3544,7 +3544,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
               size={6}
               strokeWidth={1.5}
               aria-hidden="true"
-              className="gamma-sidebar-thread-marker shrink-0 text-foreground/35"
+              className="carpus-sidebar-thread-marker shrink-0 text-foreground/35"
             />
           )}
           <div className="flex-1 min-w-0">
@@ -3568,7 +3568,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                   <Clock size={11} className="flex-shrink-0 text-foreground/40" />
                 )}
                 {session.sourceDelegationId && (
-                  <GitBranch size={11} aria-label="委派子会话" className={cn('gamma-sidebar-session-source-icon flex-shrink-0', getDelegationStatusIconClass(indicatorStatus))} />
+                  <GitBranch size={11} aria-label="委派子会话" className={cn('carpus-sidebar-session-source-icon flex-shrink-0', getDelegationStatusIconClass(indicatorStatus))} />
                 )}
                 <FadeTitle
                   className="min-w-0 truncate"
@@ -3620,13 +3620,13 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
           </div>
 
           {!editing && (
-            <div className={cn('gamma-sidebar-session-trailing flex shrink-0 items-center gap-0.5', compactActions && 'gamma-sidebar-thread-trailing')}>
+            <div className={cn('carpus-sidebar-session-trailing flex shrink-0 items-center gap-0.5', compactActions && 'carpus-sidebar-thread-trailing')}>
               {delegationSummary && (
                 <div
                   className="flex shrink-0 items-center justify-end gap-0.5 text-[11px] leading-4 text-foreground/55"
                   aria-label={`子会话：${delegationSummary.settled}/${delegationSummary.total}`}
                 >
-                  <span className="gamma-sidebar-delegation-count shrink-0 tabular-nums">
+                  <span className="carpus-sidebar-delegation-count shrink-0 tabular-nums">
                     {delegationSummary.settled}/{delegationSummary.total}
                   </span>
                   <SafeTooltip content={delegationSummary.expanded ? '收起子会话' : '展开子会话'} side="top">
@@ -3940,7 +3940,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, group.workspace.id)}
       onDragEnd={onDragEnd}
-      className={cn('gamma-sidebar-project relative rounded-lg transition-opacity', dragging && 'opacity-45')}
+      className={cn('carpus-sidebar-project relative rounded-lg transition-opacity', dragging && 'opacity-45')}
       data-project-collapsed={collapsed}
       data-project-current={isCurrent}
     >
@@ -3952,7 +3952,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         {renamingWorkspace ? (
           <div
             className={cn(
-              'gamma-sidebar-project-row relative flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1.5 text-left titlebar-no-drag',
+              'carpus-sidebar-project-row relative flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1.5 text-left titlebar-no-drag',
               'text-[hsl(var(--sidebar-primary-foreground))]',
             )}
           >
@@ -3981,7 +3981,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               onSelectProject(group.workspace.id)
             }}
             className={cn(
-              'gamma-sidebar-project-row relative flex min-w-0 flex-1 cursor-grab items-center gap-3 rounded-lg py-1.5 text-left transition-[color,background-color] titlebar-no-drag active:cursor-grabbing hover:bg-foreground/[0.04]',
+              'carpus-sidebar-project-row relative flex min-w-0 flex-1 cursor-grab items-center gap-3 rounded-lg py-1.5 text-left transition-[color,background-color] titlebar-no-drag active:cursor-grabbing hover:bg-foreground/[0.04]',
               'text-[hsl(var(--sidebar-primary-foreground))] hover:text-[hsl(var(--sidebar-primary-foreground))]',
             )}
           >
@@ -3993,21 +3993,21 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               <LocalProjectBadge
                 projectRootPath={group.workspace.projectRootPath}
                 projectRootStatus={group.workspace.projectRootStatus}
-                className="gamma-sidebar-project-badge"
+                className="carpus-sidebar-project-badge"
               />
             </span>
           </button>
         )}
 
         {!renamingWorkspace && (
-          <div className="gamma-sidebar-project-actions absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+          <div className="carpus-sidebar-project-actions absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
             {!isAutomationGroup && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button data-icon-button="true"
                     type="button"
                     aria-label="项目菜单"
-                    className="gamma-sidebar-project-action gamma-sidebar-project-menu flex size-6 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/[0.055] hover:text-foreground data-[state=open]:bg-foreground/[0.055] titlebar-no-drag"
+                    className="carpus-sidebar-project-action carpus-sidebar-project-menu flex size-6 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/[0.055] hover:text-foreground data-[state=open]:bg-foreground/[0.055] titlebar-no-drag"
                   >
                     <MoreHorizontal size={15} strokeWidth={1.6} />
                   </button>
@@ -4086,7 +4086,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                       e.stopPropagation()
                       void onNewSession(group.workspace.id)
                     }}
-                    className="gamma-sidebar-project-action gamma-sidebar-project-new flex size-6 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/[0.055] hover:text-foreground titlebar-no-drag"
+                    className="carpus-sidebar-project-action carpus-sidebar-project-new flex size-6 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/[0.055] hover:text-foreground titlebar-no-drag"
                   >
                     <Plus size={15} strokeWidth={1.6} />
                   </button>
@@ -4103,14 +4103,14 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               collapsed={collapsed}
               label={`项目「${group.workspace.name}」`}
               onClick={() => onToggleCollapse(group.workspace.id)}
-              className="gamma-sidebar-project-chevron"
+              className="carpus-sidebar-project-chevron"
             />
           </div>
         )}
       </div>
 
       {!hideSessions && (
-        <div id={`project-sessions-${group.workspace.id}`} className="gamma-sidebar-thread-children">
+        <div id={`project-sessions-${group.workspace.id}`} className="carpus-sidebar-thread-children">
         {!collapsed ? (
           treeItems.length > 0 ? (
             <div className="flex flex-col">
@@ -4154,7 +4154,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                     />
 
                     {childCount > 0 && expandedChildren && (
-                      <div className="gamma-sidebar-thread-children gamma-sidebar-delegation-children flex flex-col">
+                      <div className="carpus-sidebar-thread-children carpus-sidebar-delegation-children flex flex-col">
                         {item.childSessions.map((childSession) => (
                           <DelegatedChildSessionItem
                             key={childSession.id}
@@ -4181,8 +4181,8 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               })}
             </div>
           ) : (
-            <div className="gamma-sidebar-thread-row gamma-sidebar-thread-empty flex items-center text-[13px] text-muted-foreground select-none">
-              <Circle size={6} strokeWidth={1.5} className="gamma-sidebar-thread-marker shrink-0 text-foreground/30" />
+            <div className="carpus-sidebar-thread-row carpus-sidebar-thread-empty flex items-center text-[13px] text-muted-foreground select-none">
+              <Circle size={6} strokeWidth={1.5} className="carpus-sidebar-thread-marker shrink-0 text-foreground/30" />
               <span>暂无会话</span>
             </div>
           )

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { MarkdownWorkspaceDocument } from '@gamma/shared'
+import type { MarkdownWorkspaceDocument } from '@carpus/shared'
 import { acceptLoadedDocument, beginDocumentLoad, completeDocumentSave, editDocument, initialMarkdownWorkspaceState } from './markdown-document-controller'
 const document = (id: string): MarkdownWorkspaceDocument => ({ id, sourceId: 'source', name: id + '.md', path: id, content: '# ' + id, revision: 'r1', writable: true, sourceOnly: false })
 describe('Given 按文档隔离的 Markdown 草稿', () => {

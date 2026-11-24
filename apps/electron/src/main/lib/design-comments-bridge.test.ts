@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { EventEmitter } from 'node:events'
-import type { AgentSessionMeta, AgentSubmitOrEnqueueInput, AgentSubmitOrEnqueueResult, DesignArtifact } from '@gamma/shared'
+import type { AgentSessionMeta, AgentSubmitOrEnqueueInput, AgentSubmitOrEnqueueResult, DesignArtifact } from '@carpus/shared'
 import { AgentMessageSubmissionGate } from './agent-message-submission-gate'
 import { createDesignCommentsBridge } from './design-comments-bridge'
 import type { DesignCommentsDependencies, DesignCommentsState } from './design-comments-bridge'

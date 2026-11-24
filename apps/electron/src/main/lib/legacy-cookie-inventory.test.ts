@@ -73,7 +73,7 @@ test('Given 旧 profile 库存 When 导出缺少分区、重复分区或重复 C
 })
 
 async function verifyInventoryDatabase(scenario: string): Promise<void> {
-  const directory = mkdtempSync(join(tmpdir(), 'gamma-cookie-inventory-test-'))
+  const directory = mkdtempSync(join(tmpdir(), 'carpus-cookie-inventory-test-'))
   const sourcePath = join(directory, 'verify-cookie-inventory.ts')
   const outputPath = join(directory, 'verify-cookie-inventory.mjs')
   writeFileSync(sourcePath, `
@@ -83,7 +83,7 @@ async function verifyInventoryDatabase(scenario: string): Promise<void> {
     import { DatabaseSync } from 'node:sqlite'
     import { readLegacyCookieInventory } from ${JSON.stringify(inventoryModulePath)}
 
-    const root = process.env.GAMMA_COOKIE_TEST_DIRECTORY
+    const root = process.env.CARPUS_COOKIE_TEST_DIRECTORY
     const nowSeconds = 1_700_000_000
     const chromeNow = BigInt(nowSeconds) * 1_000_000n + 11_644_473_600_000_000n
     const partition = ${JSON.stringify(partition)}
@@ -101,7 +101,7 @@ async function verifyInventoryDatabase(scenario: string): Promise<void> {
       return { db, path, add }
     }
 
-    if (process.env.GAMMA_COOKIE_TEST_SCENARIO === 'inventory') {
+    if (process.env.CARPUS_COOKIE_TEST_SCENARIO === 'inventory') {
       const profile = join(root, 'snapshot')
       const main = database(profile, false)
       main.add('login')
@@ -133,7 +133,7 @@ async function verifyInventoryDatabase(scenario: string): Promise<void> {
       const empty = join(root, 'empty')
       mkdirSync(empty)
       assert.deepEqual(readLegacyCookieInventory(empty, nowSeconds), { profiles: [{ partition: null, cookies: [] }] })
-    } else if (process.env.GAMMA_COOKIE_TEST_SCENARIO === 'chips') {
+    } else if (process.env.CARPUS_COOKIE_TEST_SCENARIO === 'chips') {
       const profile = join(root, 'snapshot')
       const main = database(profile)
       main.add('expired-chips', { site: 'https://old.test', expiry: chromeNow })
@@ -184,7 +184,7 @@ async function verifyInventoryDatabase(scenario: string): Promise<void> {
     if (!script) throw new Error('未生成 Cookie 库存验证脚本')
     await Bun.write(outputPath, script)
     const result = spawnSync(electronBinary, [outputPath], {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', GAMMA_COOKIE_TEST_DIRECTORY: directory, GAMMA_COOKIE_TEST_SCENARIO: scenario },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', CARPUS_COOKIE_TEST_DIRECTORY: directory, CARPUS_COOKIE_TEST_SCENARIO: scenario },
       encoding: 'utf8',
     })
     expect(result.status, result.stdout + '\n' + result.stderr).toBe(0)

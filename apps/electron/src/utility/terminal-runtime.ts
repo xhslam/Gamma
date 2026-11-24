@@ -10,7 +10,7 @@ import {
   type TerminalOutputEvent,
   type TerminalResizeInput,
   type TerminalState,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { resolveTerminalShell } from './terminal-shell-resolver'
 import { resolveAgyTerminalLaunch } from './agy-terminal-launch'
 
@@ -71,7 +71,7 @@ if (!parentPort) {
 parentPort.on('message', (event) => {
   const value = event?.data as Record<string, unknown> | undefined
   const transfer = value?.data && typeof value.data === 'object' ? value.data as Record<string, unknown> : value
-  if (!transfer || transfer.type !== 'gamma-terminal-runtime-port') return
+  if (!transfer || transfer.type !== 'carpus-terminal-runtime-port') return
   const port = event.ports?.[0] ?? value?.port as MessagePortLike | undefined
   if (!port) {
     console.error('[TerminalRuntime] invalid MessagePort bootstrap message')

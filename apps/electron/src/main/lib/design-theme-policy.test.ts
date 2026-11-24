@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { DesignThemeSnapshot } from '@gamma/shared'
+import type { DesignThemeSnapshot } from '@carpus/shared'
 import { buildDesignThemeCss, matchesDesignEditorThemeUrl, parseDesignTheme } from './design-theme-policy'
 
 export const designTestTheme: DesignThemeSnapshot = {
@@ -8,7 +8,7 @@ export const designTestTheme: DesignThemeSnapshot = {
   danger: '#d97757', ring: '#d97757', fontFamily: '"Inter Variable", -apple-system, sans-serif', radius: 6,
 }
 
-describe('Given Gamma 的 design 外壳主题', () => {
+describe('Given Carpus 的 design 外壳主题', () => {
   test('When 同步主题 Then 映射 CDS 外观变量，不修改布局、作品选择器或 iframe', () => {
     const css = buildDesignThemeCss(designTestTheme)
     expect(css).toContain(':root.cds-root, :root.cds-root .cds-root')

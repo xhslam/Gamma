@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { Channel } from '@gamma/shared'
+import type { Channel } from '@carpus/shared'
 import { cn } from '@/lib/utils'
 import { supportsChannelPlanQuota, fetchChannelPlanQuota } from '@/lib/channel-plan-quota'
 import { currentPlanQuota, getPlanQuotaDisplay, planQuotaChannelKey } from '@/lib/channel-plan-quota-display'

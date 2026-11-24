@@ -1,4 +1,4 @@
-import type { ShellEnvironmentStatus, WindowsShellPreference } from '@gamma/shared'
+import type { ShellEnvironmentStatus, WindowsShellPreference } from '@carpus/shared'
 
 export type WindowsShellKind = 'git-bash' | 'wsl'
 

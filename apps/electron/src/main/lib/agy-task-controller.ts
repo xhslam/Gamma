@@ -1,4 +1,4 @@
-import { AGY_IPC_CHANNELS } from '@gamma/shared'
+import { AGY_IPC_CHANNELS } from '@carpus/shared'
 import { getAgentSessionMeta, resolveAgentWorkbenchDir } from './agent-session-manager'
 import { getAgentWorkspace } from './agent-workspace-manager'
 import { getMainWindow } from './main-window-store'

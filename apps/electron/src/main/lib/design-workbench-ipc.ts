@@ -5,10 +5,10 @@ import { getAgentWorkspace } from './agent-workspace-manager'
 import { resolveAgentWorkbenchDir } from './agent-session-manager'
 import { getDesignBundleSkillPath, runDesignArtifactCommand } from './design-bundle'
 import { parseDesignTheme, matchesDesignEditorThemeUrl } from './design-theme-policy'
-import type { DesignThemeSnapshot } from '@gamma/shared'
+import type { DesignThemeSnapshot } from '@carpus/shared'
 import type { IpcMain } from 'electron'
-import { DESIGN_WORKBENCH_IPC } from '@gamma/shared'
-import type { BrowserViewState, DesignArtifact, DesignCreateArtifactInput, DesignWorkbenchOpenResult } from '@gamma/shared'
+import { DESIGN_WORKBENCH_IPC } from '@carpus/shared'
+import type { BrowserViewState, DesignArtifact, DesignCreateArtifactInput, DesignWorkbenchOpenResult } from '@carpus/shared'
 import { getDesignBundleStatus, installDesignBundle } from './design-bundle'
 import { createDesignArtifact, getDesignArtifact, listDesignArtifacts, openDesignArtifact } from './design-artifacts'
 import { bindDesignAgentContext, unbindDesignAgentContext } from './design-agent-context'
@@ -41,7 +41,7 @@ const delivery = createDesignDeliveryService({
   },
 })
 
-/** 只有 Gamma 主 renderer 可以打开工作台；编辑器自身没有此 preload。 */
+/** 只有 Carpus 主 renderer 可以打开工作台；编辑器自身没有此 preload。 */
 export function registerDesignWorkbenchHandlers(ipc: IpcMain, assertTrustedSender: (senderId: number) => void): void {
   ipc.handle(DESIGN_WORKBENCH_IPC.STATUS, (event) => {
     assertTrustedSender(event.sender.id)

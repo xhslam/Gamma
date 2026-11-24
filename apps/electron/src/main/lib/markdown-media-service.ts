@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { resolveFilePath } from './file-preview-service'
-import type { FileAccessOptions } from '@gamma/shared'
+import type { FileAccessOptions } from '@carpus/shared'
 
 function stripQueryAndHash(value: string): string {
   return value.replace(/[?#].*$/, '')

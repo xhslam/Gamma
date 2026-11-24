@@ -2,7 +2,7 @@ import { flushSync } from 'react-dom'
 
 /** 分栏拖动只有超过死区后才提交；点击分隔条不会污染持久化布局。 */
 export const PANE_RESIZE_DEADZONE = 4
-export const PANE_RESIZE_GUARD_EVENT = 'gamma:pane-resize-guard'
+export const PANE_RESIZE_GUARD_EVENT = 'carpus:pane-resize-guard'
 let activeGuards = 0
 export function isPaneResizeProtected(): boolean { return activeGuards > 0 }
 export function hasPaneResizeStarted(startX: number, clientX: number): boolean {

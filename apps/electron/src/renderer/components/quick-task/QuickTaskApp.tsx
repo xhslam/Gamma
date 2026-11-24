@@ -4,7 +4,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { fileToBase64, formatFileNames } from '@/lib/file-utils'
-import { MAX_ATTACHMENT_SIZE } from '@gamma/shared'
+import { MAX_ATTACHMENT_SIZE } from '@carpus/shared'
 import { toast } from 'sonner'
 import { FadeTitle } from '@/components/ui/fade-title'
 
@@ -330,7 +330,7 @@ export function QuickTaskApp(): React.ReactElement {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={'向 Gamma 描述你的任务，Enter 发送...'}
+            placeholder={'向 Carpus 描述你的任务，Enter 发送...'}
             className="w-full resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50 leading-relaxed"
             style={{ minHeight: '60px', maxHeight: '160px' }}
             disabled={isSubmitting}

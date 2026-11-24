@@ -1,7 +1,7 @@
 import { dialog, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { IPC_CHANNELS } from '@gamma/shared'
-import type { MarkdownWorkspaceContext, MarkdownWorkspaceRequest, MarkdownWorkspaceResult } from '@gamma/shared'
+import { IPC_CHANNELS } from '@carpus/shared'
+import type { MarkdownWorkspaceContext, MarkdownWorkspaceRequest, MarkdownWorkspaceResult } from '@carpus/shared'
 import { MarkdownWorkspaceService } from './markdown-workspace-service'
 import { resolveMarkdownRelativeMediaPath } from './markdown-media-service'
 

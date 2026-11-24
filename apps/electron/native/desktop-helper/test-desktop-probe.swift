@@ -6,7 +6,7 @@ import Carbon.HIToolbox
 
 // Phase 0 探针，不是生产控制器。默认仅自测，不截图、不枚举窗口、不监听或注入事件。
 // 标记只用于来源区分，不是签名；其他进程可以伪造它，不能作为授权凭证。
-private let gammaMagicTag: Int64 = 0x47414D4D41555345
+private let carpusMagicTag: Int64 = 0x47414D4D41555345
 private let requiredGateIDs = [
     "live-event-tap", "live-preemption", "live-occlusion",
     "live-capture-alignment", "live-ax-raise"
@@ -35,7 +35,7 @@ private struct SafetyLatch {
     var disabled = false
     var ownEvents = 0
     mutating func receive(tag: Int64, pid: Int64) {
-        if tag == gammaMagicTag && pid == Int64(getpid()) { ownEvents += 1 }
+        if tag == carpusMagicTag && pid == Int64(getpid()) { ownEvents += 1 }
         else { preempted = true }
     }
     mutating func listenerDisabled() { disabled = true; preempted = true }
@@ -70,20 +70,20 @@ private func logicCheck(_ id: String, _ passed: Bool, _ detail: String) -> Check
 }
 private func selfTests() -> [Check] {
     var own = SafetyLatch()
-    own.receive(tag: gammaMagicTag, pid: Int64(getpid()))
+    own.receive(tag: carpusMagicTag, pid: Int64(getpid()))
     var human = own
     human.receive(tag: 0, pid: 0)
-    human.receive(tag: gammaMagicTag, pid: Int64(getpid()))
+    human.receive(tag: carpusMagicTag, pid: Int64(getpid()))
     var disabled = own
     disabled.listenerDisabled()
     var wrongPID = SafetyLatch()
-    wrongPID.receive(tag: gammaMagicTag, pid: Int64(getpid()) + 1)
+    wrongPID.receive(tag: carpusMagicTag, pid: Int64(getpid()) + 1)
     let bounds = CGRect(x: -1920, y: -200, width: 800, height: 600)
     let at = CGPoint(x: 10, y: 20)
     let tagged = CGEvent(source: nil)
-    tagged?.setIntegerValueField(.eventSourceUserData, value: gammaMagicTag)
+    tagged?.setIntegerValueField(.eventSourceUserData, value: carpusMagicTag)
     return [
-        logicCheck("tag-field-roundtrip", tagged?.getIntegerValueField(.eventSourceUserData) == gammaMagicTag,
+        logicCheck("tag-field-roundtrip", tagged?.getIntegerValueField(.eventSourceUserData) == carpusMagicTag,
                    "仅在内存 CGEvent 对象写入和读取字段，未 post，不能证明事件穿过真实 Tap 后仍保留标记"),
         logicCheck("self-event-classification", own.ownEvents == 1 && own.mayDispatch && wrongPID.preempted,
                    "本地来源分类逻辑通过；标记和 PID 都不是不可伪造的认证"),
@@ -192,7 +192,7 @@ private func liveEventTap() -> Check {
               context.latch.mayDispatch else {
             return Check(id: "live-event-tap", status: .fail, evidence: "integration", detail: "Tap 不健康或无法构造事件，零注入")
         }
-        event.setIntegerValueField(.eventSourceUserData, value: gammaMagicTag)
+        event.setIntegerValueField(.eventSourceUserData, value: carpusMagicTag)
         event.setIntegerValueField(.eventSourceUnixProcessID, value: Int64(getpid()))
         // 仅 explicit live+ack 模式到达这里：在当前指针位置投递一次 mouseMoved，可能影响 hover。
         event.post(tap: .cgSessionEventTap)

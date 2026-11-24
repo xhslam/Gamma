@@ -68,7 +68,7 @@ describe('Given computer session end', () => {
   test('When 用户结束自动桌面会话 Then 走真实停止屏障且不透传上游 session', async () => {
     const f = createComputerFixture({ consent: false })
     const result = await f.controller.execute(f.binding, { command: 'session', subcommand: 'end' })
-    expect(result).toMatchObject({ ok: true, command: 'session', data: { stopped: true, barrier: 'gamma-controller' } })
+    expect(result).toMatchObject({ ok: true, command: 'session', data: { stopped: true, barrier: 'carpus-controller' } })
     expect(f.calls.map(call => call.method)).toEqual(['terminate'])
     expect(f.controller.getState(f.binding.sessionId).phase).toBe('paused')
     await expect(f.controller.execute(f.binding, { command: 'status' })).rejects.toThrow('暂停')

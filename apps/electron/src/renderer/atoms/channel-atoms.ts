@@ -1,6 +1,6 @@
 /** 公共渠道与模型选择器状态，不绑定具体会话产品。 */
 import { atom } from 'jotai'
-import type { Channel } from '@gamma/shared'
+import type { Channel } from '@carpus/shared'
 
 /** 全局渠道列表缓存（启动时加载一次，设置变更时刷新）。 */
 export const channelsAtom = atom<Channel[]>([])

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ComputerPrivateObservation, SDKMessage } from '@gamma/shared'
+import type { ComputerPrivateObservation, SDKMessage } from '@carpus/shared'
 import { PiAgentAdapter, type PiAgentQueryOptions } from './pi-agent-adapter'
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0m0AAAAASUVORK5CYII='
@@ -15,7 +15,7 @@ function response(): Response {
 
 describe('Given 真实Pi适配器、SessionManager和本地模拟provider', () => {
   test('When 观察已取出但发送门禁等待时停止 Then 真实适配器不向本地provider发送旧副本', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-computer-revoke-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-computer-revoke-'))
     let requests = 0, revoked = false, release!: () => void, reached!: () => void
     const entered = new Promise<void>(resolve => { reached = resolve })
     const barrier = new Promise<void>(resolve => { release = resolve })
@@ -41,7 +41,7 @@ describe('Given 真实Pi适配器、SessionManager和本地模拟provider', () =
   }, 10_000)
 
   test('When 临时观察外发后恢复会话 Then 原图AX只在当次请求，不进入artifact/SDK事件/恢复请求', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-computer-privacy-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-computer-privacy-'))
     const bodies: string[] = [], events: SDKMessage[] = []
     const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) { bodies.push(await request.text()); return response() } })
     const adapter = new PiAgentAdapter()

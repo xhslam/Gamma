@@ -27,7 +27,7 @@ import {
   type AgentContextRefMode,
   type SDKMessage,
   type SDKAssistantMessage,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 export {
   DEFAULT_CONTEXT_WINDOW,
@@ -145,7 +145,7 @@ export function normalizeSDKMessage(m: SDKMessage): NormalizedReferencedMessage 
       }
     }
 
-    // 检查顶层 attachments 元数据（如 Gamma 消息附件）
+    // 检查顶层 attachments 元数据（如 Carpus 消息附件）
     const msgAttachments = (m as { attachments?: Array<{ name?: string; filename?: string; type?: string; mediaType?: string }> }).attachments
     if (Array.isArray(msgAttachments)) {
       for (const att of msgAttachments) {

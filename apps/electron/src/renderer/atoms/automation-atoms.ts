@@ -12,8 +12,8 @@ import type {
   AutomationScheduleType,
   AutomationPermissionMode,
   AutomationSessionMode,
-} from '@gamma/shared'
-import { AUTOMATION_DEFAULT_PERMISSION_MODE, AUTOMATION_DEFAULT_SESSION_MODE } from '@gamma/shared'
+} from '@carpus/shared'
+import { AUTOMATION_DEFAULT_PERMISSION_MODE, AUTOMATION_DEFAULT_SESSION_MODE } from '@carpus/shared'
 
 /** 全部定时任务列表 */
 export const automationsAtom = atom<Automation[]>([])

@@ -1,4 +1,4 @@
-import type { AgyActivityEvent } from '@gamma/shared'
+import type { AgyActivityEvent } from '@carpus/shared'
 
 /** 仅合并相邻、同一步骤的文本行；工具和异常事件保留原有顺序与详情。 */
 export function groupAgyActivity(events: readonly AgyActivityEvent[]): AgyActivityEvent[] {

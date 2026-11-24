@@ -8,7 +8,7 @@ import { createDesignArtifactService } from './design-artifacts'
 const temp: string[] = []
 afterEach(() => { for (const path of temp.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function fixture(external = true) {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'gamma-artifacts-')))
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'carpus-artifacts-')))
   temp.push(base)
   const storage = join(base, 'workspace')
   const project = join(base, 'project')
@@ -44,7 +44,7 @@ const files: Record<DesignArtifactKind, string> = {
   dashboard: 'db/files/index.html.json', motion: 'db/film/script.json', whiteboard: 'db/board/meta.json',
 }
 
-describe('Given 经授权的 Gamma 项目与作品会话', () => {
+describe('Given 经授权的 Carpus 项目与作品会话', () => {
   for (const type of Object.keys(files) as DesignArtifactKind[]) {
     test(`When 新建 ${type} Then 写入原生可打开作品而非空目录`, async () => {
       const f = fixture()

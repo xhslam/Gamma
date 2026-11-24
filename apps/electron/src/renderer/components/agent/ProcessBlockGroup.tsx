@@ -18,7 +18,7 @@ import type {
   SDKContentBlock,
   SDKTextBlock,
   SDKThinkingBlock,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 interface ProcessBlockGroupProps {
   blocks: SDKContentBlock[]

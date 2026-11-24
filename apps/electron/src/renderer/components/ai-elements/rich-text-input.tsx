@@ -79,8 +79,8 @@ import {
 
 // ===== 行数计算 =====
 
-const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'gamma:session-quick-switch-keydown'
-const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'gamma:session-quick-switch-keyup'
+const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'carpus:session-quick-switch-keydown'
+const SESSION_QUICK_SWITCH_KEYUP_EVENT = 'carpus:session-quick-switch-keyup'
 
 function isMacPlatform(): boolean {
   return typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || '')

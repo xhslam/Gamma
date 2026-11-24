@@ -11,7 +11,7 @@ import { updateAgentContextRefs } from '../agent-session-manager'
 import { reconcileReferenceSummaries } from './background-summary'
 import { saveSnapshotToCache, computeSnapshotHash, getSnapshotCacheFilePathByRefId } from './ref-cache'
 import { normalizeSDKMessage, type NormalizedReferencedMessage } from './context-builder'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 
 describe('Conversation Reference Context Injector & Compaction Resilience', () => {
   let tempHome: string
@@ -21,7 +21,7 @@ describe('Conversation Reference Context Injector & Compaction Resilience', () =
   const sourceSessionId = 'source_test_session'
 
   beforeAll(() => {
-    tempHome = mkdtempSync(join(tmpdir(), 'gamma-injector-test-'))
+    tempHome = mkdtempSync(join(tmpdir(), 'carpus-injector-test-'))
     prevHome = setConfigHomeForTest(tempHome)
 
     const indexPath = getAgentSessionsIndexPath()

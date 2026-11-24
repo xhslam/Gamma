@@ -312,7 +312,7 @@ export function DiffPanelTabBar({
   }, [tabs, visibleTabs?.left, visibleTabs?.right])
 
   return (
-    <div ref={barRef} className={cn('gamma-topbar relative flex items-center', detectIsMac() && 'gamma-workspace-mac-topbar', canExpandSidebar && detectIsMac() && 'pl-20')}>
+    <div ref={barRef} className={cn('carpus-topbar relative flex items-center', detectIsMac() && 'carpus-workspace-mac-topbar', canExpandSidebar && detectIsMac() && 'pl-20')}>
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
       {canExpandSidebar && <SidebarExpandButton />}
       <div className="relative flex h-full min-w-0 flex-1 items-center titlebar-no-drag">

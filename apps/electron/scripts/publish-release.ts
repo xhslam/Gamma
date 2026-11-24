@@ -10,7 +10,7 @@ if (!directory || !tag) throw new Error('用法: publish-release.ts <已校验�
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string
 releaseVersion(tag, version)
 const repo = process.env.GITHUB_REPOSITORY
-if (repo !== 'xhslam/Gamma') throw new Error('仅允许发布到 xhslam/Gamma')
+if (repo !== 'xhslam/Carpus') throw new Error('仅允许发布到 xhslam/Carpus')
 const gh = (args: string[]) => execFileSync('gh', [...args, '--repo', repo], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
 const source = resolve(directory)
 const checksums = readFileSync(join(source, 'SHA256SUMS'), 'utf8')
@@ -29,9 +29,9 @@ const newerPublished = pages.flat().some(release => {
   return false
 })
 if (existing && !existing.draft) throw new Error('该版本已公开，拒绝覆盖正式 Release')
-if (!existing) gh(['release', 'create', tag, '--draft', '--verify-tag', '--title', `Gamma ${tag}`, '--notes', 'macOS 使用临时 ad-hoc 签名，未公证；自动更新安装尚未验证。'])
+if (!existing) gh(['release', 'create', tag, '--draft', '--verify-tag', '--title', `Carpus ${tag}`, '--notes', 'macOS 使用临时 ad-hoc 签名，未公证；自动更新安装尚未验证。'])
 gh(['release', 'upload', tag, ...readdirSync(source).map(name => join(source, name)), '--clobber'])
-const downloaded = mkdtempSync(join(tmpdir(), 'gamma-release-'))
+const downloaded = mkdtempSync(join(tmpdir(), 'carpus-release-'))
 try {
   gh(['release', 'download', tag, '--dir', downloaded])
   await verifyDownloaded(downloaded, checksums)

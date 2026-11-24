@@ -5,7 +5,7 @@
  */
 
 import * as React from 'react'
-import type { GitHubRelease } from '@gamma/shared'
+import type { GitHubRelease } from '@carpus/shared'
 import { RefreshCw, Loader2} from 'lucide-react'
 import { ReleaseNotesViewer } from './ReleaseNotesViewer'
 import { SettingsCard } from './primitives'

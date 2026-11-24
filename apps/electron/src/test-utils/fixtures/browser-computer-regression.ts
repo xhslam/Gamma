@@ -121,9 +121,9 @@ try {
     await evaluate('new Promise(resolve=>{same.onload=resolve;same.src="/frame?changed"})')
     await assert.rejects(controller.click('regression', old), /失效/)
   })
-  process.stdout.write(`GAMMA_BROWSER_RESULT:${JSON.stringify({ checks })}\n`)
+  process.stdout.write(`CARPUS_BROWSER_RESULT:${JSON.stringify({ checks })}\n`)
 } catch (error) {
-  process.stdout.write(`GAMMA_BROWSER_RESULT:${JSON.stringify({ checks, error: String(error instanceof Error ? error.stack : error) })}\n`)
+  process.stdout.write(`CARPUS_BROWSER_RESULT:${JSON.stringify({ checks, error: String(error instanceof Error ? error.stack : error) })}\n`)
   process.exitCode = 1
 } finally { controller.dispose(); owner.destroy(); server.close(); app.quit() }
 

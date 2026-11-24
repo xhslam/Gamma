@@ -1,5 +1,5 @@
 /**
- * Shared utility functions for gamma
+ * Shared utility functions for carpus
  */
 
 // Placeholder - will be expanded as needed

@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
 import { atomFamily } from 'jotai-family'
-import type { AutomaticMemoryCategory, AutomaticMemoryChange } from '@gamma/shared'
+import type { AutomaticMemoryCategory, AutomaticMemoryChange } from '@carpus/shared'
 
 /** 仅当前 renderer 生命周期的真实保存提示，不持久化或模拟历史结果。 */
 export const automaticMemoryChangesAtom = atom<AutomaticMemoryChange[]>([])

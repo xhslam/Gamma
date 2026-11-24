@@ -1,5 +1,5 @@
 import { getChannelById } from './channel-manager'
-import type { ProviderType } from '@gamma/shared'
+import type { ProviderType } from '@carpus/shared'
 
 export interface AvailableAgentModel {
   id: string

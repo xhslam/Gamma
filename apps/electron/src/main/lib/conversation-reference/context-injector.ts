@@ -14,8 +14,8 @@ import {
   DEFAULT_BUDGET_RATIO,
   type ReferencedConversationData,
 } from './context-builder'
-import type { AgentContextRef } from '@gamma/shared'
-import { inferBudgetContextWindow } from '@gamma/shared'
+import type { AgentContextRef } from '@carpus/shared'
+import { inferBudgetContextWindow } from '@carpus/shared'
 
 /**
  * 将引用的上下文 prompt 注入到即将发送给模型的 messages 列表中

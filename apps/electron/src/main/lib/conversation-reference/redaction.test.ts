@@ -17,7 +17,7 @@ import {
 } from './pi-tools'
 import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
 import { setConfigHomeForTest, getAgentSessionsIndexPath, getAgentSessionMessagesPath } from '../config-paths'
-import type { AgentContextRef, SDKMessage } from '@gamma/shared'
+import type { AgentContextRef, SDKMessage } from '@carpus/shared'
 
 describe('Credential Redaction & Field Coverage (Item 8)', () => {
   const CANARY_SK = 'sk-proj-CANARY98765432109876543210abcdef'
@@ -170,7 +170,7 @@ END OPENSSH PRIVATE KEY`
     const refId = 'ref_redact_test'
 
     beforeAll(() => {
-      tempHome = mkdtempSync(join(tmpdir(), 'gamma-redact-test-'))
+      tempHome = mkdtempSync(join(tmpdir(), 'carpus-redact-test-'))
       prevHome = setConfigHomeForTest(tempHome)
 
       const indexPath = getAgentSessionsIndexPath()

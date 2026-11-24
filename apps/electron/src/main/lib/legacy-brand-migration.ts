@@ -1,5 +1,5 @@
 /**
- * 首次从 Proma 升级到 Gamma 时复制应用拥有的数据。
+ * 首次从 Proma 升级到 Carpus 时复制应用拥有的数据。
  * 旧目录始终保留；只有完成凭据与浏览器迁移的 staging 才会成为正式配置。
  */
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { writeTextFileAtomic } from './safe-file'
 
-export const LEGACY_MIGRATION_MARKER = 'gamma-brand-migration.json'
+export const LEGACY_MIGRATION_MARKER = 'carpus-brand-migration.json'
 const MIGRATION_VERSION = 1
 const SECRET_PREFIX = 'safeStorage:v1:'
 const PROFILE_TRANSIENT_FILES = new Set(['SingletonLock', 'SingletonSocket', 'SingletonCookie', 'lockfile'])
@@ -63,8 +63,8 @@ export function getLegacyBrandMigrationPaths(options: LegacyBrandMigrationOption
     : ['@proma/electron', 'Proma']
   return {
     legacyConfigDirectory: join(options.homeDirectory, `.proma${suffix}`),
-    configDirectory: join(options.homeDirectory, `.gamma${suffix}`),
-    profileDirectory: join(options.appDataDirectory, options.isDevelopment ? `@gamma/electron-dev${instanceSuffix}` : 'Gamma'),
+    configDirectory: join(options.homeDirectory, `.carpus${suffix}`),
+    profileDirectory: join(options.appDataDirectory, options.isDevelopment ? `@carpus/electron-dev${instanceSuffix}` : 'Carpus'),
     legacyProfileCandidates: oldNames.map((name) => join(options.appDataDirectory, name)),
   }
 }
@@ -89,13 +89,13 @@ function assertPlainDirectory(directory: string): void {
 export function findLegacyProfileDirectory(paths: LegacyBrandMigrationPaths): string | undefined {
   const candidates = paths.legacyProfileCandidates.filter((candidate) => existsSync(candidate))
   for (const candidate of candidates) assertPlainDirectory(candidate)
-  if (candidates.length > 1) throw new Error('发现多个 Proma 浏览器数据目录；请先保留备份并整理旧目录，Gamma 不会自动合并它们。')
+  if (candidates.length > 1) throw new Error('发现多个 Proma 浏览器数据目录；请先保留备份并整理旧目录，Carpus 不会自动合并它们。')
   return candidates[0]
 }
 
 /** 只更新实际位于旧受管根内的绝对路径，用户项目根和消息正文由上层排除。 */
 export function migrateLegacyManagedPath(value: string, sourceRoot: string, targetRoot: string): string {
-  if (value.startsWith('proma-file://')) return `gamma-file://${value.slice('proma-file://'.length)}`
+  if (value.startsWith('proma-file://')) return `carpus-file://${value.slice('proma-file://'.length)}`
   if (value.startsWith('file://')) {
     try {
       const path = fileURLToPath(value)
@@ -114,7 +114,7 @@ export function migrateLegacyManagedPath(value: string, sourceRoot: string, targ
 export function migrateLegacyMetadata(value: unknown, sourceRoot: string, targetRoot: string, parentKey = ''): unknown {
   if (Array.isArray(value)) return value.map((item) => migrateLegacyMetadata(item, sourceRoot, targetRoot, parentKey))
   if (typeof value === 'string') {
-    if (parentKey === 'outputMode' && value === 'proma-input') return 'gamma-input'
+    if (parentKey === 'outputMode' && value === 'proma-input') return 'carpus-input'
     if (/path|directory|dir$|^cwd$|^url$|^src$|^piSessionFile$|^parentSession$|^mainRepoRoot$|^attachedFiles$|^attachedDirectories$/i.test(parentKey)) return migrateLegacyManagedPath(value, sourceRoot, targetRoot)
     return value
   }
@@ -126,13 +126,13 @@ export function migrateLegacyMetadata(value: unknown, sourceRoot: string, target
     typeof record.workspaceSlug === 'string' && typeof record.workspaceSkillPath === 'string' && /^proma-coach[\\/]/.test(record.workspaceSkillPath)
   )
   for (const [key, item] of Object.entries(record)) {
-    const nextKey = key.startsWith('_proma') ? `_gamma${key.slice('_proma'.length)}` : key === 'promaLogoId' ? 'gammaLogoId' : key === 'isPromaManaged' ? 'isGammaManaged' : key
+    const nextKey = key.startsWith('_proma') ? `_carpus${key.slice('_proma'.length)}` : key === 'promaLogoId' ? 'carpusLogoId' : key === 'isPromaManaged' ? 'isCarpusManaged' : key
     // 内容块、工具参数和用户指定的项目根不属于应用元数据。
-    if (ownedCoachActivation && (key === 'slug' || key === 'name') && item === 'proma-coach') migrated[nextKey] = 'gamma-coach'
-    else if (ownedCoachActivation && key === 'workspaceSkillPath' && typeof item === 'string') migrated[nextKey] = item.replace(/^proma-coach([\\/])/, 'gamma-coach$1')
-    else if (ownedCoachActivation && key === 'filePath' && typeof item === 'string') migrated[nextKey] = migrateLegacyManagedPath(item, sourceRoot, targetRoot).replace(/([\\/](?:skills|skills-inactive)[\\/])proma-coach([\\/])/, '$1gamma-coach$2')
+    if (ownedCoachActivation && (key === 'slug' || key === 'name') && item === 'proma-coach') migrated[nextKey] = 'carpus-coach'
+    else if (ownedCoachActivation && key === 'workspaceSkillPath' && typeof item === 'string') migrated[nextKey] = item.replace(/^proma-coach([\\/])/, 'carpus-coach$1')
+    else if (ownedCoachActivation && key === 'filePath' && typeof item === 'string') migrated[nextKey] = migrateLegacyManagedPath(item, sourceRoot, targetRoot).replace(/([\\/](?:skills|skills-inactive)[\\/])proma-coach([\\/])/, '$1carpus-coach$2')
     else if (USER_CONTENT_KEYS.has(key)) migrated[nextKey] = item
-    else if (key === 'kind' && item === 'proma_event' && (parentKey === 'runtimeEnvelope' || 'event' in record)) migrated[nextKey] = 'gamma_event'
+    else if (key === 'kind' && item === 'proma_event' && (parentKey === 'runtimeEnvelope' || 'event' in record)) migrated[nextKey] = 'carpus_event'
     else migrated[nextKey] = migrateLegacyMetadata(item, sourceRoot, targetRoot, key)
   }
   return migrated
@@ -224,7 +224,7 @@ function migrateCopiedGitPointers(root: string, sourceRoot: string, targetRoot: 
         if (!value) continue
         const oldDirectory = resolve(sourceRoot, relative(root, dirname(path)))
         const pointedPath = resolve(oldDirectory, value)
-        if (mapGitPath(pointedPath) === pointedPath) throw new Error('受管 Git worktree 仍引用外部仓库或外部工作树。请先用 git worktree move 整理位置，再启动 Gamma；原仓库没有被改动。')
+        if (mapGitPath(pointedPath) === pointedPath) throw new Error('受管 Git worktree 仍引用外部仓库或外部工作树。请先用 git worktree move 整理位置，再启动 Carpus；原仓库没有被改动。')
         const migrated = mapGitPath(value)
         if (migrated !== value) next = `${prefix}${migrated}\n`
       } else {
@@ -243,7 +243,7 @@ function migrateProfilePartitionDirectories(profile: string): void {
   assertPlainDirectory(partitions)
   for (const entry of readdirSync(partitions, { withFileTypes: true })) {
     if (!entry.isDirectory() || !entry.name.startsWith('proma-browser-')) continue
-    const target = join(partitions, `gamma-browser-${entry.name.slice('proma-browser-'.length)}`)
+    const target = join(partitions, `carpus-browser-${entry.name.slice('proma-browser-'.length)}`)
     if (existsSync(target)) throw new Error('旧浏览器 partition 与新名称冲突，迁移已停止。')
     renameSync(join(partitions, entry.name), target)
   }
@@ -256,33 +256,33 @@ export function prepareLegacyBrandMigration(paths: LegacyBrandMigrationPaths): P
   assertPlainDirectory(paths.legacyConfigDirectory)
   const legacyProfileDirectory = findLegacyProfileDirectory(paths)
   const configNeedsMigration = existsSync(paths.legacyConfigDirectory) && !completed
-  if (configNeedsMigration && existsSync(paths.configDirectory)) throw new Error(`旧配置与 Gamma 配置同时存在。已保留两份数据，未合并或覆盖：${paths.configDirectory}`)
+  if (configNeedsMigration && existsSync(paths.configDirectory)) throw new Error(`旧配置与 Carpus 配置同时存在。已保留两份数据，未合并或覆盖：${paths.configDirectory}`)
   const profileMarker = readMarker(paths.profileDirectory)
   const profileNeedsMigration = Boolean(legacyProfileDirectory && !completed && profileMarker?.status !== 'complete')
   if (profileNeedsMigration && existsSync(paths.profileDirectory) && (profileMarker?.status !== 'profile-pending' || profileMarker.sourceConfigDirectory !== paths.legacyConfigDirectory || profileMarker.sourceProfileDirectory !== legacyProfileDirectory)) {
-    throw new Error('旧浏览器数据与已有 Gamma 浏览器数据同时存在。已停止迁移并保留两份数据。')
+    throw new Error('旧浏览器数据与已有 Carpus 浏览器数据同时存在。已停止迁移并保留两份数据。')
   }
   const marker: LegacyMigrationMarker = { version: MIGRATION_VERSION, sourceConfigDirectory: paths.legacyConfigDirectory, ...(legacyProfileDirectory ? { sourceProfileDirectory: legacyProfileDirectory } : {}), status: 'profile-pending' }
   let stagingConfigDirectory: string | undefined
   let legacyProfileSnapshot: string | undefined
   try {
     if (legacyProfileDirectory && (profileNeedsMigration || configNeedsMigration)) {
-      legacyProfileSnapshot = mkdtempSync(join(tmpdir(), 'gamma-legacy-snapshot-'))
+      legacyProfileSnapshot = mkdtempSync(join(tmpdir(), 'carpus-legacy-snapshot-'))
       copyLegacyProfile(legacyProfileDirectory, legacyProfileSnapshot)
     }
     if (profileNeedsMigration && !existsSync(paths.profileDirectory)) {
       mkdirSync(dirname(paths.profileDirectory), { recursive: true })
-      const stagingProfile = mkdtempSync(join(dirname(paths.profileDirectory), '.gamma-profile-migration-'))
+      const stagingProfile = mkdtempSync(join(dirname(paths.profileDirectory), '.carpus-profile-migration-'))
       try {
         copyLegacyProfile(legacyProfileSnapshot!, stagingProfile)
         migrateProfilePartitionDirectories(stagingProfile)
         writeTextFileAtomic(join(stagingProfile, LEGACY_MIGRATION_MARKER), JSON.stringify(marker, null, 2))
-        if (existsSync(paths.profileDirectory)) throw new Error('迁移期间 Gamma 浏览器目录已被其他进程创建。')
+        if (existsSync(paths.profileDirectory)) throw new Error('迁移期间 Carpus 浏览器目录已被其他进程创建。')
         renameSync(stagingProfile, paths.profileDirectory)
       } finally { if (existsSync(stagingProfile)) rmSync(stagingProfile, { recursive: true, force: true }) }
     }
     if (configNeedsMigration) {
-      stagingConfigDirectory = mkdtempSync(join(dirname(paths.configDirectory), '.gamma-config-migration-'))
+      stagingConfigDirectory = mkdtempSync(join(dirname(paths.configDirectory), '.carpus-config-migration-'))
       cpSync(paths.legacyConfigDirectory, stagingConfigDirectory, { recursive: true, dereference: false, verbatimSymlinks: true })
       migrateCopiedMetadata(stagingConfigDirectory, paths.legacyConfigDirectory, paths.configDirectory)
       migrateCopiedGitPointers(stagingConfigDirectory, paths.legacyConfigDirectory, paths.configDirectory)
@@ -297,7 +297,7 @@ export function prepareLegacyBrandMigration(paths: LegacyBrandMigrationPaths): P
     commit: () => {
       const completeMarker: LegacyMigrationMarker = { ...marker, status: 'complete' }
       if (stagingConfigDirectory) {
-        if (existsSync(paths.configDirectory)) throw new Error('迁移期间 Gamma 配置目录已被创建，旧数据未覆盖。')
+        if (existsSync(paths.configDirectory)) throw new Error('迁移期间 Carpus 配置目录已被创建，旧数据未覆盖。')
         writeTextFileAtomic(join(stagingConfigDirectory, LEGACY_MIGRATION_MARKER), JSON.stringify(completeMarker, null, 2))
         renameSync(stagingConfigDirectory, paths.configDirectory)
         stagingConfigDirectory = undefined
@@ -334,7 +334,7 @@ export function withLegacyProfileLock<T>(adapter: LegacyProfileLockAdapter, prof
   try {
     adapter.setPath('userData', profile)
     acquired = adapter.requestSingleInstanceLock()
-    if (!acquired) throw new Error('Proma 仍在运行。请退出旧应用后重新启动 Gamma；旧数据没有被复制或改写。')
+    if (!acquired) throw new Error('Proma 仍在运行。请退出旧应用后重新启动 Carpus；旧数据没有被复制或改写。')
     return copySnapshot()
   } finally {
     if (acquired) adapter.releaseSingleInstanceLock()

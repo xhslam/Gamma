@@ -26,7 +26,7 @@ export function configureComputerLogPath(path: string): void {
 }
 
 export function getComputerLogPath(): string {
-  return mainLogPath || process.env.GAMMA_COMPUTER_LOG_PATH || join(homedir(), 'Library', 'Logs', 'Gamma', 'computer-use.log')
+  return mainLogPath || process.env.CARPUS_COMPUTER_LOG_PATH || join(homedir(), 'Library', 'Logs', 'Carpus', 'computer-use.log')
 }
 
 export function logComputerUseEvent(entry: ComputerLogEntry): void {

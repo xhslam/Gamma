@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { APP_ICON_PREVIEWS } from '../../lib/app-icons'
 import { AppIconGrid } from './AppIconPicker'
-import { GammaLogoSettings } from './GammaLogoSettings'
+import { CarpusLogoSettings } from './CarpusLogoSettings'
 
 describe('十三款应用图标选择与品牌素材', () => {
   test('Given 默认米白蓝绿 When 渲染图标选择器 Then 显示十三张真实图片并仅标记默认项', () => {
@@ -10,7 +10,7 @@ describe('十三款应用图标选择与品牌素材', () => {
     expect(html.match(/<img /g)).toHaveLength(13)
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
     expect(html).toMatch(/aria-label="米白蓝绿（默认）" aria-pressed="true"/)
-    expect(html).toContain('gamma-ivory-teal.png')
+    expect(html).toContain('carpus-ivory-teal.png')
     for (const icon of APP_ICON_PREVIEWS) {
       expect(icon.src).toBeTruthy()
       expect(html).toContain(icon.src)
@@ -43,12 +43,12 @@ describe('十三款应用图标选择与品牌素材', () => {
   })
 
   test('Given 打开品牌素材页 When 渲染下载列表 Then 与图标选择器共用十三款图片且每款均可下载', () => {
-    const html = renderToStaticMarkup(<GammaLogoSettings />)
+    const html = renderToStaticMarkup(<CarpusLogoSettings />)
     expect(html.match(/<img /g)).toHaveLength(13)
     expect(html.match(/aria-label="下载/g)).toHaveLength(13)
     for (const icon of APP_ICON_PREVIEWS) {
       expect(html).toContain(icon.src)
-      expect(icon.resourcePath).toBe(`gamma-logos/${icon.fileName}`)
+      expect(icon.resourcePath).toBe(`carpus-logos/${icon.fileName}`)
     }
     expect(html).not.toContain('透明背景版本')
   })

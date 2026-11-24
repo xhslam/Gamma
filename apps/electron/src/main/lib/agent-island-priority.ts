@@ -1,4 +1,4 @@
-import type { AgentIslandPhase } from '@gamma/shared'
+import type { AgentIslandPhase } from '@carpus/shared'
 
 /**
  * Ordering for the island's primary status. A live run takes precedence over

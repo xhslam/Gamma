@@ -114,7 +114,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
 
   return (
     <div data-testid="agent-session-header" className={cn(
-      'gamma-topbar gamma-agent-topbar gamma-ui relative z-[51] flex min-w-0 items-center gap-2 px-2',
+      'carpus-topbar carpus-agent-topbar carpus-ui relative z-[51] flex min-w-0 items-center gap-2 px-2',
       ownsWindowControls && detectIsMac() && 'pl-20',
     )}>
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}

@@ -28,7 +28,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
-          bun -e 'import { appendFileSync } from "node:fs"; import { releaseVersion } from "./apps/electron/scripts/release-artifacts"; import pkg from "./apps/electron/package.json"; const tag = process.env.RELEASE_TAG || `v${pkg.version}`; releaseVersion(tag, pkg.version); if (process.env.GITHUB_REPOSITORY !== "xhslam/Gamma") throw new Error("发布仓库不匹配"); appendFileSync(process.env.GITHUB_OUTPUT!, `release_tag=${tag}\n`)'
+          bun -e 'import { appendFileSync } from "node:fs"; import { releaseVersion } from "./apps/electron/scripts/release-artifacts"; import pkg from "./apps/electron/package.json"; const tag = process.env.RELEASE_TAG || `v${pkg.version}`; releaseVersion(tag, pkg.version); if (process.env.GITHUB_REPOSITORY !== "xhslam/Carpus") throw new Error("发布仓库不匹配"); appendFileSync(process.env.GITHUB_OUTPUT!, `release_tag=${tag}\n`)'
       - name: 发布门禁回归
         run: bun test apps/electron/scripts/release-artifacts.test.ts apps/electron/scripts/release-workflow.test.ts apps/electron/scripts/sign-mac-app.test.ts apps/electron/scripts/install-electron.test.ts apps/electron/scripts/fetch-with-retry.test.ts apps/electron/scripts/prepare-officecli.test.ts apps/electron/scripts/genui-vite-plugin.test.ts apps/electron/src/main/lib/github-release-client.test.ts apps/electron/src/main/lib/updater/mac-update-policy.test.ts
       - run: bun run typecheck
@@ -106,7 +106,7 @@ jobs:
         continue-on-error: true
         working-directory: apps/electron
         run: bun run prepare:design
-      - name: 从已校验的 Gamma 发行包恢复同一设计快照
+      - name: 从已校验的 Carpus 发行包恢复同一设计快照
         if: steps.design.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -126,7 +126,7 @@ jobs:
       - name: 校验 macOS 临时签名和压缩包
         if: runner.os == 'macOS'
         run: |
-          codesign --verify --deep --strict 'apps/electron/out/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/Gamma.app'
+          codesign --verify --deep --strict 'apps/electron/out/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/Carpus.app'
           unzip -t apps/electron/out/*.zip > /dev/null
           hdiutil verify apps/electron/out/*.dmg
       - name: 校验 Windows 安装包归档
@@ -155,7 +155,7 @@ jobs:
       contents: write
     # 不允许不同版本同时修改 latest Release。
     concurrency:
-      group: gamma-release-publish
+      group: carpus-release-publish
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}

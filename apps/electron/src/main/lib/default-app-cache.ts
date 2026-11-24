@@ -6,7 +6,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import type { DefaultAppInfo } from '@gamma/shared'
+import type { DefaultAppInfo } from '@carpus/shared'
 import { getDefaultAppsCachePath } from './config-paths'
 
 interface DefaultAppCacheEntry extends DefaultAppInfo {

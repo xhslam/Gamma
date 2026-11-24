@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { AgentPermissionService, type CanUseToolOptions } from './agent-permission-service'
-import type { PermissionRequest } from '@gamma/shared'
+import type { PermissionRequest } from '@carpus/shared'
 
 function permissionOptions(signal: AbortSignal, toolUseID: string): CanUseToolOptions {
   return { signal, toolUseID, displayName: '删除分组', description: '删除 Todo 分组' }
@@ -27,7 +27,7 @@ describe('公开网络查询权限', () => {
     test(`Given ${toolName} 只读工具 When 检查自动模式权限 Then 不创建用户审批等待`, async () => {
       const service = new AgentPermissionService()
       const requests: string[] = []
-      const input = toolName === 'WebSearch' ? { query: 'Gamma' } : { url: 'https://example.com' }
+      const input = toolName === 'WebSearch' ? { query: 'Carpus' } : { url: 'https://example.com' }
       const result = await service.createCanUseTool('web-session', (request) => requests.push(request.requestId))(
         toolName,
         input,

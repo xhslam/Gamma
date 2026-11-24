@@ -15,7 +15,7 @@ import { SettingsCard } from '@/components/settings/primitives'
 import { SkillFilesPanel } from '@/components/settings/SkillFilesPanel'
 import { LiveMarkdownEditor } from '@/components/markdown/LiveMarkdownEditor'
 import { cn } from '@/lib/utils'
-import type { SkillMeta } from '@gamma/shared'
+import type { SkillMeta } from '@carpus/shared'
 import { extractSkillBody, rebuildSkillMd } from './skillMdUtils'
 import { FadeTitle } from '@/components/ui/fade-title'
 
@@ -229,7 +229,7 @@ export function SkillDetailView({
   }, [])
 
   const sourceLabel = isBuiltin
-    ? 'GAMMA 内置'
+    ? 'CARPUS 内置'
     : skill.importSource
       ? `从 ${skill.importSource.sourceWorkspaceName} 导入`
       : '当前项目'

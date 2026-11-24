@@ -10,7 +10,7 @@ app.on('second-instance', () => showAndFocusMainWindow())
 
 import { getSettings, updateSettings } from './lib/settings-service'
 import { restoreAppIconVariant } from './lib/app-icon-service'
-import { handleGammaFileRequest } from './lib/local-file-protocol'
+import { handleCarpusFileRequest } from './lib/local-file-protocol'
 
 // 处理 EPIPE/EIO 错误：当 stdout/stderr 管道或终端 pty 被关闭时，忽略写入错误
 process.stdout?.on?.('error', (err: NodeJS.ErrnoException) => {
@@ -92,8 +92,8 @@ import {
   shouldSuppressVoiceDictationActivate,
 } from './lib/voice-dictation-window'
 import { registerGlobalShortcut, unregisterAllGlobalShortcuts } from './lib/global-shortcut-service'
-import { setGammaVersion } from '@gamma/core'
-import { COMPUTER_IPC_CHANNELS } from '@gamma/shared'
+import { setCarpusVersion } from '@carpus/core'
+import { COMPUTER_IPC_CHANNELS } from '@carpus/shared'
 import { canRecoverRenderer, RENDERER_RECOVERY_WINDOW_MS } from './lib/renderer-process-recovery'
 import { TRAY_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS } from '../types'
 
@@ -443,7 +443,7 @@ function createWindow(): void {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;')
-    const page = `<!doctype html><html><head><meta charset="utf-8"><title>Gamma 无法加载</title><style>body{font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:48px;color:#222;background:#fff}main{max-width:680px;margin:auto}h1{font-size:20px;font-weight:600}pre{white-space:pre-wrap;background:#f3f3f3;padding:16px;border-radius:8px}a{display:inline-block;margin-top:12px;padding:9px 14px;border-radius:6px;background:#222;color:#fff;text-decoration:none}</style></head><body><main><h1>Gamma 无法加载主界面</h1><pre>${escapeHtml(reason)}</pre><a href="${escapeHtml(rendererEntryUrl)}">重新加载主界面</a></main></body></html>`
+    const page = `<!doctype html><html><head><meta charset="utf-8"><title>Carpus 无法加载</title><style>body{font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:48px;color:#222;background:#fff}main{max-width:680px;margin:auto}h1{font-size:20px;font-weight:600}pre{white-space:pre-wrap;background:#f3f3f3;padding:16px;border-radius:8px}a{display:inline-block;margin-top:12px;padding:9px 14px;border-radius:6px;background:#222;color:#fff;text-decoration:none}</style></head><body><main><h1>Carpus 无法加载主界面</h1><pre>${escapeHtml(reason)}</pre><a href="${escapeHtml(rendererEntryUrl)}">重新加载主界面</a></main></body></html>`
     mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`).catch((error) => {
       console.error('[启动] 降级错误页加载失败:', error)
       mainWindow?.show()
@@ -635,18 +635,18 @@ async function bootstrap(): Promise<void> {
   // 独立短生命周期进程验证 Utility 日志，无需创建会话或执行任务。
   const loggerProbe = new AgentRuntimeClient({ sessionId: 'logger-self-check' })
   void loggerProbe.start().catch(() => {}).finally(() => loggerProbe.stop().catch(() => {}))
-  // 初始化 Gamma 版本号（供 User-Agent 等全局标识使用）
-  setGammaVersion(app.getVersion())
+  // 初始化 Carpus 版本号（供 User-Agent 等全局标识使用）
+  setCarpusVersion(app.getVersion())
 
-  // 注册自定义协议 gamma-file:// 用于内联预览本地文件。
+  // 注册自定义协议 carpus-file:// 用于内联预览本地文件。
   // 协议只接受主进程签发的 opaque token，不解析 renderer 提供的绝对路径。
-  protocol.handle('gamma-file', handleGammaFileRequest)
+  protocol.handle('carpus-file', handleCarpusFileRequest)
 
   // 初始化运行时环境。Node.js 仅由 npx / npm 型 MCP 在实际连接时使用，
   // 或由用户从设置手动检测；启动时不应将其作为 Agent 的前置要求。
   await safeAwait('initializeRuntime', () => initializeRuntime({ skipNodeDetection: true }))
 
-  // 同步默认 Skills 模板到 ~/.gamma/default-skills/
+  // 同步默认 Skills 模板到 ~/.carpus/default-skills/
   safeRun('seedDefaultSkills', seedDefaultSkills)
 
   // 升级所有工作区中版本过旧的默认 Skills
@@ -763,7 +763,7 @@ async function bootstrap(): Promise<void> {
   )
   safeRun('registerGlobalShortcut:voice-dictation', () =>
     registerGlobalShortcut('voice-dictation', () => {
-      toggleVoiceDictationWindow({ targetIsGamma: mainWindow?.isFocused() === true })
+      toggleVoiceDictationWindow({ targetIsCarpus: mainWindow?.isFocused() === true })
     }),
   )
 
@@ -818,13 +818,13 @@ function handleBootstrapFailure(err: unknown): void {
   try {
     const message = err instanceof Error ? (err.stack ?? err.message) : String(err)
     dialog.showErrorBox(
-      'Gamma 启动遇到错误',
+      'Carpus 启动遇到错误',
       `部分功能可能不可用：\n\n${message}\n\n` +
         `日志位置：${app.getPath('logs')}\n\n` +
         `常见原因与排查：\n` +
-        `1. 旧版 Gamma 进程未退出（终端运行 killall Gamma 后重试）\n` +
-        `2. ~/.gamma/ 配置损坏（重命名 ~/.gamma 后重启）\n` +
-        `3. 系统 Keychain 无法解密保存的凭证（删除 ~/.gamma/feishu.json 等后重新登录）\n\n` +
+        `1. 旧版 Carpus 进程未退出（终端运行 killall Carpus 后重试）\n` +
+        `2. ~/.carpus/ 配置损坏（重命名 ~/.carpus 后重启）\n` +
+        `3. 系统 Keychain 无法解密保存的凭证（删除 ~/.carpus/feishu.json 等后重新登录）\n\n` +
         `如需协助请到 GitHub Issues 反馈。`,
     )
   } catch {
@@ -854,7 +854,7 @@ const confirmComputerQuit = createComputerQuitBarrier({
   onFailure: (error: unknown) => {
     setQuitting(false)
     console.error('[computer] 退出前停止桌面操作失败:', error)
-    dialog.showErrorBox('桌面操作尚未完全停止', 'Gamma 暂未退出，以避免遗留桌面执行进程。请重试退出；若仍失败，请查看电脑操作日志。')
+    dialog.showErrorBox('桌面操作尚未完全停止', 'Carpus 暂未退出，以避免遗留桌面执行进程。请重试退出；若仍失败，请查看电脑操作日志。')
   },
 })
 let designShutdownFinished = false

@@ -1,4 +1,4 @@
-import type { ChangeSource } from '@gamma/shared'
+import type { ChangeSource } from '@carpus/shared'
 
 export interface DiffChangeSourceEntry {
   source?: ChangeSource

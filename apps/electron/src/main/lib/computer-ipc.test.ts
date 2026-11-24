@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { IpcMainInvokeEvent } from 'electron'
-import { COMPUTER_IPC_CHANNELS } from '@gamma/shared'
+import { COMPUTER_IPC_CHANNELS } from '@carpus/shared'
 import { createComputerFixture } from '../../test-utils/computer-fixture'
 import { loadIsolatedModule } from '../../test-utils/isolated-module'
 import { assertComputerSender } from './computer-ipc-policy'
@@ -20,7 +20,7 @@ function createIpcFixture(options: { failStatus?: boolean } = {}) {
   const window = { isDestroyed: () => false, isVisible: () => false, isFocused: () => false, webContents: { id: 7 } }
   const { registerComputerIpc } = loadIsolatedModule<IpcModule>(`${import.meta.dir}/computer-ipc.ts`, {
     electron: { ipcMain: { handle: (channel: string, handler: IpcHandler) => { handlers.set(channel, handler) } } },
-    '@gamma/shared': { COMPUTER_IPC_CHANNELS },
+    '@carpus/shared': { COMPUTER_IPC_CHANNELS },
     './main-window-store': { getMainWindow: () => window },
     './computer-service': { computerController: fixture.controller, computerAuthorizationManager: fixture.auth },
     './computer-ipc-policy': { assertComputerSender },

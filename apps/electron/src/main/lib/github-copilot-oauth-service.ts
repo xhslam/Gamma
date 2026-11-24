@@ -7,7 +7,7 @@
  */
 
 import { shell } from 'electron'
-import type { GithubCopilotOAuthCredentials, GithubCopilotOAuthDeviceCode } from '@gamma/shared'
+import type { GithubCopilotOAuthCredentials, GithubCopilotOAuthDeviceCode } from '@carpus/shared'
 import { runWithOAuthProxyScope } from './oauth-proxy-scope'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')

@@ -34,8 +34,8 @@ function getTrayIconPath(): string {
   // dev: __dirname/resources（build:resources 拷贝产物）
   // prod: process.resourcesPath（electron-builder extraResources 产物）
   const resourcesDir = app.isPackaged
-    ? join(process.resourcesPath, 'gamma-logos')
-    : join(__dirname, 'resources/gamma-logos')
+    ? join(process.resourcesPath, 'carpus-logos')
+    : join(__dirname, 'resources/carpus-logos')
   return join(resourcesDir, 'iconTemplate.png')
 }
 
@@ -107,12 +107,12 @@ function buildTrayMenu(actions: TrayActions): Menu {
     },
     { type: 'separator' },
     {
-      label: '打开 Gamma',
+      label: '打开 Carpus',
       click: () => actions.showMainWindow(),
     },
     { type: 'separator' },
     {
-      label: '退出 Gamma',
+      label: '退出 Carpus',
       click: () => {
         app.quit()
       },
@@ -151,7 +151,7 @@ export function createTray(actionsInput?: Partial<TrayActions>): Tray | null {
 
     tray = new Tray(image)
 
-    tray.setToolTip(process.platform === 'win32' ? '' : 'Gamma')
+    tray.setToolTip(process.platform === 'win32' ? '' : 'Carpus')
 
     updateTrayMenu(actions)
 

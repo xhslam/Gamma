@@ -6,7 +6,7 @@
  */
 
 import * as React from 'react'
-import type { DefaultAppInfo, FileAccessOptions } from '@gamma/shared'
+import type { DefaultAppInfo, FileAccessOptions } from '@carpus/shared'
 
 const rendererCache = new Map<string, DefaultAppInfo>()
 

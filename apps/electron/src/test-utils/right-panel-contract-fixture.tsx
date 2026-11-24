@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider, createStore } from 'jotai'
-import type { FileAccessOptions, UnstagedChangesResult } from '@gamma/shared'
+import type { FileAccessOptions, UnstagedChangesResult } from '@carpus/shared'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { OnDemandRightPanelNav } from '@/components/agent/OnDemandRightPanelNav'
 import { OnDemandConversationLayout } from '@/components/agent/on-demand/OnDemandConversationLayout'

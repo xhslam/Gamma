@@ -25,8 +25,8 @@ export interface VisualRendererHarness {
 
 /** 独立视觉回归宿主：使用真实 Chromium 的 DPR、页面缩放和 reduced-motion 媒体仿真，不改动通用交互测试宿主。 */
 export async function createVisualRendererHarness(entrySource: string): Promise<VisualRendererHarness> {
-  const directory = await mkdtemp(join(tmpdir(), 'gamma-renderer-regression-'))
-  const entry = 'gamma-electron-renderer-regression'
+  const directory = await mkdtemp(join(tmpdir(), 'carpus-renderer-regression-'))
+  const entry = 'carpus-electron-renderer-regression'
   try {
     const tailwindConfig = loadTailwindConfig(resolve(import.meta.dir, '../../tailwind.config.js'))
     const result = await build({
@@ -76,7 +76,7 @@ export async function createVisualRendererHarness(entrySource: string): Promise<
   return {
     async run<T>(scenario: string, options: VisualRendererOptions = {}): Promise<T> {
       const mainPath = join(directory, `main-${++runId}.cjs`)
-      const marker = 'GAMMA_RENDERER_RESULT:'
+      const marker = 'CARPUS_RENDERER_RESULT:'
       // 不连接真实 PTY/剪贴板；结果只来自该次场景提供的 mock 数据。
       await writeFile(mainPath, `
 const { app, BrowserWindow } = require('electron');

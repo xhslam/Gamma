@@ -1,5 +1,5 @@
-import type { SDKAssistantMessage, SDKMessage, SDKSystemMessage } from '@gamma/shared'
-import { isPersistableSDKSystemMessage } from '@gamma/shared'
+import type { SDKAssistantMessage, SDKMessage, SDKSystemMessage } from '@carpus/shared'
+import { isPersistableSDKSystemMessage } from '@carpus/shared'
 
 function isNonEmptyString(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0

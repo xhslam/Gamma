@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { ProviderType } from '@gamma/shared'
+import type { ProviderType } from '@carpus/shared'
 import { AnthropicAdapter } from './anthropic-adapter.ts'
-import { setGammaVersion } from './user-agent.ts'
+import { setCarpusVersion } from './user-agent.ts'
 
 function buildRequest(provider: ProviderType, apiKey = 'test-key') {
   const adapter = new AnthropicAdapter(provider)
@@ -33,7 +33,7 @@ describe('AnthropicAdapter headers', () => {
   })
 
   test('xiaomi token plan keeps bearer authentication with registered legacy User-Agent', () => {
-    setGammaVersion('9.9.9')
+    setCarpusVersion('9.9.9')
 
     const request = buildRequest('xiaomi-token-plan')
 
@@ -43,7 +43,7 @@ describe('AnthropicAdapter headers', () => {
   })
 
   test('qwen token plan uses the complete Anthropic endpoint with bearer authentication and registered legacy User-Agent', () => {
-    setGammaVersion('9.9.9')
+    setCarpusVersion('9.9.9')
 
     const request = buildRequest('qwen-token-plan')
 
@@ -54,7 +54,7 @@ describe('AnthropicAdapter headers', () => {
   })
 
   test('zhipu team plan uses apiKey from JSON for model calls', () => {
-    setGammaVersion('9.9.9')
+    setCarpusVersion('9.9.9')
 
     const request = buildRequest(
       'zhipu-coding-team',

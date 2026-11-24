@@ -2,14 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { DesignArtifact } from '@gamma/shared'
+import type { DesignArtifact } from '@carpus/shared'
 import { createDesignDeliveryService, saveDesignArchive } from './design-delivery'
 import { flushDesignEditor } from './design-editor-flush'
 
 const temporary: string[] = []
 afterEach(async () => { await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true }))) })
 async function fixture() {
-  const base = await mkdtemp(join(tmpdir(), 'gamma-design-delivery-'))
+  const base = await mkdtemp(join(tmpdir(), 'carpus-design-delivery-'))
   temporary.push(base)
   const root = join(base, 'artifact')
   const workbench = join(base, 'session')
@@ -110,12 +110,12 @@ describe('Given 保存屏障只适用于对应 Design 顶层页面', () => {
 })
 
 test('Given 六类真实原版归档命令 When 交付完整稿 Then ZIP 可解读且包含原始元数据与所有素材', async () => {
-  const { DESIGN_BUNDLE_REVISION } = await import('@gamma/shared')
+  const { DESIGN_BUNDLE_REVISION } = await import('@carpus/shared')
   const { createDesignArtifactService } = await import('./design-artifacts')
   const { getElectronExecutablePath } = await import('../../test-utils/electron-executable')
   const { resolve } = await import('node:path')
   const { inflateRawSync } = await import('node:zlib')
-  const base = await mkdtemp(join(tmpdir(), 'gamma-real-design-archive-'))
+  const base = await mkdtemp(join(tmpdir(), 'carpus-real-design-archive-'))
   temporary.push(base)
   const project = join(base, 'project'); const storage = join(base, 'storage'); const workbench = join(base, 'session')
   await Promise.all([mkdir(project), mkdir(storage), mkdir(workbench)])

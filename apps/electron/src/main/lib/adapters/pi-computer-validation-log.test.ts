@@ -38,7 +38,7 @@ describe('Given 电脑观察外发核验失败', () => {
     expect(classifyComputerValidationFailure(error)).toEqual({ reason: 'unknown' })
   })
   test('When 外发核验抛错 Then 真正记录 JSONL 并剥离观察；取消时不记录', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-validation-log-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-validation-log-'))
     const previousPath = getComputerLogPath()
     configureComputerLogPath(join(root, 'computer-use.log'))
     const messages = [{ role: 'toolResult' as const, timestamp: 1, toolCallId: 'call-1', toolName: 'computer', isError: false, content: [{ type: 'text' as const, text: 'PRIVATE_OBSERVATION' }] }]
@@ -81,7 +81,7 @@ describe('Given 按核验原因生成占位文本', () => {
   })
   test('When 主进程暂停原因通过 RPC 序列化 Then Utility 占位包含实际停止原因且混合新观察仍会剥离', async () => {
     const { ComputerRunPausedError } = await import('../computer-pause')
-    const { serializeAgentRuntimeError } = await import('@gamma/shared')
+    const { serializeAgentRuntimeError } = await import('@carpus/shared')
     const { hasComputerObservationContent, stripComputerObservationContent } = await import('./pi-computer-context')
     const serialized = JSON.parse(JSON.stringify(serializeAgentRuntimeError(new ComputerRunPausedError('物理键鼠接管急停'))))
     const rpcError = Object.assign(new Error(serialized.message), serialized)

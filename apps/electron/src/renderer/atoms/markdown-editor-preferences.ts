@@ -4,8 +4,8 @@ import {
   DEFAULT_MARKDOWN_EDITOR_PREFERENCES,
   mergeMarkdownEditorPreferences,
   normalizeMarkdownEditorPreferences,
-} from '@gamma/shared'
-import type { MarkdownEditorPreferences, MarkdownEditorPreferencesUpdate } from '@gamma/shared'
+} from '@carpus/shared'
+import type { MarkdownEditorPreferences, MarkdownEditorPreferencesUpdate } from '@carpus/shared'
 
 /** 可见偏好立即更新；主进程确认值仅用于失败恢复。 */
 export const markdownEditorPreferencesAtom = atom<MarkdownEditorPreferences>(

@@ -1,5 +1,5 @@
-/* 上游宿主颜色令牌局部映射到 Gamma 主题，不污染应用全局。 */
-.gamma-intelligent-ui {
+/* 上游宿主颜色令牌局部映射到 Carpus 主题，不污染应用全局。 */
+.carpus-intelligent-ui {
   --dsw-alias-bg-base: hsl(var(--background));
   --dsw-alias-bg-layer-1: hsl(var(--background));
   --dsw-alias-bg-layer-2: hsl(var(--muted));
@@ -32,5 +32,5 @@
   font-family: inherit;
   line-height: 1.5;
 }
-.gamma-intelligent-ui pre { margin: 0; }
-.gamma-intelligent-ui button:focus-visible, .gamma-intelligent-ui summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.carpus-intelligent-ui pre { margin: 0; }
+.carpus-intelligent-ui button:focus-visible, .carpus-intelligent-ui summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }

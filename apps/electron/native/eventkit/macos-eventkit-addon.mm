@@ -36,14 +36,14 @@ static NSDictionary *itemResponse(EKCalendarItem *item) { return @{ @"calendarIt
 static NSNumber *milliseconds(NSDate *value) { return value ? @((long long)llround(value.timeIntervalSince1970 * 1000.0)) : nil; }
 static NSDictionary *itemDTO(NSString *entity, EKCalendarItem *item) {
   NSMutableDictionary *result = [@{ @"calendarItemIdentifier": item.calendarItemIdentifier ?: @"", @"calendarItemExternalIdentifier": item.calendarItemExternalIdentifier ?: @"", @"title": item.title ?: @"", @"notes": item.notes ?: @"", @"lastModifiedAt": milliseconds(item.lastModifiedDate) ?: @0 } mutableCopy];
-  NSString *identity = GammaPlanningIdentity(entity, item.URL); if (identity) result[@"gammaIdentity"] = identity;
+  NSString *identity = CarpusPlanningIdentity(entity, item.URL); if (identity) result[@"carpusIdentity"] = identity;
   if ([entity isEqualToString:@"calendar"]) { EKEvent *event = (EKEvent *)item; result[@"startAt"] = milliseconds(event.startDate) ?: @0; result[@"endAt"] = milliseconds(event.endDate) ?: @0; result[@"allDay"] = @(event.allDay); result[@"isRecurring"] = @(event.recurrenceRules.count > 0); }
   else { EKReminder *reminder = (EKReminder *)item; NSDate *due = reminder.dueDateComponents ? [[NSCalendar currentCalendar] dateFromComponents:reminder.dueDateComponents] : nil; if (due) result[@"dueAt"] = milliseconds(due); result[@"dueDateOnly"] = @(reminder.dueDateComponents && reminder.dueDateComponents.hour == NSDateComponentUndefined); result[@"priority"] = reminder.priority <= 4 ? @"high" : reminder.priority >= 6 ? @"low" : @"medium"; result[@"completed"] = @(reminder.completed); if (reminder.completionDate) result[@"completedAt"] = milliseconds(reminder.completionDate); }
   return result;
 }
 
 static EKCalendarItem *recoveredItem(NSString *entity, EKCalendar *target, NSDictionary *payload) {
-  NSString *identity = string(payload, @"identity"); if (!GammaPlanningIdentityURL(entity, identity)) return nil;
+  NSString *identity = string(payload, @"identity"); if (!CarpusPlanningIdentityURL(entity, identity)) return nil;
   if ([entity isEqualToString:@"calendar"]) {
     // 删除后本地日程快照可能已不存在。带 anchor 时精确查找；仅 crash-recovery 时退化为较宽窗口。
     NSNumber *anchorValue = number(payload, @"startAt");
@@ -52,7 +52,7 @@ static EKCalendarItem *recoveredItem(NSString *entity, EKCalendar *target, NSDic
     NSDate *start = [[NSCalendar currentCalendar] dateByAddingUnit:NSCalendarUnitDay value:before toDate:anchor options:0];
     NSDate *end = [[NSCalendar currentCalendar] dateByAddingUnit:NSCalendarUnitDay value:after toDate:anchor options:0];
     NSPredicate *predicate = [eventStore() predicateForEventsWithStartDate:start endDate:end calendars:@[target]];
-    for (EKEvent *event in [eventStore() eventsMatchingPredicate:predicate]) if (GammaPlanningIdentityMatches(entity, identity, event.URL)) return event;
+    for (EKEvent *event in [eventStore() eventsMatchingPredicate:predicate]) if (CarpusPlanningIdentityMatches(entity, identity, event.URL)) return event;
   }
   return nil;
 }
@@ -63,15 +63,15 @@ static void upsert(NSString *entity, NSDictionary *payload, CommandContext *ctx,
   NSString *identifier = string(payload, @"calendarItemIdentifier"); EKCalendarItem *recovered = identifier ? nil : ([entity isEqualToString:@"reminder"] ? ([recoveredReminders firstObject]) : recoveredItem(entity, target, payload));
   NSError *error = nil;
   if ([entity isEqualToString:@"calendar"]) {
-    EKEvent *event = identifier ? (EKEvent *)[eventStore() calendarItemWithIdentifier:identifier] : nil; if (event && ![event.calendar.calendarIdentifier isEqualToString:target.calendarIdentifier]) { ctx->reject(@"系统项目已移出连接集合"); return; } if (!event && identifier && ![number(payload, @"allowRecreate") boolValue]) { ctx->reject(@"系统日程已不存在；请选择保留 Gamma 后再重建"); return; } if (!event) event = (EKEvent *)recovered; if (!event) event = [EKEvent eventWithEventStore:eventStore()];
+    EKEvent *event = identifier ? (EKEvent *)[eventStore() calendarItemWithIdentifier:identifier] : nil; if (event && ![event.calendar.calendarIdentifier isEqualToString:target.calendarIdentifier]) { ctx->reject(@"系统项目已移出连接集合"); return; } if (!event && identifier && ![number(payload, @"allowRecreate") boolValue]) { ctx->reject(@"系统日程已不存在；请选择保留 Carpus 后再重建"); return; } if (!event) event = (EKEvent *)recovered; if (!event) event = [EKEvent eventWithEventStore:eventStore()];
     NSNumber *startAt = number(payload, @"startAt"); if (!startAt) { ctx->reject(@"日程缺少开始时间"); return; }
-    event.calendar = target; event.title = title; event.notes = string(payload, @"notes"); event.URL = GammaPlanningUpsertIdentityURL(entity, string(payload, @"identity"), event.URL);
+    event.calendar = target; event.title = title; event.notes = string(payload, @"notes"); event.URL = CarpusPlanningUpsertIdentityURL(entity, string(payload, @"identity"), event.URL);
     event.startDate = date(startAt); event.endDate = date(number(payload, @"endAt") ?: @(startAt.doubleValue + 3600000)); event.allDay = [number(payload, @"allDay") boolValue];
     if (![eventStore() saveEvent:event span:EKSpanThisEvent commit:YES error:&error]) { ctx->reject(error.localizedDescription); return; }
     ctx->resolve(json(itemResponse(event))); return;
   }
-  EKReminder *reminder = identifier ? (EKReminder *)[eventStore() calendarItemWithIdentifier:identifier] : nil; if (reminder && ![reminder.calendar.calendarIdentifier isEqualToString:target.calendarIdentifier]) { ctx->reject(@"系统项目已移出连接集合"); return; } if (!reminder && identifier && ![number(payload, @"allowRecreate") boolValue]) { ctx->reject(@"系统提醒事项已不存在；请选择保留 Gamma 后再重建"); return; } if (!reminder) reminder = (EKReminder *)recovered; if (!reminder) reminder = [EKReminder reminderWithEventStore:eventStore()];
-  reminder.calendar = target; reminder.title = title; reminder.notes = string(payload, @"notes"); reminder.URL = GammaPlanningUpsertIdentityURL(entity, string(payload, @"identity"), reminder.URL);
+  EKReminder *reminder = identifier ? (EKReminder *)[eventStore() calendarItemWithIdentifier:identifier] : nil; if (reminder && ![reminder.calendar.calendarIdentifier isEqualToString:target.calendarIdentifier]) { ctx->reject(@"系统项目已移出连接集合"); return; } if (!reminder && identifier && ![number(payload, @"allowRecreate") boolValue]) { ctx->reject(@"系统提醒事项已不存在；请选择保留 Carpus 后再重建"); return; } if (!reminder) reminder = (EKReminder *)recovered; if (!reminder) reminder = [EKReminder reminderWithEventStore:eventStore()];
+  reminder.calendar = target; reminder.title = title; reminder.notes = string(payload, @"notes"); reminder.URL = CarpusPlanningUpsertIdentityURL(entity, string(payload, @"identity"), reminder.URL);
   NSNumber *dueAt = number(payload, @"dueAt"); if (dueAt) { NSDate *due = date(dueAt); NSCalendarUnit units = [number(payload, @"dueDateOnly") boolValue] ? (NSCalendarUnitYear|NSCalendarUnitMonth|NSCalendarUnitDay) : (NSCalendarUnitYear|NSCalendarUnitMonth|NSCalendarUnitDay|NSCalendarUnitHour|NSCalendarUnitMinute|NSCalendarUnitSecond); NSDateComponents *components = [[NSCalendar currentCalendar] components:units fromDate:due]; components.timeZone = NSTimeZone.localTimeZone; reminder.dueDateComponents = components; } else reminder.dueDateComponents = nil;
   NSString *priority = string(payload, @"priority") ?: @"medium"; reminder.priority = [priority isEqualToString:@"high"] ? 1 : [priority isEqualToString:@"low"] ? 9 : 5;
   reminder.completed = [number(payload, @"completed") boolValue]; NSNumber *completedAt = number(payload, @"completedAt"); reminder.completionDate = reminder.completed && completedAt ? date(completedAt) : nil;
@@ -91,12 +91,12 @@ static void removeItem(NSString *entity, EKCalendarItem *item, CommandContext *c
 static void execute(NSString *command, NSString *entity, NSDictionary *payload, CommandContext *ctx) {
   @autoreleasepool {
     if (!@available(macOS 14.0, *)) { ctx->resolve(json(@{ @"entity": entity, @"status": @"unsupported" })); return; }
-    NSLog(@"[GammaEventKit] executing %@ for %@ (status=%@)", command, entity, statusName([EKEventStore authorizationStatusForEntityType:typeFor(entity)]));
+    NSLog(@"[CarpusEventKit] executing %@ for %@ (status=%@)", command, entity, statusName([EKEventStore authorizationStatusForEntityType:typeFor(entity)]));
     EKEntityType entityType = typeFor(entity);
     if ([command isEqualToString:@"authorizationStatus"]) { ctx->resolve(json(@{ @"entity": entity, @"status": statusName([EKEventStore authorizationStatusForEntityType:entityType]) })); return; }
     if ([command isEqualToString:@"requestAccess"]) {
       // Electron main 可能不是前台应用；显式激活其 NSApplication，确保 TCC sheet 可呈现。
-      NSLog(@"[GammaEventKit] requesting TCC with NSApp=%@ active=%d", NSApp, NSApp.isActive);
+      NSLog(@"[CarpusEventKit] requesting TCC with NSApp=%@ active=%d", NSApp, NSApp.isActive);
       [NSApp activateIgnoringOtherApps:YES];
       void (^completion)(BOOL, NSError *) = ^(BOOL granted, NSError *error) { dispatch_async(dispatch_get_main_queue(), ^{ ctx->resolve(json(@{ @"entity": entity, @"status": statusName([EKEventStore authorizationStatusForEntityType:entityType]), @"granted": @(granted), @"error": error.localizedDescription ?: @"" })); }); };
       if ([entity isEqualToString:@"calendar"]) [eventStore() requestFullAccessToEventsWithCompletion:completion]; else [eventStore() requestFullAccessToRemindersWithCompletion:completion];
@@ -128,12 +128,12 @@ static void execute(NSString *command, NSString *entity, NSDictionary *payload, 
       NSPredicate *predicate = [eventStore() predicateForRemindersInCalendars:@[target]];
       [eventStore() fetchRemindersMatchingPredicate:predicate completion:^(NSArray<EKReminder *> *reminders) { dispatch_async(dispatch_get_main_queue(), ^{
         NSString *identity = string(payload, @"identity"); EKReminder *match = nil;
-        for (EKReminder *reminder in reminders) if (GammaPlanningIdentityMatches(entity, identity, reminder.URL)) { match = reminder; break; }
+        for (EKReminder *reminder in reminders) if (CarpusPlanningIdentityMatches(entity, identity, reminder.URL)) { match = reminder; break; }
         removeItem(entity, match, ctx);
       }); }];
       return;
     }
-    if ([command isEqualToString:@"upsert"] && [entity isEqualToString:@"reminder"] && !string(payload, @"calendarItemIdentifier") && string(payload, @"identity")) { EKCalendar *target = [eventStore() calendarWithIdentifier:string(payload, @"targetId")]; NSPredicate *predicate = target ? [eventStore() predicateForRemindersInCalendars:@[target]] : nil; [eventStore() fetchRemindersMatchingPredicate:predicate completion:^(NSArray<EKReminder *> *reminders) { dispatch_async(dispatch_get_main_queue(), ^{ NSString *identity = string(payload, @"identity"); NSMutableArray *matches = [NSMutableArray array]; for (EKReminder *reminder in reminders) if (GammaPlanningIdentityMatches(entity, identity, reminder.URL)) [matches addObject:reminder]; upsert(entity, payload, ctx, matches); }); }]; return; }
+    if ([command isEqualToString:@"upsert"] && [entity isEqualToString:@"reminder"] && !string(payload, @"calendarItemIdentifier") && string(payload, @"identity")) { EKCalendar *target = [eventStore() calendarWithIdentifier:string(payload, @"targetId")]; NSPredicate *predicate = target ? [eventStore() predicateForRemindersInCalendars:@[target]] : nil; [eventStore() fetchRemindersMatchingPredicate:predicate completion:^(NSArray<EKReminder *> *reminders) { dispatch_async(dispatch_get_main_queue(), ^{ NSString *identity = string(payload, @"identity"); NSMutableArray *matches = [NSMutableArray array]; for (EKReminder *reminder in reminders) if (CarpusPlanningIdentityMatches(entity, identity, reminder.URL)) [matches addObject:reminder]; upsert(entity, payload, ctx, matches); }); }]; return; }
     if ([command isEqualToString:@"upsert"]) { upsert(entity, payload, ctx, @[]); return; }
     ctx->reject(@"unsupported command");
   }
@@ -149,7 +149,7 @@ static Napi::Value subscribeChanges(const Napi::CallbackInfo &info) {
   if (info.Length() < 1 || !info[0].IsFunction()) { Napi::TypeError::New(env, "change listener callback is required").ThrowAsJavaScriptException(); return env.Undefined(); }
   if (eventStoreChangeObserver) [[NSNotificationCenter defaultCenter] removeObserver:eventStoreChangeObserver];
   if (eventStoreChangeListener) eventStoreChangeListener->Release();
-  eventStoreChangeListener = std::make_unique<Napi::ThreadSafeFunction>(Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(), "GammaEventKitChanges", 1, 1));
+  eventStoreChangeListener = std::make_unique<Napi::ThreadSafeFunction>(Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(), "CarpusEventKitChanges", 1, 1));
   eventStoreChangeObserver = [[NSNotificationCenter defaultCenter] addObserverForName:EKEventStoreChangedNotification object:eventStore() queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *) {
     if (!eventStoreChangeListener) return;
     eventStoreChangeListener->NonBlockingCall([](Napi::Env callbackEnv, Napi::Function callback) { callback.Call({}); });
@@ -161,7 +161,7 @@ static Napi::Value command(const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env(); if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() || !info[2].IsString()) { Napi::TypeError::New(env, "command, entity and payload JSON are required").ThrowAsJavaScriptException(); return env.Undefined(); }
   NSString *name = [NSString stringWithUTF8String:info[0].As<Napi::String>().Utf8Value().c_str()]; NSString *entity = [NSString stringWithUTF8String:info[1].As<Napi::String>().Utf8Value().c_str()]; NSString *payloadText = [NSString stringWithUTF8String:info[2].As<Napi::String>().Utf8Value().c_str()];
   NSError *error = nil; NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[payloadText dataUsingEncoding:NSUTF8StringEncoding] options:0 error:&error]; if (!payload || ![payload isKindOfClass:[NSDictionary class]]) payload = @{};
-  auto *ctx = new CommandContext(env); NSLog(@"[GammaEventKit] scheduling %@ for %@ on main queue", name, entity); dispatch_async(dispatch_get_main_queue(), ^{ execute(name, entity, payload, ctx); }); return ctx->deferred->Promise();
+  auto *ctx = new CommandContext(env); NSLog(@"[CarpusEventKit] scheduling %@ for %@ on main queue", name, entity); dispatch_async(dispatch_get_main_queue(), ^{ execute(name, entity, payload, ctx); }); return ctx->deferred->Promise();
 }
-Napi::Object Init(Napi::Env env, Napi::Object exports) { NSLog(@"[GammaEventKit] N-API addon loaded"); env.AddCleanupHook(cleanupChanges); exports.Set("command", Napi::Function::New(env, command)); exports.Set("subscribeChanges", Napi::Function::New(env, subscribeChanges)); return exports; }
-NODE_API_MODULE(gamma_eventkit, Init)
+Napi::Object Init(Napi::Env env, Napi::Object exports) { NSLog(@"[CarpusEventKit] N-API addon loaded"); env.AddCleanupHook(cleanupChanges); exports.Set("command", Napi::Function::New(env, command)); exports.Set("subscribeChanges", Napi::Function::New(env, subscribeChanges)); return exports; }
+NODE_API_MODULE(carpus_eventkit, Init)

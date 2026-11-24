@@ -124,7 +124,7 @@
     <xsd:attribute name="cropbottom" type="xsd:string" use="optional"/>
     <xsd:attribute name="gain" type="xsd:string" use="optional"/>
     <xsd:attribute name="blacklevel" type="xsd:string" use="optional"/>
-    <xsd:attribute name="gamma" type="xsd:string" use="optional"/>
+    <xsd:attribute name="carpus" type="xsd:string" use="optional"/>
     <xsd:attribute name="grayscale" type="s:ST_TrueFalse" use="optional"/>
     <xsd:attribute name="bilevel" type="s:ST_TrueFalse" use="optional"/>
   </xsd:attributeGroup>

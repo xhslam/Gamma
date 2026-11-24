@@ -1,4 +1,4 @@
-import type { FeishuChatBinding } from '@gamma/shared'
+import type { FeishuChatBinding } from '@carpus/shared'
 
 export type FeishuBindingViewMode = 'active' | 'archived'
 export type FeishuBindingTypeFilter = 'all' | 'group' | 'p2p'

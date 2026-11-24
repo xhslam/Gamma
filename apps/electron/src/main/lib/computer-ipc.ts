@@ -6,7 +6,7 @@ import {
   type ComputerPermission,
   type ComputerUsePreferences,
   type ComputerPreviewRequest,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { getMainWindow } from './main-window-store'
 import { computerAuthorizationManager, computerController } from './computer-service'
 import { assertComputerSender } from './computer-ipc-policy'

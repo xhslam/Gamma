@@ -29,12 +29,12 @@ const defaultPath = join(resourcesDir, 'icon.png')
 const require = createRequire(import.meta.url)
 // app-builder-bin 随现有 electron-builder 提供，不额外引入图像转换依赖。
 const { appBuilderPath }: { appBuilderPath: string } = require('app-builder-bin')
-const tempDir = mkdtempSync(join(tmpdir(), 'gamma-icons-'))
+const tempDir = mkdtempSync(join(tmpdir(), 'carpus-icons-'))
 
 try {
   for (const variant of APP_ICON_VARIANTS) {
     // 每款共用同一矢量轮廓，确保颜色切换时形状与留白一致。
-    const source = readFileSync(join(resourcesDir, 'icon-sources/pixel-gamma.svg'), 'utf-8')
+    const source = readFileSync(join(resourcesDir, 'icon-sources/pixel-carpus.svg'), 'utf-8')
       .replace('#F2EBDD', variant.background)
       .replace('#345F6C', variant.foreground)
     const body = await sharp(Buffer.from(source))
@@ -48,11 +48,11 @@ try {
       .extend({ top: leadingPadding, bottom: trailingPadding, left: leadingPadding, right: trailingPadding, background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer()
-    await Bun.write(join(resourcesDir, 'gamma-logos', variant.fileName), output)
-    await Bun.write(join(rendererDir, 'bots/gamma-logos', variant.fileName), output)
+    await Bun.write(join(resourcesDir, 'carpus-logos', variant.fileName), output)
+    await Bun.write(join(rendererDir, 'bots/carpus-logos', variant.fileName), output)
     if (variant.id === 'default') {
       await Bun.write(defaultPath, output)
-      await Bun.write(join(rendererDir, 'models/gamma.png'), output)
+      await Bun.write(join(rendererDir, 'models/carpus.png'), output)
     }
   }
 

@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import { setConfigHomeForTest } from '../config-paths'
 import { appendSDKMessages, createAgentSession, updateAgentContextRefs } from '../agent-session-manager'
 import { PiAgentAdapter, type PiAgentQueryOptions } from '../adapters/pi-agent-adapter'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 
 /** 真实 Pi SDK 和本地模拟 provider；验证请求链路，不代表真实模型的语义安全性。 */
 describe('Given 真实 Pi、隔离配置与显式对话引用', () => {
   test('When 工具多轮和恢复后移除引用 Then 每次注入一次且不进入 Pi artifact', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-ref-pi-runtime-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-ref-pi-runtime-'))
     const previous = setConfigHomeForTest(root)
     const adapter = new PiAgentAdapter()
     const bodies: string[] = []

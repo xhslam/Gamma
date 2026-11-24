@@ -5,7 +5,7 @@
  * 支持非 Git 模式降级（无行级增删数据时按文件数展示角标）。
  */
 
-import type { UnstagedChangesResult } from '@gamma/shared'
+import type { UnstagedChangesResult } from '@carpus/shared'
 import type { SessionFileChange } from '@/lib/session-file-changes'
 
 export interface DiffBadgeStats {

@@ -1,4 +1,4 @@
-import type { MarkdownWorkspaceDocument, MarkdownWorkspaceResult, MarkdownWorkspaceSource } from '@gamma/shared'
+import type { MarkdownWorkspaceDocument, MarkdownWorkspaceResult, MarkdownWorkspaceSource } from '@carpus/shared'
 
 export type MarkdownWorkspaceMode = 'read' | 'rich' | 'source' | 'split'
 export interface MarkdownDocumentDraft extends MarkdownWorkspaceDocument {

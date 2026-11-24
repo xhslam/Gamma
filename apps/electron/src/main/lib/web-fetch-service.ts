@@ -114,7 +114,7 @@ async function fetchWebLocally(input: WebFetchInput, options: WebFetchOptions): 
       try { response = await (options.fetch ?? network.fetch)(url, {
         signal,
         redirect: 'manual',
-        headers: { 'User-Agent': 'Gamma/1.0', Accept: 'text/markdown, text/html, text/plain, application/json;q=0.8', 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' },
+        headers: { 'User-Agent': 'Carpus/1.0', Accept: 'text/markdown, text/html, text/plain, application/json;q=0.8', 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' },
       }) } catch (error) {
         throw new RemoteFetchEligibleError(url, error instanceof Error ? error.message : '本地网页请求失败。')
       }

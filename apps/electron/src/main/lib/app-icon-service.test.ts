@@ -7,7 +7,7 @@ import type { AppIconVariantId } from '../../types/app-icons'
 
 const resourcesDir = join(import.meta.dir, 'test-resources')
 const defaultPath = join(resourcesDir, 'icon.png')
-const emeraldPath = join(resourcesDir, 'gamma-logos', 'gamma-mint-forest.png')
+const emeraldPath = join(resourcesDir, 'carpus-logos', 'carpus-mint-forest.png')
 
 function createRuntime(savedVariant: unknown = 'default') {
   let persistedVariant = savedVariant
@@ -15,7 +15,7 @@ function createRuntime(savedVariant: unknown = 'default') {
   const appliedPaths: string[] = []
   const savedVariants: AppIconVariantId[] = []
   const availablePaths = new Set([defaultPath, ...APP_ICON_VARIANTS.map((variant) =>
-    join(resourcesDir, 'gamma-logos', variant.fileName),
+    join(resourcesDir, 'carpus-logos', variant.fileName),
   )])
   const dependencies: AppIconDependencies = {
     platform: 'darwin',
@@ -39,7 +39,7 @@ describe('应用图标切换与重启恢复', () => {
   test('Given 十三款内置图标 When 解析资源路径 Then 默认指向 icon.png 且其余均指向对应品牌资源', () => {
     expect(resolveAppIconPath('default', resourcesDir)).toBe(defaultPath)
     for (const variant of APP_ICON_VARIANTS.slice(1)) {
-      expect(resolveAppIconPath(variant.id, resourcesDir)).toBe(join(resourcesDir, 'gamma-logos', variant.fileName))
+      expect(resolveAppIconPath(variant.id, resourcesDir)).toBe(join(resourcesDir, 'carpus-logos', variant.fileName))
     }
   })
 

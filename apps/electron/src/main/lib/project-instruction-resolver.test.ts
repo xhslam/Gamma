@@ -7,7 +7,7 @@ import { hasRootProjectAgentsInstruction, resolveProjectInstructions } from './p
 const temporaryProjects: string[] = []
 
 function createProject(): string {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'gamma-project-instructions-'))
+  const projectRoot = mkdtempSync(join(tmpdir(), 'carpus-project-instructions-'))
   temporaryProjects.push(projectRoot)
   return projectRoot
 }

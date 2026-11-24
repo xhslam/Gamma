@@ -28,7 +28,7 @@ final class FixtureDelegate: NSObject, NSApplicationDelegate {
     let endpoint: URL, title: String
     var windows: [String: NSWindow] = [:], inputs: [String: FixtureInput] = [:], states: [String: FixtureState] = [:]
     var timer: Timer?
-    init(endpoint: URL, token: String) { self.endpoint = endpoint; title = "Gamma Native Acceptance \(token)" }
+    init(endpoint: URL, token: String) { self.endpoint = endpoint; title = "Carpus Native Acceptance \(token)" }
     func applicationDidFinishLaunching(_ notification: Notification) {
         for name in ["B", "A"] {
             let window = NSWindow(contentRect: NSRect(x: 320, y: 180, width: 700, height: 500), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)

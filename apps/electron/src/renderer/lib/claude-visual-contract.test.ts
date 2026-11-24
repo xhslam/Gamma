@@ -13,7 +13,7 @@ describe('Given Claude 风格的共享视觉契约', () => {
   test('When DPR 或减少动态效果偏好改变 Then 提供对应媒体规则', () => {
     expect(css).toContain('(min-resolution: 2dppx)')
     expect(css).toContain('(min-resolution: 3dppx)')
-    expect(css).toContain('.gamma-ui')
+    expect(css).toContain('.carpus-ui')
     expect(css).toContain('prefers-reduced-motion: reduce')
   })
 })

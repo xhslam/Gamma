@@ -14,7 +14,7 @@ beforeAll(async () => {
     const render=(visible=true,active=true)=>root.render(React.createElement(Provider,{store},visible?React.createElement(AgyPermissionNotice,{active,embedded:true}):null))
     const delay=()=>new Promise(resolve=>setTimeout(resolve,30))
     const until=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await delay()}throw new Error('一次性权限提示未达到预期状态')}
-    window.noticeTest={render,delay,until,notice:()=>document.querySelector('[aria-label="AGY 权限提示"]'),restart:()=>{root.unmount();store=createStore();root=createRoot(document.getElementById('root'));render()},stored:()=>localStorage.getItem('gamma-agy-permission-notice-seen-v1')}
+    window.noticeTest={render,delay,until,notice:()=>document.querySelector('[aria-label="AGY 权限提示"]'),restart:()=>{root.unmount();store=createStore();root=createRoot(document.getElementById('root'));render()},stored:()=>localStorage.getItem('carpus-agy-permission-notice-seen-v1')}
   `)
 }, 60_000)
 afterAll(async () => { await renderer?.dispose() })

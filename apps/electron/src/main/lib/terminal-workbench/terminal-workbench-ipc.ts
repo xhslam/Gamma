@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { TERMINAL_WORKBENCH_IPC_CHANNELS, type DesktopTerminalSessionInput } from '@gamma/shared'
+import { TERMINAL_WORKBENCH_IPC_CHANNELS, type DesktopTerminalSessionInput } from '@carpus/shared'
 import { createTerminalSessionManager } from './terminal-session-manager.cjs'
 import { createTerminalProjectDirectories, TERMINAL_FOCUS_SCOPE } from './terminal-project-directories.cjs'
 import { createTerminalSessionCatalog } from './terminal-session-catalog.cjs'

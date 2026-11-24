@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { PLANNING_IPC_CHANNELS } from '@gamma/shared'
+import { PLANNING_IPC_CHANNELS } from '@carpus/shared'
 import { DEFAULT_PRODUCTIVITY_TOOLS_SETTINGS, normalizeProductivityToolsSettings } from '../../types/settings'
 import { PLANNING_REMOVED_ERROR, registerRemovedPlanningHandlers } from './planning-ipc-retirement'
 

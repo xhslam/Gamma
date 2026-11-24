@@ -18,7 +18,7 @@ export function resolveUpdateConfigPath(resourcesPath: string, userDataPath: str
     'provider: github',
     `owner: ${GITHUB_RELEASE_REPO.owner}`,
     `repo: ${GITHUB_RELEASE_REPO.repo}`,
-    'updaterCacheDirName: gamma-updater',
+    'updaterCacheDirName: carpus-updater',
     '',
   ].join('\n'))
   return fallbackPath

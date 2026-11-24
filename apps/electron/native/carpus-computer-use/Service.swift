@@ -93,7 +93,7 @@ final class DesktopService {
     private func handle(_ fd: Int32) {
         defer { close(fd) }
         do {
-            try authenticatePeer(fd, requireGammaParent: true)
+            try authenticatePeer(fd, requireCarpusParent: true)
             let request = try receiveFrame(fd, as: Request.self, limit: 512 * 1024)
             try require(request.version == protocolVersion, "IPC 协议不兼容")
             switch request.operation {
@@ -216,8 +216,8 @@ func runClient(_ arguments: [String]) throws -> Int32 {
     try require(fd >= 0, "客户端 socket 创建失败")
     defer { close(fd) }
     configureSocket(fd)
-    try require(withSocketAddress { connect(fd, $0, $1) } == 0, "独立组件未启动；请由 Gamma 使用 LaunchServices 打开组件，不得重放已投递操作")
-    try authenticatePeer(fd, requireGammaParent: false)
+    try require(withSocketAddress { connect(fd, $0, $1) } == 0, "独立组件未启动；请由 Carpus 使用 LaunchServices 打开组件，不得重放已投递操作")
+    try authenticatePeer(fd, requireCarpusParent: false)
     try sendFrame(fd, request)
     var total = 0
     var bufferedStdout = ClientOutputBuffer()

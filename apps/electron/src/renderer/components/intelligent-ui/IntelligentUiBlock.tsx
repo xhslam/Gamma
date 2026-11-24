@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
-import { ErrorBoundary, GenuiActionContext, GenuiBlock, isRenderableProcess, processGenuiSpec, setGenuiAssetBase } from '@gamma/genui-embed'
-import type { BlockInteractionState } from '@gamma/genui-embed'
+import { ErrorBoundary, GenuiActionContext, GenuiBlock, isRenderableProcess, processGenuiSpec, setGenuiAssetBase } from '@carpus/genui-embed'
+import type { BlockInteractionState } from '@carpus/genui-embed'
 import { intelligentUiEnabledAtom } from '@/atoms/ui-preferences'
 import { useAgentBrowserLink } from '@/components/browser/AgentBrowserLinkProvider'
 import { Button } from '@/components/ui/button'
@@ -62,13 +62,13 @@ export default function IntelligentUiBlock({ source, blockId }: { source: string
   }
   if (!enabled || !session) return <UiSourceFallback source={source} message="Intelligent UI 已关闭" />
   if (!parsed.spec) return <UiSourceFallback source={source} message={parsed.error} />
-  return <div className="gamma-intelligent-ui not-prose" data-intelligent-ui="" onClickCapture={event => {
+  return <div className="carpus-intelligent-ui not-prose" data-intelligent-ui="" onClickCapture={event => {
     const target = event.target instanceof Element ? event.target.closest('a') : null
     if (!target) return
     event.preventDefault(); event.stopPropagation()
     const href = target.getAttribute('href') ?? ''
     if (isPublicUiUrl(href) && browser) browser.openLink(href)
-    else setError('此链接未通过 Gamma 导航入口校验')
+    else setError('此链接未通过 Carpus 导航入口校验')
   }} onAuxClickCapture={event => { if (event.target instanceof Element && event.target.closest('a')) { event.preventDefault(); event.stopPropagation() } }}>
     <ErrorBoundary label="Intelligent UI"><GenuiActionContext.Provider value={session.canSend ? onAction : undefined}><GenuiBlock key={stateKey} spec={parsed.spec} stateKey={stateKey} initialState={initialState} onStateChange={saveState} animateEntrance={false} /></GenuiActionContext.Provider></ErrorBoundary>
     {pending && <section className="mt-3 rounded-lg border border-border bg-muted/40 p-3" aria-label="确认 UI 交互" data-ui-action-preview="">

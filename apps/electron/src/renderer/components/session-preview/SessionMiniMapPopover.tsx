@@ -24,8 +24,8 @@ import type {
   SDKSystemMessage,
   SDKUserContentBlock,
   SDKUserMessage,
-} from '@gamma/shared'
-import { getSDKCompactStatus } from '@gamma/shared'
+} from '@carpus/shared'
+import { getSDKCompactStatus } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 export type SessionMiniMapType = 'agent'

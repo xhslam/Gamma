@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { runComputerUseDiagnostics } from './computer-use-diagnostics'
 import type { ComputerUseDiagnosticsOptions, ComputerUseDiagnosticsReport } from './computer-use-diagnostics'
 
-const reportPath = join(tmpdir(), `gamma-computer-use-diagnostics-${process.pid}.json`)
+const reportPath = join(tmpdir(), `carpus-computer-use-diagnostics-${process.pid}.json`)
 const roots: string[] = []
 afterEach(() => {
   rmSync(reportPath, { force: true })
@@ -17,13 +17,13 @@ function fixture(parentAX = true, helperAX = true) {
   const paths: string[] = []
   const listeners: Array<() => void> = []
   const options: ComputerUseDiagnosticsOptions = {
-    platform: 'darwin', argv: ['Gamma', '--computer-use-diagnostics'], resourcesPath: '/Applications/Gamma.app/Contents/Resources',
+    platform: 'darwin', argv: ['Carpus', '--computer-use-diagnostics'], resourcesPath: '/Applications/Carpus.app/Contents/Resources',
     app: {
       isPackaged: true,
       setName: name => { events.push(`name:${name}`) },
       setPath: (name, path) => { expect(existsSync(path)).toBe(true); paths.push(path); events.push(`path:${name}`) },
-      getPath: () => '/Applications/Gamma.app/Contents/MacOS/Gamma',
-      getAppPath: () => '/Applications/Gamma.app/Contents/Resources/app.asar', getVersion: () => '0.19.fixture',
+      getPath: () => '/Applications/Carpus.app/Contents/MacOS/Carpus',
+      getAppPath: () => '/Applications/Carpus.app/Contents/Resources/app.asar', getVersion: () => '0.19.fixture',
       whenReady: async () => { events.push('ready'); expect(paths).toHaveLength(2) },
       on: (_event, callback) => { listeners.push(callback) },
       quit: () => { events.push('quit'); for (const callback of listeners) callback() },
@@ -55,9 +55,9 @@ async function collect(options: ComputerUseDiagnosticsOptions): Promise<{ report
 }
 
 describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
-  test('When未指定准确开关 Then不初始化Gamma身份、profile或helper', () => {
+  test('When未指定准确开关 Then不初始化Carpus身份、profile或helper', () => {
     const { options, events } = fixture()
-    options.argv = ['Gamma', '--computer-use-diagnostics=/tmp/arbitrary']
+    options.argv = ['Carpus', '--computer-use-diagnostics=/tmp/arbitrary']
     expect(runComputerUseDiagnostics(options)).toBeUndefined()
     expect(events).toEqual([])
     expect(existsSync(reportPath)).toBe(false)
@@ -66,20 +66,20 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
   test('When启动诊断 Then同步隔离profile，ready后只请求status并先回收helper再退出', async () => {
     const { options, events, paths } = fixture()
     const { report, metadata } = await collect(options)
-    expect(events.slice(0, 4)).toEqual(['name:Gamma', 'path:userData', 'path:sessionData', 'ready'])
+    expect(events.slice(0, 4)).toEqual(['name:Carpus', 'path:userData', 'path:sessionData', 'ready'])
     expect(events.indexOf('ready')).toBeLessThan(events.indexOf('parentAX'))
     expect(events.indexOf('terminate')).toBeLessThan(events.indexOf('quit'))
     expect(paths[0]).toBe(paths[1])
-    expect(paths[0]?.startsWith(join(tmpdir(), 'gamma-computer-use-diagnostics-profile-'))).toBe(true)
+    expect(paths[0]?.startsWith(join(tmpdir(), 'carpus-computer-use-diagnostics-profile-'))).toBe(true)
     expect(paths.every(path => !existsSync(path))).toBe(true)
     expect(report.parentAX).toBe(true)
     expect(report.helperPermissions).toEqual({ accessibility: true, screen: false, listen: false, post: false })
     expect(report.identitiesMatch).toBe(true)
     expect(report.inheritanceVerified).toBe(false)
-    expect(report.permissionOwner).toBe('gammaComputerUse')
+    expect(report.permissionOwner).toBe('carpusComputerUse')
     expect(report.readOnly).toBe(true)
     expect(report.errors).toEqual([])
-    expect(report.helperExecutable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
+    expect(report.helperExecutable).toBe('/Applications/carpusComputerUse.app/Contents/MacOS/carpusComputerUse')
     expect(readFileSync(reportPath, 'utf8')).not.toContain('SECRET_AX_CANARY')
     expect(statSync(reportPath).mode & 0o777).toBe(0o600)
     expect(metadata).toEqual({ diagnosticsReportPath: reportPath, reportWritten: true })
@@ -110,12 +110,12 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
   })
 
   test('When外部参数试图指定输出路径且报告目标是符号链接 Then忽略参数且原子替换链接而不改其目标', async () => {
-    const root = mkdtempSync('/tmp/gamma-diagnostics-link-test-'); roots.push(root)
+    const root = mkdtempSync('/tmp/carpus-diagnostics-link-test-'); roots.push(root)
     const canary = join(root, 'canary.json')
     writeFileSync(canary, 'original')
     symlinkSync(canary, reportPath)
     const { options } = fixture()
-    options.argv = ['Gamma', '--computer-use-diagnostics', `--output=${canary}`]
+    options.argv = ['Carpus', '--computer-use-diagnostics', `--output=${canary}`]
     await collect(options)
     expect(readFileSync(canary, 'utf8')).toBe('original')
     expect(lstatSync(reportPath).isSymbolicLink()).toBe(false)
@@ -123,15 +123,15 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
 
   test('When开发态诊断 Then仍使用独立权限组件而不导入业务service', async () => {
     const { options } = fixture()
-    options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Gamma/apps/electron' }
+    options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Carpus/apps/electron' }
     const { report } = await collect(options)
-    expect(report.helperExecutable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
+    expect(report.helperExecutable).toBe('/Applications/carpusComputerUse.app/Contents/MacOS/carpusComputerUse')
   })
 
   test('When Windows 平台诊断 Then 正确指向 agent-desktop.exe 并处理 not_required 状态', async () => {
     const { options } = fixture()
     options.platform = 'win32'
-    options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Gamma/apps/electron' }
+    options.app = { ...options.app, isPackaged: false, getAppPath: () => '/workspace/Carpus/apps/electron' }
     options.createHost = executable => ({
       call: async () => ({
         permissions: { accessibility: { state: 'not_required' }, screen_recording: { state: 'not_required' } },
@@ -139,8 +139,8 @@ describe('Given真实GUI父进程的Computer Use只读诊断入口', () => {
       terminate: async () => {},
     })
     const { report } = await collect(options)
-    expect(report.permissionOwner).toBe('Gamma')
-    expect(report.helperExecutable).toBe('/workspace/Gamma/apps/electron/resources/agent-desktop/agent-desktop.exe')
+    expect(report.permissionOwner).toBe('Carpus')
+    expect(report.helperExecutable).toBe('/workspace/Carpus/apps/electron/resources/agent-desktop/agent-desktop.exe')
     expect(report.helperPermissions).toEqual({ accessibility: true, screen: true, listen: true, post: true })
   })
 })

@@ -11,7 +11,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import DOMPurify from 'dompurify'
 import { File as PierreFile } from '@pierre/diffs/react'
 import { toast } from 'sonner'
-import type { AgentPendingFile, FilePreviewMetadata } from '@gamma/shared'
+import type { AgentPendingFile, FilePreviewMetadata } from '@carpus/shared'
 import { cn } from '@/lib/utils'
 import {
   agentDiffViewModeAtom,

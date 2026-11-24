@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AgentSessionMeta } from '@gamma/shared'
+import type { AgentSessionMeta } from '@carpus/shared'
 import type { AgentSessionTreeItem } from './collapsed-agent-rail'
 import { getProjectPreviewSessions, SIDEBAR_PROJECT_PREVIEW_LIMIT } from './sidebar-project-preview'
 

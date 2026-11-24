@@ -12,7 +12,7 @@ import {
 } from './pi-tools'
 import { saveSnapshotToCache, computeSnapshotHash } from './ref-cache'
 import { buildReferencedContext } from './context-builder'
-import type { AgentContextRef, SDKMessage } from '@gamma/shared'
+import type { AgentContextRef, SDKMessage } from '@carpus/shared'
 
 describe('Conversation Reference Pi Extension Tools & Security', () => {
   let tempHome: string
@@ -23,7 +23,7 @@ describe('Conversation Reference Pi Extension Tools & Security', () => {
   const deepSourceSessionId = 'deep_source_session'
 
   beforeAll(() => {
-    tempHome = mkdtempSync(join(tmpdir(), 'gamma-pi-tools-test-'))
+    tempHome = mkdtempSync(join(tmpdir(), 'carpus-pi-tools-test-'))
     prevHome = setConfigHomeForTest(tempHome)
 
     // 初始化会话元数据索引文件

@@ -74,8 +74,8 @@ describe('工作区父布局与内容渲染隔离', () => {
       const before=api.counts.sidebar;
       api.rename(fixture,'parent','已更新的会话标题');await sidebar.until(()=>fixture.row('parent').textContent.includes('已更新的会话标题'));
       const atomUpdated=api.counts.sidebar>before,afterAtom=api.counts.sidebar;
-      api.resizeSidebar(280);await sidebar.until(()=>document.querySelector('.gamma-sidebar').style.width==='280px');
-      const result={atomUpdated,propUpdated:api.counts.sidebar>afterAtom,width:document.querySelector('.gamma-sidebar').style.width,errors:api.errors};
+      api.resizeSidebar(280);await sidebar.until(()=>document.querySelector('.carpus-sidebar').style.width==='280px');
+      const result={atomUpdated,propUpdated:api.counts.sidebar>afterAtom,width:document.querySelector('.carpus-sidebar').style.width,errors:api.errors};
       fixture.root.unmount();return result;
     `)).toEqual({ atomUpdated: true, propUpdated: true, width: '280px', errors: [] })
   }, 30_000)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { SDKContentBlock, SDKMessage } from '@gamma/shared'
+import type { SDKContentBlock, SDKMessage } from '@carpus/shared'
 import { aggregateTaskItems } from './task-progress'
 import { buildTaskProgressData } from './SDKMessageRenderer'
 

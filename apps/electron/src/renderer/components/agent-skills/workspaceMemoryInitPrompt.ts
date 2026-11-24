@@ -32,13 +32,13 @@ export const AGENTS_MD_TEMPLATE = `# <项目名> 规则
 - 用户个人信息和偏好不写在这里，写进全局用户记忆。
 - Agent 改动本文件前必须先问用户。`
 
-/** This block is project-portable policy, while exact Gamma paths remain in the workspace prompt. */
-export const PROJECT_KNOWLEDGE_MAINTENANCE_BLOCK = `<!-- gamma:knowledge-maintenance:start -->
+/** This block is project-portable policy, while exact Carpus paths remain in the workspace prompt. */
+export const PROJECT_KNOWLEDGE_MAINTENANCE_BLOCK = `<!-- carpus:knowledge-maintenance:start -->
 ## 记忆分工（固定段，不要改）
 - 本文件写"必须怎么做"；项目是什么、为什么这么定、踩过什么坑，写进 memory/。
 - 用户个人信息和偏好不写在这里，写进全局用户记忆。
 - Agent 改动本文件前必须先问用户。
-<!-- gamma:knowledge-maintenance:end -->`
+<!-- carpus:knowledge-maintenance:end -->`
 
 export function getMemoryHistoryRangeLabel(value: MemoryHistoryRange): string {
   return MEMORY_HISTORY_RANGE_OPTIONS.find((option) => option.value === value)?.promptLabel ?? '最近 1 个月内'
@@ -56,7 +56,7 @@ export function buildWorkspaceKnowledgeBootstrapPrompt(): string {
 ${AGENTS_MD_TEMPLATE}
 \`\`\`
 
-2. 确保包含固定的“记忆分工”区块。若已有旧协议标记 \`<!-- proma:knowledge-maintenance:start -->\` 或 \`<!-- gamma:knowledge-maintenance:start -->\`，做最小修订并保留原标记。
+2. 确保包含固定的“记忆分工”区块。若已有旧协议标记 \`<!-- proma:knowledge-maintenance:start -->\` 或 \`<!-- carpus:knowledge-maintenance:start -->\`，做最小修订并保留原标记。
 
 ## 第二阶段：建立项目协作约定
 项目规则完成后，不要读取历史会话。只在当前回复末尾提出**一个**与本次项目协作约定有关的简短问题（例如代码改动前是否先出方案、测试验收要求等）。

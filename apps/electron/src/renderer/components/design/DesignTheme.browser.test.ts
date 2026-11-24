@@ -11,7 +11,7 @@ let temporary: string
 const theme = { mode: 'dark', background: '#1f1e1d', panel: '#262624', inset: '#30302e', text: '#f0eee6', secondary: '#b0aea5', tertiary: '#85837b', border: '#f0eee61f', accent: '#d97757', accentText: '#141413', danger: '#d97757', ring: '#d97757', fontFamily: 'system-ui, sans-serif', radius: 6 }
 
 beforeAll(async () => {
-  temporary = await mkdtemp(join(tmpdir(), 'gamma-design-native-theme-'))
+  temporary = await mkdtemp(join(tmpdir(), 'carpus-design-native-theme-'))
   const modulePath = join(temporary, 'theme-host.cjs')
   await build({ entryPoints: [resolve(import.meta.dir, '../../../main/lib/design-theme-host.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: modulePath })
   const content = `<!doctype html><html class="cds-root"><head><style>.cds-root{--cds-surface-2:#fff;--cds-text-primary:#111;--cds-radius:20px;--cds-font-sans:serif}body{margin:0}#chrome{background:var(--cds-surface-2);color:var(--cds-text-primary);border-radius:var(--cds-radius);font-family:var(--cds-font-sans);height:40px}</style></head><body><div id="chrome" class="cds-root"><button id="action">原版编辑操作</button><output id="count">0</output></div><iframe id="artwork" srcdoc="<!doctype html><html class='cds-root'><style>:root{--cds-surface-2:rgb(252,232,192)}body{background:var(--cds-surface-2);color:rgb(12,34,56);font-family:serif}</style><body>作品独立配色</body></html>"></iframe><script>document.getElementById('action').onclick=()=>{document.getElementById('count').textContent=String(Number(document.getElementById('count').textContent)+1)}</script></body></html>`
@@ -36,7 +36,7 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose(); if (temporary) await rm(temporary, { recursive: true, force: true }) })
 
 describe('Given Chromium 原生 WebContentsView 中的编辑器外壳与作品 iframe', () => {
-  test('When 五类工作台应用 Gamma 深浅主题 Then 只改变外壳，不改变作品配色字体且原版按钮仍可用', async () => {
+  test('When 五类工作台应用 Carpus 深浅主题 Then 只改变外壳，不改变作品配色字体且原版按钮仍可用', async () => {
     const results = await renderer.run<Array<{ background: string; color: string; radius: string; artBackground: string; artColor: string; artFont: string; count: string }>>(`
       const api=window.nativeTheme,results=[];
       for(const kind of ['design','slides','design-system','dashboard','motion']){

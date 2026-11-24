@@ -1,7 +1,7 @@
 {
-  "name": "@gamma/electron",
+  "name": "@carpus/electron",
   "version": "0.19.302",
-  "description": "Gamma，为专业用户设计的 Agent",
+  "description": "Carpus，为专业用户设计的 Agent",
   "main": "dist/main.cjs",
   "author": {
     "name": "ErlichLiu",
@@ -29,8 +29,8 @@
     "build:eventkit-native": "bun run scripts/build-eventkit-native.ts",
     "prepare:agent-desktop": "bun run scripts/prepare-agent-desktop.ts",
     "prepare:design": "bun run scripts/prepare-design-bundle.ts",
-    "build:computer-use": "bun run scripts/build-gamma-computer-use.ts",
-    "install:computer-use": "bun run scripts/build-gamma-computer-use.ts --install",
+    "build:computer-use": "bun run scripts/build-carpus-computer-use.ts",
+    "install:computer-use": "bun run scripts/build-carpus-computer-use.ts --install",
     "build:native-helpers": "bun run build:agent-island-native && bun run build:eventkit-native",
     "build:cli": "bun run scripts/build-cli.ts",
     "prepare:officecli": "bun run scripts/prepare-officecli.ts",
@@ -99,10 +99,10 @@
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@larksuiteoapi/node-sdk": "^1.65.0",
-    "@gamma/core": "workspace:*",
-    "@gamma/session-core": "workspace:*",
-    "@gamma/shared": "workspace:*",
-    "@gamma/ui": "workspace:*",
+    "@carpus/core": "workspace:*",
+    "@carpus/session-core": "workspace:*",
+    "@carpus/shared": "workspace:*",
+    "@carpus/ui": "workspace:*",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -203,6 +203,6 @@
   "build": {
     "extends": "electron-builder.yml"
   },
-  "gamma": {},
-  "homepage": "https://github.com/xhslam/Gamma"
+  "carpus": {},
+  "homepage": "https://github.com/xhslam/Carpus"
 }

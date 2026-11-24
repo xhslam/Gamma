@@ -1,5 +1,5 @@
 import { atomWithStorage } from 'jotai/utils'
-import type { BlockInteractionState } from '@gamma/genui-embed'
+import type { BlockInteractionState } from '@carpus/genui-embed'
 
 export interface UiStateEntry { key: string; state: BlockInteractionState }
 const BLOCKED_KEY = /^(?:__proto__|constructor|prototype)$|password|secret|token|api.?key|密码|密钥|令牌/i
@@ -25,7 +25,7 @@ export function normalizeUiStates(value: unknown): UiStateEntry[] {
 }
 
 /** JSON UI 偏好缓存；不可用或配额耗尽时仍允许本地操作，不使整块 UI 崩溃。 */
-export const intelligentUiStatesAtom = atomWithStorage<UiStateEntry[]>('gamma.intelligent-ui.states.v1', [], {
+export const intelligentUiStatesAtom = atomWithStorage<UiStateEntry[]>('carpus.intelligent-ui.states.v1', [], {
   getItem(key, initial) {
     try {
       const raw = localStorage.getItem(key)

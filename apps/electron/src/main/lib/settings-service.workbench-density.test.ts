@@ -20,7 +20,7 @@ async function scenario(path: string, source: string): Promise<Record<string, un
 }
 
 function temporarySettings(): { directory: string; path: string } {
-  const directory = mkdtempSync(join(tmpdir(), 'gamma-density-'))
+  const directory = mkdtempSync(join(tmpdir(), 'carpus-density-'))
   return { directory, path: join(directory, 'settings.json') }
 }
 

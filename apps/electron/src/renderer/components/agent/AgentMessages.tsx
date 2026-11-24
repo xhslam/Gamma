@@ -38,7 +38,7 @@ import {
   type LocalSearchRecordInput,
   type SessionMessageSearch,
 } from '@/lib/session-message-search'
-import { toTranscript } from '@gamma/session-core'
+import { toTranscript } from '@carpus/session-core'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AssistantLogo, MessageGroupRenderer, getGroupId, getGroupPreview, extractUserText, type MessageGroup } from './SDKMessageRenderer'
@@ -47,8 +47,8 @@ import { AgentBrowserLinkProvider } from '@/components/browser/AgentBrowserLinkP
 import { AgentHistorySelectionLayer } from './AgentHistorySelectionLayer'
 import { TaskProgressOverlay, type ContextCompactionProgress } from './TaskProgressOverlay'
 import { createMessageGroupRenderCache, groupMessagesForRendering } from './message-group-rendering'
-import type { AgentEventUsage, RetryAttempt, SDKAssistantMessage, SDKMessage, SDKSystemMessage, SDKTextBlock, SDKThinkingBlock } from '@gamma/shared'
-import { getSDKCompactStatus } from '@gamma/shared'
+import type { AgentEventUsage, RetryAttempt, SDKAssistantMessage, SDKMessage, SDKSystemMessage, SDKTextBlock, SDKThinkingBlock } from '@carpus/shared'
+import { getSDKCompactStatus } from '@carpus/shared'
 import { agentLiveMessagesAtomFamily, agentSessionStreamingStateAtomFamily, type AgentStreamState } from '@/atoms/agent-atoms'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
@@ -247,7 +247,7 @@ interface AgentMessagesProps {
   historyQuoteNavigation?: AgentHistoryQuoteNavigationRequest | null
 }
 
-const AGENT_HISTORY_QUOTE_HIGHLIGHT_NAME = 'gamma-agent-history-quote'
+const AGENT_HISTORY_QUOTE_HIGHLIGHT_NAME = 'carpus-agent-history-quote'
 
 interface TextPosition {
   node: Node
@@ -989,7 +989,7 @@ export const AgentMessages = React.memo(function AgentMessages({
       const record = message as Record<string, unknown>
       // 已标记且未变化时不重写：对老世代消息对象的属性写入会触发 GC 写屏障，
       // 在数百条历史 × 高频 partial 下形成持续开销。
-      if (record._gammaStableKey !== key) record._gammaStableKey = key
+      if (record._carpusStableKey !== key) record._carpusStableKey = key
       return message
     }
     const hasUuid = (message: SDKMessage): boolean => {
@@ -1001,7 +1001,7 @@ export const AgentMessages = React.memo(function AgentMessages({
     const upsert = (message: SDKMessage): void => {
       const stamped = stampStableKey(message)
       if (hasUuid(stamped)) {
-        const key = (stamped as Record<string, unknown>)._gammaStableKey as string
+        const key = (stamped as Record<string, unknown>)._carpusStableKey as string
         const existingIndex = uuidIndexes.get(key)
         if (existingIndex != null) {
           result[existingIndex] = stamped

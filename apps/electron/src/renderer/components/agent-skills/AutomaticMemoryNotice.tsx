@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { X } from 'lucide-react'
-import type { AutomaticMemorySource } from '@gamma/shared'
+import type { AutomaticMemorySource } from '@carpus/shared'
 import { automaticMemoryChangesAtom, automaticMemoryNavigationAtom, dismissedAutomaticMemoryChangesAtom } from '@/atoms/automatic-memory-atoms'
 import { useAutomaticMemoryChanges } from '@/hooks/useAutomaticMemoryChanges'
 import { automaticMemoryChangeKey, selectAutomaticMemoryChanges } from '@/lib/automatic-memory-presentation'
@@ -67,7 +67,7 @@ export function AutomaticMemoryNotice({ kind, sessionId, workspaceSlug }: Automa
         <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b border-border/40 px-5 py-4 text-left">
             <DialogTitle className="text-base">工作区记忆</DialogTitle>
-            <DialogDescription className="text-xs">浏览、整理和管理 Gamma 为你保留的信息。</DialogDescription>
+            <DialogDescription className="text-xs">浏览、整理和管理 Carpus 为你保留的信息。</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto p-4">
             {selected && (

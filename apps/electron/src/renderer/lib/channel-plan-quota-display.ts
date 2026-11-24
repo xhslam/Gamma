@@ -1,4 +1,4 @@
-import type { Channel, ChannelPlanQuotaResult, ChannelPlanQuotaWindow, ProviderType } from '@gamma/shared'
+import type { Channel, ChannelPlanQuotaResult, ChannelPlanQuotaWindow, ProviderType } from '@carpus/shared'
 
 export interface LoadedPlanQuota {
   channelKey: string

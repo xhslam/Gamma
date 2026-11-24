@@ -2,7 +2,7 @@
  * AppearanceSettings - 外观设置页
  *
  * 应用配色、聊天壁纸和工作台显示偏好。
- * 通过 Jotai atom 管理状态，持久化到 ~/.gamma/settings.json。
+ * 通过 Jotai atom 管理状态，持久化到 ~/.carpus/settings.json。
  */
 
 import * as React from 'react'

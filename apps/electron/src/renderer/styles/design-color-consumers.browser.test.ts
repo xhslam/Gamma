@@ -7,7 +7,7 @@ beforeAll(async () => {
   renderer = await createElectronRendererHarness(`
     import React from 'react';
     import {createRoot} from 'react-dom/client';
-    import {CodeBlock,MermaidBlock} from '@gamma/ui';
+    import {CodeBlock,MermaidBlock} from '@carpus/ui';
     import {MarkdownSourceEditor} from '@/components/markdown-workspace/MarkdownSourceEditor';
     import {LiveMarkdownEditor} from '@/components/markdown/LiveMarkdownEditor';
     import {markdownThemeStyle} from '@/components/markdown-workspace/markdown-editor-presentation';

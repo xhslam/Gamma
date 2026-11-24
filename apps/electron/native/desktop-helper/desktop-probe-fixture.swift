@@ -41,14 +41,14 @@ private final class FixtureDelegate: NSObject, NSApplicationDelegate {
     private func makeWindow(id: String, origin: CGPoint) {
         let window = NSWindow(contentRect: CGRect(origin: origin, size: CGSize(width: 640, height: 480)),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Gamma Phase 0 Fixture"
-        window.identifier = NSUserInterfaceItemIdentifier("gamma.probe.window.\(id)")
+        window.title = "Carpus Phase 0 Fixture"
+        window.identifier = NSUserInterfaceItemIdentifier("carpus.probe.window.\(id)")
         window.tabbingMode = .disallowed
         window.isReleasedWhenClosed = false
         guard let view = window.contentView else { return }
         let label = NSTextField(labelWithString: "窗口 \(id) · 点击计数 0 · 仅合成数据")
         label.frame = CGRect(x: 20, y: 434, width: 600, height: 24)
-        label.setAccessibilityIdentifier("gamma.probe.\(id).status")
+        label.setAccessibilityIdentifier("carpus.probe.\(id).status")
         view.addSubview(label)
         labels[id] = label
         clickCounts[id] = 0
@@ -56,7 +56,7 @@ private final class FixtureDelegate: NSObject, NSApplicationDelegate {
             for column in 0..<6 {
                 let button = NSButton(title: "\(id) \(column),\(row)", target: self, action: #selector(gridClicked(_:)))
                 button.identifier = NSUserInterfaceItemIdentifier("\(id):\(column):\(row)")
-                button.setAccessibilityIdentifier("gamma.probe.\(id).cell.\(column).\(row)")
+                button.setAccessibilityIdentifier("carpus.probe.\(id).cell.\(column).\(row)")
                 button.frame = CGRect(x: CGFloat(20 + column * 100), y: CGFloat(335 - row * 65), width: 88, height: 52)
                 button.bezelStyle = .regularSquare
                 view.addSubview(button)
@@ -64,11 +64,11 @@ private final class FixtureDelegate: NSObject, NSApplicationDelegate {
         }
         let text = NSTextField(string: "合成测试文本 ABC 中文 🙂")
         text.frame = CGRect(x: 20, y: 80, width: 600, height: 28)
-        text.setAccessibilityIdentifier("gamma.probe.\(id).text")
+        text.setAccessibilityIdentifier("carpus.probe.\(id).text")
         view.addSubview(text)
         let sheet = NSButton(title: "打开测试 sheet", target: self, action: #selector(openSheet(_:)))
         sheet.frame = CGRect(x: 20, y: 24, width: 180, height: 32)
-        sheet.setAccessibilityIdentifier("gamma.probe.\(id).sheet")
+        sheet.setAccessibilityIdentifier("carpus.probe.\(id).sheet")
         view.addSubview(sheet)
         windows.append(window)
     }

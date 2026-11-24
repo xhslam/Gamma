@@ -20,7 +20,7 @@ describe('Conversation Reference Cache (Snapshots & Summaries)', () => {
   let prevHome: string | undefined
 
   beforeAll(() => {
-    tempHome = mkdtempSync(join(tmpdir(), 'gamma-cache-test-'))
+    tempHome = mkdtempSync(join(tmpdir(), 'carpus-cache-test-'))
     prevHome = setConfigHomeForTest(tempHome)
   })
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { WebContents } from 'electron'
-import type { AgentDeferredQueueMessageInput } from '@gamma/shared'
+import type { AgentDeferredQueueMessageInput } from '@carpus/shared'
 import { AgentQueueCoordinator } from './agent-queue-coordinator'
 
 function fixture() {

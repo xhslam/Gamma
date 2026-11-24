@@ -4,15 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DefaultResourceLoader, SettingsManager } from '@earendil-works/pi-coding-agent'
 import { Type, validateToolCall, type ToolCall } from '@earendil-works/pi-ai'
-import { createGammaManagedResourceLoaderOptions, createGammaProjectInstructionFilesOverride } from './pi-resource-loader-overrides'
+import { createCarpusManagedResourceLoaderOptions, createCarpusProjectInstructionFilesOverride } from './pi-resource-loader-overrides'
 import { getCodexCatalogModels } from './pi-model-registry'
 import { CodexModelStore } from './pi-codex-model-store'
 import { setConfigHomeForTest } from '../config-paths'
 import { writeJsonFileAtomic } from '../safe-file'
 
 describe('Pi 1.3 受管升级边界', () => {
-  test('Given 项目及 agent 目录存在环境式资源 When 使用 Gamma loader Then 仅保留显式指令和内联扩展，不激活 MCP/Codemode', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-pi-upgrade-'))
+  test('Given 项目及 agent 目录存在环境式资源 When 使用 Carpus loader Then 仅保留显式指令和内联扩展，不激活 MCP/Codemode', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'carpus-pi-upgrade-'))
     const cwd = join(root, 'project')
     const agentDir = join(root, 'agent')
     let inlineLoaded = false
@@ -30,8 +30,8 @@ describe('Pi 1.3 受管升级边界', () => {
       writeJsonFileAtomic(join(agentDir, 'mcp.json'), { mcpServers: { unauthorized: { command: 'never-execute-me' } } })
       const loader = new DefaultResourceLoader({
         cwd, agentDir, settingsManager: SettingsManager.inMemory(),
-        ...createGammaManagedResourceLoaderOptions(),
-        agentsFilesOverride: createGammaProjectInstructionFilesOverride([{ path: join(cwd, 'explicit.md'), content: 'AUTHORIZED_CONTEXT' }]),
+        ...createCarpusManagedResourceLoaderOptions(),
+        agentsFilesOverride: createCarpusProjectInstructionFilesOverride([{ path: join(cwd, 'explicit.md'), content: 'AUTHORIZED_CONTEXT' }]),
         extensionFactories: [() => { inlineLoaded = true }],
       })
       await loader.reload()
@@ -48,7 +48,7 @@ describe('Pi 1.3 受管升级边界', () => {
   })
 
   test('Given 缓存同时包含聊天和非聊天模型 When 查询 Codex 会话目录 Then 排除非聊天模型', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-pi-catalog-upgrade-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-pi-catalog-upgrade-'))
     const previous = setConfigHomeForTest(root)
     try {
       const base = {

@@ -126,7 +126,7 @@ export const VMARK_SOURCE = {
     "version": "1.0.17",
     "commit": "5d972ccd57dd3707d0d71f62a4cf0209e97c7829",
     "files": ["notes-math-node-view.ts", "notes-math-render-scheduler.ts", "math-render-queue.ts", "notes-markdown-dialect.ts", "notes-math-opaque-ranges.ts"],
-    "adaptations": ["Tiptap PM 模块与 VMark codeBlock 公式存储", "Gamma 主题与滚动容器", "IME 保护、受限 KaTeX 和公式缓存"]
+    "adaptations": ["Tiptap PM 模块与 VMark codeBlock 公式存储", "Carpus 主题与滚动容器", "IME 保护、受限 KaTeX 和公式缓存"]
   },
   "dependencyPatches": {
     "mdast-util-to-markdown@2.1.2": "移植上游 Unicode code point 保真修复与等价索引优化；其余 parser patches 是性能优化，首期不移植，不宣称同等性能"

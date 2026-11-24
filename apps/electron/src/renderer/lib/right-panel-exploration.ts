@@ -7,7 +7,7 @@
  * 3. 历史分支恢复必须携带真实 sourceMessageId / sourceLabel，禁止捏造假元数据
  */
 
-import type { AgentSessionMeta } from '@gamma/shared'
+import type { AgentSessionMeta } from '@carpus/shared'
 import type { AgentExplorationBranchTab } from '@/atoms/agent-atoms'
 
 export interface ExplorationBranchItem {

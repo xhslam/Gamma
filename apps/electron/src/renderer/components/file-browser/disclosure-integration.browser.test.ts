@@ -31,9 +31,9 @@ describe('Given 真实目录及子Agent内容折叠', () => {
 
   test('When 点击原生目录按钮并聚焦 Then 只展开一次、可键盘访问且槽位不改变名称位置', async () => {
     const result = await renderer.run<{native:boolean;open:string;loads:number;beforeX:number;afterX:number;rowHeight:number;width:number;focus:boolean}>(`
-      const f=window.foldIntegration;await f.wait(()=>f.arrow('Beta'));const button=f.arrow('Beta'),row=button.closest('.file-tree-row'),beforeX=row.querySelector('.gamma-fade-title').getBoundingClientRect().x;
+      const f=window.foldIntegration;await f.wait(()=>f.arrow('Beta'));const button=f.arrow('Beta'),row=button.closest('.file-tree-row'),beforeX=row.querySelector('.carpus-fade-title').getBoundingClientRect().x;
       button.focus();button.click();await f.wait(()=>button.getAttribute('aria-expanded')==='true');await f.pause();
-      return{native:button.tagName==='BUTTON'&&button.type==='button'&&button.tabIndex===0,open:button.getAttribute('aria-expanded'),loads:f.calls.filter(p=>p.endsWith('/Beta')).length,beforeX,afterX:row.querySelector('.gamma-fade-title').getBoundingClientRect().x,rowHeight:row.getBoundingClientRect().height,width:button.getBoundingClientRect().width,focus:document.activeElement===button};
+      return{native:button.tagName==='BUTTON'&&button.type==='button'&&button.tabIndex===0,open:button.getAttribute('aria-expanded'),loads:f.calls.filter(p=>p.endsWith('/Beta')).length,beforeX,afterX:row.querySelector('.carpus-fade-title').getBoundingClientRect().x,rowHeight:row.getBoundingClientRect().height,width:button.getBoundingClientRect().width,focus:document.activeElement===button};
     `, {keyboard:true})
     expect(result).toMatchObject({native:true,open:'true',loads:1,rowHeight:34,width:14,focus:true})
     expect(result.afterX).toBe(result.beforeX)

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { GitHubRelease } from '@gamma/shared'
+import type { GitHubRelease } from '@carpus/shared'
 import { createGitHubReleaseClient, parseReleaseFeed } from './github-release-client'
 
-const release = (tag = 'v0.19.260'): GitHubRelease => ({ id: 1, tag_name: tag, name: tag, body: '更新说明', draft: false, prerelease: false, created_at: '2026-11-09T12:00:00Z', published_at: '2026-11-09T12:00:00Z', html_url: `https://github.com/xhslam/Gamma/releases/tag/${tag}` })
-const xml = `<feed><entry><updated>2026-11-09T12:00:00Z</updated><link href="https://github.com/xhslam/Gamma/releases/tag/v0.19.260"/><title>Gamma &amp; 更新</title><content type="html">&lt;p&gt;公开说明&lt;/p&gt;</content></entry><entry><updated>2026-11-09T12:00:00Z</updated><link href="https://github.com/xhslam/Gamma/releases/tag/v0.19.261-beta.1"/><title>beta</title></entry></feed>`
+const release = (tag = 'v0.19.260'): GitHubRelease => ({ id: 1, tag_name: tag, name: tag, body: '更新说明', draft: false, prerelease: false, created_at: '2026-11-09T12:00:00Z', published_at: '2026-11-09T12:00:00Z', html_url: `https://github.com/xhslam/Carpus/releases/tag/${tag}` })
+const xml = `<feed><entry><updated>2026-11-09T12:00:00Z</updated><link href="https://github.com/xhslam/Carpus/releases/tag/v0.19.260"/><title>Carpus &amp; 更新</title><content type="html">&lt;p&gt;公开说明&lt;/p&gt;</content></entry><entry><updated>2026-11-09T12:00:00Z</updated><link href="https://github.com/xhslam/Carpus/releases/tag/v0.19.261-beta.1"/><title>beta</title></entry></feed>`
 
 describe('Given 版本历史与安装清单分离的 GitHub 客户端', () => {
   test('When 多个窗口同时查询同一页 Then 合并 API 请求并缓存结果', async () => {
@@ -64,7 +64,7 @@ describe('Given 版本历史与安装清单分离的 GitHub 客户端', () => {
     expect(await client.listReleases()).toEqual([{ ...release(), name: release().tag_name, body: '' }])
   })
   test('When 订阅来自其他仓库、响应过大或分页无效 Then 拒绝而不发起任意URL请求', async () => {
-    expect(() => parseReleaseFeed(xml.replaceAll('xhslam/Gamma', 'evil/repo'))).toThrow()
+    expect(() => parseReleaseFeed(xml.replaceAll('xhslam/Carpus', 'evil/repo'))).toThrow()
     expect(() => parseReleaseFeed('x'.repeat(2_000_001))).toThrow()
     const client = createGitHubReleaseClient({ fetch: async () => { throw new Error('不得请求') } })
     await expect(client.listReleases({ page: 0 })).rejects.toThrow('分页')

@@ -1,5 +1,5 @@
-import type { ChannelPlanQuotaResult, ChannelPlanQuotaWindow } from '@gamma/shared'
-import { parseGithubCopilotCredentials } from '@gamma/shared'
+import type { ChannelPlanQuotaResult, ChannelPlanQuotaWindow } from '@carpus/shared'
+import { parseGithubCopilotCredentials } from '@carpus/shared'
 import { createManagedProxyFetch } from './proxy-fetch'
 import type { ManagedProxyFetch } from './proxy-fetch'
 

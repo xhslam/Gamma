@@ -1,7 +1,7 @@
 /**
  * Token-gated local file protocol support for inline previews.
  *
- * The renderer never receives raw gamma-file:// absolute paths. Main process
+ * The renderer never receives raw carpus-file:// absolute paths. Main process
  * code registers an already-authorized file or directory and gets back an
  * opaque URL that the protocol handler can resolve.
  */
@@ -62,18 +62,18 @@ function registerEntry(path: string, isDirectory: boolean): string {
 
   const token = randomUUID()
   registeredEntries.set(token, { root, isDirectory, createdAt: Date.now() })
-  return `gamma-file://${token}`
+  return `carpus-file://${token}`
 }
 
-export function registerGammaFilePath(path: string): string {
+export function registerCarpusFilePath(path: string): string {
   return registerEntry(path, false)
 }
 
-export function registerGammaDirectoryPath(path: string): string {
+export function registerCarpusDirectoryPath(path: string): string {
   return registerEntry(path, true)
 }
 
-export function handleGammaFileRequest(request: Request): Promise<Response> | Response {
+export function handleCarpusFileRequest(request: Request): Promise<Response> | Response {
   let url: URL
   try {
     url = new URL(request.url)

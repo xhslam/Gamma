@@ -4,7 +4,7 @@ import {
   withCodexFastModeServiceTier,
 } from './pi-codex-request-settings'
 import { injectOpenAIReasoningLevel } from './pi-openai-reasoning-request-settings'
-import { resolveReasoningProfile } from '@gamma/shared'
+import { resolveReasoningProfile } from '@carpus/shared'
 
 describe('Pi Codex request settings', () => {
   test('Given OpenAI model IDs When resolving profiles Then separates standard, max, and non-reasoning models', () => {

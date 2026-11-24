@@ -8,7 +8,7 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { RefreshCw, Loader2, CheckCircle2, AlertCircle, Info, Terminal, ExternalLink, RotateCw } from 'lucide-react'
-import type { EnvironmentCheckResult, RuntimeStatus, WindowsShellPreference } from '@gamma/shared'
+import type { EnvironmentCheckResult, RuntimeStatus, WindowsShellPreference } from '@carpus/shared'
 import {
   SettingsSection,
   SettingsCard,
@@ -29,7 +29,7 @@ declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
 /** 实际发布源仓库；修改会影响用户下载更新，不属于品牌清理范围。 */
-const GITHUB_RELEASES_URL = 'https://github.com/xhslam/Gamma/releases'
+const GITHUB_RELEASES_URL = 'https://github.com/xhslam/Carpus/releases'
 
 /** 更新状态卡片 */
 export function UpdateCard(): React.ReactElement | null {
@@ -38,7 +38,7 @@ export function UpdateCard(): React.ReactElement | null {
   const [checking, setChecking] = React.useState(false)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [showReleaseNotes, setShowReleaseNotes] = React.useState(false)
-  const [release, setRelease] = React.useState<import('@gamma/shared').GitHubRelease | null>(null)
+  const [release, setRelease] = React.useState<import('@carpus/shared').GitHubRelease | null>(null)
 
   // updater 不可用时不渲染
   if (!available) return null
@@ -500,7 +500,7 @@ function ShellEnvironmentCard(): React.ReactElement | null {
 export function AboutSettings(): React.ReactElement {
   return (
     <SettingsSection
-      title="关于 Gamma"
+      title="关于 Carpus"
       description="集成通用 AI Agent 的下一代人工智能软件"
     >
       <SettingsCard>
@@ -525,12 +525,12 @@ export function AboutSettings(): React.ReactElement {
         </SettingsRow>
         <SettingsRow label="项目地址">
           <a
-            href="https://github.com/xhslam/Gamma"
+            href="https://github.com/xhslam/Carpus"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-primary hover:underline"
           >
-            github.com/xhslam/Gamma
+            github.com/xhslam/Carpus
           </a>
         </SettingsRow>
       </SettingsCard>

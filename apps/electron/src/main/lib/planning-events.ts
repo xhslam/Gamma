@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { PLANNING_IPC_CHANNELS, type ActivePlanningReminder, type PlanningAgentOperation, type PlanningChange, type PlanningChangeResource } from '@gamma/shared'
+import { PLANNING_IPC_CHANNELS, type ActivePlanningReminder, type PlanningAgentOperation, type PlanningChange, type PlanningChangeResource } from '@carpus/shared'
 
 const ALL_PLANNING_CHANGE_RESOURCES: PlanningChangeResource[] = ['todos', 'calendar_events', 'todo_groups', 'calendar_groups', 'tags', 'reminders']
 

@@ -7,7 +7,7 @@ import { resolveInstalledComputerApp } from './computer-installed-app'
 const temporary: string[] = []
 afterEach(() => { for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true }) })
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-installed-app-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-installed-app-'))
   temporary.push(root)
   const metadata = new Map<string, unknown>()
   const reads: string[] = []

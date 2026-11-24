@@ -22,7 +22,7 @@ import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, List
 import { ComposerAttachmentMenu } from './ComposerAttachmentMenu'
 import { ConversationReferenceChips } from './ConversationReferenceChips'
 import { ConversationReferenceDialog } from './ConversationReferenceDialog'
-import type { AgentContextRef, AgentContextRefMode } from '@gamma/shared'
+import type { AgentContextRef, AgentContextRefMode } from '@carpus/shared'
 import { AgentMessages, type AgentHistoryQuoteNavigationRequest } from './AgentMessages'
 import { AgentHeader } from './AgentHeader'
 import { OnDemandConversationLayout } from './on-demand/OnDemandConversationLayout'
@@ -143,7 +143,7 @@ import { useOpenSession } from '@/hooks/useOpenSession'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { sendWithCmdEnterAtom } from '@/atoms/shortcut-atoms'
 import { useOpenPreview } from '@/components/diff/preview-opener'
-import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentSendOutboxEntry, AgentSubmitOrEnqueueInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@gamma/shared'
+import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentSendOutboxEntry, AgentSubmitOrEnqueueInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@carpus/shared'
 import {
   DEFAULT_BUDGET_RATIO,
   inferContextWindow,
@@ -157,7 +157,7 @@ import {
   resolveReasoningCapability,
   resolveReasoningProfile,
   ABSOLUTE_TIER_A_TOKEN_LIMIT,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
 import { getFilePanelDragData, INSERT_FILE_MENTION_EVENT, type FilePanelDragItem } from '@/lib/file-panel-drag'
 import {
@@ -339,7 +339,7 @@ interface SessionThinkingConfig {
 }
 
 interface AgentThinkingPopoverProps {
-  agentThinking: import('@gamma/shared').ThinkingConfig | undefined
+  agentThinking: import('@carpus/shared').ThinkingConfig | undefined
   onToggle: () => void
   reasoningConfig?: SessionThinkingConfig
   subscriptionThinkingState?: 'loading' | 'unavailable'
@@ -2355,7 +2355,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     })
     const unsubscribeStream = window.electronAPI.onAgentStreamEvent((event) => {
       if (event.sessionId !== sessionId) return
-      if (event.payload.kind === 'gamma_event' && event.payload.event.type === 'run_started'
+      if (event.payload.kind === 'carpus_event' && event.payload.event.type === 'run_started'
         && sentStartedAt !== undefined && event.payload.event.startedAt === sentStartedAt) confirmAccepted(true)
       if (event.payload.kind === 'sdk_message'
         && (event.payload.message as SDKMessageRecord).uuid === outboxMessageId) confirmAccepted(true)
@@ -2364,7 +2364,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       const additionalDirectoriesForRun = createBaseAdditionalDirectories()
 
       if (streaming) {
-        // Agent 正在输出时，用户消息默认进入 Gamma 托管队列，不打断当前 turn。
+        // Agent 正在输出时，用户消息默认进入 Carpus 托管队列，不打断当前 turn。
         const attachmentContext = pendingFilesSnapshot.length > 0
           ? await preparePendingFilesForSend(pendingFilesSnapshot, additionalDirectoriesForRun)
           : null
@@ -2849,7 +2849,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const previousState = store.get(agentSessionStreamingStateAtomFamily(sessionId))
 
     // 1. 立即注入合成用户消息（/compact 气泡立刻可见，与普通发送路径一致）
-    const syntheticMsg: import('@gamma/shared').SDKMessage = {
+    const syntheticMsg: import('@carpus/shared').SDKMessage = {
       type: 'user',
       uuid: localUuid,
       message: {
@@ -2857,7 +2857,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       },
       parent_tool_use_id: null,
       _createdAt: streamStartedAt,
-    } as unknown as import('@gamma/shared').SDKMessage
+    } as unknown as import('@carpus/shared').SDKMessage
 
     store.set(liveMessagesMapAtom, (prev) => {
       const map = new Map(prev)
@@ -3144,8 +3144,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       const target = getStopGenerationTarget(event)
       if (target?.kind === 'agent' && target.sessionId === sessionId && streaming) handleStop()
     }
-    window.addEventListener('gamma:stop-generation', handler)
-    return () => window.removeEventListener('gamma:stop-generation', handler)
+    window.addEventListener('carpus:stop-generation', handler)
+    return () => window.removeEventListener('carpus:stop-generation', handler)
   }, [sessionId, streaming, handleStop])
 
   // 监听快捷键系统分发的 focus-input 事件（Cmd+L）
@@ -3154,8 +3154,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       const proseMirror = document.querySelector('[data-input-mode="agent"] .ProseMirror') as HTMLElement | null
       proseMirror?.focus()
     }
-    window.addEventListener('gamma:focus-input', handler)
-    return () => window.removeEventListener('gamma:focus-input', handler)
+    window.addEventListener('carpus:focus-input', handler)
+    return () => window.removeEventListener('carpus:focus-input', handler)
   }, [])
 
   // 监听文件面板三点菜单「引用到 Agent」事件：在输入框插入 @file 引用
@@ -3634,7 +3634,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         <div className="relative isolate px-4 pb-2.5 md:px-6 md:pb-4" data-input-mode="agent">
           <div
             className={cn(
-              'gamma-composer bg-background/95',
+              'carpus-composer bg-background/95',
               (isPlanMode || isPermissionPlanMode) && !isDragOver && 'plan-mode-border',
               isDragOver && 'border-[2px] border-dashed border-primary bg-primary/[0.03]'
             )}

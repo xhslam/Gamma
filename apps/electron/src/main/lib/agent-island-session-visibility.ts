@@ -1,4 +1,4 @@
-import type { AgentIslandPhase } from '@gamma/shared'
+import type { AgentIslandPhase } from '@carpus/shared'
 
 /** 影响 Island 会话保留的最小状态；保持为纯函数以便回归测试。 */
 export interface AgentIslandSessionVisibilityInput {

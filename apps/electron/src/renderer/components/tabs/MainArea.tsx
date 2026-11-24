@@ -6,7 +6,7 @@ import { DesignWorkspaceView } from '@/components/design/DesignWorkspaceView'
  */
 
 import * as React from 'react'
-import type { BrowserStateChange, BrowserTabFocusChange } from '@gamma/shared'
+import type { BrowserStateChange, BrowserTabFocusChange } from '@carpus/shared'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import {
   tabsAtom,
@@ -200,7 +200,7 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
 
 
   return (
-    <Panel variant="grow" className={activeView === 'conversations' ? 'bg-content-area' : 'gamma-workspace-surface'}>
+    <Panel variant="grow" className={activeView === 'conversations' ? 'bg-content-area' : 'carpus-workspace-surface'}>
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex flex-1 flex-col min-w-0 h-full">
           {/* 首次打开后保留终端实例，让后台 Shell 继续接收输出。 */}

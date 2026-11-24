@@ -51,9 +51,9 @@ describe('Given 标签发布工作流', () => {
     const script = readFileSync(new URL('./publish-release.ts', import.meta.url), 'utf8')
     expect(script.indexOf("await verifyDownloaded(downloaded, checksums)")).toBeLessThan(script.indexOf("'--draft=false'"))
   })
-  test('When 构建 App 与加载更新日志 Then 指向同一 Gamma 仓库', () => {
+  test('When 构建 App 与加载更新日志 Then 指向同一 Carpus 仓库', () => {
     const config = YAML.parse(readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')) as { publish: { owner: string; repo: string } }
-    expect(config.publish).toMatchObject({ owner: 'xhslam', repo: 'Gamma' })
+    expect(config.publish).toMatchObject({ owner: 'xhslam', repo: 'Carpus' })
     expect(config.publish).toMatchObject(GITHUB_RELEASE_REPO)
     const about = readFileSync(new URL('../src/renderer/components/settings/AboutSettings.tsx', import.meta.url), 'utf8')
     expect(about).toContain(`https://github.com/${GITHUB_RELEASE_REPO.owner}/${GITHUB_RELEASE_REPO.repo}/releases`)

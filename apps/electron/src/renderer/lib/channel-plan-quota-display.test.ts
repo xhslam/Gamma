@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { ChannelPlanQuotaResult } from '@gamma/shared'
+import type { ChannelPlanQuotaResult } from '@carpus/shared'
 import { formatPlanQuotaResetCountdown, getPlanQuotaPillDisplay } from './channel-plan-quota-display'
 
 const NOW = Date.UTC(2026, 10, 21, 8, 0, 0)

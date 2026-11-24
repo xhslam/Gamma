@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { GitHubRelease, GitHubReleaseListOptions } from '@gamma/shared'
+import type { GitHubRelease, GitHubReleaseListOptions } from '@carpus/shared'
 
-export const GITHUB_RELEASE_REPO = { owner: 'xhslam', repo: 'Gamma' } as const
+export const GITHUB_RELEASE_REPO = { owner: 'xhslam', repo: 'Carpus' } as const
 const API = `https://api.github.com/repos/${GITHUB_RELEASE_REPO.owner}/${GITHUB_RELEASE_REPO.repo}`
 const WEB = `https://github.com/${GITHUB_RELEASE_REPO.owner}/${GITHUB_RELEASE_REPO.repo}`
 const TTL = 30 * 60_000

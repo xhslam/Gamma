@@ -1,5 +1,5 @@
 /* 仅扩展启用壁纸的主会话。其他面板沿用自己的底色与间距。 */
-.gamma-workbench .gamma-workbench-frame [data-workspace-pane="agent"] > [data-panel="content"]:has([data-agent-conversation-root] > .ascii-wallpaper-container) {
+.carpus-workbench .carpus-workbench-frame [data-workspace-pane="agent"] > [data-panel="content"]:has([data-agent-conversation-root] > .ascii-wallpaper-container) {
   padding-inline: 0;
   padding-bottom: 0;
   overflow: clip;
@@ -34,7 +34,7 @@
   background: linear-gradient(90deg, transparent, hsl(var(--background) / 24%) 28% 73%, transparent);
 }
 
-.gamma-panel[data-panel].gamma-wallpaper-dock {
+.carpus-panel[data-panel].carpus-wallpaper-dock {
   container-type: inline-size;
   padding: 0;
   border-radius: var(--panel-radius);
@@ -45,9 +45,9 @@
 }
 
 @container (min-width: 340px) {
-  [data-wallpaper-settings] .gamma-wallpaper-choices { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  [data-wallpaper-settings] .carpus-wallpaper-choices { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @container (min-width: 660px) {
-  .gamma-wallpaper-choices-dock .gamma-wallpaper-choices { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .carpus-wallpaper-choices-dock .carpus-wallpaper-choices { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }

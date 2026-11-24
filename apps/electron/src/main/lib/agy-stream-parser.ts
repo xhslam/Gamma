@@ -1,4 +1,4 @@
-import type { AgyActivityEvent } from '@gamma/shared'
+import type { AgyActivityEvent } from '@carpus/shared'
 
 const MAX_LINE_BYTES = 256 * 1024
 const MAX_TEXT_CHARS = 64 * 1024

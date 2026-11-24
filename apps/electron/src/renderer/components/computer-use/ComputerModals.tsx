@@ -4,7 +4,7 @@ import type {
   ComputerAppAuthDecision,
   ComputerAppAuthRequest,
   ComputerRiskConfirmRequest,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import {
   Dialog,
   DialogContent,
@@ -98,7 +98,7 @@ export function ComputerModals(): React.ReactElement {
               </div>
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              本次允许仅在当前运行有效；总是允许或总是拒绝会保存，可在通用设置恢复默认。应用授权不替代界面观察外发同意或高风险动作确认。基础操作使用 Gamma 辅助功能授权；截图需要可选录屏权限，物理键鼠输入需另行允许。
+              本次允许仅在当前运行有效；总是允许或总是拒绝会保存，可在通用设置恢复默认。应用授权不替代界面观察外发同意或高风险动作确认。基础操作使用 Carpus 辅助功能授权；截图需要可选录屏权限，物理键鼠输入需另行允许。
             </p>
           </div>
 

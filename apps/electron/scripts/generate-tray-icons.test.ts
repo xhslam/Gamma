@@ -8,7 +8,7 @@ const resourcesDir = resolve(import.meta.dir, '../resources')
 
 describe('菜单栏像素 γ 图标', () => {
   test('给定 App 矢量源，生成相同轮廓且不包含底板的单色模板', () => {
-    const source = readFileSync(resolve(resourcesDir, 'icon-sources/pixel-gamma.svg'), 'utf8')
+    const source = readFileSync(resolve(resourcesDir, 'icon-sources/pixel-carpus.svg'), 'utf8')
     const svg = createTrayIconSvg(source)
     expect(svg).toContain(source.match(/\bd="([^"]+)"/)![1]!)
     expect(svg).toContain('fill="black"')
@@ -22,8 +22,8 @@ describe('菜单栏像素 γ 图标', () => {
   for (const scale of [1, 2, 3]) {
     test(`给定 ${scale}x 资源，与 App 轮廓导出一致且四周透明`, async () => {
       const suffix = scale === 1 ? '' : `@${scale}x`
-      const source = readFileSync(resolve(resourcesDir, 'icon-sources/pixel-gamma.svg'), 'utf8')
-      const actual = await sharp(resolve(resourcesDir, `gamma-logos/iconTemplate${suffix}.png`)).raw().toBuffer({ resolveWithObject: true })
+      const source = readFileSync(resolve(resourcesDir, 'icon-sources/pixel-carpus.svg'), 'utf8')
+      const actual = await sharp(resolve(resourcesDir, `carpus-logos/iconTemplate${suffix}.png`)).raw().toBuffer({ resolveWithObject: true })
       const expected = await sharp(Buffer.from(createTrayIconSvg(source))).resize(22 * scale, 22 * scale).raw().toBuffer()
       expect(actual.info.width).toBe(22 * scale)
       expect(actual.info.height).toBe(22 * scale)

@@ -58,9 +58,9 @@ beforeAll(async () => {
 afterAll(async () => { await renderer?.dispose() })
 
 const measure = `
-  await window.until(()=>document.querySelector('.gamma-composer-footer'));
+  await window.until(()=>document.querySelector('.carpus-composer-footer'));
   await window.wait(250);
-  const row=document.querySelector('.gamma-composer-footer > div');
+  const row=document.querySelector('.carpus-composer-footer > div');
   return [...row.children].flatMap(wrap=>{
     const button=wrap.querySelector('button');
     if(!button)return [];

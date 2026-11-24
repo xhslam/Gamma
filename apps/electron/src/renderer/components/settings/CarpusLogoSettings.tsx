@@ -1,4 +1,4 @@
-/** Gamma 品牌图标下载，与外观设置共用十三款配色。 */
+/** Carpus 品牌图标下载，与外观设置共用十三款配色。 */
 import * as React from 'react'
 import { atom, useAtom } from 'jotai'
 import { Download, Loader2 } from 'lucide-react'
@@ -64,12 +64,12 @@ function LogoCard({ logo }: LogoCardProps): React.ReactElement {
   )
 }
 
-export function GammaLogoSettings(): React.ReactElement {
+export function CarpusLogoSettings(): React.ReactElement {
   return (
     <>
       <SettingsSection
         title="品牌 Logo"
-        description="下载十三款 Gamma 像素图标，用作机器人头像或品牌素材"
+        description="下载十三款 Carpus 像素图标，用作机器人头像或品牌素材"
       >
         <div className="grid grid-cols-2 gap-4 min-[640px]:grid-cols-5">
           {APP_ICON_PREVIEWS.map((logo) => <LogoCard key={logo.id} logo={logo} />)}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { COMPUTER_IPC_CHANNELS } from '@gamma/shared'
+import { COMPUTER_IPC_CHANNELS } from '@carpus/shared'
 import { loadIsolatedModule } from '../../test-utils/isolated-module'
 
 function createServiceFixture(packaged: boolean, exists = true, platform = 'darwin') {
@@ -27,7 +27,7 @@ function createServiceFixture(packaged: boolean, exists = true, platform = 'darw
           getVersion: () => '1.2.3',
           getAppPath: () =>
             packaged
-              ? '/Applications/Gamma.app/Contents/Resources/app.asar'
+              ? '/Applications/Carpus.app/Contents/Resources/app.asar'
               : '/repo/apps/electron',
         },
       },
@@ -39,13 +39,13 @@ function createServiceFixture(packaged: boolean, exists = true, platform = 'darw
       },
       'node:path': { join },
       'node:os': { release: () => '24.0.0' },
-      './gamma-computer-use-command': { createGammaComputerUseCommand: () => ({ executable: '/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse', argsPrefix: ['--client'] }) },
+      './carpus-computer-use-command': { createCarpusComputerUseCommand: () => ({ executable: '/Applications/carpusComputerUse.app/Contents/MacOS/carpusComputerUse', argsPrefix: ['--client'] }) },
       './computer-platform': { isComputerPlatformSupported: () => true },
       './computer-controller': { ComputerController: MockController },
       './agent-desktop-host': { AgentDesktopHost: MockHost },
       './computer-execution-gate': { installComputerExecutionGuard: () => {} },
       './main-window-store': { getMainWindow: () => undefined },
-      '@gamma/shared': { COMPUTER_IPC_CHANNELS },
+      '@carpus/shared': { COMPUTER_IPC_CHANNELS },
       './computer-authorization-manager': {
         computerAuthorizationManager: {
           onAppAuthRequested: () => {},
@@ -57,7 +57,7 @@ function createServiceFixture(packaged: boolean, exists = true, platform = 'darw
       process: {
         platform,
         env: { HOME: '/tmp' },
-        resourcesPath: '/Applications/Gamma.app/Contents/Resources',
+        resourcesPath: '/Applications/Carpus.app/Contents/Resources',
       },
     },
   )
@@ -70,17 +70,17 @@ function createServiceFixture(packaged: boolean, exists = true, platform = 'darw
 }
 
 describe('Given agent-desktop 路径解析与服务初始化', () => {
-  test('When macOS 正式安装包解析 CLI Then 使用独立 gammaComputerUse 应用', () => {
+  test('When macOS 正式安装包解析 CLI Then 使用独立 carpusComputerUse 应用', () => {
     const fixture = createServiceFixture(true)
     expect(fixture.commandResolver()).toEqual({
-      executable: '/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse', argsPrefix: ['--client'],
+      executable: '/Applications/carpusComputerUse.app/Contents/MacOS/carpusComputerUse', argsPrefix: ['--client'],
     })
     expect(fixture.checked).toEqual([])
   })
 
   test('When macOS 开发态解析 CLI Then 仍使用独立组件、不继承开发应用权限', () => {
     const fixture = createServiceFixture(false)
-    expect(fixture.commandResolver().executable).toBe('/Applications/gammaComputerUse.app/Contents/MacOS/gammaComputerUse')
+    expect(fixture.commandResolver().executable).toBe('/Applications/carpusComputerUse.app/Contents/MacOS/carpusComputerUse')
   })
 
   test('When Linux 开发态解析 CLI Then 保留 resources 引擎路径', () => {
@@ -92,7 +92,7 @@ describe('Given agent-desktop 路径解析与服务初始化', () => {
     const fixture = createServiceFixture(true, true, 'win32')
     expect(fixture.commandResolver()).toEqual({
       executable:
-        '/Applications/Gamma.app/Contents/Resources/agent-desktop/agent-desktop.exe',
+        '/Applications/Carpus.app/Contents/Resources/agent-desktop/agent-desktop.exe',
     })
   })
 

@@ -12,7 +12,7 @@ describe('Given 固定展开宽度的左侧导航', () => {
   test('When 渲染展开侧栏 Then 使用 256px 且不读取历史拖拽宽度', () => {
     expect(LEFT_SIDEBAR_WIDTH).toBe(256)
     expect(shellSource).toContain('<LeftSidebar width={LEFT_SIDEBAR_WIDTH} />')
-    expect(atomSource).not.toContain('gamma-left-sidebar-width')
+    expect(atomSource).not.toContain('carpus-left-sidebar-width')
     expect(shellSource).not.toContain('leftSidebarWidthAtom')
   })
 
@@ -54,13 +54,13 @@ describe('Given 侧边栏项目分组与树形边界', () => {
   })
 
   test('When 绘制项目会话 Then 使用连续竖线和空心圆点，且只移除导航右侧分隔线', () => {
-    expect(sidebarSource).toContain('gamma-sidebar-thread-children')
-    expect(sidebarSource).toContain('gamma-sidebar-thread-marker')
-    expect(sidebarSource).toContain('gamma-sidebar-preview-boundary')
-    expect(globalStyles).toContain('.gamma-sidebar .gamma-sidebar-thread-children::before')
+    expect(sidebarSource).toContain('carpus-sidebar-thread-children')
+    expect(sidebarSource).toContain('carpus-sidebar-thread-marker')
+    expect(sidebarSource).toContain('carpus-sidebar-preview-boundary')
+    expect(globalStyles).toContain('.carpus-sidebar .carpus-sidebar-thread-children::before')
     expect(globalStyles).toContain('border-radius: 50%;')
-    expect(panelStyles).toContain('.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel[data-panel]')
-    expect(globalStyles).toContain('.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel.gamma-sidebar')
+    expect(panelStyles).toContain('.carpus-workbench-frame [data-sidebar-region="navigation"] .carpus-panel[data-panel]')
+    expect(globalStyles).toContain('.carpus-workbench-frame [data-sidebar-region="navigation"] .carpus-panel.carpus-sidebar')
     expect(globalStyles).toContain('border-right-width: 0;')
   })
 })

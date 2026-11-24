@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import type { DesignArtifact } from '@gamma/shared'
+import type { DesignArtifact } from '@carpus/shared'
 import { buildDesignAgentContextPrompt } from './design-agent-policy'
 
 const artifact: DesignArtifact = { id: 'artifact', workspaceId: 'workspace', sessionId: 'chat', title: '阅读首页', kind: 'canvas', rootPath: '/authorized/designs/reading', createdAt: 1, updatedAt: 1 }

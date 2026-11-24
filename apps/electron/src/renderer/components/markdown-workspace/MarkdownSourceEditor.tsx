@@ -4,8 +4,8 @@ import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from '@cod
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, indentUnit } from '@codemirror/language'
-import { normalizeMarkdownEditorPreferences } from '@gamma/shared'
-import type { MarkdownEditorPreferences } from '@gamma/shared'
+import { normalizeMarkdownEditorPreferences } from '@carpus/shared'
+import type { MarkdownEditorPreferences } from '@carpus/shared'
 import { guardCodeMirrorKeyBinding, isImeKeyEvent, markCodeMirrorCompositionEnd } from './vmark/utils/imeGuard'
 
 // 保留原有语法结构/字重，只将默认高亮的独立色板换成暖色文字。

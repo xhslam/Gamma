@@ -1,5 +1,5 @@
-import { DESIGN_SKILL_SLUG } from '@gamma/shared'
-import type { DesignIntegrationStatus, InstallDesignInput } from '@gamma/shared'
+import { DESIGN_SKILL_SLUG } from '@carpus/shared'
+import type { DesignIntegrationStatus, InstallDesignInput } from '@carpus/shared'
 import { getAgentWorkspace, getAllWorkspaceSkills, getWorkspaceSkillFolder } from './agent-workspace-manager'
 import { getInactiveSkillsDir, getWorkspaceSkillsDir } from './config-paths'
 import { installDesignSkill } from './design-skill-install'

@@ -23,7 +23,7 @@ import { PreviewOpenButton } from './tool-result-renderers/preview-open-button'
 import { getTaskGetStatusLabel, parseTaskGetResult, type ParsedTaskGetResult } from './tool-result-renderers/task-get-result'
 import { parseTaskListResult, type ParsedTaskListItem } from './tool-result-renderers/task-list-result'
 import { formatDuration } from './AgentMessages'
-import { useSmoothStream } from '@gamma/ui'
+import { useSmoothStream } from '@carpus/ui'
 import { useToolExecution } from './use-tool-execution'
 import { ProcessTimelineContext, ProcessTimelineStep } from './ProcessTimelineStep'
 import { ProcessTimelineText, ProcessTimelineTool } from './ProcessTimelineContent'
@@ -34,7 +34,7 @@ import type {
   SDKToolUseBlock,
   SDKThinkingBlock,
   SDKSystemMessage,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 

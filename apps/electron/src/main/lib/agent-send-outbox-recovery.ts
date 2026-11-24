@@ -1,4 +1,4 @@
-import type { AgentCancelQueuedMessageInput, AgentQueuedMessageControlInput, AgentSendOutboxEntry, AgentSendOutboxRetryResult, AgentSubmitOrEnqueueInput, AgentSubmitOrEnqueueResult } from '@gamma/shared'
+import type { AgentCancelQueuedMessageInput, AgentQueuedMessageControlInput, AgentSendOutboxEntry, AgentSendOutboxRetryResult, AgentSubmitOrEnqueueInput, AgentSubmitOrEnqueueResult } from '@carpus/shared'
 import type { AgentSendOutbox } from './agent-send-outbox'
 
 interface AgentSendOutboxRecoveryOptions {

@@ -1,4 +1,4 @@
-import { PLANNING_IPC_CHANNELS } from '@gamma/shared'
+import { PLANNING_IPC_CHANNELS } from '@carpus/shared'
 
 export const PLANNING_REMOVED_ERROR = 'Todo 和日程功能已移除'
 

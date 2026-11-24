@@ -1,7 +1,7 @@
 import type {
   FeishuChatBinding,
   FeishuGroupInfo,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 export interface SingleUserGroupInput {
   groupInfo: Pick<FeishuGroupInfo, 'members' | 'userCount'> | null | undefined

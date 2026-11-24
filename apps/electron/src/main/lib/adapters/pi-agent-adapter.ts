@@ -5,14 +5,14 @@ import { classifyComputerValidationFailure } from './pi-computer-validation-log'
 /**
  * Pi Agent SDK 适配器
  *
- * Gamma 内部继续使用 SDKMessage 兼容协议，避免渲染层、Jotai 状态、
+ * Carpus 内部继续使用 SDKMessage 兼容协议，避免渲染层、Jotai 状态、
  * JSONL 持久化和历史会话展示在 SDK 迁移时一起改名。
  */
 
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { compactComputerScreenshots, injectComputerObservationContext, withComputerRequestFence, hasComputerObservationContent, stripComputerObservationContent, withComputerSharingFence, installComputerInterruptionHooks, computerPermissionInterruption } from './pi-computer-context'
-import type { ComputerPrivateObservation } from '@gamma/shared'
+import type { ComputerPrivateObservation } from '@carpus/shared'
 import { spawn } from 'node:child_process'
 import type { Dispatcher } from 'undici'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
@@ -25,7 +25,7 @@ import type {
   XaiOAuthCredentials,
   AgentQueryInput,
   JsonSchemaOutputFormat,
-  GammaPermissionMode,
+  CarpusPermissionMode,
   ProviderType,
   SendQueuedMessageOptions,
   SDKMessage,
@@ -33,14 +33,14 @@ import type {
   AgentToolCallDelta,
   SDKUserMessageInput,
   SkillActivation,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import {
   calculatePiAutoCompactionReserveTokens,
   inferReasoningTransport,
   isCodexFastModeSupportedModel,
   resolveReasoningProfile,
   createSkillActivationFromPath,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import type { CanUseToolOptions, PermissionResult } from '../agent-permission-service'
 import { isPromptTooLongError } from '../agent-error-utils'
 
@@ -62,9 +62,9 @@ import {
   type AgentRuntimeGuard,
 } from '../agent-runtime-guards'
 import {
-  createGammaManagedResourceLoaderOptions,
-  createGammaProjectInstructionFilesOverride,
-  type GammaProjectInstructionFile,
+  createCarpusManagedResourceLoaderOptions,
+  createCarpusProjectInstructionFilesOverride,
+  type CarpusProjectInstructionFile,
 } from './pi-resource-loader-overrides'
 import { ProjectInstructionScopeController } from './pi-project-instruction-scope'
 import type { ProjectInstructionSource } from '../project-instruction-resolver'
@@ -92,7 +92,7 @@ import {
 } from './pi-message-adapter'
 import { DEFAULT_CONTEXT_WINDOW, buildModel } from './pi-model-registry'
 import { PendingPromptSkillActivationTracker } from './pi-skill-activation-tracker'
-import { GammaTaskProgressController, type GammaTaskItem } from './pi-task-progress'
+import { CarpusTaskProgressController, type CarpusTaskItem } from './pi-task-progress'
 import { normalizePiToolResultDetails, serializePiToolResultPayload } from './pi-tool-result-json'
 import { createPiRetryTerminalGate, mapPiNativeRetryEvent } from './pi-retry-control'
 import { PI_MODEL_IDLE_TIMEOUT_MS, PI_MODEL_RETRY_SETTINGS, withPiStreamWatchdog } from './pi-stream-watchdog'
@@ -132,19 +132,19 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   apiKey: string
   baseUrl?: string
   provider: ProviderType
-  /** OAuth credential coordination key; equals the selected Gamma channel id. */
+  /** OAuth credential coordination key; equals the selected Carpus channel id. */
   channelId?: string
   channelName?: string
   maxTurns?: number
-  permissionMode: GammaPermissionMode
+  permissionMode: CarpusPermissionMode
   canUseTool?: (
     toolName: string,
     input: Record<string, unknown>,
     options: CanUseToolOptions,
   ) => Promise<PermissionResult>
   systemPrompt: string
-  /** Gamma 已验证的项目根 instruction files；不触发 Pi 的磁盘自动发现。 */
-  projectInstructionFiles?: GammaProjectInstructionFile[]
+  /** Carpus 已验证的项目根 instruction files；不触发 Pi 的磁盘自动发现。 */
+  projectInstructionFiles?: CarpusProjectInstructionFile[]
   /** 用于 typed 文件工具的会话级子目录指令激活；不会解析 Bash。 */
   projectInstructionScope?: {
     projectRoot: string
@@ -165,7 +165,7 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   thinkingLevel?: AgentThinkingLevel
   maxBudgetUsd?: number
   outputFormat?: JsonSchemaOutputFormat
-  /** Gamma 聚合的附加目录；Pi 内置工具 factory 不接收多 root 参数，编排层会把它们注入 systemPrompt。 */
+  /** Carpus 聚合的附加目录；Pi 内置工具 factory 不接收多 root 参数，编排层会把它们注入 systemPrompt。 */
   additionalDirectories?: string[]
   additionalSkillPaths?: string[]
   /** 当前用户输入显式引用的 Skill name（兼容历史 slug 已在编排层归一化） */
@@ -190,26 +190,26 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   codexFastMode?: boolean
   /** Pi 的 OAuth credential store 使用真实 expires 和 refresh，不读取 ~/.pi。 */
   codexOAuthCredentials?: CodexOAuthCredentials
-  /** Pi 运行中刷新 OAuth 后，将新凭据回写到 Gamma 渠道存储。 */
+  /** Pi 运行中刷新 OAuth 后，将新凭据回写到 Carpus 渠道存储。 */
   onCodexOAuthCredentialsRefreshed?: (credentials: CodexOAuthCredentials) => void | Promise<void>
   /** GitHub Copilot OAuth credential store 使用真实 expires、模型策略和 refresh，不读取 ~/.pi。 */
   githubCopilotOAuthCredentials?: GithubCopilotOAuthCredentials
-  /** Pi 运行中刷新 GitHub Copilot OAuth 后，将新凭据及模型策略回写到 Gamma 渠道存储。 */
+  /** Pi 运行中刷新 GitHub Copilot OAuth 后，将新凭据及模型策略回写到 Carpus 渠道存储。 */
   onGithubCopilotOAuthCredentialsRefreshed?: (credentials: GithubCopilotOAuthCredentials) => void | Promise<void>
   /** xAI OAuth credential store 使用真实 expires 和 refresh，不读取 ~/.pi。 */
   xaiOAuthCredentials?: XaiOAuthCredentials
-  /** Pi 运行中刷新 xAI OAuth 后，将新凭据回写到 Gamma 渠道存储。 */
+  /** Pi 运行中刷新 xAI OAuth 后，将新凭据回写到 Carpus 渠道存储。 */
   onXaiOAuthCredentialsRefreshed?: (credentials: XaiOAuthCredentials) => void | Promise<void>
   /** 会话级 OpenAI（Codex OAuth / Responses API）思考深度。 */
   openAIThinkingLevel?: AgentThinkingLevel
-  /** 长期记忆根目录；未指定时默认指向 Gamma 数据目录下的 memory/（按用户隔离）。 */
+  /** 长期记忆根目录；未指定时默认指向 Carpus 数据目录下的 memory/（按用户隔离）。 */
   memoryRoot?: string
   /** 仅当前已验证工作区的记忆根；独立于全局根，不发现相邻工作区。 */
   memoryWorkspaceRoot?: string
   memoryWorkspaceSlug?: string
   /** 初始原始用户文本，避免用注入的上下文触发预检。 */
   memoryUserMessage?: string
-  /** 长期记忆用户标识，用于在 Gamma 数据目录下按用户隔离存储。 */
+  /** 长期记忆用户标识，用于在 Carpus 数据目录下按用户隔离存储。 */
   memoryUserId?: string
   /** 是否挂载长期记忆扩展（子 Agent、后台任务、computer use 会话应设为 false）。 */
   memoryEnabled?: boolean
@@ -652,18 +652,18 @@ function buildAllowedSkillRoots(additionalSkillPaths: string[] | undefined): str
     .filter((path, index, arr) => arr.indexOf(path) === index)
 }
 
-function isGammaSkillPath(path: string | undefined, allowedRoots: string[]): boolean {
+function isCarpusSkillPath(path: string | undefined, allowedRoots: string[]): boolean {
   if (!path || allowedRoots.length === 0) return false
   const guardedPath = resolveGuardedRealPath(path)
   return allowedRoots.some((root) => isPathWithinRoot(guardedPath, root))
 }
 
-function createGammaSkillsOverride(additionalSkillPaths: string[] | undefined): (base: SkillLoadResult) => SkillLoadResult {
+function createCarpusSkillsOverride(additionalSkillPaths: string[] | undefined): (base: SkillLoadResult) => SkillLoadResult {
   const allowedRoots = buildAllowedSkillRoots(additionalSkillPaths)
   return (base) => ({
     skills: base.skills.filter((skill) =>
-      isGammaSkillPath(skill.filePath, allowedRoots) || isGammaSkillPath(skill.baseDir, allowedRoots)),
-    diagnostics: base.diagnostics.filter((diagnostic) => isGammaSkillPath(diagnostic.path, allowedRoots)),
+      isCarpusSkillPath(skill.filePath, allowedRoots) || isCarpusSkillPath(skill.baseDir, allowedRoots)),
+    diagnostics: base.diagnostics.filter((diagnostic) => isCarpusSkillPath(diagnostic.path, allowedRoots)),
   })
 }
 
@@ -723,7 +723,7 @@ interface PreparedPromptWithSkills {
   activations: SkillActivation[]
 }
 
-async function preparePromptWithGammaSkills(
+async function preparePromptWithCarpusSkills(
   resourceLoader: ResourceLoader,
   prompt: string,
   explicitSkillNames?: string[],
@@ -891,13 +891,13 @@ function createTerminatingJsonToolResult(payload: unknown): AgentToolResult<unkn
   } as AgentToolResult<unknown>
 }
 
-export const PI_COMPACTION_CONTINUATION_PROMPT = `<gamma_compaction_continuation>
+export const PI_COMPACTION_CONTINUATION_PROMPT = `<carpus_compaction_continuation>
 当前会话上下文已经安全压缩。请依据压缩摘要、保留的最近上下文和已持久化的交接状态，继续完成原始用户任务。
 
 - 不要重复已经完成或已提交的操作；先核验当前状态。
 - 若仍有工作，立即执行下一项具体行动。
 - 只有原始需求全部完成时才给出最终答复；若确实受阻，明确说明阻塞原因。
-</gamma_compaction_continuation>`
+</carpus_compaction_continuation>`
 
 export function planPiCompactionContinuation(options: {
   continuationCount: number
@@ -998,8 +998,8 @@ export function buildCurrentSessionCompactionTool(
   const definition = sdk.defineTool({
     name: 'CompactContext',
     label: '压缩当前会话上下文',
-    description: 'Compact only the current Pi Agent session after this turn finishes. Before calling, persist a durable handoff or checkpoint to the session workbench or project files as appropriate. Gamma will compact the current session, then automatically continue the original task from the compacted context.',
-    promptSnippet: 'CompactContext: after persisting a durable handoff/checkpoint, compact the current session context. Gamma will automatically continue the original task after compaction.',
+    description: 'Compact only the current Pi Agent session after this turn finishes. Before calling, persist a durable handoff or checkpoint to the session workbench or project files as appropriate. Carpus will compact the current session, then automatically continue the original task from the compacted context.',
+    promptSnippet: 'CompactContext: after persisting a durable handoff/checkpoint, compact the current session context. Carpus will automatically continue the original task after compaction.',
     parameters: Type.Object({}),
     async execute() {
       requestCompaction()
@@ -1071,11 +1071,11 @@ function stringFromInput(input: Record<string, unknown>, keys: string[], fallbac
  * 使用 Pi 的 toolCallId 作为默认任务 ID，让 tool_use 和 TaskCreate 结果从流开始就稳定关联。
  * 显式 ID 仅为旧调用格式保留兼容，不应覆盖正常的 opaque toolCallId。
  */
-export function resolveGammaTaskId(input: Record<string, unknown>, toolCallId: string): string {
+export function resolveCarpusTaskId(input: Record<string, unknown>, toolCallId: string): string {
   return stringFromInput(input, ['id', 'taskId', 'task_id'], toolCallId)
 }
 
-function normalizeTaskStatus(value: unknown, fallback: GammaTaskItem['status']): GammaTaskItem['status'] {
+function normalizeTaskStatus(value: unknown, fallback: CarpusTaskItem['status']): CarpusTaskItem['status'] {
   if (
     value === 'pending' ||
     value === 'in_progress' ||
@@ -1096,17 +1096,17 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return items.length > 0 ? items : undefined
 }
 
-export function buildGammaProductToolDefinitions(
+export function buildCarpusProductToolDefinitions(
   sdk: Pick<PiSdk, 'defineTool'>,
   canUseTool: PiAgentQueryOptions['canUseTool'],
-  tasks: Map<string, GammaTaskItem>,
+  tasks: Map<string, CarpusTaskItem>,
 ): ToolDefinition[] {
 
   const definitions = [
     sdk.defineTool({
       name: 'EnterPlanMode',
       label: '进入计划模式',
-      description: '进入 Gamma 计划模式。进入后只能调研、整理计划；将完整计划写入会话 plan/ 目录，并等待用户批准后再执行写操作。',
+      description: '进入 Carpus 计划模式。进入后只能调研、整理计划；将完整计划写入会话 plan/ 目录，并等待用户批准后再执行写操作。',
       promptSnippet: '进入计划模式，先调研，将完整计划写入 plan Markdown 文档，再等待用户确认。',
       parameters: Type.Object({
         reason: Type.Optional(Type.String({ description: '进入计划模式的原因。' })),
@@ -1135,7 +1135,7 @@ export function buildGammaProductToolDefinitions(
     sdk.defineTool({
       name: 'AskUserQuestion',
       label: '询问用户',
-      description: '当需要用户选择、补充信息或确认偏好时调用，Gamma 会展示可交互问答横幅。',
+      description: '当需要用户选择、补充信息或确认偏好时调用，Carpus 会展示可交互问答横幅。',
       promptSnippet: '向用户提出结构化问题并等待回答。',
       parameters: Type.Object({
         questions: Type.Array(Type.Object({
@@ -1168,8 +1168,8 @@ export function buildGammaProductToolDefinitions(
       }),
       async execute(toolCallId, params) {
         const input = params as Record<string, unknown>
-        const id = resolveGammaTaskId(input, toolCallId)
-        const task: GammaTaskItem = {
+        const id = resolveCarpusTaskId(input, toolCallId)
+        const task: CarpusTaskItem = {
           id,
           subject: stringFromInput(input, ['subject', 'title', 'name'], `任务 #${id}`),
           status: 'pending',
@@ -1207,7 +1207,7 @@ export function buildGammaProductToolDefinitions(
         const id = stringFromInput(input, ['taskId', 'task_id', 'id'])
         if (!id) throw new Error('taskId 必填')
         const existing = tasks.get(id)
-        const task: GammaTaskItem = {
+        const task: CarpusTaskItem = {
           id,
           subject: stringFromInput(input, ['subject', 'title', 'name'], existing?.subject ?? `任务 #${id}`),
           status: normalizeTaskStatus(input.status, existing?.status ?? 'pending'),
@@ -1266,7 +1266,7 @@ export function buildGammaProductToolDefinitions(
 }
 
 const WSL_EXPORT_ENV_KEYS = [
-  'GAMMA_CLI',
+  'CARPUS_CLI',
   'PROMA_CLI',
   'HTTP_PROXY',
   'HTTPS_PROXY',
@@ -1276,8 +1276,8 @@ const WSL_EXPORT_ENV_KEYS = [
   'https_proxy',
   'all_proxy',
   'no_proxy',
-  'GAMMA_WINDOWS_SHELL',
-  'GAMMA_WSL_DISTRO',
+  'CARPUS_WINDOWS_SHELL',
+  'CARPUS_WSL_DISTRO',
 ] as const
 
 function shellQuote(value: string): string {
@@ -1297,7 +1297,7 @@ function buildWslCommand(command: string, env: NodeJS.ProcessEnv | undefined): s
   for (const key of WSL_EXPORT_ENV_KEYS) {
     const rawValue = env?.[key]
     if (!rawValue) continue
-    const value = key === 'GAMMA_CLI' || key === 'PROMA_CLI' ? windowsPathToWslPath(rawValue) : rawValue
+    const value = key === 'CARPUS_CLI' || key === 'PROMA_CLI' ? windowsPathToWslPath(rawValue) : rawValue
     exportLines.push(`export ${key}=${shellQuote(value)}`)
   }
 
@@ -1388,7 +1388,7 @@ function createWslBashOperations(runtimeEnv: AgentRuntimeEnv): BashOperations {
   }
 }
 
-function createGammaBashToolOptions(runtimeEnv: AgentRuntimeEnv | undefined): BashToolOptions | undefined {
+function createCarpusBashToolOptions(runtimeEnv: AgentRuntimeEnv | undefined): BashToolOptions | undefined {
   if (!runtimeEnv) return undefined
 
   const spawnHook: NonNullable<BashToolOptions['spawnHook']> = ({ command, cwd, env }) => ({
@@ -1414,7 +1414,7 @@ export function isPiBashToolAvailable(
   platform: NodeJS.Platform,
   runtimeEnv: Pick<AgentRuntimeEnv, 'shellKind'> | undefined,
 ): boolean {
-  // Pi 的 Windows Bash 工具只能通过 Gamma 配置的 Git Bash 或 WSL 执行。
+  // Pi 的 Windows Bash 工具只能通过 Carpus 配置的 Git Bash 或 WSL 执行。
   return platform !== 'win32' || runtimeEnv?.shellKind === 'git-bash' || runtimeEnv?.shellKind === 'wsl'
 }
 
@@ -1435,7 +1435,7 @@ export function selectPiBuiltinShellTool(
   return 'none'
 }
 
-function createGammaPowerShellToolOptions(runtimeEnv: AgentRuntimeEnv | undefined): PowerShellToolOptions | undefined {
+function createCarpusPowerShellToolOptions(runtimeEnv: AgentRuntimeEnv | undefined): PowerShellToolOptions | undefined {
   if (!runtimeEnv) return undefined
   return {
     spawnHook: ({ command, cwd, env }) => ({
@@ -1456,10 +1456,10 @@ function buildBuiltinToolDefinitions(
   const definitions = [
     sdk.createReadToolDefinition(cwd),
     ...(shellTool === 'bash'
-      ? [sdk.createBashToolDefinition(cwd, createGammaBashToolOptions(runtimeEnv))]
+      ? [sdk.createBashToolDefinition(cwd, createCarpusBashToolOptions(runtimeEnv))]
       : []),
     ...(shellTool === 'powershell'
-      ? [sdk.createPowerShellToolDefinition(cwd, createGammaPowerShellToolOptions(runtimeEnv))]
+      ? [sdk.createPowerShellToolDefinition(cwd, createCarpusPowerShellToolOptions(runtimeEnv))]
       : []),
     sdk.createEditToolDefinition(cwd),
     sdk.createWriteToolDefinition(cwd),
@@ -1489,7 +1489,7 @@ function appendWindowsBaseModeInstruction(systemPrompt: string, runtimeEnv: Agen
   return `${systemPrompt}
 
 <runtime_capabilities>
-当前 Windows 设备未配置 Git Bash 或 WSL，因此 Bash 工具不可用。你仍可使用 Read、Write、Edit、Grep、Find、Ls 及 Gamma 提供的其他工具完成任务；不要声称已运行命令、测试或 Git 操作。若任务确实需要命令行，请默认调用 InstallWindowsShell 帮助用户安装 Git Bash；该工具会要求用户确认下载并打开官方安装程序。
+当前 Windows 设备未配置 Git Bash 或 WSL，因此 Bash 工具不可用。你仍可使用 Read、Write、Edit、Grep、Find、Ls 及 Carpus 提供的其他工具完成任务；不要声称已运行命令、测试或 Git 操作。若任务确实需要命令行，请默认调用 InstallWindowsShell 帮助用户安装 Git Bash；该工具会要求用户确认下载并打开官方安装程序。
 </runtime_capabilities>`
 }
 
@@ -1536,7 +1536,7 @@ export function installRuntimeGuardHooks(session: AgentSession, guard: AgentRunt
   session.agent.prepareNextTurnWithContext = async (context, signal) => {
     const previousSnapshot = await previousPrepareNextTurnWithContext?.(context, signal)
     if (guard.shouldStopBeforeNextTurn()) {
-      // Pi 的 steer/follow-up 队列在 turn 完成后才 drain；达到 Gamma 上限时必须在这里清空，
+      // Pi 的 steer/follow-up 队列在 turn 完成后才 drain；达到 Carpus 上限时必须在这里清空，
       // 否则纯文本 turn 之后追加的队列消息会绕过 afterToolCall 继续进入下一轮。
       session.agent.clearAllQueues()
     }
@@ -1607,7 +1607,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         ? sdk.SessionManager.open(sessionFile, input.piSessionDir, cwd)
         : sdk.SessionManager.create(cwd, input.piSessionDir)
       // 分支外的任务及失败调用不能成为当前进度；压缩不删除分支中的原始工具结果。
-      const taskProgress = new GammaTaskProgressController(sessionManager.getBranch()
+      const taskProgress = new CarpusTaskProgressController(sessionManager.getBranch()
         .filter((entry) => entry.type === 'message')
         .map((entry) => entry.message))
       const { modelRuntime, model } = await buildModel(sdk, input)
@@ -1632,7 +1632,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           input.canUseTool,
           input.runtimeEnv,
         ),
-        ...buildGammaProductToolDefinitions(sdk, input.canUseTool, taskProgress.tasks),
+        ...buildCarpusProductToolDefinitions(sdk, input.canUseTool, taskProgress.tasks),
         ...wrapCustomToolDefinitions(input.customTools, input.canUseTool),
       ].filter(tool => !input.desktopMode || ['ComputerStatus', 'ComputerObserve', 'ComputerAct', 'ComputerStop', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(tool.name))
 
@@ -1725,10 +1725,10 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         cwd,
         agentDir: input.piAgentDir,
         settingsManager,
-        ...createGammaManagedResourceLoaderOptions(),
-        agentsFilesOverride: createGammaProjectInstructionFilesOverride(input.projectInstructionFiles ?? []),
+        ...createCarpusManagedResourceLoaderOptions(),
+        agentsFilesOverride: createCarpusProjectInstructionFilesOverride(input.projectInstructionFiles ?? []),
         additionalSkillPaths: input.additionalSkillPaths ?? [],
-        skillsOverride: createGammaSkillsOverride(input.additionalSkillPaths),
+        skillsOverride: createCarpusSkillsOverride(input.additionalSkillPaths),
         ...(extensionFactories.length > 0 && { extensionFactories }),
         systemPromptOverride: () => appendWindowsBaseModeInstruction(input.systemPrompt, input.runtimeEnv),
       })
@@ -1946,7 +1946,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                 (event.message as AssistantMessage).stopReason === 'error' || shouldDeferNativeOverflow
               )
               if (shouldDeferAssistantTerminal && converted?.type === 'assistant' && assistantUuid) {
-                // Native retry 会丢弃该失败 assistant；不应消耗 Gamma 的 turn/budget 配额。
+                // Native retry 会丢弃该失败 assistant；不应消耗 Carpus 的 turn/budget 配额。
                 // 关键：此处不能重置 UUID。retry 后的新 partial/final 必须原地替换此前
                 // 已经展示的 partial，避免用户同时看到断流残片和恢复后的完整回答。
                 retryTerminalGate.defer({
@@ -2156,7 +2156,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             try {
               preparedPrompt = promptInput.skipSkillExpansion
                 ? { content: promptInput.content, activations: [] }
-                : await preparePromptWithGammaSkills(
+                : await preparePromptWithCarpusSkills(
                   resourceLoader,
                   promptInput.content,
                   promptInput.skillMentions,
@@ -2313,7 +2313,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       throw new Error(stopOverride?.errors[0] ?? 'Agent 已达到运行限制，无法继续追加消息')
     }
     const preparedPrompt = active.resourceLoader
-      ? await preparePromptWithGammaSkills(
+      ? await preparePromptWithCarpusSkills(
         active.resourceLoader,
         message.message.content,
         options?.skillMentions,
@@ -2383,7 +2383,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
   }
 
   async setPermissionMode(_sessionId: string, _mode: string): Promise<void> {
-    // Gamma 权限由工具包装层实时读取 sessionPermissionModes，自身无需同步给 Pi。
+    // Carpus 权限由工具包装层实时读取 sessionPermissionModes，自身无需同步给 Pi。
   }
 
   dispose(): void {

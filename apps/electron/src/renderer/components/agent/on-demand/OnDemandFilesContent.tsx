@@ -34,7 +34,7 @@ import {
 import type { PreviewFile } from '@/atoms/preview-atoms'
 import { openInBigPanelAtom } from '@/atoms/on-demand-panel-atoms'
 import { FileTypeIcon } from '@/components/file-browser/FileTypeIcon'
-import type { FileEntry } from '@gamma/shared'
+import type { FileEntry } from '@carpus/shared'
 
 interface OnDemandFilesContentProps {
   sessionId?: string
@@ -580,7 +580,7 @@ export function OnDemandFilesContent({
                     onMouseEnter={() => setSelectedIndex(virtualRow.index)}
                     style={{ paddingLeft: `${item.depth * 14 + 6}px` }}
                     className={cn(
-                      'gamma-list-row group flex h-full w-full items-center gap-1.5 rounded-md pr-2 text-left text-xs transition-colors',
+                      'carpus-list-row group flex h-full w-full items-center gap-1.5 rounded-md pr-2 text-left text-xs transition-colors',
                       isSelected ? 'bg-primary/10 text-foreground' : 'hover:bg-muted/60 text-muted-foreground',
                     )}
                     data-disclosure-trigger={item.isDirectory ? "" : undefined}

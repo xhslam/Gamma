@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import * as shared from '@gamma/shared'
-import type { TerminalCreateInput, TerminalExitEvent, TerminalOutputAck, TerminalOutputEvent, TerminalState } from '@gamma/shared'
+import * as shared from '@carpus/shared'
+import type { TerminalCreateInput, TerminalExitEvent, TerminalOutputAck, TerminalOutputEvent, TerminalState } from '@carpus/shared'
 import { loadIsolatedModule } from '../../test-utils/isolated-module'
 import * as outputBuffer from './terminal-output-buffer'
 
@@ -18,7 +18,7 @@ function setup() {
   let computerExclusive = false
   const service = loadIsolatedModule<Service>(`${import.meta.dir}/terminal-service.ts`, {
     'node:crypto': { randomUUID: () => 'agent-terminal' },
-    '@gamma/shared': shared,
+    '@carpus/shared': shared,
     './terminal-output-buffer': outputBuffer,
     './computer-execution-gate': { assertComputerExecutionAllowed: () => { if (computerExclusive) throw new Error('桌面控制互斥') } },
     './terminal-agent-policy': { resolveAgentTerminalCwd: () => '/project' },

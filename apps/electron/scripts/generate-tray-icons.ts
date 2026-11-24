@@ -14,12 +14,12 @@ export function createTrayIconSvg(source: string): string {
 }
 
 export async function generateTrayIcons(): Promise<void> {
-  const source = readFileSync(join(resourcesDir, 'icon-sources/pixel-gamma.svg'), 'utf8')
+  const source = readFileSync(join(resourcesDir, 'icon-sources/pixel-carpus.svg'), 'utf8')
   const svg = Buffer.from(createTrayIconSvg(source))
   for (const scale of [1, 2, 3]) {
     const suffix = scale === 1 ? '' : `@${scale}x`
     await sharp(svg).resize(22 * scale, 22 * scale).png()
-      .toFile(join(resourcesDir, `gamma-logos/iconTemplate${suffix}.png`))
+      .toFile(join(resourcesDir, `carpus-logos/iconTemplate${suffix}.png`))
   }
 }
 

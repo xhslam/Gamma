@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AutomaticMemoryCandidate, AutomaticMemorySource } from '@gamma/shared'
+import type { AutomaticMemoryCandidate, AutomaticMemorySource } from '@carpus/shared'
 import { AutomaticMemoryStore } from './automatic-memory-store'
 
 describe('自动分类记忆权威存储', () => {
@@ -13,7 +13,7 @@ describe('自动分类记忆权威存储', () => {
   const file = (): string => join(root, 'w1', 'memory', '.automatic-memory.json')
   const apply = (candidates = [candidate()], messageId = 'm1', userText = '我使用 Bun'): ReturnType<AutomaticMemoryStore['applyCandidates']> => store.applyCandidates('w1', candidates, source(messageId), userText, store.captureRevision('w1'))
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gamma-auto-memory-'))
+    root = mkdtempSync(join(tmpdir(), 'carpus-auto-memory-'))
     mkdirSync(join(root, 'w1')); mkdirSync(join(root, 'w2'))
     store = new AutomaticMemoryStore({ resolveWorkspaceRoot: slug => join(root, slug), now: () => 1000 })
   })

@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgyActivityEvent, AgyTask, AgyTaskSnapshot } from '@gamma/shared'
+import type { AgyActivityEvent, AgyTask, AgyTaskSnapshot } from '@carpus/shared'
 import { writeTextFileAtomic } from './safe-file'
 
 const PAGE_SIZE = 200

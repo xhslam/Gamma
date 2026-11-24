@@ -1,19 +1,19 @@
 /**
- * Gamma-managed Pi mode deliberately opts out of Pi's ambient local resources.
+ * Carpus-managed Pi mode deliberately opts out of Pi's ambient local resources.
  *
- * Gamma supplies the system prompt, Skills and product tools explicitly. Do not
+ * Carpus supplies the system prompt, Skills and product tools explicitly. Do not
  * let a user project's ancestor context files, extensions, or APPEND_SYSTEM.md
  * silently alter that managed runtime. Inline extension factories remain
  * available: Pi loads them independently of `noExtensions`.
  */
 import { normalizeProjectPathForComparison } from '../project-instruction-resolver'
 
-export interface GammaProjectInstructionFile {
+export interface CarpusProjectInstructionFile {
   path: string
   content: string
 }
 
-export function createGammaManagedResourceLoaderOptions() {
+export function createCarpusManagedResourceLoaderOptions() {
   return {
     noContextFiles: true,
     noExtensions: true,
@@ -24,22 +24,22 @@ export function createGammaManagedResourceLoaderOptions() {
 }
 
 /**
- * Pi still owns the final <project_context> formatting. Gamma supplies this override only after validating explicit Gamma-managed
+ * Pi still owns the final <project_context> formatting. Carpus supplies this override only after validating explicit Carpus-managed
  * workspace paths and user-authorized project paths, so no ambient context-file
  * discovery is re-enabled.
  */
-export function createGammaProjectInstructionFilesOverride(files: GammaProjectInstructionFile[]) {
+export function createCarpusProjectInstructionFilesOverride(files: CarpusProjectInstructionFile[]) {
   const agentsFiles = files.map(({ path, content }) => ({ path, content }))
   return () => ({ agentsFiles })
 }
 
 
 /** 显式叠加三层规则；同一真实路径只保留靠后的层，避免重复并保持覆盖顺序。 */
-export function combineGammaInstructionFiles(
-  workspaceFile: GammaProjectInstructionFile | undefined,
-  projectFiles: GammaProjectInstructionFile[],
-  globalFile?: GammaProjectInstructionFile,
-): GammaProjectInstructionFile[] {
+export function combineCarpusInstructionFiles(
+  workspaceFile: CarpusProjectInstructionFile | undefined,
+  projectFiles: CarpusProjectInstructionFile[],
+  globalFile?: CarpusProjectInstructionFile,
+): CarpusProjectInstructionFile[] {
   const layers = [
     ...(globalFile ? [{ file: globalFile, source: '全局' }] : []),
     ...(workspaceFile ? [{ file: workspaceFile, source: '工作区' }] : []),

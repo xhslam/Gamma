@@ -94,7 +94,7 @@ describe('agent-desktop-protocol', () => {
 
     it('batch 命令明确拒绝直接执行', () => {
       expect(() => buildAgentDesktopArgs({ command: 'batch' })).toThrow(
-        'batch 必须由 Gamma 逐项执行并分别授权',
+        'batch 必须由 Carpus 逐项执行并分别授权',
       )
     })
 

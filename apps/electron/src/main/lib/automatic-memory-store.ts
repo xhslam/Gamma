@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { lstatSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AutomaticMemoryCandidate, AutomaticMemoryCategory, AutomaticMemoryChange, AutomaticMemoryEntry, AutomaticMemorySettings, AutomaticMemorySnapshot, AutomaticMemorySource } from '@gamma/shared'
+import type { AutomaticMemoryCandidate, AutomaticMemoryCategory, AutomaticMemoryChange, AutomaticMemoryEntry, AutomaticMemorySettings, AutomaticMemorySnapshot, AutomaticMemorySource } from '@carpus/shared'
 import { getAgentWorkspacesDir } from './config-paths'
 import { writeTextFileAtomic } from './safe-file'
 

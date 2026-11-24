@@ -1,4 +1,4 @@
-import type { ComputerPermission } from '@gamma/shared'
+import type { ComputerPermission } from '@carpus/shared'
 
 export type ComputerFailurePhase = 'prepare' | 'confirmation' | 'read' | 'select' | 'perform' | 'after-dispatch'
 export interface ComputerFailureEvidence {

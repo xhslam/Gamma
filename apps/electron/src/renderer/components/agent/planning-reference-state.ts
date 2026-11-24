@@ -1,4 +1,4 @@
-import type { CalendarEvent, Todo } from '@gamma/shared'
+import type { CalendarEvent, Todo } from '@carpus/shared'
 
 export type PlanningReferenceType = 'todo' | 'calendar_event'
 

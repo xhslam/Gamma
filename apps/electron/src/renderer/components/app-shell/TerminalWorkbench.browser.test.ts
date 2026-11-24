@@ -64,7 +64,7 @@ beforeAll(async () => {
 }, 180_000)
 afterAll(async () => { await renderer?.dispose() })
 
-describe('Given Gamma 的终端工作台独立页', () => {
+describe('Given Carpus 的终端工作台独立页', () => {
   test('When 从会话切换到独立工作区 Then 工作区内容贴合主面板四边', async () => {
     expect(await renderer.run<boolean[]>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
@@ -131,7 +131,7 @@ describe('Given Gamma 的终端工作台独立页', () => {
     })
   }, 30_000)
 
-  test('Given 旧阅读主题和已运行的终端 When 切换 Gamma 主题 Then 页面和终端实时同步', async () => {
+  test('Given 旧阅读主题和已运行的终端 When 切换 Carpus 主题 Then 页面和终端实时同步', async () => {
     expect(await renderer.run<Record<string, boolean>>(`
       const api = window.leftSidebarRegression, fixture = await api.mount();
       fixture.button('Code').click();

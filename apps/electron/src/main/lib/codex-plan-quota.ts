@@ -1,4 +1,4 @@
-import type { ChannelPlanQuotaResult, ChannelPlanQuotaWindow } from '@gamma/shared'
+import type { ChannelPlanQuotaResult, ChannelPlanQuotaWindow } from '@carpus/shared'
 
 interface CodexUsageWindow {
   used_percent?: unknown

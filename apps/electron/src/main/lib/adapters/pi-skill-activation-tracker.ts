@@ -1,4 +1,4 @@
-import type { SkillActivation } from '@gamma/shared'
+import type { SkillActivation } from '@carpus/shared'
 
 export interface PendingPromptSkillActivation {
   id: number

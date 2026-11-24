@@ -11,7 +11,7 @@ const temporary: string[] = []
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
 const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 function fixture(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-release-test-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-release-test-'))
   temporary.push(root)
   return root
 }
@@ -36,8 +36,8 @@ async function makeTarget(root: string, target: ReleaseTarget): Promise<string> 
 
 describe('Given 标签触发正式发布', () => {
   test('When 构建 Linux Then 沿用 electron-builder 的架构命名', () => {
-    expect(artifactName('1.0.0', 'linux-x64', 'deb')).toBe('Gamma-1.0.0-linux-amd64.deb')
-    expect(artifactName('1.0.0', 'linux-x64', 'AppImage')).toBe('Gamma-1.0.0-linux-x86_64.AppImage')
+    expect(artifactName('1.0.0', 'linux-x64', 'deb')).toBe('Carpus-1.0.0-linux-amd64.deb')
+    expect(artifactName('1.0.0', 'linux-x64', 'AppImage')).toBe('Carpus-1.0.0-linux-x86_64.AppImage')
   })
   test('When 标签与版本一致 Then 接受；不一致或预发布版本则拒绝', () => {
     expect(releaseVersion(`v${version}`, version)).toBe(version)
@@ -60,7 +60,7 @@ describe('Given 各平台安装包与 electron-updater 清单', () => {
   test('When 安装包篡改或 blockmap 缺失 Then 阻止发布', async () => {
     const root = fixture()
     const directory = await makeTarget(root, 'win-x64')
-    const file = join(directory, `Gamma-${version}-win-x64.exe`)
+    const file = join(directory, `Carpus-${version}-win-x64.exe`)
     writeTextFileAtomic(file, 'MZtamper!')
     await expect(validateTarget(directory, 'win-x64', version)).rejects.toThrow('SHA-512')
     await makeTarget(root, 'win-x64')
@@ -86,7 +86,7 @@ describe('Given 各平台安装包与 electron-updater 清单', () => {
     await makeTarget(root, 'mac-arm64')
     await expect(assembleRelease(root, join(root, 'output'), version)).rejects.toThrow()
     const directory = await makeTarget(root, 'mac-arm64')
-    unlinkSync(join(directory, `Gamma-${version}-mac-arm64.zip`))
+    unlinkSync(join(directory, `Carpus-${version}-mac-arm64.zip`))
     await expect(validateTarget(directory, 'mac-arm64', version)).rejects.toThrow()
   })
   test('When 草稿重新下载的附件遗漏、损坏或混入额外文件 Then 保持草稿', async () => {
@@ -135,7 +135,7 @@ if (args[0] === 'api') {
     chmodSync(fake, 0o755)
     const logFile = join(root, 'calls.log')
     const processResult = Bun.spawn([process.execPath, new URL('./publish-release.ts', import.meta.url).pathname, output, `v${version}`], {
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: 'xhslam/Gamma', TEST_RELEASE_LOG: logFile, TEST_RELEASE_CASE: mode, TEST_RELEASE_TAG: `v${version}`, TEST_RELEASE_SOURCE: output },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: 'xhslam/Carpus', TEST_RELEASE_LOG: logFile, TEST_RELEASE_CASE: mode, TEST_RELEASE_TAG: `v${version}`, TEST_RELEASE_SOURCE: output },
       stdout: 'pipe', stderr: 'pipe',
     })
     // 同时消费输出，避免子进程管道积压。

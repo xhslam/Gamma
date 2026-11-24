@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { ComputerBinding } from '@gamma/shared'
+import type { ComputerBinding } from '@carpus/shared'
 import type { ExtensionToolContext } from '@earendil-works/pi-coding-agent'
 import { buildPiComputerTools } from './pi-computer-tools'
 import type { ComputerController } from '../computer-controller'

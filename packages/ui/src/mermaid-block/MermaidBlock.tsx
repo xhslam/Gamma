@@ -97,7 +97,7 @@ async function renderWithOfficialMermaid(code: string, host: Element): Promise<s
   }))
   mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', themeVariables: paletteVariables })
 
-  const id = `gamma-mermaid-${Date.now()}-${mermaidRenderId++}`
+  const id = `carpus-mermaid-${Date.now()}-${mermaidRenderId++}`
   const { svg } = await mermaid.render(id, code)
   if (!isUsableSvg(svg)) throw new Error('Mermaid 输出了无效 SVG')
   return svg

@@ -1,5 +1,5 @@
-import type { SDKMessage, SDKUserMessage } from '@gamma/shared'
-import { groupIntoTurns, isUserInputMessage, type MessageGroup } from '@gamma/session-core'
+import type { SDKMessage, SDKUserMessage } from '@carpus/shared'
+import { groupIntoTurns, isUserInputMessage, type MessageGroup } from '@carpus/session-core'
 
 export interface MessageGroupRenderCache {
   prefixLength: number

@@ -21,10 +21,10 @@
  * Kimi Coding Plan 特殊要求：
  * - Base URL：`https://api.kimi.com/coding/v1`
  * - 改名过渡期间沿用本软件原有 Proma User-Agent，避免破坏已有供应商注册身份。
- * - Gamma 品牌及默认客户端标识由 setGammaVersion 初始化。
+ * - Carpus 品牌及默认客户端标识由 setCarpusVersion 初始化。
  */
 
-import { extractZhipuCodingTeamApiToken, type ProviderType } from '@gamma/shared'
+import { extractZhipuCodingTeamApiToken, type ProviderType } from '@carpus/shared'
 import type {
   ProviderAdapter,
   ProviderRequest,
@@ -37,7 +37,7 @@ import type {
 } from './types.ts'
 import { resolveAnthropicMessagesUrl } from './url-utils.ts'
 import { detectThinkingCapability } from './thinking-capability.ts'
-import { getGammaUserAgent } from './user-agent.ts'
+import { getCarpusUserAgent } from './user-agent.ts'
 
 // ===== Anthropic 特有类型 =====
 
@@ -281,12 +281,12 @@ export class AnthropicAdapter implements ProviderAdapter {
     }
     if (this.providerType === 'kimi-coding' || this.providerType === 'zhipu-coding' || this.providerType === 'zhipu-coding-team') {
       base['Authorization'] = `Bearer ${this.providerType === 'zhipu-coding-team' ? extractZhipuCodingTeamApiToken(apiKey) : apiKey}`
-      base['User-Agent'] = getGammaUserAgent(undefined, this.providerType)
+      base['User-Agent'] = getCarpusUserAgent(undefined, this.providerType)
       return base
     }
     if (this.providerType === 'xiaomi-token-plan' || this.providerType === 'qwen-token-plan') {
       base['Authorization'] = `Bearer ${apiKey}`
-      base['User-Agent'] = getGammaUserAgent(undefined, this.providerType)
+      base['User-Agent'] = getCarpusUserAgent(undefined, this.providerType)
       return base
     }
     if (this.providerType === 'minimax' || this.providerType === 'qwen-anthropic') {
@@ -375,9 +375,9 @@ export class AnthropicAdapter implements ProviderAdapter {
 
     const requestBody = JSON.stringify(body)
 
-    // 调试：开启 GAMMA_DEBUG_REQUEST 时打印请求体，便于排查思考+工具场景的消息结构
+    // 调试：开启 CARPUS_DEBUG_REQUEST 时打印请求体，便于排查思考+工具场景的消息结构
     const procReq = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    if (procReq?.env?.GAMMA_DEBUG_REQUEST) {
+    if (procReq?.env?.CARPUS_DEBUG_REQUEST) {
       console.log('[Request]', this.providerType, input.modelId, '→', requestBody.slice(0, 4000))
     }
 
@@ -393,9 +393,9 @@ export class AnthropicAdapter implements ProviderAdapter {
       const event = JSON.parse(jsonLine) as AnthropicSSEEvent
       const events: StreamEvent[] = []
 
-      // 调试：开启 GAMMA_DEBUG_SSE 时打印原始事件，便于排查 Provider 的 SSE 格式差异
+      // 调试：开启 CARPUS_DEBUG_SSE 时打印原始事件，便于排查 Provider 的 SSE 格式差异
       const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-      if (proc?.env?.GAMMA_DEBUG_SSE) {
+      if (proc?.env?.CARPUS_DEBUG_SSE) {
         console.log('[SSE]', jsonLine.slice(0, 400))
       }
 

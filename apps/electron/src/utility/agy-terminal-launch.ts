@@ -49,7 +49,7 @@ export function resolveAgyTerminalLaunch(options: AgyTerminalLaunchOptions = {})
   if (platform === 'darwin' && !env.LANG) env.LANG = 'en_US.UTF-8'
   env.TERM = 'xterm-256color'
   env.COLORTERM = 'truecolor'
-  env.TERM_PROGRAM = 'Gamma'
+  env.TERM_PROGRAM = 'Carpus'
   const invocation = createAgyInvocation(executable, ['--dangerously-skip-permissions'], env, platform)
   return {
     file: invocation.command,

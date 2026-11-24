@@ -16,7 +16,7 @@ import * as React from 'react'
 import { isImeKeyboardEvent } from '@/lib/ime-keyboard-policy'
 import { cn } from '@/lib/utils'
 import { attachScrollFade } from '@/components/ui/scroll-fade'
-import type { FileIndexEntry } from '@gamma/shared'
+import type { FileIndexEntry } from '@carpus/shared'
 import { FileTypeIcon } from './FileTypeIcon'
 import { FileText, MessageSquareText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -474,7 +474,7 @@ function TreeNodeList({
           aria-level={node.depth + 1}
           aria-expanded={node.type === 'dir' && node.children.length > 0 ? node.expanded : undefined}
           className={cn(
-            'gamma-list-row w-full flex items-center gap-1.5 px-2.5 text-left text-xs transition-colors',
+            'carpus-list-row w-full flex items-center gap-1.5 px-2.5 text-left text-xs transition-colors',
             isSelected
               ? 'bg-accent text-accent-foreground'
               : 'hover:bg-accent/50',

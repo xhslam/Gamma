@@ -11,7 +11,7 @@ let manager: AgentSessionManager
 let contextPrompt: AgentSessionContextPrompt
 let tempHome: string
 let originalHome: string | undefined
-let originalGammaDev: string | undefined
+let originalCarpusDev: string | undefined
 let previousConfigHome: string | undefined
 
 function jsonl(rows: string[]): string {
@@ -19,7 +19,7 @@ function jsonl(rows: string[]): string {
 }
 
 function writeAgentSessionJsonl(sessionId: string, rows: string[]): void {
-  const dir = join(tempHome, '.gamma', 'agent-sessions')
+  const dir = join(tempHome, '.carpus', 'agent-sessions')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, `${sessionId}.jsonl`), jsonl(rows), 'utf-8')
 }
@@ -37,7 +37,7 @@ function writeAgentSessionsIndex(sessions: Array<{
   forkSourceSdkSessionId?: string
   resumeAtMessageUuid?: string
 }>): void {
-  const dir = join(tempHome, '.gamma')
+  const dir = join(tempHome, '.carpus')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'agent-sessions.json'), JSON.stringify({ version: 1, sessions }), 'utf-8')
 }
@@ -49,7 +49,7 @@ function writeAgentWorkspacesIndex(workspaces: Array<{
   createdAt: number
   updatedAt: number
 }>): void {
-  const dir = join(tempHome, '.gamma')
+  const dir = join(tempHome, '.carpus')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'agent-workspaces.json'), JSON.stringify({ version: 2, workspaces }), 'utf-8')
 }
@@ -66,11 +66,11 @@ function createIndexedSessions(count: number) {
 
 beforeAll(async () => {
   originalHome = process.env.HOME
-  originalGammaDev = process.env.GAMMA_DEV
-  tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-agent-session-manager-'))
+  originalCarpusDev = process.env.CARPUS_DEV
+  tempHome = mkdtempSync(join(os.tmpdir(), 'carpus-agent-session-manager-'))
   process.env.HOME = tempHome
   previousConfigHome = setConfigHomeForTest(tempHome)
-  process.env.GAMMA_DEV = '0'
+  process.env.CARPUS_DEV = '0'
   manager = await import('./agent-session-manager')
   contextPrompt = await import('./agent-session-context-prompt')
   manager.setPiSessionManagerForTest({
@@ -104,10 +104,10 @@ afterAll(() => {
   } else {
     process.env.HOME = originalHome
   }
-  if (originalGammaDev === undefined) {
-    delete process.env.GAMMA_DEV
+  if (originalCarpusDev === undefined) {
+    delete process.env.CARPUS_DEV
   } else {
-    process.env.GAMMA_DEV = originalGammaDev
+    process.env.CARPUS_DEV = originalCarpusDev
   }
   rmSync(tempHome, { recursive: true, force: true })
 })
@@ -138,8 +138,8 @@ describe('Agent 会话 JSONL 读取', () => {
 
 describe('Agent 会话 runtime 元数据', () => {
   test('Given 已保存 OpenAI medium 默认值 When 新建会话 Then 始终创建并持久化 Pi 会话', () => {
-    const settingsPath = join(tempHome, '.gamma', 'settings.json')
-    mkdirSync(join(tempHome, '.gamma'), { recursive: true })
+    const settingsPath = join(tempHome, '.carpus', 'settings.json')
+    mkdirSync(join(tempHome, '.carpus'), { recursive: true })
     writeFileSync(settingsPath, JSON.stringify({
       agentThinking: { type: 'adaptive' },
       agentEffort: 'max',
@@ -209,7 +209,7 @@ describe('Agent 会话 runtime 元数据', () => {
       piSessionFile: '/tmp/pi-session.jsonl',
       piEntryBindings: { 'assistant-1': 'entry-1' },
     }])
-    mkdirSync(join(tempHome, '.gamma', 'agent-workspaces', 'workspace-a', 'pi-session-to-move'), { recursive: true })
+    mkdirSync(join(tempHome, '.carpus', 'agent-workspaces', 'workspace-a', 'pi-session-to-move'), { recursive: true })
 
     const moved = manager.moveSessionToWorkspace('pi-session-to-move', 'workspace-b')
 
@@ -217,14 +217,14 @@ describe('Agent 会话 runtime 元数据', () => {
     expect(moved.sdkSessionId).toBeUndefined()
     expect(moved.piSessionFile).toBeUndefined()
     expect(moved.piEntryBindings).toBeUndefined()
-    expect(existsSync(join(tempHome, '.gamma', 'agent-workspaces', 'workspace-b', 'pi-session-to-move'))).toBe(true)
+    expect(existsSync(join(tempHome, '.carpus', 'agent-workspaces', 'workspace-b', 'pi-session-to-move'))).toBe(true)
   })
 
   test('Given 新安装用户保存关闭思考 When 连续新建会话 Then 不被旧版迁移改回 high', () => {
-    const settingsPath = join(tempHome, '.gamma', 'settings.json')
-    const indexPath = join(tempHome, '.gamma', 'agent-sessions.json')
+    const settingsPath = join(tempHome, '.carpus', 'settings.json')
+    const indexPath = join(tempHome, '.carpus', 'agent-sessions.json')
     const indexBackupPath = `${indexPath}.bak`
-    mkdirSync(join(tempHome, '.gamma'), { recursive: true })
+    mkdirSync(join(tempHome, '.carpus'), { recursive: true })
     rmSync(indexPath, { force: true })
     rmSync(indexBackupPath, { force: true })
     writeFileSync(settingsPath, JSON.stringify({
@@ -580,14 +580,14 @@ describe('Agent 会话删除墓碑', () => {
     manager.appendSDKMessages(id, [{ type: 'result', subtype: 'success' } as never])
 
     expect(manager.getAgentSessionMeta(id)).toBeUndefined()
-    expect(existsSync(join(tempHome, '.gamma', 'agent-sessions', `${id}.jsonl`))).toBe(false)
+    expect(existsSync(join(tempHome, '.carpus', 'agent-sessions', `${id}.jsonl`))).toBe(false)
   })
 })
 
 
 describe('Agent-only 历史数据边界', () => {
   test('Given 磁盘仍有 Chat 历史 When 列出并自动归档 Agent Then 历史 Chat 与附件逐字节保留且不暴露迁移入口', () => {
-    const configDir = join(tempHome, '.gamma')
+    const configDir = join(tempHome, '.carpus')
     const conversationsDir = join(configDir, 'conversations')
     const attachmentsDir = join(configDir, 'attachments', 'legacy-chat')
     mkdirSync(conversationsDir, { recursive: true })

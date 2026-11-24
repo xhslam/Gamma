@@ -8,8 +8,8 @@ import { APP_ICON_VARIANTS, getAppIconResourcePath } from './app-icons'
 const electronDir = resolve(import.meta.dir, '../..')
 const resourcesDir = join(electronDir, 'resources')
 const sourcesDir = join(resourcesDir, 'icon-sources')
-const logosDir = join(resourcesDir, 'gamma-logos')
-const previewsDir = join(electronDir, 'src/renderer/assets/bots/gamma-logos')
+const logosDir = join(resourcesDir, 'carpus-logos')
+const previewsDir = join(electronDir, 'src/renderer/assets/bots/carpus-logos')
 
 // 独立验收配色数量与默认品牌色，避免旧金属资源混入导出。
 const SOURCE_IDENTITIES = APP_ICON_VARIANTS
@@ -139,16 +139,16 @@ describe('十三款应用图标的原始来源、Dock 几何与打包资源', ()
   test('Given 已确认的十三款像素配色 When 读取资源清单 Then ID唯一且所有预览与运行文件齐全', async () => {
     expect(APP_ICON_VARIANTS).toHaveLength(13)
     expect(new Set(APP_ICON_VARIANTS.map((variant) => variant.id)).size).toBe(13)
-    expect(APP_ICON_VARIANTS[0]).toMatchObject({ id: 'default', name: '米白蓝绿', fileName: 'gamma-ivory-teal.png', background: '#F2EBDD', foreground: '#345F6C' })
-    const source = readFileSync(join(sourcesDir, 'pixel-gamma.svg'), 'utf-8')
+    expect(APP_ICON_VARIANTS[0]).toMatchObject({ id: 'default', name: '米白蓝绿', fileName: 'carpus-ivory-teal.png', background: '#F2EBDD', foreground: '#345F6C' })
+    const source = readFileSync(join(sourcesDir, 'pixel-carpus.svg'), 'utf-8')
     expect(source).toContain('<path')
     expect(source).not.toContain('<image')
     const expectedFiles = SOURCE_IDENTITIES.map((source) => source.fileName).sort()
     for (const dir of [logosDir, previewsDir]) {
-      expect(readdirSync(dir).filter((file) => file.startsWith('gamma-') && file.endsWith('.png')).sort()).toEqual(expectedFiles)
+      expect(readdirSync(dir).filter((file) => file.startsWith('carpus-') && file.endsWith('.png')).sort()).toEqual(expectedFiles)
     }
     for (const identity of SOURCE_IDENTITIES) {
-      expect(getAppIconResourcePath(identity.id)).toBe(identity.id === 'default' ? 'icon.png' : `gamma-logos/${identity.fileName}`)
+      expect(getAppIconResourcePath(identity.id)).toBe(identity.id === 'default' ? 'icon.png' : `carpus-logos/${identity.fileName}`)
     }
   })
 
@@ -179,10 +179,10 @@ describe('十三款应用图标的原始来源、Dock 几何与打包资源', ()
   })
 
   test('Given 默认米白蓝绿的处理后PNG When 读取应用图标与内部品牌图 Then 两处使用同一份带透明留白的1024px导出', async () => {
-    const defaultIcon = readFileSync(join(logosDir, 'gamma-ivory-teal.png'))
+    const defaultIcon = readFileSync(join(logosDir, 'carpus-ivory-teal.png'))
     const appIcon = readFileSync(join(resourcesDir, 'icon.png'))
     expect(appIcon.equals(defaultIcon)).toBe(true)
-    expect(readFileSync(join(electronDir, 'src/renderer/assets/models/gamma.png')).equals(defaultIcon)).toBe(true)
+    expect(readFileSync(join(electronDir, 'src/renderer/assets/models/carpus.png')).equals(defaultIcon)).toBe(true)
     expectDockGeometry(await decodeRgba(appIcon, 1024))
   })
 

@@ -4,7 +4,7 @@
  * 主题模式、IPC 通道等设置相关定义。
  */
 
-import type { EnvironmentCheckResult, ThinkingConfig, AgentEffort, AgentThinkingLevel, FeishuSessionMirrorSettings, TerminalProfile, WindowsShellPreference, MarkdownEditorPreferences, MarkdownEditorPreferencesUpdate } from '@gamma/shared'
+import type { EnvironmentCheckResult, ThinkingConfig, AgentEffort, AgentThinkingLevel, FeishuSessionMirrorSettings, TerminalProfile, WindowsShellPreference, MarkdownEditorPreferences, MarkdownEditorPreferencesUpdate } from '@carpus/shared'
 
 /** 通知音场景类型 */
 export type NotificationSoundType = 'taskComplete' | 'permissionRequest' | 'exitPlanMode' | 'planningReminder'
@@ -34,7 +34,7 @@ export type VoiceDictationProvider = 'doubao'
 export type VoiceDictationEndpointMode = 'async' | 'duplex'
 
 /** 语音输入输出方式 */
-export type VoiceDictationOutputMode = 'auto' | 'clipboard' | 'gamma-input'
+export type VoiceDictationOutputMode = 'auto' | 'clipboard' | 'carpus-input'
 
 /** 语音输入浮窗位置 */
 export interface VoiceDictationWindowPosition {
@@ -102,15 +102,15 @@ export interface VoiceDictationToggleInput {
 
 /** 主进程冻结的一次听写输出上下文。 */
 export interface VoiceDictationOutputContext {
-  /** 本次听写是否写入 Gamma 内部输入框。 */
-  routeToGammaInput: boolean
+  /** 本次听写是否写入 Carpus 内部输入框。 */
+  routeToCarpusInput: boolean
   /** 会话开始时选择的输出模式。 */
   outputMode: VoiceDictationOutputMode
 }
 
-/** 主进程确认开始听写时，告知渲染进程本次输出是否应路由到 Gamma 输入框。 */
+/** 主进程确认开始听写时，告知渲染进程本次输出是否应路由到 Carpus 输入框。 */
 export interface VoiceDictationShownEvent {
-  routeToGammaInput: boolean
+  routeToCarpusInput: boolean
   /** 主进程生成的冻结输出上下文 ID，后续 preview / commit / cancel 必须原样带回。 */
   outputContextId: string
   sourceInputId?: string
@@ -136,11 +136,11 @@ export interface VoiceDictationAudioChunkInput {
   data: ArrayBuffer
 }
 
-/** 将当前识别结果作为 Gamma 输入框中的临时组合文本预览。 */
+/** 将当前识别结果作为 Carpus 输入框中的临时组合文本预览。 */
 export interface VoiceDictationPreviewInput {
   sessionId: string
   text: string
-  /** 本次听写会话冻结的 Gamma 输入目标；null 表示不路由到内部输入框。 */
+  /** 本次听写会话冻结的 Carpus 输入目标；null 表示不路由到内部输入框。 */
   targetInputId?: string | null
   /** 主进程生成的冻结输出上下文 ID。 */
   outputContextId?: string
@@ -152,7 +152,7 @@ export interface VoiceDictationStopInput {
   sessionId: string
   /** 跨 ASR 重连保持稳定的听写会话 ID */
   previewSessionId?: string
-  /** 取消预览时应清理的 Gamma 输入目标。 */
+  /** 取消预览时应清理的 Carpus 输入目标。 */
   targetInputId?: string | null
   /** 主进程生成的冻结输出上下文 ID。 */
   outputContextId?: string
@@ -162,7 +162,7 @@ export interface VoiceDictationStopInput {
 export interface VoiceDictationCommitInput {
   sessionId: string
   text: string
-  /** 本次听写会话冻结的 Gamma 输入目标；null 表示不路由到内部输入框。 */
+  /** 本次听写会话冻结的 Carpus 输入目标；null 表示不路由到内部输入框。 */
   targetInputId?: string | null
   /** 主进程生成的冻结输出上下文 ID。 */
   outputContextId?: string
@@ -172,7 +172,7 @@ export interface VoiceDictationCommitInput {
 export interface VoiceDictationTextEvent {
   sessionId: string
   text: string
-  /** 本次听写会话冻结的 Gamma 输入目标；null 表示交给全局 fallback 处理。 */
+  /** 本次听写会话冻结的 Carpus 输入目标；null 表示交给全局 fallback 处理。 */
   targetInputId?: string | null
 }
 
@@ -189,7 +189,7 @@ export interface VoiceDictationResizeInput {
 
 /** 输出语音输入文本结果 */
 export interface VoiceDictationCommitResult {
-  mode: 'gamma-input' | 'cursor' | 'clipboard'
+  mode: 'carpus-input' | 'cursor' | 'clipboard'
   success: boolean
   message: string
 }
@@ -406,20 +406,20 @@ export interface AppSettings {
   appIconVariant?: string
   /** 语音输入设置（Access Token 以加密态存储，由专用服务解密后返回渲染进程） */
   voiceDictation?: VoiceDictationPersistedSettings
-  /** 飞书 Session 镜像设置：每个 Gamma Session 可创建一个仅包含用户与指定 Bot 的飞书群 */
+  /** 飞书 Session 镜像设置：每个 Carpus Session 可创建一个仅包含用户与指定 Bot 的飞书群 */
   feishuSessionMirror?: FeishuSessionMirrorSettings
   /** 已确认的受管浏览器风险告知版本；低于当前版本时首次使用会再次要求确认。 */
   browserRiskDisclaimerVersion?: number
   /** 旧版 Todo 与日程开关；仅为配置兼容保留，始终禁用。 */
   productivityTools: ProductivityToolsSettings
-  /** 启动时自动清理临时文件（gamma-preview、gamma-installers），默认 true */
+  /** 启动时自动清理临时文件（carpus-preview、carpus-installers），默认 true */
   autoCleanupTempOnStart?: boolean
   /** 自动清理 N 天前已归档会话的 SDK 数据（0 = 禁用，默认 0） */
   autoCleanupArchivedDays?: number
   /**
-   * Agent 代创建 git commit / PR 时是否附加 Gamma 推广标识。
-   * 默认 true：commit trailer `Made-with: Gamma`，PR body 末尾链接到 https://github.com/xhslam/Gamma。
-   * 关闭后不注入任何 Gamma 归因。
+   * Agent 代创建 git commit / PR 时是否附加 Carpus 推广标识。
+   * 默认 true：commit trailer `Made-with: Carpus`，PR body 末尾链接到 https://github.com/xhslam/Carpus。
+   * 关闭后不注入任何 Carpus 归因。
    */
   gitAttributionEnabled?: boolean
   /** macOS 原生 Agent 灵动岛偏好。 */
@@ -542,7 +542,7 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   STOP: 'voice-dictation:stop',
   /** 取消语音输入会话 */
   CANCEL: 'voice-dictation:cancel',
-  /** 同步 Gamma 输入框中的临时识别文本 */
+  /** 同步 Carpus 输入框中的临时识别文本 */
   PREVIEW: 'voice-dictation:preview',
   /** 输出最终文本 */
   COMMIT: 'voice-dictation:commit',

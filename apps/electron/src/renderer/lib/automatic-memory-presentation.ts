@@ -1,4 +1,4 @@
-import type { AutomaticMemoryCategory, AutomaticMemoryChange, AutomaticMemoryEntry, AutomaticMemorySource } from '@gamma/shared'
+import type { AutomaticMemoryCategory, AutomaticMemoryChange, AutomaticMemoryEntry, AutomaticMemorySource } from '@carpus/shared'
 
 export const AUTOMATIC_MEMORY_CATEGORIES: ReadonlyArray<{ key: AutomaticMemoryCategory; label: string }> = [
   { key: 'profile', label: '个人偏好' },

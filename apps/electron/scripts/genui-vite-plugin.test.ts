@@ -10,9 +10,9 @@ const cases = [
 ] as const
 
 describe('Given 仅使用 GenUI embed、不装载 DSH 插件运行时的宿主适配', () => {
-  test('When Windows Node 路径与 Vite importer 的斜杠不同 Then 三个宿主模块都命中 Gamma 实现', () => {
-    const client = 'D:\\a\\Gamma\\Gamma\\node_modules\\@changfenhuang\\dsh-genui\\src\\client'
-    const importer = 'D:/a/Gamma/Gamma/node_modules/@changfenhuang/dsh-genui/src/client/embed.ts'
+  test('When Windows Node 路径与 Vite importer 的斜杠不同 Then 三个宿主模块都命中 Carpus 实现', () => {
+    const client = 'D:\\a\\Carpus\\Carpus\\node_modules\\@changfenhuang\\dsh-genui\\src\\client'
+    const importer = 'D:/a/Carpus/Carpus/node_modules/@changfenhuang/dsh-genui/src/client/embed.ts'
     for (const [id, target] of cases) expect(resolveGenuiHostAdapter(id, importer, client, adapters)).toBe(resolve(adapters, target))
   })
   test('When macOS/Linux 解析同一适配 Then 保持 POSIX 路径行为', () => {

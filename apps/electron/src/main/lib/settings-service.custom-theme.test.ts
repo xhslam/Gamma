@@ -21,7 +21,7 @@ async function scenario(path: string, source: string): Promise<Record<string, un
 
 describe('自定义主题设置持久化', () => {
   test('Given 旧配置和非法颜色 When 保存并重载 Then 保留自定义模式、规范颜色及其他设置', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-custom-theme-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-custom-theme-'))
     const path = join(directory, 'settings.json')
     try {
       expect(await scenario(path, 'console.log(JSON.stringify({mode:getSettings().themeMode,colors:getSettings().customTheme}))'))

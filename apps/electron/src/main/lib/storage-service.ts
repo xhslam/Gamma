@@ -383,8 +383,8 @@ async function calcAttachmentsCategory(): Promise<StorageCategory> {
 }
 
 async function calcTempFilesCategory(): Promise<StorageCategory> {
-  const previewDir = join(tmpdir(), 'gamma-preview')
-  const installerDir = join(app.getPath('temp'), 'gamma-installers')
+  const previewDir = join(tmpdir(), 'carpus-preview')
+  const installerDir = join(app.getPath('temp'), 'carpus-installers')
   const [preview, installer] = await Promise.all([
     getDirSize(previewDir),
     getDirSize(installerDir),
@@ -421,7 +421,7 @@ export async function cleanupTempFiles(): Promise<CleanupResult> {
   let freedBytes = 0, deletedCount = 0
   const errors: string[] = []
 
-  const previewDir = join(tmpdir(), 'gamma-preview')
+  const previewDir = join(tmpdir(), 'carpus-preview')
   if (existsSync(previewDir)) {
     try {
       const files = await fsPromises.readdir(previewDir)
@@ -434,7 +434,7 @@ export async function cleanupTempFiles(): Promise<CleanupResult> {
     }
   }
 
-  const installerDir = join(app.getPath('temp'), 'gamma-installers')
+  const installerDir = join(app.getPath('temp'), 'carpus-installers')
   if (existsSync(installerDir)) {
     try {
       const files = await fsPromises.readdir(installerDir)

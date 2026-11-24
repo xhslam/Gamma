@@ -13,11 +13,11 @@ export type SidebarViewMode = 'active' | 'archived'
 /** 侧边栏视图模式（active = 显示活跃对话，archived = 显示已归档对话） */
 export const sidebarViewModeAtom = atom<SidebarViewMode>('active')
 
-export const pinnedSidebarProjectIdsAtom = atomWithStorage<string[]>('gamma-sidebar-pinned-projects', [])
+export const pinnedSidebarProjectIdsAtom = atomWithStorage<string[]>('carpus-sidebar-pinned-projects', [])
 
 /** 项目列表高度（px），用户可拖拽调整，持久化到 localStorage */
 export const projectListHeightAtom = atomWithStorage<number>(
-  'gamma-workspace-list-height',
+  'carpus-workspace-list-height',
   120,
 )
 

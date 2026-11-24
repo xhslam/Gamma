@@ -1,8 +1,8 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { Palette, Type, FileText, Languages, Keyboard, RotateCcw, Search } from 'lucide-react'
-import type { MarkdownEditorPreferences } from '@gamma/shared'
-import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@gamma/shared'
+import type { MarkdownEditorPreferences } from '@carpus/shared'
+import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@carpus/shared'
 import { markdownEditorPreferencesAtom, markdownEditorPreferencesErrorAtom, markdownEditorPreferencesSavingAtom, loadMarkdownEditorPreferencesAtom, updateMarkdownEditorPreferencesAtom } from '@/atoms/markdown-editor-preferences'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -150,11 +150,11 @@ export function MarkdownEditorSettingsPage(): React.ReactElement {
       {/* 区块 1：主题与外观 */}
       <SettingsSection
         title="主题与外观"
-        description="选择文档阅读与编辑时的配色方案，或跟随 Gamma 外观"
+        description="选择文档阅读与编辑时的配色方案，或跟随 Carpus 外观"
       >
         <SettingsCard>
           <SettingsToggle
-            label="跟随 Gamma 外观"
+            label="跟随 Carpus 外观"
             description="开启后文档配色自动使用应用当前的深浅主题与全局风格"
             checked={preferences.theme === 'inherit'}
             onCheckedChange={(checked) => save({ theme: checked ? 'inherit' : 'paper' })}
@@ -442,12 +442,12 @@ export function MarkdownEditorSettings({ mode = 'dialog' }: MarkdownEditorSettin
     </aside>
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5" role="region" aria-label="文档设置内容">
-        {show('appearance') && matches('主题', '外观 白色 纸张 薄荷 棕褐色 夜间 Solarized 跟随 Gamma') && <section className="space-y-5"><h3 className="text-base font-semibold">主题</h3><div className="grid grid-cols-3 gap-3 sm:grid-cols-6">{MARKDOWN_DOCUMENT_THEMES.map(item => <button key={item.id} type="button" aria-label={`${item.label}主题`} aria-pressed={preferences.theme === item.id} onClick={() => save({ theme: item.id })} className="group min-w-0 space-y-2 text-center text-xs focus-visible:outline-none"><span className={`flex h-16 items-center justify-center rounded-lg border text-xl font-semibold shadow-sm group-focus-visible:ring-2 group-focus-visible:ring-ring ${preferences.theme === item.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`} style={{ backgroundColor: item.background, color: item.text }}>Aa</span><FadeTitle className="block truncate">{item.label}</FadeTitle></button>)}</div><SettingRow label="跟随 Gamma 外观" description="文档使用应用当前的深浅主题与配色。"><Switch aria-label="跟随 Gamma 外观" checked={preferences.theme === 'inherit'} onCheckedChange={checked => save({ theme: checked ? 'inherit' : 'paper' })} /></SettingRow><div className="rounded-lg border border-border/60 bg-background px-5 py-4" style={markdownEditorStyle(preferences)}><div style={{ fontFamily: 'var(--md-editor-font)', fontSize: 'var(--md-editor-size)', lineHeight: 'var(--md-editor-line-height)', letterSpacing: 'var(--md-editor-letter-spacing)' }}><strong className="font-semibold">阅读与写作</strong><p>好的排版让你专注内容。Good typography stays quiet.</p></div></div></section>}
+        {show('appearance') && matches('主题', '外观 白色 纸张 薄荷 棕褐色 夜间 Solarized 跟随 Carpus') && <section className="space-y-5"><h3 className="text-base font-semibold">主题</h3><div className="grid grid-cols-3 gap-3 sm:grid-cols-6">{MARKDOWN_DOCUMENT_THEMES.map(item => <button key={item.id} type="button" aria-label={`${item.label}主题`} aria-pressed={preferences.theme === item.id} onClick={() => save({ theme: item.id })} className="group min-w-0 space-y-2 text-center text-xs focus-visible:outline-none"><span className={`flex h-16 items-center justify-center rounded-lg border text-xl font-semibold shadow-sm group-focus-visible:ring-2 group-focus-visible:ring-ring ${preferences.theme === item.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`} style={{ backgroundColor: item.background, color: item.text }}>Aa</span><FadeTitle className="block truncate">{item.label}</FadeTitle></button>)}</div><SettingRow label="跟随 Carpus 外观" description="文档使用应用当前的深浅主题与配色。"><Switch aria-label="跟随 Carpus 外观" checked={preferences.theme === 'inherit'} onCheckedChange={checked => save({ theme: checked ? 'inherit' : 'paper' })} /></SettingRow><div className="rounded-lg border border-border/60 bg-background px-5 py-4" style={markdownEditorStyle(preferences)}><div style={{ fontFamily: 'var(--md-editor-font)', fontSize: 'var(--md-editor-size)', lineHeight: 'var(--md-editor-line-height)', letterSpacing: 'var(--md-editor-letter-spacing)' }}><strong className="font-semibold">阅读与写作</strong><p>好的排版让你专注内容。Good typography stays quiet.</p></div></div></section>}
         {show('editor') && <section><h3 className="mb-3 text-base font-semibold">排版与源码</h3>{editorChoices.map(choice)}{editorToggles.map(toggle)}</section>}
         {show('markdown') && <section><h3 className="mb-3 text-base font-semibold">Markdown</h3>{markdownChoices.map(choice)}{toggle(tableToggle)}</section>}
         {show('cjk') && <section><h3 className="mb-3 text-base font-semibold">中文排版</h3><p className="mb-3 text-xs leading-relaxed text-muted-foreground">在文档的更多菜单中选择「中文排版」，预览后应用；修改不会自动写盘，可撤销。</p>{cjkToggles.map(toggle)}</section>}
         {show('shortcuts') && <section><h3 className="mb-3 text-base font-semibold">快捷键</h3>{shortcutRowsDialog.map(item => matches(item.label, '快捷键') && <SettingRow key={item.key} label={item.label}><Select value={preferences.shortcuts[item.key]} onValueChange={value => { if (Object.entries(preferences.shortcuts).some(([key, accelerator]) => key !== item.key && accelerator === value)) { setValidationError('该快捷键已用于另一个文档操作，请选择其他键。'); return } save({ shortcuts: { ...preferences.shortcuts, [item.key]: value } }) }}><SelectTrigger aria-label={`${item.label}快捷键`} className="h-8 w-[136px] text-xs"><SelectValue /></SelectTrigger><SelectContent style={themeStyle}>{shortcutOptions.map(key => <SelectItem key={key} value={key}>{key}</SelectItem>)}</SelectContent></Select></SettingRow>)}{staticShortcuts.map(([label, key]) => matches(label ?? '', '快捷键') && <SettingRow key={label} label={label ?? ''}><kbd className="text-xs text-muted-foreground">{key}</kbd></SettingRow>)}</section>}
-        {term && ![...editorChoices, ...markdownChoices, ...editorToggles, ...cjkToggles, ...shortcutRowsDialog, tableToggle, { label: '主题 外观 白色 纸张 薄荷 棕褐色 夜间 Solarized 跟随 Gamma' }, { label: '保存 查找 粗体 斜体 撤销 应用段落源码 取消段落源码 快捷键' }].some(field => matches(field.label, 'description' in field ? field.description ?? '' : '')) && <p className="py-10 text-center text-sm text-muted-foreground">没有匹配的设置</p>}
+        {term && ![...editorChoices, ...markdownChoices, ...editorToggles, ...cjkToggles, ...shortcutRowsDialog, tableToggle, { label: '主题 外观 白色 纸张 薄荷 棕褐色 夜间 Solarized 跟随 Carpus' }, { label: '保存 查找 粗体 斜体 撤销 应用段落源码 取消段落源码 快捷键' }].some(field => matches(field.label, 'description' in field ? field.description ?? '' : '')) && <p className="py-10 text-center text-sm text-muted-foreground">没有匹配的设置</p>}
       </div>
       <div className="flex min-h-9 shrink-0 items-center border-t border-border/50 px-6 py-2 text-xs text-muted-foreground" role={error ? 'alert' : 'status'}>{error || (saving ? '保存设置中…' : '更改即时生效，自动保存')}</div>
     </div>

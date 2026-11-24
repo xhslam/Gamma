@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { createGammaComputerUseCommand, GAMMA_COMPUTER_USE_EXECUTABLE, GAMMA_COMPUTER_USE_APP, validateGammaComputerUseInstallation } from './gamma-computer-use-command'
+import { createCarpusComputerUseCommand, CARPUS_COMPUTER_USE_EXECUTABLE, CARPUS_COMPUTER_USE_APP, validateCarpusComputerUseInstallation } from './carpus-computer-use-command'
 
 function fixture() {
   const calls: string[][] = []
@@ -10,7 +10,7 @@ function fixture() {
   let stopped = true
   let time = 0
   let launches = 0
-  const command = createGammaComputerUseCommand({
+  const command = createCarpusComputerUseCommand({
     validate() {},
     async launch() { launches++; running = true },
     async invoke(args, identity) {
@@ -29,13 +29,13 @@ function fixture() {
 }
 
 describe('Given 独立 macOS 桌面权限持有组件', () => {
-  test('When 解析命令 Then 固定选择独立应用代理、不选择 Gamma 资源路径', () => {
+  test('When 解析命令 Then 固定选择独立应用代理、不选择 Carpus 资源路径', () => {
     const { command } = fixture()
-    expect(command.executable).toBe(GAMMA_COMPUTER_USE_EXECUTABLE)
+    expect(command.executable).toBe(CARPUS_COMPUTER_USE_EXECUTABLE)
     expect(command.argsPrefix).toEqual(['--client'])
   })
   test('When 未安装或校验失败 Then 不尝试启动、不静默使用内置引擎', () => {
-    expect(() => createGammaComputerUseCommand({ validate() { throw new Error('未安装') } })).toThrow('未安装')
+    expect(() => createCarpusComputerUseCommand({ validate() { throw new Error('未安装') } })).toThrow('未安装')
   })
   test('When 服务未运行 Then 仅用 LaunchServices 启动、握手后才可操作', async () => {
     const f = fixture()
@@ -61,7 +61,7 @@ describe('Given 独立 macOS 桌面权限持有组件', () => {
   })
   test('When LaunchServices 成功但组件始终不可连接 Then 有界失败且只发送无副作用握手', async () => {
     let now = 0
-    const command = createGammaComputerUseCommand({ validate() {}, async launch() {}, async invoke() { throw new Error('offline') }, now: () => now, async wait() { now += 1000 } })
+    const command = createCarpusComputerUseCommand({ validate() {}, async launch() {}, async invoke() { throw new Error('offline') }, now: () => now, async wait() { now += 1000 } })
     await expect(command.prepare?.()).rejects.toThrow('未投递桌面操作')
   })
   test('When 停止 Then 必须取得独立服务端停止确认', async () => {
@@ -75,11 +75,11 @@ describe('Given 独立 macOS 桌面权限持有组件', () => {
 
 // 实际执行 codesign，而非只 mock validate，覆盖 requirement 字面量被当作文件名的问题。
 describe('Given 已安装的真实 macOS 独立组件', () => {
-  test.skipIf(process.platform !== 'darwin' || !existsSync(GAMMA_COMPUTER_USE_APP))('When 校验正确签名及身份 Then 允许接入', () => {
-    expect(() => validateGammaComputerUseInstallation()).not.toThrow()
+  test.skipIf(process.platform !== 'darwin' || !existsSync(CARPUS_COMPUTER_USE_APP))('When 校验正确签名及身份 Then 允许接入', () => {
+    expect(() => validateCarpusComputerUseInstallation()).not.toThrow()
   })
-  test.skipIf(process.platform !== 'darwin' || !existsSync(GAMMA_COMPUTER_USE_APP))('When 要求错误身份 Then codesign 明确拒绝', () => {
-    const result = spawnSync('/usr/bin/codesign', ['--verify', '-R', '=identifier "invalid.gamma.identity"', GAMMA_COMPUTER_USE_APP], { encoding: 'utf8' })
+  test.skipIf(process.platform !== 'darwin' || !existsSync(CARPUS_COMPUTER_USE_APP))('When 要求错误身份 Then codesign 明确拒绝', () => {
+    const result = spawnSync('/usr/bin/codesign', ['--verify', '-R', '=identifier "invalid.carpus.identity"', CARPUS_COMPUTER_USE_APP], { encoding: 'utf8' })
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('failed to satisfy')
   })

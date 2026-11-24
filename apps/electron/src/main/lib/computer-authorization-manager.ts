@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type {
   ComputerAppAuthDecision, ComputerAppAuthRequest, ComputerRiskConfirmRequest, ComputerUsePreferences,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { getConfigDir } from './config-paths'
 import { writeJsonFileAtomic } from './safe-file'
 

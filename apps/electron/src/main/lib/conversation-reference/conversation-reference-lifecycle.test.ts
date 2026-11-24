@@ -30,16 +30,16 @@ import {
 } from '../agent-session-manager'
 import { getReferencedMessagesForRef } from './pi-tools'
 import { getSnapshotCacheFilePathByRefId } from './ref-cache'
-import type { AgentContextRef, SDKMessage } from '@gamma/shared'
+import type { AgentContextRef, SDKMessage } from '@carpus/shared'
 
 describe('Conversation Reference Lifecycle & Validation', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'gamma-ref-lifecycle-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'carpus-ref-lifecycle-'))
     setConfigHomeForTest(tempDir)
-    mkdirSync(join(tempDir, '.gamma'), { recursive: true })
-    mkdirSync(join(tempDir, '.gamma', 'agent-sessions'), { recursive: true })
+    mkdirSync(join(tempDir, '.carpus'), { recursive: true })
+    mkdirSync(join(tempDir, '.carpus', 'agent-sessions'), { recursive: true })
 
     // 初始化空白索引
     writeFileSync(

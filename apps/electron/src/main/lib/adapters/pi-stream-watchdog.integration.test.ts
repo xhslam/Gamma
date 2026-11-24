@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 import { PiAgentAdapter } from './pi-agent-adapter'
 import type { PiRetryUpdate } from './pi-retry-control'
 
@@ -17,7 +17,7 @@ function successResponse(): Response {
 }
 
 async function runAgainstLocalProvider(response: () => Response) {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-stream-regression-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-stream-regression-'))
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: response })
   const adapter = new PiAgentAdapter()
   const retries: PiRetryUpdate[] = []

@@ -3,7 +3,7 @@ import Darwin
 
 let protocolVersion = 1
 let maxOutput = 24 * 1024 * 1024
-let socketDirectory = "/tmp/gamma-computer-use-\(getuid())"
+let socketDirectory = "/tmp/carpus-computer-use-\(getuid())"
 let socketPath = socketDirectory + "/service.sock"
 
 enum ComponentError: Error, CustomStringConvertible {
@@ -146,7 +146,7 @@ func validateRoot(_ root: String, session: String) throws {
     let url = URL(fileURLWithPath: root)
     let real = try realDirectoryPath(root)
     let temp = try systemTemporaryDirectory()
-    try require(root == real && url.deletingLastPathComponent().path == temp && url.lastPathComponent.hasPrefix("gamma-ad-") && url.lastPathComponent.count > 9, "root 必须是系统临时目录内的 gamma-ad-* 真实目录")
+    try require(root == real && url.deletingLastPathComponent().path == temp && url.lastPathComponent.hasPrefix("carpus-ad-") && url.lastPathComponent.count > 9, "root 必须是系统临时目录内的 carpus-ad-* 真实目录")
     try validatePrivateDirectory(root)
     try validatePrivateDirectory(root + "/state")
     // 根内不得包含 symlink，避免引擎读取旧 refs 时逃逸到外部目录。

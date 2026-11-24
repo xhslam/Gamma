@@ -1,4 +1,4 @@
-declare module '@gamma/genui-embed' {
+declare module '@carpus/genui-embed' {
   import type { ComponentType, Context, ReactNode } from 'react'
   export interface GenuiSpec { title?: string; items: Array<Record<string, unknown>> }
   export interface BlockInteractionState {

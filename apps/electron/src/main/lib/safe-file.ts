@@ -49,7 +49,7 @@ function writeFileAtomic(filePath: string, content: string | Uint8Array, preserv
   let descriptor: number | null = null
   try {
     for (let attempt = 0; attempt < 16; attempt++) {
-      const candidate = join(parent, `.${stem}.gamma-${randomBytes(12).toString('hex')}.tmp`)
+      const candidate = join(parent, `.${stem}.carpus-${randomBytes(12).toString('hex')}.tmp`)
       try {
         descriptor = openSync(candidate, 'wx', 0o600)
         tmpPath = candidate

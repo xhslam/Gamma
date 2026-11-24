@@ -1,11 +1,11 @@
 import { buildReferencedContext, type ReferencedConversationData } from './context-builder'
 import { resolveReferencedConversationData } from './context-injector'
-import type { AgentContextRef, ReferenceSummaryProgress, ReferenceSummaryStatus } from '@gamma/shared'
+import type { AgentContextRef, ReferenceSummaryProgress, ReferenceSummaryStatus } from '@carpus/shared'
 import {
   DEFAULT_BUDGET_RATIO,
   ABSOLUTE_TIER_A_TOKEN_LIMIT,
   inferBudgetContextWindow,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { getConfigDir } from '../config-paths'
 import { getReferencedMessagesForRef } from './pi-tools'
 import { computeSummaryHash, isFallbackSummary, loadSummaryFromCache } from './ref-cache'

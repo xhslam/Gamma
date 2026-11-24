@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { GAMMA_PERMISSION_MODES } from '@gamma/shared'
-import type { AgentSendOutboxEntry, AgentSubmitOrEnqueueInput } from '@gamma/shared'
+import { CARPUS_PERMISSION_MODES } from '@carpus/shared'
+import type { AgentSendOutboxEntry, AgentSubmitOrEnqueueInput } from '@carpus/shared'
 import { parseReferenceSnapshot } from './conversation-reference/send-snapshot'
 import { writeTextFileAtomic } from './safe-file'
 
@@ -56,7 +56,7 @@ export function parseSendOutboxEntry(value: unknown, sessionId: string): AgentSe
     safeInput.contextRefIds = [...input.contextRefIds]
   }
   if (input.permissionModeOverride !== undefined) {
-    if (!GAMMA_PERMISSION_MODES.some((mode) => mode === input.permissionModeOverride)) throw new Error('失败消息权限模式无效')
+    if (!CARPUS_PERMISSION_MODES.some((mode) => mode === input.permissionModeOverride)) throw new Error('失败消息权限模式无效')
     safeInput.permissionModeOverride = input.permissionModeOverride as AgentSubmitOrEnqueueInput['permissionModeOverride']
   }
   if (typeof input.startedAt === 'number' && Number.isFinite(input.startedAt)) safeInput.startedAt = input.startedAt

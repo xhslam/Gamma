@@ -1,4 +1,4 @@
-import type { AgentSessionMeta, AgentWorkspace } from '@gamma/shared'
+import type { AgentSessionMeta, AgentWorkspace } from '@carpus/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 
 interface AgentSessionTreeLike {

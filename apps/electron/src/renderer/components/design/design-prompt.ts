@@ -1,4 +1,4 @@
-import { DESIGN_SKILL_SLUG, DESIGN_SOURCE_URL } from '@gamma/shared'
+import { DESIGN_SKILL_SLUG, DESIGN_SOURCE_URL } from '@carpus/shared'
 
 export interface DesignBrief {
   title: string
@@ -20,11 +20,11 @@ export function buildDesignPrompt(brief: DesignBrief, skillPath: string): string
   if (!kind) throw new Error('不支持的设计类型')
   return [
     `使用 baoyu-design 的 ${DESIGN_SKILL_SLUG} 完成下面的设计。来源：${DESIGN_SOURCE_URL}。`,
-    `先读取本机 Skill：${JSON.stringify(`${skillPath}/SKILL.md`)}，以及本次任务必需的格式参考。遵守 Gamma 的工具权限和项目边界。`,
+    `先读取本机 Skill：${JSON.stringify(`${skillPath}/SKILL.md`)}，以及本次任务必需的格式参考。遵守 Carpus 的工具权限和项目边界。`,
     `设计简报（JSON 数据）：\n${JSON.stringify({ title: brief.title.trim(), type: kind.label, request: brief.request.trim() }, null, 2)}`,
     '在当前已授权项目内创建独立 designs/<slug>/ 目录，使用 project/canvas.json 和 .dc.html 画板格式，不覆盖已有设计。不修改应用代码，除非我明确要求。',
     '使用 Skill 自带的本地 artifact.mjs 创建/检查并打开画布。服务只监听 127.0.0.1，不启用 --lan、share 或公网发布；不自动提交、推送或调用付费服务。',
-    '编辑器启动后，用 Gamma 受管浏览器打开返回的本地 URL，让我在右侧画布查看和编辑。缺少运行环境时明确说明，不要声称生成或预览成功。',
+    '编辑器启动后，用 Carpus 受管浏览器打开返回的本地 URL，让我在右侧画布查看和编辑。缺少运行环境时明确说明，不要声称生成或预览成功。',
   ].join('\n\n')
 }
 

@@ -11,7 +11,7 @@ function verifyPreferencesScenario(scenario: string): void {
     import {
       DEFAULT_MARKDOWN_EDITOR_PREFERENCES as defaults,
       normalizeMarkdownEditorPreferences as normalize,
-    } from '@gamma/shared'
+    } from '@carpus/shared'
     import {
       markdownEditorPreferencesAtom as preferencesAtom,
       markdownEditorPreferencesErrorAtom as errorAtom,

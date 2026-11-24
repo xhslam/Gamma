@@ -6,7 +6,7 @@
  * core 层不依赖 Electron / Node fs，通过注入函数访问平台能力。
  */
 
-import type { AgentThinkingLevel, FileAttachment, ProviderType } from '@gamma/shared'
+import type { AgentThinkingLevel, FileAttachment, ProviderType } from '@carpus/shared'
 
 // ===== 图片附件数据 =====
 

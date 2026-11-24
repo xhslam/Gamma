@@ -12,17 +12,17 @@
 
 import { randomUUID } from 'node:crypto'
 import type {
-  GammaPermissionMode,
+  CarpusPermissionMode,
   PermissionRequest,
   DangerLevel,
   AskUserRequest,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import {
   SAFE_TOOLS,
   isSafeBashCommand,
   isDangerousCommand,
   hasDangerousStructure,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 /** SDK PermissionBehavior */
 type PermissionBehavior = 'allow' | 'deny'

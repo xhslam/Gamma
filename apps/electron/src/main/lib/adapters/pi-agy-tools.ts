@@ -1,6 +1,6 @@
 import { Type } from 'typebox'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { AgyTaskStartInput } from '@gamma/shared'
+import type { AgyTaskStartInput } from '@carpus/shared'
 import type { PiBuiltinToolsContext } from './pi-builtin-tools'
 import { agyTaskService } from '../agy-task-controller'
 import { serializePiToolResultPayload } from './pi-tool-result-json'

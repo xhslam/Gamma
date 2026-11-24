@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import type { ComputerBinding, ComputerRiskPolicy } from '@gamma/shared'
+import type { ComputerBinding, ComputerRiskPolicy } from '@carpus/shared'
 import { ComputerController, type ComputerHost } from '../main/lib/computer-controller'
 import { ComputerAuthorizationManager } from '../main/lib/computer-authorization-manager'
 import type { InstalledComputerApp } from '../main/lib/computer-installed-app'
@@ -22,7 +22,7 @@ export function createComputerFixture(options: {
 } = {}) {
   const calls: ComputerFixtureCall[] = []
   const actions: Record<string, unknown>[] = []
-  const auth = new ComputerAuthorizationManager(join(tmpdir(), `gamma-computer-${randomUUID()}.json`))
+  const auth = new ComputerAuthorizationManager(join(tmpdir(), `carpus-computer-${randomUUID()}.json`))
   auth.updatePreferences({ riskPolicy: options.policy ?? 'relaxed', headedAllowed: options.headed ?? true })
   if (options.consent !== false) auth.updatePreferences({ shareObservations: true })
   if (options.trustedApps !== false) {

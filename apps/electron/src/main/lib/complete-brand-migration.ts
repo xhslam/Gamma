@@ -20,7 +20,7 @@ export async function completeBrandMigration(prepared: PreparedLegacyBrandMigrat
     const slots = prepared.stagingConfigDirectory ? collectLegacyCredentialSlots(prepared.stagingConfigDirectory) : []
     if (prepared.profileNeedsMigration && !prepared.legacyProfileSnapshot) throw new Error('缺少旧浏览器只读快照，迁移已停止。')
     const inventory = prepared.profileNeedsMigration ? (services.readCookieInventory ?? readLegacyCookieInventory)(prepared.legacyProfileSnapshot!) : undefined
-    if (slots.length > 0 && !services.encryptionAvailable()) throw new Error('系统凭据加密暂不可用，迁移已停止；请解锁系统钥匙串后重新启动 Gamma。旧数据已保留。')
+    if (slots.length > 0 && !services.encryptionAvailable()) throw new Error('系统凭据加密暂不可用，迁移已停止；请解锁系统钥匙串后重新启动 Carpus。旧数据已保留。')
     let plaintexts: string[] | undefined
     let cookies: LegacyCookieProfile[] | undefined
     let lastFailure: unknown
@@ -41,7 +41,7 @@ export async function completeBrandMigration(prepared: PreparedLegacyBrandMigrat
         } catch (error) { lastFailure = error }
         finally { if (candidate && helper !== candidate) await candidate.stop() }
       }
-      if (!helper) throw new Error(lastFailure instanceof Error ? lastFailure.message : '旧凭据无法读取，迁移已停止。旧目录仍保留，请检查系统钥匙串权限后重新启动 Gamma。')
+      if (!helper) throw new Error(lastFailure instanceof Error ? lastFailure.message : '旧凭据无法读取，迁移已停止。旧目录仍保留，请检查系统钥匙串权限后重新启动 Carpus。')
     }
     if (cookies) await services.importCookies(cookies)
     if (slots.length > 0 && plaintexts) reencryptLegacyCredentialSlots(slots, plaintexts, services.encrypt)

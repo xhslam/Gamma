@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DESIGN_SKILL_SLUG, DESIGN_SOURCE_REVISION, DESIGN_SOURCE_URL } from '@gamma/shared'
+import { DESIGN_SKILL_SLUG, DESIGN_SOURCE_REVISION, DESIGN_SOURCE_URL } from '@carpus/shared'
 
 const execFileAsync = promisify(execFile)
 

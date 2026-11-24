@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@gamma/shared'
+import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@carpus/shared'
 import { markdownEditorStyle, markdownShortcutMatches, markdownThemeStyle } from './markdown-editor-presentation'
 
 describe('Given 文档排版与独立主题', () => {

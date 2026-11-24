@@ -31,7 +31,7 @@ import {
 } from './context-builder'
 
 export { normalizeSDKMessage }
-import type { AgentContextRef, SDKMessage } from '@gamma/shared'
+import type { AgentContextRef, SDKMessage } from '@carpus/shared'
 
 /** 工具输出最大字符上限（防单次工具调用输出过大导致 Token 爆炸） */
 const MAX_TOOL_OUTPUT_CHARS = 8000

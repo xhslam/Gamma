@@ -31,7 +31,7 @@ export async function callExaWebTool(
   const deadline = new AbortController()
   const signal = AbortSignal.any([deadline.signal, ...(options.signal ? [options.signal] : [])])
   const timeout = setTimeout(() => deadline.abort(), timeoutMs)
-  const client = new Client({ name: 'gamma-web-service', version: '1.0.0' }, { capabilities: {} })
+  const client = new Client({ name: 'carpus-web-service', version: '1.0.0' }, { capabilities: {} })
   let transport: StreamableHTTPClientTransport | undefined
   let network: ReturnType<typeof createManagedWebFetch> | undefined
 

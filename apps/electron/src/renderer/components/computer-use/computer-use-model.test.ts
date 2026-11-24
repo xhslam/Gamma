@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { ComputerState } from '@gamma/shared'
+import type { ComputerState } from '@carpus/shared'
 import {
   getComputerStatusLabel,
   hasComputerControl,

@@ -6,7 +6,7 @@ import { writeTextFileAtomic } from './safe-file'
 import { migrateLegacyBuiltinSkillContent } from './legacy-skill-content'
 
 export const LEGACY_COACH_SKILL_SLUG = 'proma-coach'
-export const GAMMA_COACH_SKILL_SLUG = 'gamma-coach'
+export const CARPUS_COACH_SKILL_SLUG = 'carpus-coach'
 
 export interface LegacyBuiltinSkillRename {
   legacySlug: string
@@ -15,11 +15,11 @@ export interface LegacyBuiltinSkillRename {
 
 /** 只处理应用曾分发的明确标识，不按 proma-* 通配改名用户 Skill。 */
 export const LEGACY_BUILTIN_SKILL_RENAMES: readonly LegacyBuiltinSkillRename[] = [
-  { legacySlug: LEGACY_COACH_SKILL_SLUG, currentSlug: GAMMA_COACH_SKILL_SLUG },
-  { legacySlug: 'proma-build-ai-app', currentSlug: 'gamma-build-ai-app' },
-  { legacySlug: 'proma-cloud-sdk', currentSlug: 'gamma-cloud-sdk' },
-  { legacySlug: 'proma-generate-image', currentSlug: 'gamma-generate-image' },
-  { legacySlug: 'proma-gpt-image-2', currentSlug: 'gamma-gpt-image-2' },
+  { legacySlug: LEGACY_COACH_SKILL_SLUG, currentSlug: CARPUS_COACH_SKILL_SLUG },
+  { legacySlug: 'proma-build-ai-app', currentSlug: 'carpus-build-ai-app' },
+  { legacySlug: 'proma-cloud-sdk', currentSlug: 'carpus-cloud-sdk' },
+  { legacySlug: 'proma-generate-image', currentSlug: 'carpus-generate-image' },
+  { legacySlug: 'proma-gpt-image-2', currentSlug: 'carpus-gpt-image-2' },
 ]
 
 export function getRenamedBuiltinSkillSlug(slug: string): string | undefined {

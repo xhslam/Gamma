@@ -33,17 +33,17 @@ export function createApplicationMenu(): Menu {
     ...(isMac
       ? [
           {
-            label: 'Gamma',
+            label: 'Carpus',
             submenu: [
-              { role: 'about' as const, label: '关于 Gamma' },
+              { role: 'about' as const, label: '关于 Carpus' },
               { type: 'separator' as const },
               { role: 'services' as const, label: '服务' },
               { type: 'separator' as const },
-              { role: 'hide' as const, label: '隐藏 Gamma' },
+              { role: 'hide' as const, label: '隐藏 Carpus' },
               { role: 'hideOthers' as const, label: '隐藏其他' },
               { role: 'unhide' as const, label: '显示全部' },
               { type: 'separator' as const },
-              { role: 'quit' as const, label: '退出 Gamma' },
+              { role: 'quit' as const, label: '退出 Carpus' },
             ],
           },
         ]

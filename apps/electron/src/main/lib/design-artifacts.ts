@@ -9,7 +9,7 @@ const ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}
 interface Workspace { id: string; slug: string; projectRootPath?: string }
 interface Session { workspaceId?: string }
 interface CommandResult { stdout: string }
-/** 依赖注入只用于独立测试；生产入口始终读取 Gamma 工作区与会话授权。 */
+/** 依赖注入只用于独立测试；生产入口始终读取 Carpus 工作区与会话授权。 */
 export interface DesignArtifactDependencies {
   getWorkspace(id: string): Workspace | undefined | Promise<Workspace | undefined>
   getSession(id: string): Session | undefined | Promise<Session | undefined>
@@ -65,7 +65,7 @@ function safeTree(root: string): void {
   }
   visit(root, 0)
 }
-/** 不允许上游恢复在 Gamma 外开启过的 LAN 或任意 shell hook。 */
+/** 不允许上游恢复在 Carpus 外开启过的 LAN 或任意 shell hook。 */
 function assertLocalOnlyState(root: string): void {
   const sharing = join(root, '.sharing.json')
   if (lstatSync(sharing, { throwIfNoEntry: false })) {
@@ -115,7 +115,7 @@ function json(path: string, data: object): void {
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char)
 }
-/** 全为 Gamma 自有空白模板，不分发上游混合许可资产。 */
+/** 全为 Carpus 自有空白模板，不分发上游混合许可资产。 */
 function seed(artifact: DesignArtifact): void {
   const { rootPath: root, title, kind: type } = artifact
   const createdOnFiles = { v: 1, at: new Date(artifact.createdAt).toISOString() }
@@ -128,7 +128,7 @@ function seed(artifact: DesignArtifact): void {
     json(join(root, 'project/canvas.json'), { v: 3, createdOnFiles, title, launch: { view: 'canvas' }, pages: [], boards: { 'Main.dc.html': { x: 0, y: 0, w: 880, h: 560 } }, order: ['Main.dc.html'], notes: {}, designSystems: [] })
     writeTextFileAtomic(join(root, 'project/Main.dc.html'), `<!doctype html><html><head><meta charset="utf-8"><title>${heading}</title><script src="./support.js"></script></head><body><x-dc><helmet><style>body{margin:0}</style></helmet><div style="width:880px;height:560px;display:flex;align-items:center;justify-content:center;background:#fafafa;color:#18181b;font-family:sans-serif"><h1>${heading}</h1></div></x-dc><script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":560}}'>class Component extends DCLogic { renderVals() { return {}; } }</script></body></html>`)
   } else if (type === 'system') {
-    json(join(root, 'project/design-system.json'), { v: 3, layout: 'files', createdOnFiles, title, namespace: 'Gamma', libraries: [], sections: {}, groups: [], assetGroups: {}, blobs: {}, docs: { sections: [] } })
+    json(join(root, 'project/design-system.json'), { v: 3, layout: 'files', createdOnFiles, title, namespace: 'Carpus', libraries: [], sections: {}, groups: [], assetGroups: {}, blobs: {}, docs: { sections: [] } })
     json(join(root, 'project/tokens.json'), {})
     writeTextFileAtomic(join(root, 'project/README.md'), `# ${title}\n\n待创作的空白设计系统。\n`)
     mkdirSync(join(root, 'project/components/Cover'), { recursive: true })

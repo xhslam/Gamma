@@ -10,7 +10,7 @@ import {
   type AgentRuntimeRequest,
   type AgentRuntimeResponse,
   type AgentRuntimeState,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { PiAgentAdapter, type PiAgentQueryOptions } from '../main/lib/adapters/pi-agent-adapter'
 import { getParentRequestTimeoutMs } from './agent-runtime-request-timeout'
 import { logComputerUseEvent } from '../main/lib/computer-logger'
@@ -51,7 +51,7 @@ const capabilityAbortControllers = new Map<string, AbortController>()
 const piAdapter = new PiAgentAdapter()
 const parentPort = (process as typeof process & { parentPort?: ParentPortLike }).parentPort
 
-logComputerUseEvent({ time: new Date().toISOString(), event: 'logger-ready', process: 'utility', version: process.env.GAMMA_APP_VERSION ?? 'unknown', pid: process.pid })
+logComputerUseEvent({ time: new Date().toISOString(), event: 'logger-ready', process: 'utility', version: process.env.CARPUS_APP_VERSION ?? 'unknown', pid: process.pid })
 
 if (!parentPort) {
   console.error('[AgentRuntime] Electron parentPort is unavailable')
@@ -61,7 +61,7 @@ if (!parentPort) {
 parentPort.on('message', (event) => {
   const value = event?.data as Record<string, unknown> | undefined
   const transfer = value?.data && typeof value.data === 'object' ? value.data as Record<string, unknown> : value
-  if (!transfer || transfer.type !== 'gamma-agent-runtime-port') return
+  if (!transfer || transfer.type !== 'carpus-agent-runtime-port') return
   const port = event.ports?.[0] ?? value?.port as MessagePortLike | undefined
   if (transfer.protocolVersion !== AGENT_RUNTIME_PROTOCOL_VERSION || !port) {
     console.error('[AgentRuntime] invalid MessagePort bootstrap message')

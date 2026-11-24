@@ -2,7 +2,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { atom, useAtom } from 'jotai'
 import { Circle, Loader2, Monitor, Square, X } from 'lucide-react'
-import type { ComputerPreview } from '@gamma/shared'
+import type { ComputerPreview } from '@carpus/shared'
 import { Button } from '@/components/ui/button'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
 

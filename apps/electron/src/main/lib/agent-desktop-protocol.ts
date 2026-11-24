@@ -241,8 +241,8 @@ export const AGENT_DESKTOP_COMMANDS: Record<string, CommandSpec> = {
   permissions: spec([], ['request', 'guide'], true),
   version: spec([], [], true),
 
-  // 批量执行：必须由 Gamma 逐项执行并分别授权
-  batch: spec([], [], false, 'batch 必须由 Gamma 逐项执行并分别授权'),
+  // 批量执行：必须由 Carpus 逐项执行并分别授权
+  batch: spec([], [], false, 'batch 必须由 Carpus 逐项执行并分别授权'),
 
   // 辅助与会话管理
   skills: spec(['subcommand'], ['skill'], true),
@@ -412,7 +412,7 @@ export function buildAgentDesktopArgs(input: AgentDesktopInput): string[] {
   if (command.disabled) throw new Error(command.disabled)
 
   if (input.command === 'batch') {
-    throw new Error('batch 必须由 Gamma 逐项执行并分别授权')
+    throw new Error('batch 必须由 Carpus 逐项执行并分别授权')
   }
 
   const globals = ['headed', 'waitFor', 'waitForGone', 'waitTimeout']

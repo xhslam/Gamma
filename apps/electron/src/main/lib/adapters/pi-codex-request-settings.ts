@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
-import { isCodexFastModeSupportedModel } from '@gamma/shared'
+import { isCodexFastModeSupportedModel } from '@carpus/shared'
 
 type ProviderPayload = Record<string, unknown>
 

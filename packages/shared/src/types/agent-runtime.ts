@@ -68,7 +68,7 @@ export interface AgentRuntimeHandshakePayload {
 }
 
 export interface AgentRuntimePortTransfer {
-  type: 'gamma-agent-runtime-port'
+  type: 'carpus-agent-runtime-port'
   protocolVersion: typeof AGENT_RUNTIME_PROTOCOL_VERSION
 }
 

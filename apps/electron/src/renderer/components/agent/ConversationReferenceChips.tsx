@@ -25,7 +25,7 @@ import {
   type AgentContextRef,
   type ReferenceSummaryStatus,
   type ReferenceSummaryProgress,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 export interface ConversationReferenceChipsProps {

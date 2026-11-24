@@ -7,7 +7,7 @@ import { parseMemoryDocument, patchMemoryMetadata } from './memory-metadata'
 
 const roots: string[] = []
 function fixture(): { global: string; workspace: string; catalog: MemoryCatalog } {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-memory-catalog-')); roots.push(root)
+  const root = mkdtempSync(join(tmpdir(), 'carpus-memory-catalog-')); roots.push(root)
   const global = join(root, 'global'); const workspace = join(root, 'workspace')
   mkdirSync(global); mkdirSync(workspace)
   return { global, workspace, catalog: new MemoryCatalog({ roots: [{ scope: 'global', root: global }, { scope: 'workspace', root: workspace }] }) }

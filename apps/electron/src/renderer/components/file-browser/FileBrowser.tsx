@@ -47,7 +47,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { workspaceFilesVersionAtom, fileBrowserAutoRevealAtom, recentlyModifiedPathsAtom, currentAgentSessionIdAtom, isFileBrowserAutoRevealActive } from '@/atoms/agent-atoms'
-import type { FileAccessOptions, FileEntry } from '@gamma/shared'
+import type { FileAccessOptions, FileEntry } from '@carpus/shared'
 import { FileTypeIcon } from './FileTypeIcon'
 import { DefaultAppMenuItem } from './DefaultAppMenuItem'
 import {
@@ -852,7 +852,7 @@ function FileTreeItem({
         ref={rowRef}
         data-sticky-row={isSticky ? 'true' : undefined}
         className={cn(
-          'gamma-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
+          'carpus-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
           isSticky && STICKY_ROW_BASE_CLASS,
         )}
         style={{
@@ -890,7 +890,7 @@ function FileTreeItem({
           <button
             type="button"
             data-disclosure-trigger=""
-            className="gamma-disclosure-button"
+            className="carpus-disclosure-button"
             style={{ width: 14 }}
             aria-expanded={expanded}
             aria-label={(expanded ? '收起目录 ' : '展开目录 ') + entry.name}

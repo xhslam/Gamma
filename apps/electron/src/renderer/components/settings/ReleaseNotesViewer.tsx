@@ -5,12 +5,12 @@
  */
 
 import * as React from 'react'
-import type { GitHubRelease } from '@gamma/shared'
+import type { GitHubRelease } from '@carpus/shared'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
 import { ExternalLink } from 'lucide-react'
-import { CodeBlock } from '@gamma/ui'
+import { CodeBlock } from '@carpus/ui'
 import { cn } from '@/lib/utils'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { FadeTitle } from '@/components/ui/fade-title'

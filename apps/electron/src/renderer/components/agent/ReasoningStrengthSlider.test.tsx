@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReasoningCapability } from '@gamma/shared'
+import type { ReasoningCapability } from '@carpus/shared'
 import { ReasoningStrengthSlider, getReasoningSliderSelection } from './ReasoningStrengthSlider'
 
 const capability: ReasoningCapability = {

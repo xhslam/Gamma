@@ -96,8 +96,8 @@ describe('Given 输入框下方的真实附件菜单', () => {
 
   test('When 窄窗口中按钮折叠到更多菜单 Then 仍可打开文件选择器并回填', async () => {
     const result = await renderer.run(`
-      await window.until(()=>document.querySelector('.gamma-composer-footer'));
-      document.querySelector('.gamma-composer-footer').style.width='100px';
+      await window.until(()=>document.querySelector('.carpus-composer-footer'));
+      document.querySelector('.carpus-composer-footer').style.width='100px';
       await window.until(()=>document.querySelector('[aria-label="更多工具"]'));
       document.querySelector('[aria-label="更多工具"]').click();
       await window.until(()=>document.querySelector('[aria-label="添加附件或引用对话"]'));

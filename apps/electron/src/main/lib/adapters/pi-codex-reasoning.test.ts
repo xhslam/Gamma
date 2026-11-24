@@ -6,7 +6,7 @@ import { getCodexCatalogModels, resolvePiBudgetContextWindow, resolvePiReasoning
 import { resolvePiThinkingLevel } from '../agent-thinking-level'
 
 const onlineModel: Model<Api> = {
-  id: 'gamma-fixture-online-only', name: '本地在线目录夹具', provider: 'openai-codex',
+  id: 'carpus-fixture-online-only', name: '本地在线目录夹具', provider: 'openai-codex',
   api: 'openai-codex-responses', baseUrl: 'https://chatgpt.com/backend-api',
   reasoning: true, input: ['text', 'image'], contextWindow: 272_000, maxTokens: 128_000,
   cost: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },

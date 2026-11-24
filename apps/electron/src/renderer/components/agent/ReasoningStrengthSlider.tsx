@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { normalizeReasoningCapabilityLevel } from '@gamma/shared'
-import type { AgentThinkingLevel, ReasoningCapability } from '@gamma/shared'
+import { normalizeReasoningCapabilityLevel } from '@carpus/shared'
+import type { AgentThinkingLevel, ReasoningCapability } from '@carpus/shared'
 import { Slider } from '../ui/slider'
 
 const THINKING_LABELS: Record<AgentThinkingLevel, string> = {

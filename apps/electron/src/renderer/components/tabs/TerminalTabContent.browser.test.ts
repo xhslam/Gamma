@@ -343,7 +343,7 @@ describe('侧边栏终端的真实 Chromium 粘贴事件', () => {
       const terminal = await window.terminalRegression.mount({ terminateOnUnmount: false, snapshotOutput: 'THEME_HISTORY' })
       const screen = document.querySelector('.xterm-screen')
       const referencePanel = document.createElement('section')
-      referencePanel.className = 'gamma-panel'
+      referencePanel.className = 'carpus-panel'
       referencePanel.dataset.panel = 'workspace'
       document.body.append(referencePanel)
       let colorsMatch = true

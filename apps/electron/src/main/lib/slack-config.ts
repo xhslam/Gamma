@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { safeStorage } from 'electron'
-import type { SlackBotConfig, SlackBotConfigInput, SlackConfig, SlackBotSettingsConfig, SlackSettingsConfig } from '@gamma/shared'
+import type { SlackBotConfig, SlackBotConfigInput, SlackConfig, SlackBotSettingsConfig, SlackSettingsConfig } from '@carpus/shared'
 import { getSlackConfigPath } from './config-paths'
 import { redactSensitiveLogValue } from './bridge-log-redaction'
 import { readJsonFileSafe, writeJsonFileAtomic } from './safe-file'
@@ -104,7 +104,7 @@ export function getSlackBotById(botId: string): SlackBotConfig | undefined {
 
 export function saveSlackBotConfig(input: SlackBotConfigInput): SlackBotConfig {
   const config = readRawConfig()
-  const name = input.name.trim() || 'Gamma'
+  const name = input.name.trim() || 'Carpus'
   if (CHINESE_CHARACTER_PATTERN.test(name)) {
     throw new Error('Slack App 名称不能包含中文，请使用英文名称')
   }

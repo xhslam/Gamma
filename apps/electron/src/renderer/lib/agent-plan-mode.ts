@@ -1,4 +1,4 @@
-import type { AgentPlanModeChangeSource, GammaPermissionMode } from '@gamma/shared'
+import type { AgentPlanModeChangeSource, CarpusPermissionMode } from '@carpus/shared'
 
 export interface PlanModeChange {
   active: boolean
@@ -36,8 +36,8 @@ export function updatePlanModeSessionSet(
 
 /** 输入区处于计划阶段时，权限按钮也优先展示计划模式图标。 */
 export function getDisplayedPermissionMode(
-  permissionMode: GammaPermissionMode,
+  permissionMode: CarpusPermissionMode,
   planModeActive: boolean,
-): GammaPermissionMode {
+): CarpusPermissionMode {
   return planModeActive ? 'plan' : permissionMode
 }

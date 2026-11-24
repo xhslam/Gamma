@@ -215,7 +215,7 @@ describe('Pi 公开网络查询工具', () => {
     const source = `
       import { mock } from 'bun:test';
       mock.module('electron', () => ({
-        app: { isPackaged: false, getPath: () => '/tmp/gamma-web-tool-test' },
+        app: { isPackaged: false, getPath: () => '/tmp/carpus-web-tool-test' },
         BrowserWindow: class {}, WebContentsView: class {}, MessageChannelMain: class {},
         session: {}, utilityProcess: {}, safeStorage: {}, shell: {}, net: {}, dialog: {},
         nativeTheme: {}, ipcMain: {}, globalShortcut: {}, systemPreferences: {},

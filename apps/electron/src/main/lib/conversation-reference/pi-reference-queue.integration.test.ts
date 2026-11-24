@@ -2,13 +2,13 @@ import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentContextRef } from '@gamma/shared'
+import type { AgentContextRef } from '@carpus/shared'
 import { setConfigHomeForTest } from '../config-paths'
 import { appendSDKMessages, createAgentSession, updateAgentContextRefs } from '../agent-session-manager'
 import { PiAgentAdapter } from '../adapters/pi-agent-adapter'
 
 test('Given真实Pi正在处理A When追加带B快照的用户消息 Then消费B之前工具仍用A且消费后仅注入B', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-pi-reference-queue-')), previous = setConfigHomeForTest(root)
+  const root = mkdtempSync(join(tmpdir(), 'carpus-pi-reference-queue-')), previous = setConfigHomeForTest(root)
   const adapter = new PiAgentAdapter(), bodies: string[] = []
   let target = '', a: AgentContextRef[] = [], b: AgentContextRef[] = []
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {

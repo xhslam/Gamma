@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai'
-import type { ComputerState } from '@gamma/shared'
+import type { ComputerState } from '@carpus/shared'
 import {
   computerUseApiAtom,
   computerUsePanelOpenAtom,

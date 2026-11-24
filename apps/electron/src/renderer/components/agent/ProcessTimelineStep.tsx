@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { SDKContentBlock, SDKMessage } from '@gamma/shared'
+import type { SDKContentBlock, SDKMessage } from '@carpus/shared'
 import { useToolExecution } from './use-tool-execution'
 
 /** 只将当前节点的内容路由到极简展示，最终答案与普通工具卡不受影响。 */

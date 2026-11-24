@@ -27,7 +27,7 @@ import {
   buildExplorationRestorePayload,
   type ExplorationBranchItem,
 } from '@/lib/right-panel-exploration'
-import type { AgentSessionMeta } from '@gamma/shared'
+import type { AgentSessionMeta } from '@carpus/shared'
 
 interface OnDemandExplorationContentProps {
   sessionId?: string

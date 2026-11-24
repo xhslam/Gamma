@@ -1,4 +1,4 @@
-import type { SDKContentBlock, SDKTextBlock, SDKThinkingBlock, SDKToolUseBlock } from '@gamma/shared'
+import type { SDKContentBlock, SDKTextBlock, SDKThinkingBlock, SDKToolUseBlock } from '@carpus/shared'
 import { TASK_TOOL_NAMES } from './task-progress'
 
 /** 空增量、空白和不可见占位符不应占据时间线节点；保留原始正文。 */

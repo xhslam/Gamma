@@ -1,4 +1,4 @@
-import type { AutomaticMemoryCandidate, AutomaticMemorySnapshot } from '@gamma/shared'
+import type { AutomaticMemoryCandidate, AutomaticMemorySnapshot } from '@carpus/shared'
 
 const CATEGORIES = new Set(['profile', 'topics', 'areas', 'people'])
 export const MEMORY_INPUT_LIMIT = 12_000

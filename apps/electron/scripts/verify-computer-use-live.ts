@@ -37,9 +37,9 @@ export function findComputerFixtureRef(tree: unknown, name: string): string {
 export async function verifyComputerUseLive(confirmed: boolean): Promise<void> {
   if (!confirmed || process.platform !== 'darwin') throw new Error('只允许在 macOS 显式传入 --confirm-local-test；会打开自有 AppKit 夹具并执行真实语义输入与点击')
   const auth = new ComputerAuthorizationManager()
-  if (!auth.getPreferences().shareObservations) throw new Error('用户尚未同意界面读取；请先在 Gamma 授权')
+  if (!auth.getPreferences().shareObservations) throw new Error('用户尚未同意界面读取；请先在 Carpus 授权')
   // CLI 无法承载 Electron 本地授权弹窗，不自动批准或改写设置。
-  if (auth.getPreferences().riskPolicy !== 'relaxed') throw new Error('请在 Gamma 中显式选择宽松策略后运行本地夹具；本脚本不会自动批准授权')
+  if (auth.getPreferences().riskPolicy !== 'relaxed') throw new Error('请在 Carpus 中显式选择宽松策略后运行本地夹具；本脚本不会自动批准授权')
   const token = randomUUID()
   const states: Record<string, ComputerFixtureState> = { 'native-A': emptyComputerFixtureState(), 'native-B': emptyComputerFixtureState() }
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {

@@ -1,4 +1,4 @@
-import type { AgentStreamEvent } from '@gamma/shared'
+import type { AgentStreamEvent } from '@carpus/shared'
 
 export interface AgentStreamEventBatcherOptions {
   dispatch: (event: AgentStreamEvent) => void

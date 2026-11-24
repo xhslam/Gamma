@@ -14,7 +14,7 @@ import { CalendarDays, ListTodo, MessageSquareText, Sparkles, Server } from 'luc
 import { MentionList } from './MentionList'
 import type { MentionListRef } from './MentionList'
 import { createDebouncedSuggestionLoader, createLatestSuggestionRequestGuard, createMentionPopup, positionPopup, isSuggestionTriggerPresent, shouldSuppressEscTrigger, shouldClearEscSuppressionOnExit, type EscSuppressedTrigger } from './mention-popup-utils'
-import type { AgentSessionReferenceSearchResult, WorkspaceCapabilities } from '@gamma/shared'
+import type { AgentSessionReferenceSearchResult, WorkspaceCapabilities } from '@carpus/shared'
 import { shouldAllowMentionTrigger, shouldShowMentionSuggestion } from '@/components/ai-elements/mention-utils'
 import {
   buildPlanningReferenceItems,

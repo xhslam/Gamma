@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 test('Given 新用户、旧 profile 或运行中的 Proma When bootstrap 初始化 Then ready 前隔离路径且不提前加载业务模块', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-bootstrap-test-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-bootstrap-test-'))
   const script = join(root, 'verify.ts')
   writeFileSync(script, [
     "import { mock } from 'bun:test'",
@@ -24,7 +24,7 @@ test('Given 新用户、旧 profile 或运行中的 Proma When bootstrap 初始�
     "  writeFileSync(join(home, '.proma', 'settings.json'), JSON.stringify({ name: '用户原文 Proma' }))",
     "  writeFileSync(join(oldProfile, 'Local State'), '{}')",
     '}',
-    "let name = '@gamma/electron'",
+    "let name = '@carpus/electron'",
     "const paths = { appData, temp, userData: join(root, 'not-created'), sessionData: join(root, 'not-created') }",
     'const events = [], listeners = new Map()',
     'const app = {',
@@ -40,22 +40,22 @@ test('Given 新用户、旧 profile 或运行中的 Proma When bootstrap 初始�
     'const electronPath = createRequire(' + JSON.stringify(join(import.meta.dir, '..', 'index.ts')) + ").resolve('electron')",
     "mock.module(electronPath, () => ({ app, dialog: {}, protocol: { registerSchemesAsPrivileged: () => events.push('protocol') }, safeStorage: {}, session: {} }))",
     'await import(' + JSON.stringify(join(import.meta.dir, '..', 'index.ts')) + ')',
-    "assert.equal(existsSync(join(home, '.gamma')), false, '业务服务不能提前创建配置')",
+    "assert.equal(existsSync(join(home, '.carpus')), false, '业务服务不能提前创建配置')",
     "if (scenario === 'busy') {",
     '  assert.ok(paths.userData.startsWith(temp))',
     "  assert.equal(events.includes('protocol'), false)",
     "  assert.equal(events.includes('release'), false)",
-    "  assert.equal(existsSync(join(appData, 'Gamma')), false)",
+    "  assert.equal(existsSync(join(appData, 'Carpus')), false)",
     '} else {',
-    "  assert.equal(name, 'Gamma')",
-    "  assert.equal(paths.userData, join(appData, 'Gamma'))",
+    "  assert.equal(name, 'Carpus')",
+    "  assert.equal(paths.userData, join(appData, 'Carpus'))",
     '  assert.equal(paths.sessionData, paths.userData)',
     "  assert.ok(events.includes('protocol'))",
     "  if (scenario === 'legacy') {",
     "    assert.ok(events.indexOf('lock:' + oldProfile) < events.indexOf('release'))",
     "    assert.ok(events.indexOf('release') < events.indexOf('lock:' + paths.userData))",
     "    assert.equal(JSON.parse(readFileSync(join(home, '.proma', 'settings.json'), 'utf8')).name, '用户原文 Proma')",
-    "    assert.equal(JSON.parse(readFileSync(join(paths.userData, 'gamma-brand-migration.json'), 'utf8')).status, 'profile-pending')",
+    "    assert.equal(JSON.parse(readFileSync(join(paths.userData, 'carpus-brand-migration.json'), 'utf8')).status, 'profile-pending')",
     '  }',
     '}',
     "listeners.get('will-quit')?.()",

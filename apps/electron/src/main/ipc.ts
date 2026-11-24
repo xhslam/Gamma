@@ -1,7 +1,7 @@
 import { registerDesignWorkbenchHandlers } from './lib/design-workbench-ipc'
 import { registerTerminalWorkbenchIpc } from './lib/terminal-workbench/terminal-workbench-ipc'
-import { DESIGN_IPC_CHANNELS } from '@gamma/shared'
-import type { InstallDesignInput } from '@gamma/shared'
+import { DESIGN_IPC_CHANNELS } from '@carpus/shared'
+import type { InstallDesignInput } from '@carpus/shared'
 import { getDesignStatus, installWorkspaceDesign } from './lib/design-service'
 import { closeSettingsWindow, openSettingsWindow, readySettingsWindow } from './lib/settings-window'
 import { resolvePiBudgetContextWindow } from './lib/adapters/pi-model-registry'
@@ -19,15 +19,15 @@ import { existsSync, realpathSync, readFileSync, writeFileSync, mkdirSync, statS
 import { realpath, stat, writeFile, readdir, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
-import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, MAX_ATTACHMENT_SIZE, isGammaPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@gamma/shared'
-import type { GlobalMemoryEntry } from '@gamma/shared'
+import { AUTOMATIC_MEMORY_IPC_CHANNELS, GLOBAL_MEMORY_IPC_CHANNELS, IPC_CHANNELS, CHANNEL_IPC_CHANNELS, ATTACHMENT_IPC_CHANNELS, AGENT_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, SLACK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, MAX_ATTACHMENT_SIZE, isCarpusPermissionMode, normalizePathForCompare, removeMcpServerFromConfig, TERMINAL_IPC_CHANNELS } from '@carpus/shared'
+import type { GlobalMemoryEntry } from '@carpus/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS, WINDOWS_AGENT_ISLAND_IPC_CHANNELS, TRAY_IPC_CHANNELS } from '../types'
 import { setAppIconVariant } from './lib/app-icon-service'
 import { getAutomaticMemorySnapshot, updateAutomaticMemorySettings, editAutomaticMemoryEntry, deleteAutomaticMemoryEntry } from './lib/automatic-memory-store'
-import type { AutomaticMemorySettings } from '@gamma/shared'
+import type { AutomaticMemorySettings } from '@carpus/shared'
 import { registerMarkdownWorkspaceIpc } from './lib/markdown-workspace-ipc'
 import { registerComputerIpc } from './lib/computer-ipc'
-import { AGY_IPC_CHANNELS } from '@gamma/shared'
+import { AGY_IPC_CHANNELS } from '@carpus/shared'
 import { agyTaskService } from './lib/agy-task-controller'
 import { withFileMutationQueue, version as computeMemoryVersion } from './lib/memory'
 
@@ -90,7 +90,7 @@ import type {
   GitHubRelease,
   GitHubReleaseListOptions,
   PermissionResponse,
-  GammaPermissionMode,
+  CarpusPermissionMode,
   AskUserResponse,
   ExitPlanModeResponse,
   MoveSessionToWorkspaceInput,
@@ -136,7 +136,7 @@ import type {
   BrowserTabInput,
   BrowserCreateTabInput,
   TerminalSavePastedImageInput,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import type { UserProfile, AppSettings, UpdateAppSettings } from '../types'
 import { getRuntimeStatus, getGitRepoStatus, reinitializeRuntime } from './lib/runtime-init'
 import { browserController } from './lib/browser-controller'
@@ -147,7 +147,7 @@ import { saveTerminalPastedImage, getTerminalClipboardContent } from './lib/term
 import { getMainWindow } from './lib/main-window-store'
 import { resolveBrowserProfileKey } from './lib/browser-profile-policy'
 import { getUnstagedChanges, invalidateGitDiffCache, getFileDiff, getUntrackedContent, revertFile, getDiffContents, listWorktrees, getWorktreeChanges, getMainRepoRoot } from './lib/git-diff-service'
-import { registerGammaDirectoryPath, registerGammaFilePath } from './lib/local-file-protocol'
+import { registerCarpusDirectoryPath, registerCarpusFilePath } from './lib/local-file-protocol'
 import { registerUpdaterIpc } from './lib/updater/updater-ipc'
 import {
   listChannels,
@@ -165,8 +165,8 @@ import { loginCodexOAuth, cancelCodexOAuthLogin } from './lib/codex-oauth-servic
 import { loginGithubCopilotOAuth, cancelGithubCopilotOAuthLogin } from './lib/github-copilot-oauth-service'
 import { loginXaiOAuth, cancelXaiOAuthLogin } from './lib/xai-oauth-service'
 import { resolvePiImageInputCapability, resolvePiReasoningCapability } from './lib/adapters/pi-model-registry'
-import { serializeCodexCredentials, serializeGithubCopilotCredentials, serializeXaiCredentials } from '@gamma/shared'
-import type { CodexOAuthDeviceCode, CodexOAuthLoginMethod, GithubCopilotOAuthDeviceCode, XaiOAuthDeviceCode } from '@gamma/shared'
+import { serializeCodexCredentials, serializeGithubCopilotCredentials, serializeXaiCredentials } from '@carpus/shared'
+import type { CodexOAuthDeviceCode, CodexOAuthLoginMethod, GithubCopilotOAuthDeviceCode, XaiOAuthDeviceCode } from '@carpus/shared'
 import {
   saveAttachment,
   readAttachmentAsBase64,
@@ -300,7 +300,7 @@ const workspaceMemoryWatchDestroyedListeners = new Set<number>()
  * 该代数仅用于进程内竞态保护，不写入用户的 mcp.json。
  */
 const workspaceMcpRefreshGenerations = new Map<string, number>()
-const workspaceMcpPendingValidations = new Map<string, Map<string, import('@gamma/shared').McpServerEntry>>()
+const workspaceMcpPendingValidations = new Map<string, Map<string, import('@carpus/shared').McpServerEntry>>()
 
 function advanceWorkspaceMcpRefreshGeneration(workspaceSlug: string): number {
   const generation = (workspaceMcpRefreshGenerations.get(workspaceSlug) ?? 0) + 1
@@ -308,12 +308,12 @@ function advanceWorkspaceMcpRefreshGeneration(workspaceSlug: string): number {
   return generation
 }
 
-function getWorkspaceMcpPendingValidation(workspaceSlug: string, name: string): import('@gamma/shared').McpServerEntry | undefined {
+function getWorkspaceMcpPendingValidation(workspaceSlug: string, name: string): import('@carpus/shared').McpServerEntry | undefined {
   return workspaceMcpPendingValidations.get(workspaceSlug)?.get(name)
 }
 
-function setWorkspaceMcpPendingValidation(workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry): void {
-  const pending = workspaceMcpPendingValidations.get(workspaceSlug) ?? new Map<string, import('@gamma/shared').McpServerEntry>()
+function setWorkspaceMcpPendingValidation(workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry): void {
+  const pending = workspaceMcpPendingValidations.get(workspaceSlug) ?? new Map<string, import('@carpus/shared').McpServerEntry>()
   pending.set(name, entry)
   workspaceMcpPendingValidations.set(workspaceSlug, pending)
 }
@@ -404,7 +404,7 @@ function realpathOrResolve(path: string): string {
 function getAuthorizedRoots(options?: FileAccessOptions): string[] {
   const roots: string[] = [
     getAgentWorkspacesDir(),
-    join(tmpdir(), 'gamma-preview'),
+    join(tmpdir(), 'carpus-preview'),
   ]
 
   const workspaceSlugs = new Set<string>()
@@ -667,7 +667,7 @@ function ensurePathAllowed(filePath: string, options?: FileAccessOptions): boole
 /**
  * 在 ensurePathAllowed 基础上，额外放行「已授权仓库的 worktree」。
  *
- * worktree 常被放在主仓库之外（如 ~/gamma-dev/worktrees/xxx），其路径不在任何
+ * worktree 常被放在主仓库之外（如 ~/carpus-dev/worktrees/xxx），其路径不在任何
  * 授权根下，会被 ensurePathAllowed 拒绝。但只要它回溯到的主仓库已被授权，就应放行。
  * 用 git 自身背书（--git-common-dir），避免粗暴跳过安全检查。
  */
@@ -684,7 +684,7 @@ async function ensurePathAllowedWithWorktree(filePath: string, options?: FileAcc
       if (authorizedRoot === targetMainRepo) return true
     }
     for (const workspaceSlug of getWorkspaceSlugsForAccess(options)) {
-      let repos: import('@gamma/shared').WorkspaceWorktreeRepo[]
+      let repos: import('@carpus/shared').WorkspaceWorktreeRepo[]
       try {
         repos = await getWorktreeRepos(workspaceSlug)
       } catch {
@@ -723,7 +723,7 @@ function getBundledResourcesDir(): string {
  * 默认 App 探测结果按文件后缀缓存，避免反复 spawn Swift / 注册表查询。
  * 成功结果会落盘；失败只做短暂内存冷却，避免一次瞬时失败导致整会话都隐藏按钮。
  */
-const defaultAppCache = new Map<string, import('@gamma/shared').DefaultAppInfo>()
+const defaultAppCache = new Map<string, import('@carpus/shared').DefaultAppInfo>()
 const defaultAppFailureCache = new Map<string, number>()
 const DEFAULT_APP_FAILURE_RETRY_MS = 60_000
 
@@ -762,7 +762,7 @@ async function getMacAppIconViaSips(appPath: string): Promise<string> {
   const icnsPath = candidates.find((p) => existsSync(p))
   if (!icnsPath) return ''
 
-  const tmp = mkdtempSync(join(tmpdir(), 'gamma-icon-'))
+  const tmp = mkdtempSync(join(tmpdir(), 'carpus-icon-'))
   const outPath = join(tmp, 'icon.png')
   try {
     const r = await runCmd('sips', ['-s', 'format', 'png', '-Z', '64', icnsPath, '--out', outPath], { timeoutMs: 4000 })
@@ -839,13 +839,13 @@ async function runCliCommand(bin: string, args: string[], opts: { timeoutMs?: nu
 interface McpRefreshValidation {
   name: string
   fingerprint: string
-  lastTestResult: NonNullable<import('@gamma/shared').McpServerEntry['lastTestResult']>
+  lastTestResult: NonNullable<import('@carpus/shared').McpServerEntry['lastTestResult']>
 }
 
 /**
  * 生成 MCP 可运行配置的稳定摘要。摘要只用于内存中比较，绝不记录或返回，避免暴露 headers/env 中的敏感值。
  */
-export function getMcpEntryFingerprint(entry: import('@gamma/shared').McpServerEntry): string {
+export function getMcpEntryFingerprint(entry: import('@carpus/shared').McpServerEntry): string {
   const sortedEntries = (record: Record<string, string> | undefined): Array<[string, string]> =>
     Object.entries(record ?? {}).sort(([left], [right]) => left.localeCompare(right))
 
@@ -890,9 +890,9 @@ export async function mapWithConcurrency<T, R>(
  * 因而同名服务器被编辑、禁用、删除或被后一次刷新取代时，旧结果不会落盘。
  */
 export function mergeMcpRefreshResults(
-  currentConfig: import('@gamma/shared').WorkspaceMcpConfig,
+  currentConfig: import('@carpus/shared').WorkspaceMcpConfig,
   validations: readonly McpRefreshValidation[],
-): import('@gamma/shared').WorkspaceMcpConfig {
+): import('@carpus/shared').WorkspaceMcpConfig {
   const servers = { ...currentConfig.servers }
   for (const validation of validations) {
     const currentEntry = servers[validation.name]
@@ -916,10 +916,10 @@ export function mergeMcpRefreshResults(
 async function validateAndConditionallyPersistMcp(
   workspaceSlug: string,
   name: string,
-  candidateEntry: import('@gamma/shared').McpServerEntry,
+  candidateEntry: import('@carpus/shared').McpServerEntry,
   expectedPersistedFingerprint: string,
   expectedRefreshGeneration: number,
-): Promise<import('@gamma/shared').McpConnectionMutationResult> {
+): Promise<import('@carpus/shared').McpConnectionMutationResult> {
   const { validateMcpServer } = await import('./lib/mcp-validator')
   const result = await validateMcpServer(name, candidateEntry, workspaceSlug)
   const verification = {
@@ -984,7 +984,7 @@ function isDingTalkCliAuthenticated(result: CliCommandResult): boolean {
 export async function getCliIntegrationStatuses(
   runner: CliCommandRunner = runCliCommand,
   disabledIds: ReadonlySet<string> = new Set(),
-): Promise<import('@gamma/shared').CliIntegrationStatus[]> {
+): Promise<import('@carpus/shared').CliIntegrationStatus[]> {
   const [wecom, dingtalk, github, feishu] = await Promise.all([
     runCliProbe(runner, 'wecom-cli', ['auth', 'show', '--status']),
     runCliProbe(runner, 'dws', ['auth', 'status', '--format', 'json']),
@@ -1172,7 +1172,7 @@ async function getWindowsDefaultAppInfo(filePath: string): Promise<{ appPath: st
 async function getDefaultAppInfoForFile(
   filePath: string,
   options?: FileAccessOptions,
-): Promise<import('@gamma/shared').DefaultAppInfo | null> {
+): Promise<import('@carpus/shared').DefaultAppInfo | null> {
   const absPath = await resolveFileAccessPath(filePath, options)
 
   const cacheKey = `${process.platform}:${extOf(filePath) || filePath}`
@@ -1247,7 +1247,7 @@ if let appUrl = NSWorkspace.shared.urlForApplication(toOpen: url) {
   console.log('[DefaultApp] iconDataUrl 长度:', iconDataUrl?.length)
   if (!iconDataUrl) return cacheNull(cacheKey)
 
-  const info: import('@gamma/shared').DefaultAppInfo = { name: appName, appPath, iconDataUrl }
+  const info: import('@carpus/shared').DefaultAppInfo = { name: appName, appPath, iconDataUrl }
   defaultAppCache.set(cacheKey, info)
   defaultAppFailureCache.delete(cacheKey)
   saveCachedDefaultAppInfo(cacheKey, info)
@@ -1313,7 +1313,7 @@ export function registerIpcHandlers(): void {
   registerComputerIpc()
   registerMarkdownWorkspaceIpc({
     mainWindow: getMainWindow,
-    mediaUrl: registerGammaFilePath,
+    mediaUrl: registerCarpusFilePath,
     projectPath: (context) => {
       const session = context.sessionId ? getAgentSessionMeta(context.sessionId) : undefined
       if (context.sessionId && !session) throw new Error('会话不存在')
@@ -1362,7 +1362,7 @@ export function registerIpcHandlers(): void {
     snapshot: getTerminalSnapshot,
     kill: killTerminal,
   })
-  ipcMain.handle(TERMINAL_IPC_CHANNELS.OPEN_PROJECT_AGY, async (event, input: import('@gamma/shared').ProjectAgyTerminalInput) => {
+  ipcMain.handle(TERMINAL_IPC_CHANNELS.OPEN_PROJECT_AGY, async (event, input: import('@carpus/shared').ProjectAgyTerminalInput) => {
     assertMainTerminalRenderer(event.sender.id)
     return projectAgyTerminals.open(input)
   })
@@ -1644,7 +1644,7 @@ export function registerIpcHandlers(): void {
   // 扫描系统中的编辑器应用（仅 macOS）
   ipcMain.handle(
     IPC_CHANNELS.SCAN_EDITORS,
-    async (): Promise<import('@gamma/shared').EditorApp[]> => {
+    async (): Promise<import('@carpus/shared').EditorApp[]> => {
       if (process.platform !== 'darwin') return []
       const { existsSync } = await import('node:fs')
       const { homedir } = await import('node:os')
@@ -1666,7 +1666,7 @@ export function registerIpcHandlers(): void {
   // 查询某个文件在本机的默认打开应用信息（带图标）
   ipcMain.handle(
     IPC_CHANNELS.GET_DEFAULT_APP_FOR_FILE,
-    async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@gamma/shared').DefaultAppInfo | null> => {
+    async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@carpus/shared').DefaultAppInfo | null> => {
       if (!filePath || typeof filePath !== 'string') return null
       try {
         const options = normalizeFileAccessOptions(access)
@@ -1755,7 +1755,7 @@ export function registerIpcHandlers(): void {
   // 查询订阅 Plan 额度（用于 Agent Context 圆环 hover 信息）
   ipcMain.handle(
     CHANNEL_IPC_CHANNELS.GET_PLAN_QUOTA,
-    async (_, channelId: string): Promise<import('@gamma/shared').ChannelPlanQuotaResult> => {
+    async (_, channelId: string): Promise<import('@carpus/shared').ChannelPlanQuotaResult> => {
       return getChannelPlanQuota(channelId)
     }
   )
@@ -1765,7 +1765,7 @@ export function registerIpcHandlers(): void {
   // apiKey 传给 create/update，channel-manager 加密后存储——与现有 apiKey 明文回传模式一致。
   ipcMain.handle(
     CHANNEL_IPC_CHANNELS.CODEX_OAUTH_LOGIN,
-    async (event, requestedMethod?: CodexOAuthLoginMethod): Promise<import('@gamma/shared').CodexOAuthLoginResult> => {
+    async (event, requestedMethod?: CodexOAuthLoginMethod): Promise<import('@carpus/shared').CodexOAuthLoginResult> => {
       const method: CodexOAuthLoginMethod = requestedMethod === 'device_code' ? 'device_code' : 'browser'
       try {
         const credentials = await loginCodexOAuth({
@@ -1804,7 +1804,7 @@ export function registerIpcHandlers(): void {
   // 组织策略可用的模型；成功后的凭据沿用 Channel.apiKey 加密存储。
   ipcMain.handle(
     CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_LOGIN,
-    async (event, enterpriseUrl?: string): Promise<import('@gamma/shared').GithubCopilotOAuthLoginResult> => {
+    async (event, enterpriseUrl?: string): Promise<import('@carpus/shared').GithubCopilotOAuthLoginResult> => {
       try {
         const credentials = await loginGithubCopilotOAuth({
           enterpriseUrl,
@@ -1834,7 +1834,7 @@ export function registerIpcHandlers(): void {
   // 预填的浏览器授权链接；成功后的凭据沿用 Channel.apiKey 加密存储。
   ipcMain.handle(
     CHANNEL_IPC_CHANNELS.XAI_OAUTH_LOGIN,
-    async (event): Promise<import('@gamma/shared').XaiOAuthLoginResult> => {
+    async (event): Promise<import('@carpus/shared').XaiOAuthLoginResult> => {
       try {
         const credentials = await loginXaiOAuth({
           onDeviceCode: (deviceCode) => {
@@ -2739,7 +2739,7 @@ export function registerIpcHandlers(): void {
   // 创建 Agent 工作区（保留给迁移与低层管理调用；交互式项目创建应使用 CREATE_PROJECT）。
   ipcMain.handle(
     AGENT_IPC_CHANNELS.CREATE_WORKSPACE,
-    async (_, input: import('@gamma/shared').CreateAgentWorkspaceInput): Promise<AgentWorkspace> => {
+    async (_, input: import('@carpus/shared').CreateAgentWorkspaceInput): Promise<AgentWorkspace> => {
       const workspace = await createAgentWorkspace(input)
       if (workspace.projectRootPath) watchAttachedDirectory(workspace.projectRootPath)
       return workspace
@@ -2749,7 +2749,7 @@ export function registerIpcHandlers(): void {
   // 创建项目时同时生成其首个 Agent 会话，避免项目以无会话状态进入界面。
   ipcMain.handle(
     AGENT_IPC_CHANNELS.CREATE_PROJECT,
-    async (_, input: import('@gamma/shared').CreateAgentWorkspaceInput, channelId?: string, modelId?: string): Promise<import('@gamma/shared').CreateAgentProjectResult> => {
+    async (_, input: import('@carpus/shared').CreateAgentWorkspaceInput, channelId?: string, modelId?: string): Promise<import('@carpus/shared').CreateAgentProjectResult> => {
       const workspace = await createAgentWorkspace(input)
       if (workspace.projectRootPath) watchAttachedDirectory(workspace.projectRootPath)
 
@@ -2900,11 +2900,11 @@ export function registerIpcHandlers(): void {
   // card toggle before they can become enabled.
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SAVE_MCP_CONFIG,
-    async (_, workspaceSlug: string, config: WorkspaceMcpConfig, options?: import('@gamma/shared').SaveWorkspaceMcpConfigOptions): Promise<void> => {
+    async (_, workspaceSlug: string, config: WorkspaceMcpConfig, options?: import('@carpus/shared').SaveWorkspaceMcpConfigOptions): Promise<void> => {
       for (const name of options?.explicitlyDisabledServerNames ?? []) {
         clearWorkspaceMcpPendingValidation(workspaceSlug, name)
       }
-      const pendingValidations: Array<{ name: string; candidate: import('@gamma/shared').McpServerEntry }> = []
+      const pendingValidations: Array<{ name: string; candidate: import('@carpus/shared').McpServerEntry }> = []
       const servers: WorkspaceMcpConfig['servers'] = {}
 
       const configServerNames = new Set(Object.keys(config.servers))
@@ -2968,7 +2968,7 @@ export function registerIpcHandlers(): void {
   // generation, while fingerprint matching protects this entry's validation writeback.
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SET_MCP_ENABLED_AND_VALIDATE,
-    async (_, workspaceSlug: string, name: string, enabled: boolean): Promise<import('@gamma/shared').McpConnectionMutationResult> => {
+    async (_, workspaceSlug: string, name: string, enabled: boolean): Promise<import('@carpus/shared').McpConnectionMutationResult> => {
       const current = getWorkspaceMcpConfig(workspaceSlug)
       const entry = current.servers[name]
       if (!entry) throw new Error('找不到 MCP 配置')
@@ -3007,7 +3007,7 @@ export function registerIpcHandlers(): void {
   // replaced by a stale renderer snapshot.
   ipcMain.handle(
     AGENT_IPC_CHANNELS.INSTALL_MCP_AND_VALIDATE,
-    async (_, workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry): Promise<import('@gamma/shared').McpInstallMutationResult> => {
+    async (_, workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry): Promise<import('@carpus/shared').McpInstallMutationResult> => {
       const current = getWorkspaceMcpConfig(workspaceSlug)
       if (current.servers[name]) {
         return {
@@ -3080,21 +3080,21 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.START_MCP_OAUTH,
-    async (_, input: import('@gamma/shared').StartMcpOAuthInput): Promise<import('@gamma/shared').McpOAuthStartResult> => {
+    async (_, input: import('@carpus/shared').StartMcpOAuthInput): Promise<import('@carpus/shared').McpOAuthStartResult> => {
       return startMcpOAuth(input)
     }
   )
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SAVE_MCP_OAUTH_CLIENT_SECRET,
-    (_, input: import('@gamma/shared').SaveMcpOAuthClientSecretInput): void => {
+    (_, input: import('@carpus/shared').SaveMcpOAuthClientSecretInput): void => {
       saveMcpOAuthClientSecret(input)
     }
   )
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SAVE_MCP_API_KEY,
-    async (_, input: import('@gamma/shared').SaveMcpApiKeyInput): Promise<void> => {
+    async (_, input: import('@carpus/shared').SaveMcpApiKeyInput): Promise<void> => {
       return saveMcpApiKey(input)
     }
   )
@@ -3110,14 +3110,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.GET_CLI_INTEGRATION_STATUSES,
-    async (_, workspaceSlug: string): Promise<import('@gamma/shared').CliIntegrationStatus[]> => {
+    async (_, workspaceSlug: string): Promise<import('@carpus/shared').CliIntegrationStatus[]> => {
       return getCliIntegrationStatuses(undefined, getDisabledCliIntegrationIds(workspaceSlug))
     }
   )
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SET_CLI_INTEGRATION_ENABLED,
-    async (_, workspaceSlug: string, id: string, enabled: boolean): Promise<import('@gamma/shared').CliIntegrationStatus[]> => {
+    async (_, workspaceSlug: string, id: string, enabled: boolean): Promise<import('@carpus/shared').CliIntegrationStatus[]> => {
       setCliIntegrationEnabled(workspaceSlug, id, enabled)
       return getCliIntegrationStatuses(undefined, getDisabledCliIntegrationIds(workspaceSlug))
     },
@@ -3126,7 +3126,7 @@ export function registerIpcHandlers(): void {
   // 测试 MCP 服务器连接
   ipcMain.handle(
     AGENT_IPC_CHANNELS.TEST_MCP_SERVER,
-    async (_, workspaceSlug: string, name: string, entry: import('@gamma/shared').McpServerEntry): Promise<{ success: boolean; message: string }> => {
+    async (_, workspaceSlug: string, name: string, entry: import('@carpus/shared').McpServerEntry): Promise<{ success: boolean; message: string }> => {
       const { validateMcpServer } = await import('./lib/mcp-validator')
       const result = await validateMcpServer(name, entry, workspaceSlug)
       return {
@@ -3185,7 +3185,7 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // 获取默认 Skills 的 slug 列表（来自 ~/.gamma/default-skills/）
+  // 获取默认 Skills 的 slug 列表（来自 ~/.carpus/default-skills/）
   ipcMain.handle(
     AGENT_IPC_CHANNELS.GET_DEFAULT_SKILL_SLUGS,
     async () => {
@@ -3493,7 +3493,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SEND_MESSAGE,
-    async (event, input: AgentSendInput): Promise<import('@gamma/shared').AgentSendResult> => {
+    async (event, input: AgentSendInput): Promise<import('@carpus/shared').AgentSendResult> => {
       // 旧客户端也走同一个接管入口；IPC 只等待接收，不能等待模型与工具执行结束。
       const messageId = input.userMessageUuid ?? randomUUID()
       input = prepareAgentReferenceInput(input, messageId)
@@ -3529,15 +3529,15 @@ export function registerIpcHandlers(): void {
 
   // 发送日志与恢复入口：只按已存在会话解析工作台路径，不接收 renderer 自定义路径。
   ipcMain.handle(AGENT_IPC_CHANNELS.LIST_SEND_OUTBOX, (_, sessionId: string) => listAgentSendOutbox(sessionId))
-  ipcMain.handle(AGENT_IPC_CHANNELS.SAVE_SEND_OUTBOX, (_, entry: import('@gamma/shared').AgentSendOutboxEntry) => saveAgentSendOutbox(entry))
-  ipcMain.handle(AGENT_IPC_CHANNELS.RETRY_SEND_OUTBOX, (event, input: import('@gamma/shared').AgentQueuedMessageControlInput) => retryAgentSendOutbox(input, event.sender))
+  ipcMain.handle(AGENT_IPC_CHANNELS.SAVE_SEND_OUTBOX, (_, entry: import('@carpus/shared').AgentSendOutboxEntry) => saveAgentSendOutbox(entry))
+  ipcMain.handle(AGENT_IPC_CHANNELS.RETRY_SEND_OUTBOX, (event, input: import('@carpus/shared').AgentQueuedMessageControlInput) => retryAgentSendOutbox(input, event.sender))
 
   // ===== Agent 队列消息 =====
 
   // 排队发送消息
   ipcMain.handle(
     AGENT_IPC_CHANNELS.QUEUE_MESSAGE,
-    async (event, input: import('@gamma/shared').AgentQueueMessageInput): Promise<string> => {
+    async (event, input: import('@carpus/shared').AgentQueueMessageInput): Promise<string> => {
       input = prepareAgentReferenceInput(input, input.uuid)
       const result = await submitAgentMessageOnce(input.sessionId, input.uuid, () => queueAgentMessage(input, event.sender))
       return result.duplicate ? input.uuid! : result.value
@@ -3547,7 +3547,7 @@ export function registerIpcHandlers(): void {
   // 主进程原子决定立即注入活跃 Agent 或进入 deferred queue。
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SUBMIT_OR_ENQUEUE_MESSAGE,
-    async (event, input: import('@gamma/shared').AgentSubmitOrEnqueueInput): Promise<import('@gamma/shared').AgentSubmitOrEnqueueResult> => {
+    async (event, input: import('@carpus/shared').AgentSubmitOrEnqueueInput): Promise<import('@carpus/shared').AgentSubmitOrEnqueueResult> => {
       input = prepareAgentReferenceInput(input, input.queueMessageId)
       const result = await submitAgentMessageOnce(input.sessionId, input.queueMessageId, () => submitOrEnqueueAgentMessage(input, event.sender))
       return result.duplicate ? { disposition: result.acceptedAs === 'queued' ? 'queued' : 'accepted' } : result.value
@@ -3556,7 +3556,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.GET_QUEUED_MESSAGES,
-    async (_, sessionId: string): Promise<import('@gamma/shared').AgentQueuedMessageSnapshot[]> => {
+    async (_, sessionId: string): Promise<import('@carpus/shared').AgentQueuedMessageSnapshot[]> => {
       if (!sessionId || typeof sessionId !== 'string') return []
       return listQueuedAgentMessages(sessionId)
     },
@@ -3565,7 +3565,7 @@ export function registerIpcHandlers(): void {
   // 兼容旧调用：将消息交给主进程 deferred queue。
   ipcMain.handle(
     AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE,
-    async (event, input: import('@gamma/shared').AgentDeferredQueueMessageInput): Promise<void> => {
+    async (event, input: import('@carpus/shared').AgentDeferredQueueMessageInput): Promise<void> => {
       input = prepareAgentReferenceInput(input, input.queueMessageId)
       await submitAgentMessageOnce(input.sessionId, input.queueMessageId, async () => { enqueueAgentQueuedMessage(input, event.sender) })
     },
@@ -3573,14 +3573,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.CANCEL_QUEUED_MESSAGE,
-    async (_, input: import('@gamma/shared').AgentCancelQueuedMessageInput): Promise<boolean> => {
+    async (_, input: import('@carpus/shared').AgentCancelQueuedMessageInput): Promise<boolean> => {
       return cancelQueuedAgentSend(input)
     },
   )
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.MOVE_QUEUED_MESSAGE,
-    async (_, input: import('@gamma/shared').AgentMoveQueuedMessageInput): Promise<boolean> => {
+    async (_, input: import('@carpus/shared').AgentMoveQueuedMessageInput): Promise<boolean> => {
       return moveAgentQueuedMessage(input)
     },
   )
@@ -3598,7 +3598,7 @@ export function registerIpcHandlers(): void {
       if (sessionId) {
         event.sender.send(AGENT_IPC_CHANNELS.STREAM_EVENT, {
           sessionId,
-          payload: { kind: 'gamma_event', event: { type: 'permission_resolved', requestId, behavior } },
+          payload: { kind: 'carpus_event', event: { type: 'permission_resolved', requestId, behavior } },
         })
       }
     }
@@ -3607,8 +3607,8 @@ export function registerIpcHandlers(): void {
   // 热切换指定会话的权限模式（运行中生效，不广播）
   ipcMain.handle(
     AGENT_IPC_CHANNELS.UPDATE_SESSION_PERMISSION_MODE,
-    async (_, sessionId: string, mode: GammaPermissionMode): Promise<void> => {
-      if (!isGammaPermissionMode(mode)) {
+    async (_, sessionId: string, mode: CarpusPermissionMode): Promise<void> => {
+      if (!isCarpusPermissionMode(mode)) {
         throw new Error(`无效的权限模式: ${mode}`)
       }
       // 会话不存在时直接抛错（避免 updateAgentSessionMeta 的通用异常被降级为 warn）
@@ -3697,7 +3697,7 @@ export function registerIpcHandlers(): void {
       if (sessionId) {
         event.sender.send(AGENT_IPC_CHANNELS.STREAM_EVENT, {
           sessionId,
-          payload: { kind: 'gamma_event', event: { type: 'ask_user_resolved', requestId } },
+          payload: { kind: 'carpus_event', event: { type: 'ask_user_resolved', requestId } },
         })
       }
     }
@@ -3717,7 +3717,7 @@ export function registerIpcHandlers(): void {
         // 通知渲染进程请求已处理
         event.sender.send(AGENT_IPC_CHANNELS.STREAM_EVENT, {
           sessionId,
-          payload: { kind: 'gamma_event', event: { type: 'exit_plan_mode_resolved', requestId: response.requestId } },
+          payload: { kind: 'carpus_event', event: { type: 'exit_plan_mode_resolved', requestId: response.requestId } },
         })
 
         // 如果用户选择了新的权限模式，通知渲染进程更新 UI
@@ -3733,7 +3733,7 @@ export function registerIpcHandlers(): void {
           }
           event.sender.send(AGENT_IPC_CHANNELS.STREAM_EVENT, {
             sessionId,
-            payload: { kind: 'gamma_event', event: { type: 'permission_mode_changed', mode: targetMode } },
+            payload: { kind: 'carpus_event', event: { type: 'permission_mode_changed', mode: targetMode } },
           })
           console.log(`[IPC] ExitPlanMode 权限模式切换: ${targetMode}`)
         }
@@ -3746,7 +3746,7 @@ export function registerIpcHandlers(): void {
   // 获取所有待处理的交互请求快照（渲染进程重载后恢复状态）
   ipcMain.handle(
     AGENT_IPC_CHANNELS.GET_PENDING_REQUESTS,
-    async (): Promise<import('@gamma/shared').PendingRequestsSnapshot> => {
+    async (): Promise<import('@carpus/shared').PendingRequestsSnapshot> => {
       return {
         permissions: permissionService.getPendingRequests(),
         askUsers: askUserService.getPendingRequests(),
@@ -3968,7 +3968,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.ADD_WORKTREE_REPO,
-    async (_, workspaceSlug: string, repo: import('@gamma/shared').WorkspaceWorktreeRepo) => {
+    async (_, workspaceSlug: string, repo: import('@carpus/shared').WorkspaceWorktreeRepo) => {
       return addWorktreeRepo(workspaceSlug, repo)
     }
   )
@@ -4057,7 +4057,7 @@ export function registerIpcHandlers(): void {
       const { existsSync, mkdirSync } = await import('node:fs')
       const { writeFile } = await import('node:fs/promises')
 
-      const tmpDir = join(tmpdir(), 'gamma-preview')
+      const tmpDir = join(tmpdir(), 'carpus-preview')
       if (!existsSync(tmpDir)) {
         mkdirSync(tmpDir, { recursive: true })
       }
@@ -4144,7 +4144,7 @@ export function registerIpcHandlers(): void {
   // 解析文件路径并读取内容（供内联预览使用）
   ipcMain.handle(
     'file:resolve-and-read',
-    async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@gamma/shared').FilePreviewReadResult | null> => {
+    async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@carpus/shared').FilePreviewReadResult | null> => {
       const { resolveAndReadFile } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const resolved = await resolveAuthorizedPreviewPath(filePath, options)
@@ -4261,7 +4261,7 @@ export function registerIpcHandlers(): void {
       const result = resolveMarkdownRelativeMediaPath(markdownFilePath, src, options)
       if (!result) return null
       try {
-        return { url: registerGammaFilePath(result) }
+        return { url: registerCarpusFilePath(result) }
       } catch (err) {
         console.warn('[IPC] file:resolve-markdown-media 无法注册图片，跳过:', result, err instanceof Error ? err.message : err)
         return null
@@ -4269,17 +4269,17 @@ export function registerIpcHandlers(): void {
     },
   )
 
-  // 仅解析文件路径（供 PDF/图片等用 gamma-file:// 加载）
+  // 仅解析文件路径（供 PDF/图片等用 carpus-file:// 加载）
   ipcMain.handle(
     'file:resolve-path',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<(ResolvedFileUrl & { resolvedPath: string }) | null> => {
       const options = normalizeFileAccessOptions(access)
       const result = await resolveAuthorizedPreviewPath(filePath, options)
       if (!result) return null
-      // registerGammaFilePath 对目录路径会抛「不是文件」。渲染端（如悬浮预览解析 markdown
+      // registerCarpusFilePath 对目录路径会抛「不是文件」。渲染端（如悬浮预览解析 markdown
       // 链接）可能传入目录路径，此处优雅降级为 null，而不是让异常冒泡成未捕获的 handler 错误。
       try {
-        return { url: registerGammaFilePath(result), resolvedPath: result }
+        return { url: registerCarpusFilePath(result), resolvedPath: result }
       } catch (err) {
         console.warn('[IPC] file:resolve-path 无法注册为文件，跳过:', result, err instanceof Error ? err.message : err)
         return null
@@ -4288,7 +4288,7 @@ export function registerIpcHandlers(): void {
   )
 
   // 当所在目录本身已授权时，为 HTML 预览注册它以加载相对 CSS、脚本和图片资源；
-  // 单文件授权仅注册 HTML 本体。返回的仍是 token-gated gamma-file URL。
+  // 单文件授权仅注册 HTML 本体。返回的仍是 token-gated carpus-file URL。
   ipcMain.handle(
     'file:resolve-html-preview-path',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<ResolvedFileUrl | null> => {
@@ -4300,9 +4300,9 @@ export function registerIpcHandlers(): void {
         // 单文件附件只授权该文件本身，不能因 HTML 预览而将父目录整体注册为 URL 根；
         // 此时仍可加载 HTML 本体，但同目录资源会按授权边界被拒绝。
         if (!isExplicitPreviewDirectoryPath(parentDir, options)) {
-          return { url: registerGammaFilePath(result) }
+          return { url: registerCarpusFilePath(result) }
         }
-        const directoryUrl = registerGammaDirectoryPath(parentDir)
+        const directoryUrl = registerCarpusDirectoryPath(parentDir)
         return { url: `${directoryUrl}/${encodeURIComponent(basename(result))}` }
       } catch (err) {
         console.warn('[IPC] file:resolve-html-preview-path 无法注册预览目录，跳过:', result, err instanceof Error ? err.message : err)
@@ -4327,7 +4327,7 @@ export function registerIpcHandlers(): void {
   // Office 文件转高保真 HTML（内联预览；失败时由服务层降级到内置解析器）
   ipcMain.handle(
     'file:office-to-html',
-    async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@gamma/shared').OfficePreviewResult | null> => {
+    async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@carpus/shared').OfficePreviewResult | null> => {
       const { convertOfficeToHtml } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const resolved = await resolveAuthorizedPreviewPath(filePath, options)
@@ -4893,7 +4893,7 @@ export function registerIpcHandlers(): void {
   // 保存单个 Bot 配置
   ipcMain.handle(
     FEISHU_IPC_CHANNELS.SAVE_BOT_CONFIG,
-    async (_, input: import('@gamma/shared').FeishuBotConfigInput) => {
+    async (_, input: import('@carpus/shared').FeishuBotConfigInput) => {
       const saved = saveFeishuBotConfig(input)
       feishuBridgeManager.setSessionMirrorOperator(saved.id, input.operatorOpenId)
       // 配置变更后自动重启或停止（不阻塞保存结果）
@@ -4952,7 +4952,7 @@ export function registerIpcHandlers(): void {
   // 测试飞书连接
   ipcMain.handle(
     FEISHU_IPC_CHANNELS.TEST_CONNECTION,
-    async (_, appId: string, appSecret: string, domain?: import('@gamma/shared').FeishuDomain): Promise<FeishuTestResult> => {
+    async (_, appId: string, appSecret: string, domain?: import('@carpus/shared').FeishuDomain): Promise<FeishuTestResult> => {
       return feishuBridgeManager.testConnection(appId, appSecret, domain)
     }
   )
@@ -5010,7 +5010,7 @@ export function registerIpcHandlers(): void {
         const lark = await import('@larksuiteoapi/node-sdk')
         const QRCode = (await import('qrcode')).default
         const result = await lark.registerApp({
-          source: 'gamma',
+          source: 'carpus',
           signal: abort.signal,
           onQRCodeReady: async (info) => {
             if (event.sender.isDestroyed()) return
@@ -5138,7 +5138,7 @@ export function registerIpcHandlers(): void {
   // 保存单个 Bot 配置
   ipcMain.handle(
     DINGTALK_IPC_CHANNELS.SAVE_BOT_CONFIG,
-    async (_, input: import('@gamma/shared').DingTalkBotConfigInput) => {
+    async (_, input: import('@carpus/shared').DingTalkBotConfigInput) => {
       const saved = saveDingTalkBotConfig(input)
       // 配置变更后自动重启或停止（不阻塞保存结果）
       if (saved.enabled && saved.clientId && saved.clientSecret) {
@@ -5205,7 +5205,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     SLACK_IPC_CHANNELS.SAVE_BOT_CONFIG,
-    async (event, input: import('@gamma/shared').SlackBotConfigInput) => {
+    async (event, input: import('@carpus/shared').SlackBotConfigInput) => {
       assertMainSettingsRenderer(event.sender.id)
       const saved = saveSlackBotConfig(input)
       if (saved.enabled && saved.botToken && saved.appToken) {
@@ -5459,7 +5459,7 @@ export function registerIpcHandlers(): void {
       const sourceInputId = typeof input?.sourceInputId === 'string' && input.sourceInputId.length > 0 && input.sourceInputId.length <= 512
         ? input.sourceInputId
         : undefined
-      toggleVoiceDictationWindow({ targetIsGamma: !!sourceWindow, sourceInputId })
+      toggleVoiceDictationWindow({ targetIsCarpus: !!sourceWindow, sourceInputId })
     }
   )
 
@@ -5638,7 +5638,7 @@ export function registerIpcHandlers(): void {
   // ===== 定时任务（Automation）=====
 
   // 渲染进程可能被注入内容污染（XSS via markdown / MCP tool output），主进程必须自己校验入参,
-  // 否则 NaN / -Infinity / 越界值会污染 ~/.gamma/automations.json，无法回滚。
+  // 否则 NaN / -Infinity / 越界值会污染 ~/.carpus/automations.json，无法回滚。
   const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.length > 0
   const isNonBlankString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
   const isFiniteInt = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v)

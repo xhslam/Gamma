@@ -18,19 +18,19 @@
 }
 
 /* 间距留给会话内容，画布从面板的实际边缘开始绘制。 */
-.gamma-workbench-frame .gamma-panel[data-panel="content"]:has(.code-field-background) {
+.carpus-workbench-frame .carpus-panel[data-panel="content"]:has(.code-field-background) {
   padding: 0;
 }
-.gamma-workbench-frame .gamma-panel[data-panel="content"] [data-agent-conversation-root]:has(> .code-field-background) {
+.carpus-workbench-frame .carpus-panel[data-panel="content"] [data-agent-conversation-root]:has(> .code-field-background) {
   padding: 0 var(--panel-padding) var(--panel-padding);
 }
 
 /* 刺猬常驻输入框上沿，不依赖空白会话背景，也不拦截输入。 */
-[data-agent-conversation-root] .gamma-composer {
+[data-agent-conversation-root] .carpus-composer {
   position: relative;
 }
 
-[data-agent-conversation-root] .gamma-composer::after {
+[data-agent-conversation-root] .carpus-composer::after {
   content: '';
   position: absolute;
   right: 12px;
@@ -49,15 +49,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-agent-conversation-root] .gamma-composer::after {
+  [data-agent-conversation-root] .carpus-composer::after {
     animation: none;
   }
 }
 
-.dark:not([class*="theme-"]) .gamma-panel[data-panel="content"]:has(.code-field-background) {
+.dark:not([class*="theme-"]) .carpus-panel[data-panel="content"]:has(.code-field-background) {
   background-color: color-mix(in srgb, hsl(var(--content-area)) 70%, hsl(var(--palette-light-text-hsl)));
 }
 
-.dark:not([class*="theme-"]) [data-agent-conversation-root]:has(.code-field-background) .gamma-agent-topbar {
+.dark:not([class*="theme-"]) [data-agent-conversation-root]:has(.code-field-background) .carpus-agent-topbar {
   background-color: transparent;
 }

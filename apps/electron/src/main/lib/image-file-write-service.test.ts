@@ -9,7 +9,7 @@ const PNG_DATA_URL = `data:image/png;base64,${PNG_1X1}`
 
 let directory: string
 
-beforeEach(() => { directory = mkdtempSync(join(tmpdir(), 'gamma-image-write-')) })
+beforeEach(() => { directory = mkdtempSync(join(tmpdir(), 'carpus-image-write-')) })
 afterEach(() => { rmSync(directory, { recursive: true, force: true }) })
 
 describe('Given 已授权的真实图片路径', () => {

@@ -7,7 +7,7 @@
 
 import * as React from 'react'
 import { ExternalLink } from 'lucide-react'
-import type { FileAccessOptions } from '@gamma/shared'
+import type { FileAccessOptions } from '@carpus/shared'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useDefaultAppForFile } from '@/hooks/useDefaultAppForFile'
 import { getDefaultAppOpenLabel } from '@/lib/default-app-open-label'

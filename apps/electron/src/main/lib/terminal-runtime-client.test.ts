@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as path from 'node:path'
-import type { TerminalCreateInput, TerminalExitEvent, TerminalState } from '@gamma/shared'
+import type { TerminalCreateInput, TerminalExitEvent, TerminalState } from '@carpus/shared'
 import { loadIsolatedModule } from '../../test-utils/isolated-module'
 import { startUtilityProcessWithRetry } from './utility-process-startup'
 

@@ -6,7 +6,7 @@ import {
   canRestoreExplorationBranch,
   buildExplorationRestorePayload,
 } from './right-panel-exploration'
-import type { AgentSessionMeta } from '@gamma/shared'
+import type { AgentSessionMeta } from '@carpus/shared'
 import type { AgentExplorationBranchTab } from '@/atoms/agent-atoms'
 
 describe('右侧按需面板 - 动态调研分支派生与元数据契约', () => {

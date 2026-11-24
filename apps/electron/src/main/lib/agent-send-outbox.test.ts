@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentSendOutboxEntry } from '@gamma/shared'
+import type { AgentSendOutboxEntry } from '@carpus/shared'
 import { AgentSendOutbox, parseSendOutboxEntry } from './agent-send-outbox'
 
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 function fixture() {
-  const dir = mkdtempSync(join(tmpdir(), 'gamma-outbox-')); roots.push(dir)
+  const dir = mkdtempSync(join(tmpdir(), 'carpus-outbox-')); roots.push(dir)
   const resolvePath = (id: string) => join(dir, `${id}.json`)
   return { resolvePath, store: new AgentSendOutbox(resolvePath) }
 }

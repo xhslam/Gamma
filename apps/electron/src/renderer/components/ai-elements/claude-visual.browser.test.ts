@@ -5,7 +5,7 @@ import { createVisualRendererHarness } from '../../../test-utils/visual-renderer
 import type { VisualRendererHarness } from '../../../test-utils/visual-renderer'
 
 let renderer: VisualRendererHarness
-const artifacts = process.env.GAMMA_VISUAL_ARTIFACT_DIR
+const artifacts = process.env.CARPUS_VISUAL_ARTIFACT_DIR
 beforeAll(async () => {
   if (artifacts) await mkdir(artifacts, { recursive: true })
   renderer = await createVisualRendererHarness(`
@@ -19,24 +19,24 @@ beforeAll(async () => {
     let disabledClicks = 0;
     flushSync(() => createRoot(document.getElementById('root')).render(
       React.createElement('main', {style:{padding:32,maxWidth:780}},
-        React.createElement('header', {className:'gamma-ui',style:{display:'flex',alignItems:'center',gap:16,marginBottom:32}},
-          React.createElement('h1', {className:'font-semibold',style:{fontSize:24}}, 'Gamma · 当前会话'),
+        React.createElement('header', {className:'carpus-ui',style:{display:'flex',alignItems:'center',gap:16,marginBottom:32}},
+          React.createElement('h1', {className:'font-semibold',style:{fontSize:24}}, 'Carpus · 当前会话'),
           React.createElement('span', {id:'medium',className:'font-medium'}, '进行中的探索'),
           React.createElement('span', {id:'bold',className:'font-bold'}, '重点')),
         React.createElement('div', {className:'message-item is-user',style:{marginBottom:24}},
           React.createElement('div', {id:'bubble',className:'relative inline-block rounded-[10px] bg-primary/10 px-3.5 py-2.5'}, '中文与 English 消息')),
         React.createElement('div', {'data-input-mode':'agent'},
           React.createElement('div', {id:'composer',className:'rounded-[17px] border-[0.5px] border-border',style:{padding:16}},
-            React.createElement('textarea', {id:'editor','aria-label':'输入消息',placeholder:'向 Gamma 提问…',style:{display:'block',width:'100%',height:80,background:'transparent',outline:'none',resize:'none'}}),
+            React.createElement('textarea', {id:'editor','aria-label':'输入消息',placeholder:'向 Carpus 提问…',style:{display:'block',width:'100%',height:80,background:'transparent',outline:'none',resize:'none'}}),
             React.createElement('div', {style:{display:'flex',justifyContent:'end',gap:8}},
               React.createElement(Button, {id:'disabled',variant:'ghost',disabled:true,className:inputToolbarDisabledButtonClass,onClick:()=>disabledClicks++}, '×'),
               React.createElement(Button, {id:'send',variant:'ghost',className:inputToolbarSendButtonClass}, '↑')))),
-        React.createElement('div', {className:'gamma-ui',style:{display:'flex',alignItems:'center',gap:8,marginTop:24}},
+        React.createElement('div', {className:'carpus-ui',style:{display:'flex',alignItems:'center',gap:8,marginTop:24}},
           React.createElement('span', {id:'count',className:'ui-numeric tabular-nums'}, '111'),
           React.createElement(Button, {id:'adjacent',variant:'outline'}, '详情')),
         React.createElement('pre', {id:'code',style:{fontFamily:'monospace',marginTop:24}}, 'const tokens = 12345'),
         React.createElement('article', {className:'prose dark:prose-invert'}, React.createElement('strong', {id:'markdown'}, '用户 Markdown 粗体')),
-        React.createElement('div', {id:'terminal',className:'xterm',style:{fontFamily:'monospace',fontWeight:600}}, '终端 $ echo Gamma'))));
+        React.createElement('div', {id:'terminal',className:'xterm',style:{fontFamily:'monospace',fontWeight:600}}, '终端 $ echo Carpus'))));
     window.disabledClicks = () => disabledClicks;
     window.setTheme = theme => { document.documentElement.className = theme; };
     window.visual = async () => {
@@ -176,7 +176,7 @@ describe('Given 真实 Chromium 渲染的会话 UI', () => {
         }
         palettes.push(colors);
       }
-      const floating = document.createElement('div'); floating.className = 'gamma-panel ui-floating-surface rounded-dialog'; floating.dataset.panel='floating'; document.body.append(floating);
+      const floating = document.createElement('div'); floating.className = 'carpus-panel ui-floating-surface rounded-dialog'; floating.dataset.panel='floating'; document.body.append(floating);
       return { palettes, border:getComputedStyle(floating).borderTopWidth, shadow:getComputedStyle(floating).boxShadow };
     `, { dpr: 2 })
     expect(result.palettes).toEqual([

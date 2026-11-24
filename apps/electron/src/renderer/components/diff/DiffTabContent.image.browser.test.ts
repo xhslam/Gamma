@@ -67,14 +67,14 @@ beforeAll(async () => {
       const path = require('node:path');
       const services = { exports: {} };
       new Function('require', 'module', 'exports', ${JSON.stringify(imageServices)})(require, services, services.exports);
-      const { registerGammaFilePath, handleGammaFileRequest, readImageForEdit, writeRasterImageFile } = services.exports;
-      protocol.registerSchemesAsPrivileged([{ scheme: 'gamma-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
+      const { registerCarpusFilePath, handleCarpusFileRequest, readImageForEdit, writeRasterImageFile } = services.exports;
+      protocol.registerSchemesAsPrivileged([{ scheme: 'carpus-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
       const fixturePath = () => path.join(app.getPath('userData'), 'reference.png');
       ipcMain.handle('test:image-url', () => {
         const file = fixturePath();
         fs.mkdirSync(path.dirname(file), { recursive: true });
         if (!fs.existsSync(file)) fs.writeFileSync(file, Buffer.from(${JSON.stringify(png)}, 'base64'));
-        return { url: registerGammaFilePath(file), resolvedPath: file };
+        return { url: registerCarpusFilePath(file), resolvedPath: file };
       });
       ipcMain.handle('test:read-image', (_event, file) => readImageForEdit(file));
       ipcMain.handle('test:write-image', (_event, file, dataUrl) => writeRasterImageFile(file, dataUrl));
@@ -82,7 +82,7 @@ beforeAll(async () => {
         event.sender.sendInputEvent({type,x:Math.round(x),y:Math.round(y),button:'left',clickCount:1});
       });
     `,
-    mainProcessReady: `protocol.handle('gamma-file', handleGammaFileRequest);`,
+    mainProcessReady: `protocol.handle('carpus-file', handleCarpusFileRequest);`,
     preloadSource: `
       const { contextBridge, ipcRenderer } = require('electron');
       let imageWriteAttempts=0;

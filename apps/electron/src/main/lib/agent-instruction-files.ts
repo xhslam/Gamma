@@ -1,8 +1,8 @@
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import type { SkillFileContent } from '@gamma/shared'
+import type { SkillFileContent } from '@carpus/shared'
 import { getConfigDir } from './config-paths'
-import type { GammaProjectInstructionFile } from './adapters/pi-resource-loader-overrides'
+import type { CarpusProjectInstructionFile } from './adapters/pi-resource-loader-overrides'
 
 // 沿用工作区 AGENTS.md 的文件大小限制。
 const AGENTS_FILE_SIZE_LIMIT = 10 * 1024 * 1024
@@ -41,7 +41,7 @@ export function readAgentsMdFile(path: string): SkillFileContent {
 export function readGlobalAgentsInstruction(
   path?: string,
   warn: (message: string) => void = console.warn,
-): GammaProjectInstructionFile | undefined {
+): CarpusProjectInstructionFile | undefined {
   try {
     path ??= getGlobalAgentsMdPath()
     const file = readAgentsMdFile(path)

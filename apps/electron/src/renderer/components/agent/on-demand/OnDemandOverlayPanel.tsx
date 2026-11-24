@@ -67,13 +67,13 @@ export function OnDemandOverlayPanel({ sessionId, activeOverlay, open }: OnDeman
       data-panel="quick-sidebar"
       // 文件与改动使用原可用高度的一半，保持顶部对齐；调研沿用全高。
       style={{ height: activeOverlay === 'files' || activeOverlay === 'changes' ? 'calc(50% - 0.75rem)' : 'calc(100% - 1.5rem)' }}
-      className="gamma-panel gamma-on-demand-panel my-3 flex min-h-0 min-w-0 w-full shrink-0 flex-col overflow-hidden text-foreground outline-none"
+      className="carpus-panel carpus-on-demand-panel my-3 flex min-h-0 min-w-0 w-full shrink-0 flex-col overflow-hidden text-foreground outline-none"
     >
       <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-2">
         <span className="text-sm font-medium text-muted-foreground">{labels[activeOverlay]}</span>
         <Button data-icon-button="true" data-panel-close="" type="button" variant="ghost" size="icon" className="size-7" aria-label="关闭快捷侧栏" onClick={() => closeOverlay()}><X className="size-4" /></Button>
       </header>
-      <div key={activeOverlay} className="gamma-on-demand-content flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div key={activeOverlay} className="carpus-on-demand-content flex min-h-0 flex-1 flex-col overflow-hidden">
         {activeOverlay === 'files' && <OnDemandFilesContent sessionId={sessionId} onItemSelect={handleItemSelect} />}
         {activeOverlay === 'changes' && <OnDemandChangesContent sessionId={sessionId} onItemSelect={handleItemSelect} />}
         {activeOverlay === 'exploration' && <OnDemandExplorationContent sessionId={sessionId} onItemSelect={handleItemSelect} />}

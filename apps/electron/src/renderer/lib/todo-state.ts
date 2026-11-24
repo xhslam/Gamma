@@ -1,4 +1,4 @@
-import type { Todo } from '@gamma/shared'
+import type { Todo } from '@carpus/shared'
 
 function isSameTodo(current: Todo, incoming: Todo): boolean {
   if (current === incoming) return true

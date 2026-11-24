@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentSendOutboxEntry } from '@gamma/shared'
+import type { AgentSendOutboxEntry } from '@carpus/shared'
 import { AgentSendOutbox } from './agent-send-outbox'
 import { AgentSendOutboxRecovery } from './agent-send-outbox-recovery'
 import { prepareOutboxRetryInput } from './agent-send-outbox-retry-policy'
@@ -10,7 +10,7 @@ import { prepareOutboxRetryInput } from './agent-send-outbox-retry-policy'
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 function fixture() {
-  const dir = mkdtempSync(join(tmpdir(), 'gamma-outbox-retry-')); roots.push(dir)
+  const dir = mkdtempSync(join(tmpdir(), 'carpus-outbox-retry-')); roots.push(dir)
   const entry: AgentSendOutboxEntry = {
     sessionId: 'session', id: 'message', createdAt: 1, status: 'failed',
     draft: { text: '旧正文', html: '<p>旧正文</p>', attachments: [] },

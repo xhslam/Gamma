@@ -38,7 +38,7 @@ beforeAll(async () => {
 
 afterAll(async () => { await renderer?.dispose() })
 
-describe('Given Gamma 外观设置', () => {
+describe('Given Carpus 外观设置', () => {
   test('When 选择自定义并编辑颜色 Then 保存三项颜色、实时应用令牌且非法输入不落盘', async () => {
     const result = await renderer.run<{
       options: string[]

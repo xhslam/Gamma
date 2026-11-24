@@ -2,8 +2,8 @@ import * as React from 'react'
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { atomFamily } from 'jotai-family'
 import { ArrowLeft, ArrowUpRight, ChartNoAxesCombined, Download, Film, FolderOpen, Grid2X2, Layers, List, Loader2, Palette, Paperclip, Presentation, RefreshCw, Search, SquarePen } from 'lucide-react'
-import type { DesignArtifact, DesignArtifactKind, DesignBundleStatus, DesignWorkbenchOpenResult } from '@gamma/shared'
-import { DESIGN_SOURCE_URL } from '@gamma/shared'
+import type { DesignArtifact, DesignArtifactKind, DesignBundleStatus, DesignWorkbenchOpenResult } from '@carpus/shared'
+import { DESIGN_SOURCE_URL } from '@carpus/shared'
 import {
   agentSessionsAtom, agentWorkspacesAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom,
   agentDiffPanelTabAtom, agentSidePanelOpenAtomFamily, getBrowserSidePanelTab,
@@ -18,7 +18,7 @@ import { useCreateSession } from '@/hooks/useCreateSession'
 import { cn } from '@/lib/utils'
 import { DESIGN_ARTIFACT_TYPES, filterDesignArtifacts } from './design-workbench-model'
 import type { DesignSort } from './design-workbench-model'
-import { readGammaDesignTheme, useDesignEditorTheme } from './design-theme'
+import { readCarpusDesignTheme, useDesignEditorTheme } from './design-theme'
 
 const AgentView = React.lazy(() => import('@/components/agent/AgentView').then((module) => ({ default: module.AgentView })))
 const activeDesignAtomFamily = atomFamily((_workspaceId: string) => atom<DesignWorkbenchOpenResult | null>(null))
@@ -76,7 +76,7 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
   React.useEffect(() => { void refresh() }, [refresh])
 
   const open = async (artifact: DesignArtifact): Promise<void> => {
-    const result = await window.electronAPI.openDesignArtifact(workspaceId, artifact.id, readGammaDesignTheme())
+    const result = await window.electronAPI.openDesignArtifact(workspaceId, artifact.id, readCarpusDesignTheme())
     if (!mounted.current) return
     store.set(agentSessionsAtom, (sessions) => sessions.some((item) => item.id === result.session.id)
       ? sessions.map((item) => item.id === result.session.id ? result.session : item) : [result.session, ...sessions])
@@ -156,7 +156,7 @@ function DesignProject({ workspaceId, workspaceName, sourceSessionId, embedded }
           <a href={DESIGN_SOURCE_URL} target="_blank" rel="noreferrer" aria-label="baoyu-design 源码" className="rounded p-2 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><ArrowUpRight size={15} /></a>
           <Button variant="ghost" size="icon" aria-label="刷新作品库" disabled={loading || busy} onClick={() => { void refresh() }}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></Button>
         </header>
-        {!loading && status && !status.installed && <p role="status" className="mb-4 text-xs text-destructive">内置设计编辑器资源不完整，请检查 Gamma 构建产物。</p>}
+        {!loading && status && !status.installed && <p role="status" className="mb-4 text-xs text-destructive">内置设计编辑器资源不完整，请检查 Carpus 构建产物。</p>}
         {status?.installed && !status.supportsSqlite && <p role="status" className="mb-4 text-xs text-warning">当前 Node 环境不支持 SQLite，看板和动画编辑器暂不可用。</p>}
         {error && <p role="alert" className="mb-4 break-words text-xs leading-relaxed text-destructive">{error}</p>}
         <div className="mb-8 grid grid-cols-2 gap-2">{DESIGN_ARTIFACT_TYPES.map((type) => {

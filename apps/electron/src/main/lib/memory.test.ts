@@ -7,8 +7,8 @@ import { createMemoryExtension, version } from './memory'
 import { getMemoryDir, setConfigHomeForTest } from './config-paths'
 import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 
-// 全局沙箱目录：确保整个测试文件生命周期内绝不接触 ~/.gamma/memory/
-const globalTestSandbox = mkdtempSync(join(tmpdir(), 'gamma-memory-global-sandbox-'))
+// 全局沙箱目录：确保整个测试文件生命周期内绝不接触 ~/.carpus/memory/
+const globalTestSandbox = mkdtempSync(join(tmpdir(), 'carpus-memory-global-sandbox-'))
 const prevConfigHome = setConfigHomeForTest(globalTestSandbox)
 
 afterAll(() => {
@@ -28,7 +28,7 @@ function createSseFrame(delta: Record<string, unknown>, finish: string | null = 
 
 describe('长期记忆扩展 (createMemoryExtension)', () => {
   test('When 目录为空 Then memory_list 返回 (empty)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-unit-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-unit-'))
     const memoryDir = join(root, 'memory')
     try {
       const ext = createMemoryExtension({ root: memoryDir })
@@ -49,7 +49,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 写入新记忆文件并读取 Then 正确保存并在更新时核对版本号', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-unit-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-unit-'))
     const memoryDir = join(root, 'memory')
     try {
       const ext = createMemoryExtension({ root: memoryDir })
@@ -123,7 +123,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 检查工具注册 Then 七个工具含检索与删除全部注册', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-reg-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-reg-'))
     try {
       const ext = createMemoryExtension({ root })
       const registeredTools: string[] = []
@@ -148,7 +148,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 路径穿越 Then 抛出安全异常并拒绝访问', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-sec-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-sec-'))
     try {
       const ext = createMemoryExtension({ root })
       const tools: Record<string, any> = {}
@@ -176,7 +176,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 版本冲突 Then 抛错并返回当前内容', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-conflict-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-conflict-'))
     try {
       const ext = createMemoryExtension({ root })
       const tools: Record<string, any> = {}
@@ -216,7 +216,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When str_replace 匹配 0 次或多次 Then 明确抛错', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-replace-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-replace-'))
     try {
       const ext = createMemoryExtension({ root })
       const tools: Record<string, any> = {}
@@ -262,7 +262,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 同版本并发追加 Then 仅一笔成功，另一笔读取新版本后重试', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-concurrent-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-concurrent-'))
     try {
       const ext = createMemoryExtension({ root })
       const tools: Record<string, any> = {}
@@ -307,7 +307,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 每轮开始或压缩后 Then system始终包含稳定目录而不累加custom消息', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-compact-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-compact-'))
     try {
       const handlers = new Map<string, (event: unknown, ctx: unknown) => Promise<{ systemPrompt?: string }> | undefined>()
       const ext = createMemoryExtension({ root })
@@ -319,12 +319,12 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
       const second = await before({ messageType: 'user', prompt: '你好', systemPrompt: 'BASE' }, fakeCtx)
       expect(first?.systemPrompt).toContain('<memory_listing>')
       expect(first?.systemPrompt).toBe(second?.systemPrompt)
-      expect(first?.systemPrompt?.match(/<gamma_memory_context>/g)).toHaveLength(1)
+      expect(first?.systemPrompt?.match(/<carpus_memory_context>/g)).toHaveLength(1)
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
   test('When memoryEnabled 默认为关闭 Then 只有显式传 true 才挂载长期记忆扩展', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-mount-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-mount-'))
     let lastTools: string[] = []
     const server = Bun.serve({
       hostname: '127.0.0.1',
@@ -383,7 +383,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
   })
 
   test('When 指定 userId Then 记忆存储在按用户隔离的子目录', () => {
-    const sandbox = mkdtempSync(join(tmpdir(), 'gamma-memory-sandbox-'))
+    const sandbox = mkdtempSync(join(tmpdir(), 'carpus-memory-sandbox-'))
     const prev = setConfigHomeForTest(sandbox)
     try {
       const dirA = getMemoryDir('user-alice')
@@ -402,7 +402,7 @@ describe('长期记忆扩展 (createMemoryExtension)', () => {
 
 describe('长期记忆接入冒烟测试 (Smoke Test)', () => {
   test('When 发一句"我叫落花流水" Then memory/profile.md 被写入，新开 session 第一轮上下文包含该记忆', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-memory-smoke-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-memory-smoke-'))
     const memoryRoot = join(root, 'memory')
     let requestIndex = 0
     const receivedRequests: Array<{ messages: any[] }> = []

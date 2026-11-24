@@ -33,7 +33,7 @@ export function artifactName(version: string, target: ReleaseTarget, extension: 
   // electron-builder 对 Linux 安装包使用平台惯例架构名。
   const suffix = target === 'linux-x64' && extension === 'AppImage' ? 'linux-x86_64'
     : target === 'linux-x64' && extension === 'deb' ? 'linux-amd64' : target
-  return `Gamma-${version}-${suffix}.${extension}`
+  return `Carpus-${version}-${suffix}.${extension}`
 }
 
 function manifestName(target: ReleaseTarget): string {

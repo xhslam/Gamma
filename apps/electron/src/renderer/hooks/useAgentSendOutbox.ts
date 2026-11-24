@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { AgentSendOutboxEntry } from '@gamma/shared'
+import type { AgentSendOutboxEntry } from '@carpus/shared'
 
 /** 会话切换与异步读取用 generation 隔离，旧会话的快照不能显示在新输入框。 */
 export function useAgentSendOutbox(sessionId: string): {
@@ -26,7 +26,7 @@ export function useAgentSendOutbox(sessionId: string): {
     const stopStream = window.electronAPI.onAgentStreamEvent((event) => {
       if (event.sessionId !== sessionId) return
       if ((event.payload.kind === 'sdk_message' && event.payload.message.type === 'user')
-        || (event.payload.kind === 'gamma_event' && ['run_started', 'run_completed'].includes(event.payload.event.type))) void refresh()
+        || (event.payload.kind === 'carpus_event' && ['run_started', 'run_completed'].includes(event.payload.event.type))) void refresh()
     })
     const stopQueue = window.electronAPI.onAgentQueuedMessageStatus((event) => { if (event.sessionId === sessionId) void refresh() })
     const stopComplete = window.electronAPI.onAgentStreamComplete((event) => { if (event.sessionId === sessionId) void refresh() })

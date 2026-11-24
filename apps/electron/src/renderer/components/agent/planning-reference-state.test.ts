@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CalendarEvent, Todo } from '@gamma/shared'
+import type { CalendarEvent, Todo } from '@carpus/shared'
 import {
   buildPlanningReferenceItems,
   filterPlanningReferenceItems,

@@ -1,4 +1,4 @@
-import type { FilePreviewMetadata } from '@gamma/shared'
+import type { FilePreviewMetadata } from '@carpus/shared'
 
 /** 单份文件预览的已解析内容，按 session、路径、version 与解析范围缓存。 */
 export interface PreviewContentCacheEntry {

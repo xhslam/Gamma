@@ -3,7 +3,7 @@
  *
  * 负责渠道的 CRUD 操作、API Key 加密/解密、连接测试。
  * 使用 Electron safeStorage 进行 API Key 加密（底层使用 OS 级加密）。
- * 数据持久化到 ~/.gamma/channels.json。
+ * 数据持久化到 ~/.carpus/channels.json。
  */
 
 import { readFileSync, existsSync } from 'node:fs'
@@ -26,7 +26,7 @@ import type {
   FetchModelsInput,
   FetchModelsResult,
   ProviderType,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import {
   extractZhipuCodingTeamApiToken,
   parseZhipuTeamCredentials,
@@ -40,7 +40,7 @@ import {
   parseXaiCredentials,
   serializeXaiCredentials,
   isXaiCredentialExpired,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { refreshCodexOAuth } from './codex-oauth-service'
 import { refreshGithubCopilotOAuth } from './github-copilot-oauth-service'
 import { refreshXaiOAuth } from './xai-oauth-service'
@@ -51,13 +51,13 @@ import { listCodexModels, listGithubCopilotModels, listXaiModels } from './adapt
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
 import {
-  getGammaUserAgent,
+  getCarpusUserAgent,
   migrateCompatibleChannelBaseUrl,
   normalizeBaseUrl,
   resolveAnthropicMessagesUrl,
   resolveAnthropicModelsUrl,
   resolveOpenAIModelsUrl,
-} from '@gamma/core'
+} from '@carpus/core'
 import { normalizeHttpResponse, normalizeRequestError } from './channel-test-error'
 import { writeJsonFileAtomic } from './safe-file'
 import pkg from '../../../package.json' with { type: 'json' }
@@ -683,7 +683,7 @@ export function decryptApiKey(channelId: string): string {
  */
 const inflightCodexRefresh = new Map<string, Promise<CodexOAuthCredentials>>()
 
-/** 保存 Pi 或 Gamma 刷新后的完整 Codex OAuth 凭据。 */
+/** 保存 Pi 或 Carpus 刷新后的完整 Codex OAuth 凭据。 */
 export function persistCodexOAuthCredentials(channelId: string, credentials: CodexOAuthCredentials): void {
   const channel = getChannelById(channelId)
   if (!channel || channel.provider !== 'openai-codex') {
@@ -796,7 +796,7 @@ export async function resolveGithubCopilotOAuthCredentials(channelId: string): P
   return refreshPromise
 }
 
-/** 保存 Pi 或 Gamma 刷新后的完整 xAI OAuth 凭据。 */
+/** 保存 Pi 或 Carpus 刷新后的完整 xAI OAuth 凭据。 */
 export function persistXaiOAuthCredentials(channelId: string, credentials: XaiOAuthCredentials): void {
   const channel = getChannelById(channelId)
   if (!channel || channel.provider !== 'xai') {
@@ -966,10 +966,10 @@ async function testAnthropicCompatible(
   if (provider === 'kimi-coding' || provider === 'zhipu-coding' || provider === 'zhipu-coding-team') {
     const authToken = provider === 'zhipu-coding-team' ? extractZhipuCodingTeamApiToken(apiKey) : apiKey
     headers.Authorization = `Bearer ${authToken}`
-    headers['User-Agent'] = getGammaUserAgent(pkg.version, provider)
+    headers['User-Agent'] = getCarpusUserAgent(pkg.version, provider)
   } else if (provider === 'xiaomi-token-plan') {
     headers.Authorization = `Bearer ${apiKey}`
-    headers['User-Agent'] = getGammaUserAgent(pkg.version, provider)
+    headers['User-Agent'] = getCarpusUserAgent(pkg.version, provider)
   } else if (provider === 'minimax' || provider === 'qwen-anthropic') {
     headers.Authorization = `Bearer ${apiKey}`
   } else {
@@ -1065,7 +1065,7 @@ async function testXiaomiMessages(
   }
   if (provider === 'xiaomi-token-plan') {
     headers.Authorization = `Bearer ${apiKey}`
-    headers['User-Agent'] = getGammaUserAgent(pkg.version, provider)
+    headers['User-Agent'] = getCarpusUserAgent(pkg.version, provider)
   } else {
     headers['api-key'] = apiKey
   }
@@ -1101,7 +1101,7 @@ async function testQwenTokenPlanMessages(
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
-      'User-Agent': getGammaUserAgent(pkg.version, "qwen-token-plan"),
+      'User-Agent': getCarpusUserAgent(pkg.version, "qwen-token-plan"),
     },
     body: JSON.stringify({
       model: modelId,
@@ -1198,7 +1198,7 @@ async function queryCodexPlanQuota(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     Accept: 'application/json',
-    'User-Agent': getGammaUserAgent(pkg.version),
+    'User-Agent': getCarpusUserAgent(pkg.version),
   }
   if (activeCredentials.accountId) {
     headers['ChatGPT-Account-Id'] = activeCredentials.accountId
@@ -1233,7 +1233,7 @@ async function queryKimiPlanQuota(apiKey: string, proxyUrl?: string): Promise<Ch
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': getGammaUserAgent(pkg.version, "kimi-coding"),
+      'User-Agent': getCarpusUserAgent(pkg.version, "kimi-coding"),
       Authorization: `Bearer ${apiKey}`,
     },
   }))
@@ -1323,7 +1323,7 @@ async function queryMiniMaxPlanQuota(apiKey: string, baseUrl: string, proxyUrl?:
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'User-Agent': getGammaUserAgent(pkg.version),
+      'User-Agent': getCarpusUserAgent(pkg.version),
     },
   }))
   const responseText = await response.text()
@@ -1418,7 +1418,7 @@ async function queryDeepSeekBalance(apiKey: string, baseUrl: string, proxyUrl?: 
     headers: {
       Authorization: `Bearer ${apiKey}`,
       Accept: 'application/json',
-      'User-Agent': getGammaUserAgent(pkg.version),
+      'User-Agent': getCarpusUserAgent(pkg.version),
     },
   }))
   const responseText = await response.text()
@@ -1552,7 +1552,7 @@ async function fetchZhipuQuota(
     headers: {
       Authorization: apiKey,
       'Content-Type': 'application/json',
-      'User-Agent': getGammaUserAgent(pkg.version, "zhipu-coding"),
+      'User-Agent': getCarpusUserAgent(pkg.version, "zhipu-coding"),
     },
   }))
   const responseText = await response.text()
@@ -1568,7 +1568,7 @@ async function fetchZhipuQuota(
 }
 
 async function fetchZhipuTeamQuota(
-  credentials: import('@gamma/shared').ZhipuTeamCredentials,
+  credentials: import('@carpus/shared').ZhipuTeamCredentials,
   proxyUrl?: string,
 ): Promise<ZhipuQuotaResponse | { error: string }> {
   const fetchFn = getFetchFn(proxyUrl)
@@ -1578,7 +1578,7 @@ async function fetchZhipuTeamQuota(
     'Content-Type': 'application/json',
     'set-language': 'zh',
     Referer: 'https://bigmodel.cn/coding-plan/team/usage-stats',
-    'User-Agent': getGammaUserAgent(pkg.version, "zhipu-coding-team"),
+    'User-Agent': getCarpusUserAgent(pkg.version, "zhipu-coding-team"),
   }
   if (credentials.organization) {
     headers['bigmodel-organization'] = credentials.organization
@@ -2086,7 +2086,7 @@ interface AnthropicModelItem {
  *
  * DeepSeek / Kimi 等内置供应商会按协议根路径补全模型端点。
  * Anthropic 兼容格式使用完整请求地址，不再推导模型端点。
- * Coding Plan 渠道必须发送 Gamma User-Agent。
+ * Coding Plan 渠道必须发送 Carpus User-Agent。
  * 文档: https://docs.anthropic.com/en/api/models-list
  */
 async function fetchAnthropicCompatibleModels(
@@ -2104,10 +2104,10 @@ async function fetchAnthropicCompatibleModels(
   if (provider === 'kimi-coding' || provider === 'zhipu-coding' || provider === 'zhipu-coding-team') {
     const authToken = provider === 'zhipu-coding-team' ? extractZhipuCodingTeamApiToken(apiKey) : apiKey
     headers.Authorization = `Bearer ${authToken}`
-    headers['User-Agent'] = getGammaUserAgent(pkg.version, provider)
+    headers['User-Agent'] = getCarpusUserAgent(pkg.version, provider)
   } else if (provider === 'xiaomi-token-plan') {
     headers.Authorization = `Bearer ${apiKey}`
-    headers['User-Agent'] = getGammaUserAgent(pkg.version, provider)
+    headers['User-Agent'] = getCarpusUserAgent(pkg.version, provider)
   } else if (provider === 'minimax' || provider === 'qwen-anthropic') {
     headers.Authorization = `Bearer ${apiKey}`
   } else {

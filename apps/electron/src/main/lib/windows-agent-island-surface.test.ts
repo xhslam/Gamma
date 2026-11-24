@@ -7,7 +7,7 @@ import {
   type PhaseTransition,
   type SurfaceDeps,
 } from './windows-agent-island-surface'
-import type { AgentIslandPhase, AgentIslandInteractionKind, NativeAgentIslandSnapshot } from '@gamma/shared'
+import type { AgentIslandPhase, AgentIslandInteractionKind, NativeAgentIslandSnapshot } from '@carpus/shared'
 
 function makeSnapshot(
   sessions: Array<{

@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { buildSync } from 'esbuild'
-import { TERMINAL_WORKBENCH_IPC_CHANNELS } from '@gamma/shared'
+import { TERMINAL_WORKBENCH_IPC_CHANNELS } from '@carpus/shared'
 
 describe('终端工作台 IPC 的 CommonJS 产物', () => {
   test('打包后的模块能注册 IPC，并在新用户目录返回空会话列表', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-terminal-ipc-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-terminal-ipc-'))
     try {
       const { outputFiles: [bundle] } = buildSync({
         entryPoints: [join(import.meta.dir, 'terminal-workbench-ipc.ts')],

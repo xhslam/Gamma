@@ -1,7 +1,7 @@
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 import { nativeImage } from 'electron'
-import type { DesignArtifact } from '@gamma/shared'
+import type { DesignArtifact } from '@carpus/shared'
 import { getAgentWorkspace } from './agent-workspace-manager'
 import { getAgentWorkspacePath } from './config-paths'
 import { readJsonFileSafe, writeTextFileAtomic } from './safe-file'

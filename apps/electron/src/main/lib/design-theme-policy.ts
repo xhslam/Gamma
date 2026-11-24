@@ -1,4 +1,4 @@
-import type { DesignThemeSnapshot } from '@gamma/shared'
+import type { DesignThemeSnapshot } from '@carpus/shared'
 import { parseDesignEditorScope } from './design-browser-policy'
 
 const COLORS = ['background', 'panel', 'inset', 'text', 'secondary', 'tertiary', 'border', 'accent', 'accentText', 'danger', 'ring'] as const
@@ -58,5 +58,5 @@ export function buildDesignThemeCss(input: unknown): string {
     '--cds-radius': `${t.radius}px`, '--cds-shadow-sm': 'none', '--cds-shadow-md': 'none',
     '--cds-shadow-lg': 'none', '--cds-shadow-popover': `0 0 0 1px ${t.border}`,
   }
-  return `/* Gamma design chrome only; never persist into artwork. */\n:root.cds-root, :root.cds-root .cds-root {\n${Object.entries(vars).map(([key, value]) => `${key}: ${value} !important;`).join('\n')}\n}`
+  return `/* Carpus design chrome only; never persist into artwork. */\n:root.cds-root, :root.cds-root .cds-root {\n${Object.entries(vars).map(([key, value]) => `${key}: ${value} !important;`).join('\n')}\n}`
 }

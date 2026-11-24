@@ -1,5 +1,5 @@
 /* 目录行保留原图形宽度，以独立原生button提供键盘入口，不嵌套行尾按钮。 */
-.gamma-disclosure-button {
+.carpus-disclosure-button {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -12,7 +12,7 @@
   color: inherit;
 }
 /* 内容折叠图形固定占位。状态旋转与普通操作图标的微动互相独立。 */
-:root .gamma-disclosure-indicator[data-disclosure-chevron] {
+:root .carpus-disclosure-indicator[data-disclosure-chevron] {
   flex: 0 0 var(--disclosure-size, 14px);
   width: var(--disclosure-size, 14px);
   height: var(--disclosure-size, 14px);
@@ -21,16 +21,16 @@
   transform-origin: center;
   transition: opacity 150ms ease-out, transform 150ms ease-out;
 }
-:root [data-disclosure-trigger]:is(:hover, :focus-visible, :focus-within, [aria-selected="true"]) .gamma-disclosure-indicator[data-disclosure-chevron],
-:root [data-disclosure-group]:is(:hover, :focus-within) .gamma-disclosure-indicator[data-disclosure-chevron] {
+:root [data-disclosure-trigger]:is(:hover, :focus-visible, :focus-within, [aria-selected="true"]) .carpus-disclosure-indicator[data-disclosure-chevron],
+:root [data-disclosure-group]:is(:hover, :focus-within) .carpus-disclosure-indicator[data-disclosure-chevron] {
   opacity: 1;
 }
-:root .gamma-disclosure-indicator[data-disclosure-chevron][data-expanded="true"],
-:root [data-disclosure-trigger]:is([aria-expanded="true"], [data-state="open"]) .gamma-disclosure-indicator[data-disclosure-chevron]:not([data-expanded]) {
+:root .carpus-disclosure-indicator[data-disclosure-chevron][data-expanded="true"],
+:root [data-disclosure-trigger]:is([aria-expanded="true"], [data-state="open"]) .carpus-disclosure-indicator[data-disclosure-chevron]:not([data-expanded]) {
   opacity: 1;
   transform: rotate(90deg);
 }
-:root [data-disclosure-trigger]:not(.gamma-ui):focus-visible {
+:root [data-disclosure-trigger]:not(.carpus-ui):focus-visible {
   outline: 1px solid hsl(var(--ring));
   outline-offset: -2px;
 }
@@ -53,20 +53,20 @@
   outline: 1px solid hsl(var(--ring));
   outline-offset: 2px;
 }
-:root [data-icon-button="true"] > svg:not([class*="animate-"], .gamma-disclosure-indicator, .process-plan-circle, [data-icon-motion="none"]) {
+:root [data-icon-button="true"] > svg:not([class*="animate-"], .carpus-disclosure-indicator, .process-plan-circle, [data-icon-motion="none"]) {
   translate: 0 0;
   transition: translate 180ms ease-out, transform 150ms ease-out;
 }
 @media (hover: hover) and (pointer: fine) {
-  :root [data-icon-button="true"]:not(:disabled, [aria-disabled="true"], [data-disabled]):hover > svg:not([class*="animate-"], .gamma-disclosure-indicator, .process-plan-circle, [data-icon-motion="none"]) {
+  :root [data-icon-button="true"]:not(:disabled, [aria-disabled="true"], [data-disabled]):hover > svg:not([class*="animate-"], .carpus-disclosure-indicator, .process-plan-circle, [data-icon-motion="none"]) {
     translate: 0 -1px;
   }
 }
 @media (hover: none), (pointer: coarse) {
-  :root .gamma-disclosure-indicator[data-disclosure-chevron] { opacity: 1; }
+  :root .carpus-disclosure-indicator[data-disclosure-chevron] { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root .gamma-disclosure-indicator[data-disclosure-chevron],
+  :root .carpus-disclosure-indicator[data-disclosure-chevron],
   :root [data-icon-button="true"],
   :root [data-icon-button="true"] > svg {
     transition: none !important;

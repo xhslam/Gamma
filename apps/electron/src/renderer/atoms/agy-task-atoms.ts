@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { AgyActivityEvent, AgyTask, AgyTaskUpdate } from '@gamma/shared'
+import type { AgyActivityEvent, AgyTask, AgyTaskUpdate } from '@carpus/shared'
 
 /** 每个已观察任务的时间线最多保留 2000 条；完整记录仍由主进程分页提供。 */
 export const AGY_EVENT_LIMIT = 2000

@@ -1,5 +1,5 @@
 import type { Agent, AgentMessage, AgentToolResult, StreamFn } from '@earendil-works/pi-agent-core'
-import type { ComputerPrivateObservation } from '@gamma/shared'
+import type { ComputerPrivateObservation } from '@carpus/shared'
 import { getComputerPausedToolReason } from '../computer-pause'
 
 export function computerPermissionInterruption(toolName: string, message: string): AgentToolResult<unknown> | undefined {

@@ -9,7 +9,7 @@ import { Sparkles, RefreshCw, ShieldCheck, ArrowDownToLine } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { SkillMeta } from '@gamma/shared'
+import type { SkillMeta } from '@carpus/shared'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 interface SkillCardProps {
@@ -69,7 +69,7 @@ export function SkillCard({ skill, isBuiltin, updating, onOpen, onToggle, onUpda
       <div className="mt-auto flex items-center gap-2">
         {isBuiltin ? (
           <span className="flex items-center gap-1 rounded-md bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info dark:text-info">
-            <ShieldCheck size={12} /> GAMMA 内置
+            <ShieldCheck size={12} /> CARPUS 内置
           </span>
         ) : skill.importSource ? (
           <FadeTitle className="truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">

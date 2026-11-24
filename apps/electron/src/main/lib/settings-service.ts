@@ -2,7 +2,7 @@
  * 应用设置服务
  *
  * 管理应用设置（主题模式等）的读写。
- * 存储在 ~/.gamma/settings.json
+ * 存储在 ~/.carpus/settings.json
  */
 
 import { readFileSync, existsSync } from 'node:fs'
@@ -11,7 +11,7 @@ import { writeJsonFileAtomic } from './safe-file'
 import { normalizeAppIconVariant } from '../../types/app-icons'
 import { DEFAULT_CUSTOM_THEME, DEFAULT_THEME_MODE, normalizeProductivityToolsSettings, normalizeThemeAppearance, normalizeWorkbenchDensity } from '../../types'
 import type { AgentIslandSettings, AppSettings, UpdateAppSettings } from '../../types'
-import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@gamma/shared'
+import { getTerminalProfilesForPlatform, isTerminalProfile, normalizeMarkdownEditorPreferences, mergeMarkdownEditorPreferences } from '@carpus/shared'
 
 function sanitizeAgentIslandSettings(input: unknown): AgentIslandSettings | undefined {
   if (!input || typeof input !== 'object') return undefined

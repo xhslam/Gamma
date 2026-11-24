@@ -42,7 +42,7 @@ interface UpdaterAPI {
   revealDownloadedUpdate: () => Promise<boolean>
 }
 
-interface GammaPerformanceDiagnostics {
+interface CarpusPerformanceDiagnostics {
   snapshot: () => import('./lib/performance-monitor').PerformanceSnapshot
   clear: () => void
 }
@@ -52,6 +52,6 @@ interface GammaPerformanceDiagnostics {
 interface Window {
   __pendingAttachmentData?: Map<string, string>
   __pendingAgentFileData?: Map<string, string>
-  /** 仅在 ?perf=1 或 gamma-performance-debug=1 时安装的性能诊断接口。 */
-  __gammaPerformance?: GammaPerformanceDiagnostics
+  /** 仅在 ?perf=1 或 carpus-performance-debug=1 时安装的性能诊断接口。 */
+  __carpusPerformance?: CarpusPerformanceDiagnostics
 }

@@ -20,7 +20,7 @@ const pristineContext = `    // "stream ended without ..." and "Anthropic stream
 
 describe('Given 冻结锁文件中的 Pi 重试补丁', () => {
   test('When 在干净的 1.3.0 原始上下文应用 Then 成功保留上游 HTTP/2 处理和新增匹配', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-pi-patch-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-pi-patch-'))
     try {
       mkdirSync(join(root, 'dist', 'utils'), { recursive: true })
       const file = join(root, 'dist', 'utils', 'retry.js')

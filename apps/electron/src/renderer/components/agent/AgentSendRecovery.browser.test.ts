@@ -2,7 +2,7 @@ import { build } from 'esbuild'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElectronRendererHarness } from '../../../test-utils/electron-renderer'
 import type { ElectronRendererHarness } from '../../../test-utils/electron-renderer'
-import type { AgentSendOutboxEntry } from '@gamma/shared'
+import type { AgentSendOutboxEntry } from '@carpus/shared'
 import { parseSendOutboxEntry } from '../../../main/lib/agent-send-outbox'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 let renderer: ElectronRendererHarness
 let validationDirectory: string
 beforeAll(async () => {
-  validationDirectory = await mkdtemp(join(tmpdir(), 'gamma-send-ipc-'))
+  validationDirectory = await mkdtemp(join(tmpdir(), 'carpus-send-ipc-'))
   const validationModule = join(validationDirectory, 'outbox.cjs')
   // 使用既有 esbuild 独立编译真实生产模块，避免 Bun test 装载状态影响同进程 Bun.build。
   await build({
@@ -165,7 +165,7 @@ beforeAll(async () => {
             const input = calls[0];
             if (input.queueMessageId && options.background) for (const listener of listeners.stream) listener({ sessionId: input.sessionId, payload: { kind: 'sdk_message', message: { type: 'user', uuid: input.queueMessageId } } });
             else if (input.queueMessageId) for (const listener of listeners.queue) listener({ sessionId: input.sessionId, messageId: input.queueMessageId, status: 'started', startedAt: 100 });
-            else for (const listener of listeners.stream) listener({ sessionId: input.sessionId, payload: { kind: 'gamma_event', event: { type: 'run_started', startedAt: input.startedAt } } });
+            else for (const listener of listeners.stream) listener({ sessionId: input.sessionId, payload: { kind: 'carpus_event', event: { type: 'run_started', startedAt: input.startedAt } } });
           },
           switch: async () => { active = 'b'; store.set(atoms.currentAgentSessionIdAtom, 'b'); render(); await delay(60); },
           switchTo: async id => { active = id; store.set(atoms.currentAgentSessionIdAtom, id); render(); await delay(80); },
@@ -196,7 +196,7 @@ afterAll(async () => {
 
 describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
   for (const streaming of [false, true]) {
-    for (const text of ['普通文字消息', '/skill:gamma-coach', '#mcp:example', '&session:other-session', '&todo:todo-1', '&calendar_event:event-1']) {
+    for (const text of ['普通文字消息', '/skill:carpus-coach', '#mcp:example', '&session:other-session', '&todo:todo-1', '&calendar_event:event-1']) {
       test(`When ${streaming ? '工作中排队' : '空闲发送'} ${text} Then 真实主进程暂存校验接受同一份发送参数`, async () => {
         const snapshots = await renderer.run<AgentSendOutboxEntry[]>(`
           const api = window.sendRecovery, f = await api.mount({ streaming: ${streaming}, initialText: '' });
@@ -331,10 +331,10 @@ describe('Given 真实 AgentView 与可控的拒绝 IPC', () => {
         const api = window.sendRecovery, f = await api.mount(); f.key();
         await api.until(() => f.calls.length === 1);
         await api.delay(); f.editor().commands.insertContent('运行中追加的消息');
-        f.emitStream({ sessionId: 'a', payload: { kind: 'gamma_event', event: { type: 'run_started', startedAt: -1 } } });
+        f.emitStream({ sessionId: 'a', payload: { kind: 'carpus_event', event: { type: 'run_started', startedAt: -1 } } });
         f.key(); await api.delay(60); const before = f.calls.length;
         f.emitStream({ sessionId: 'a', payload: ${confirmation === 'run_started'
-          ? "{ kind: 'gamma_event', event: { type: 'run_started', startedAt: f.calls[0].startedAt } }"
+          ? "{ kind: 'carpus_event', event: { type: 'run_started', startedAt: f.calls[0].startedAt } }"
           : "{ kind: 'sdk_message', message: { type: 'user', uuid: f.calls[0].userMessageUuid, message: { content: [] } } }"} });
         f.key(); await api.until(() => f.calls.length === 2);
         const queued = f.calls[1].dispatch === 'after_current' && f.calls[1].rawUserMessage.includes('运行中追加的消息');
@@ -681,7 +681,7 @@ describe('Given 已审查的重试时序边界', () => {
       const f = await api.mount({ initialText: '', fullLayout: true });
       await api.until(() => document.querySelector('[data-agent-welcome]'));
       const welcome = document.querySelector('.welcome-empty-state');
-      const composer = document.querySelector('.gamma-composer');
+      const composer = document.querySelector('.carpus-composer');
       const column = welcome.closest('.agent-conversation-column');
       const welcomeBounds = welcome.getBoundingClientRect();
       const columnBounds = column.getBoundingClientRect();
@@ -703,8 +703,8 @@ describe('Given 已审查的重试时序边界', () => {
   test('When 渲染真实 AgentView Then 工具行位于输入外壳之外且发送仍可用', async () => {
     expect(await renderer.run<{ independent: boolean; calls: number }>(`
       const f = await window.sendRecovery.mount();
-      const footer = document.querySelector('[data-input-mode="agent"] > .gamma-composer-footer');
-      const independent = !!footer && !footer.closest('.gamma-composer');
+      const footer = document.querySelector('[data-input-mode="agent"] > .carpus-composer-footer');
+      const independent = !!footer && !footer.closest('.carpus-composer');
       f.key(); await window.sendRecovery.until(() => f.calls.length === 1); f.reject();
       await window.sendRecovery.delay(60); f.root.unmount(); return { independent, calls: f.calls.length };
     `)).toEqual({ independent: true, calls: 1 })
@@ -777,7 +777,7 @@ test('Given 真实 AgentView 的 UI 交互与既有草稿附件 When 确认发�
   const result = await renderer.run<{ before: number; calls: number; draft: boolean; files: number; quote: string; session: string; plainData: boolean; mentions: number; sameId: boolean }>(`
     try {
     const api=window.sendRecovery;
-    const spec={items:[{type:'input',id:'name',label:'姓名',value:'/skill:gamma-coach #mcp:example'},{type:'submit',label:'分析',action:'analyze',groups:['name']}]};
+    const spec={items:[{type:'input',id:'name',label:'姓名',value:'/skill:carpus-coach #mcp:example'},{type:'submit',label:'分析',action:'analyze',groups:['name']}]};
     const fence=String.fromCharCode(96).repeat(3);
     const history=[{type:'user',uuid:'u1',message:{content:[{type:'text',text:'生成表单'}]},parent_tool_use_id:null,_createdAt:1},
       {type:'assistant',uuid:'a1',message:{content:[{type:'text',text:fence+'dsh-ui\\n'+JSON.stringify(spec)+'\\n'+fence}]},parent_tool_use_id:null,_createdAt:2}];
@@ -788,7 +788,7 @@ test('Given 真实 AgentView 的 UI 交互与既有草稿附件 When 确认发�
     [...document.querySelectorAll('button')].find(b=>b.textContent==='发送给 Agent').click();await api.until(()=>f.calls.length===1);
     const input=f.calls[0];f.resolveWith({disposition:'started'});await api.delay(60);
     const result={before,calls:f.calls.length,draft:f.editor().getText().includes('失败草稿'),files:f.files('a').length,quote:f.quote('a').text,session:input.sessionId,
-      plainData:input.userMessage.includes('/skill:gamma-coach #mcp:example')&&!input.userMessage.includes('<skill'),
+      plainData:input.userMessage.includes('/skill:carpus-coach #mcp:example')&&!input.userMessage.includes('<skill'),
       mentions:input.mentionedSkills.length+input.mentionedMcpServers.length,sameId:input.queueMessageId===f.saves[0].id};
     f.root.unmount();return result;
     } catch(error) { return {error:String(error),stack:error.stack,body:document.body.innerText} }

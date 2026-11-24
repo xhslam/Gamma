@@ -16,12 +16,12 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
   let tempConfigFile: string
 
   beforeEach(() => {
-    tempConfigFile = join(tmpdir(), `gamma-test-auth-${randomUUID()}.json`)
+    tempConfigFile = join(tmpdir(), `carpus-test-auth-${randomUUID()}.json`)
     manager = createStandardManager(tempConfigFile)
   })
 
   test('Given 首次安装 When 读取偏好 Then 默认宽松但不伪造应用持久授权，外发仍未同意', () => {
-    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-first-auth-${randomUUID()}.json`))
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `carpus-first-auth-${randomUUID()}.json`))
     const prefs = manager.getPreferences()
     expect(prefs.riskPolicy).toBe('relaxed')
     expect(prefs.allowedApps).toEqual({})
@@ -127,9 +127,9 @@ describe('ComputerAuthorizationManager 应用授权与风险确认', () => {
 })
 
 describe('Given 持久截图外发同意与失败关闭', () => {
-  const create = () => createStandardManager(join(tmpdir(), `gamma-consent-${randomUUID()}.json`))
+  const create = () => createStandardManager(join(tmpdir(), `carpus-consent-${randomUUID()}.json`))
   test('When 首次同意 Then 仅询问一次且配置可重载；dismiss不等于同意', async () => {
-    const path = join(tmpdir(), `gamma-consent-${randomUUID()}.json`)
+    const path = join(tmpdir(), `carpus-consent-${randomUUID()}.json`)
     const manager = new ComputerAuthorizationManager(path)
     manager.updatePreferences({ systemPermissionsDismissed: true })
     expect(manager.getPreferences().shareObservations).toBe(false)
@@ -185,7 +185,7 @@ describe('Given 持久截图外发同意与失败关闭', () => {
 })
 
 describe('Given 可恢复的本地应用授权', () => {
-  const create = () => createStandardManager(join(tmpdir(), `gamma-app-consent-${randomUUID()}.json`))
+  const create = () => createStandardManager(join(tmpdir(), `carpus-app-consent-${randomUUID()}.json`))
   test('When 授权UI失败后重试 Then 不保存拒绝且能够再次询问', async () => {
     const manager = create()
     manager.setUiHandlers({ appAuth: async () => { throw new Error('不可用') } })
@@ -207,7 +207,7 @@ describe('Given 可恢复的本地应用授权', () => {
     } finally { globalThis.setTimeout = original }
   })
   test('When 恢复单项询问 Then 重载后该项消失且其他决定保留', () => {
-    const path = join(tmpdir(), `gamma-revoke-${randomUUID()}.json`)
+    const path = join(tmpdir(), `carpus-revoke-${randomUUID()}.json`)
     const manager = createStandardManager(path)
     manager.recordAppDecision('One', 'always', 'app.one')
     manager.recordAppDecision('Two', 'denied', 'app.two')
@@ -223,7 +223,7 @@ describe('Given 可恢复的本地应用授权', () => {
 
 test('Given 关闭应用授权弹窗或监听器故障 When 请求结束 Then 只取消本次且不持久拒绝', async () => {
   for (const broken of [false, true]) {
-    const manager = createStandardManager(join(tmpdir(), `gamma-dismiss-${randomUUID()}.json`))
+    const manager = createStandardManager(join(tmpdir(), `carpus-dismiss-${randomUUID()}.json`))
     manager.onAppAuthRequested(request => {
       if (broken) throw new Error('UI断开')
       manager.resolveAppAuth(request.requestId, 'cancelled')
@@ -235,7 +235,7 @@ test('Given 关闭应用授权弹窗或监听器故障 When 请求结束 Then �
 
 describe('Given 宽松策略的任务授权', () => {
   test('When 跨运行操作新应用 Then 不弹应用确认，也不写入虚假的 always', async () => {
-    const path = join(tmpdir(), `gamma-relaxed-${randomUUID()}.json`)
+    const path = join(tmpdir(), `carpus-relaxed-${randomUUID()}.json`)
     const manager = new ComputerAuthorizationManager(path)
     let requested = 0
     manager.setUiHandlers({ appAuth: async () => { requested++; return 'always' } })
@@ -249,18 +249,18 @@ describe('Given 宽松策略的任务授权', () => {
   })
 
   test('When 应用或 bundle 已明确拒绝 Then 宽松与旧 always 都不能绕过', async () => {
-    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-relaxed-denied-${randomUUID()}.json`))
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `carpus-relaxed-denied-${randomUUID()}.json`))
     manager.recordAppDecision('Blocked', 'denied', 'app.blocked')
     manager.recordAppDecision('Blocked', 'always')
     expect(manager.checkAppAuthorization('Blocked', 'app.blocked')).toBe('denied')
     await expect(manager.ensureAppAuthorized('Blocked', 'app.blocked', 'run-new')).rejects.toThrow('用户已明确拒绝')
-    const reloaded = new ComputerAuthorizationManager(join(tmpdir(), `gamma-relaxed-name-denied-${randomUUID()}.json`))
+    const reloaded = new ComputerAuthorizationManager(join(tmpdir(), `carpus-relaxed-name-denied-${randomUUID()}.json`))
     reloaded.recordAppDecision('Blocked', 'denied')
     expect(reloaded.checkAppAuthorization('Blocked', 'app.blocked')).toBe('denied')
   })
 
   test('When 从宽松切回标准或严格 Then 恢复询问且保留真实 always', async () => {
-    const path = join(tmpdir(), `gamma-policy-switch-${randomUUID()}.json`)
+    const path = join(tmpdir(), `carpus-policy-switch-${randomUUID()}.json`)
     const manager = new ComputerAuthorizationManager(path)
     expect(await manager.ensureAppAuthorized('Unrecorded', 'app.unrecorded', 'run-one')).toBe(true)
     manager.recordAppDecision('Trusted', 'always', 'app.trusted')
@@ -275,7 +275,7 @@ describe('Given 宽松策略的任务授权', () => {
   })
 
   test('When 宽松省略应用弹窗 Then 仍须首次观察外发同意，拒绝不记录同意', async () => {
-    const manager = new ComputerAuthorizationManager(join(tmpdir(), `gamma-relaxed-consent-${randomUUID()}.json`))
+    const manager = new ComputerAuthorizationManager(join(tmpdir(), `carpus-relaxed-consent-${randomUUID()}.json`))
     let requested = 0
     manager.setUiHandlers({ observationConsent: async () => { requested++; return false } })
     expect(await manager.ensureAppAuthorized('Auris', 'com.auris.desktop')).toBe(true)
@@ -286,7 +286,7 @@ describe('Given 宽松策略的任务授权', () => {
 })
 
 describe('Given 授权等待与本地设置并发修改', () => {
-  const create = () => createStandardManager(join(tmpdir(), `gamma-race-${randomUUID()}.json`))
+  const create = () => createStandardManager(join(tmpdir(), `carpus-race-${randomUUID()}.json`))
   test('When 原子撤销单项 Then 保留刚写入的其他授权并清除本次许可', () => {
     const manager = create()
     manager.recordAppDecision('One', 'always', 'app.one')

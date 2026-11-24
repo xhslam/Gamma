@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AgyActivityEvent } from '@gamma/shared'
+import type { AgyActivityEvent } from '@carpus/shared'
 import { AgyStreamParser, redactAgyText, redactAgyValue } from './agy-stream-parser'
 
 type ParsedEvent = Omit<AgyActivityEvent, 'sequence' | 'timestamp'>

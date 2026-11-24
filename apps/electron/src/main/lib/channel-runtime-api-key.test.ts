@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'b
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
-import { serializeCodexCredentials } from '@gamma/shared'
+import { serializeCodexCredentials } from '@carpus/shared'
 import { writeJsonFileAtomic } from './safe-file'
 import { setConfigHomeForTest } from './config-paths'
 
@@ -11,11 +11,11 @@ type ChannelManagerModule = typeof import('./channel-manager')
 let channelManager: ChannelManagerModule
 let tempHome: string
 let originalHome: string | undefined
-let originalGammaDev: string | undefined
+let originalCarpusDev: string | undefined
 let previousConfigHome: string | undefined
 
 function writeChannels(channels: unknown[], version = 2): void {
-  const configDir = join(tempHome, '.gamma')
+  const configDir = join(tempHome, '.carpus')
   mkdirSync(configDir, { recursive: true })
   writeJsonFileAtomic(
     join(configDir, 'channels.json'),
@@ -25,16 +25,16 @@ function writeChannels(channels: unknown[], version = 2): void {
 
 beforeAll(async () => {
   originalHome = process.env.HOME
-  originalGammaDev = process.env.GAMMA_DEV
-  tempHome = mkdtempSync(join(os.tmpdir(), 'gamma-channel-runtime-key-'))
+  originalCarpusDev = process.env.CARPUS_DEV
+  tempHome = mkdtempSync(join(os.tmpdir(), 'carpus-channel-runtime-key-'))
   process.env.HOME = tempHome
   previousConfigHome = setConfigHomeForTest(tempHome)
-  process.env.GAMMA_DEV = '0'
+  process.env.CARPUS_DEV = '0'
   channelManager = await import('./channel-manager')
 })
 
 beforeEach(() => {
-  rmSync(join(tempHome, '.gamma'), { recursive: true, force: true })
+  rmSync(join(tempHome, '.carpus'), { recursive: true, force: true })
 })
 
 afterAll(() => {
@@ -44,10 +44,10 @@ afterAll(() => {
   } else {
     process.env.HOME = originalHome
   }
-  if (originalGammaDev === undefined) {
-    delete process.env.GAMMA_DEV
+  if (originalCarpusDev === undefined) {
+    delete process.env.CARPUS_DEV
   } else {
-    process.env.GAMMA_DEV = originalGammaDev
+    process.env.CARPUS_DEV = originalCarpusDev
   }
   rmSync(tempHome, { recursive: true, force: true })
 })
@@ -130,7 +130,7 @@ describe('退役渠道迁移', () => {
       expect(channelManager.getChannelById('retained-api')).toMatchObject({
         provider: 'doubao-api', name: '用户自定义渠道名', apiKey: 'preserved-api-key',
       })
-      const file = join(tempHome, '.gamma', 'channels.json')
+      const file = join(tempHome, '.carpus', 'channels.json')
       const firstWrite = readFileSync(file, 'utf-8')
       const config = JSON.parse(firstWrite) as MigrationConfig
       expect(config.version).toBe(Math.max(version, 7))

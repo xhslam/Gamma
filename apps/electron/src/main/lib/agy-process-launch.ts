@@ -87,8 +87,8 @@ export function resolveAgyExecutable(options: AgyExecutableOptions = {}): string
     }
   }
   throw new Error(platform === 'win32'
-    ? '未找到 agy 可执行文件。已检查 AGY_BIN、PATH、%LOCALAPPDATA%\\agy\\bin、~\\.local\\bin 等安装目录。请用 Get-Command agy 或 where.exe agy 核对安装；自定义安装可设置 AGY_BIN 为绝对路径。安装或修改环境变量后请重新打开 Gamma。不会自动安装或放宽权限。'
-    : '未找到 agy 可执行文件。已检查 AGY_BIN、PATH、~/.local/bin 和 Homebrew 等目录。请用 command -v agy 核对安装，或设置 AGY_BIN 为绝对路径后重新打开 Gamma。不会自动安装或放宽权限。')
+    ? '未找到 agy 可执行文件。已检查 AGY_BIN、PATH、%LOCALAPPDATA%\\agy\\bin、~\\.local\\bin 等安装目录。请用 Get-Command agy 或 where.exe agy 核对安装；自定义安装可设置 AGY_BIN 为绝对路径。安装或修改环境变量后请重新打开 Carpus。不会自动安装或放宽权限。'
+    : '未找到 agy 可执行文件。已检查 AGY_BIN、PATH、~/.local/bin 和 Homebrew 等目录。请用 command -v agy 核对安装，或设置 AGY_BIN 为绝对路径后重新打开 Carpus。不会自动安装或放宽权限。')
 }
 
 /** 仅继承 CLI 账号/运行时需要的系统环境；不传 Agent 密钥、NODE_OPTIONS 或 Electron 注入。 */
@@ -120,7 +120,7 @@ export function formatAgyLaunchError(error: unknown, executable?: string, cwd?: 
   const message = error instanceof Error ? error.message : String(error)
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined
   const location = executable ? ` 程序：${executable}。` : ''
-  if (code === 'ENOENT') return `无法启动 agy（ENOENT）：选定程序、解释器或工作目录可能已被移动/删除。${location}${cwd ? ` 工作目录：${cwd}。` : ''}请${platform === 'win32' ? '用 Get-Command agy / where.exe agy' : '用 command -v agy'}核对安装，必要时修正 AGY_BIN 后重启 Gamma。`
+  if (code === 'ENOENT') return `无法启动 agy（ENOENT）：选定程序、解释器或工作目录可能已被移动/删除。${location}${cwd ? ` 工作目录：${cwd}。` : ''}请${platform === 'win32' ? '用 Get-Command agy / where.exe agy' : '用 command -v agy'}核对安装，必要时修正 AGY_BIN 后重启 Carpus。`
   if (code === 'EACCES' || code === 'EPERM') return `无法启动 agy（${code}）：请检查程序执行权限或系统安全软件拦截。${location}不会自动提权。`
   if (code === 'ENOEXEC' || code === 'EINVAL' || code === 'UNKNOWN') return `无法启动 agy（${code}）：请检查可执行文件格式、系统架构或 batch 解释器。${location}`
   return `无法启动 agy：${message}`

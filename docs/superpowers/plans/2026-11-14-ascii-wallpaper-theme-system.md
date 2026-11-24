@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 Gamma 的外观设计系统升级为 8 款基于 Canvas 的程序化 ASCII 动态壁纸主题，并完整实现聊天区底部浮动 `/theme` Dock 与点击向外扩散的圆形揭幕（Circle Reveal）过渡动效。
+**Goal:** 将 Carpus 的外观设计系统升级为 8 款基于 Canvas 的程序化 ASCII 动态壁纸主题，并完整实现聊天区底部浮动 `/theme` Dock 与点击向外扩散的圆形揭幕（Circle Reveal）过渡动效。
 
 **Architecture:** 采用分层结构，状态层通过 Jotai 原子与 `settings.json`（经 `safe-file.ts` 原子写）双向持久化；表现层通过全视口 `AsciiWallpaperCanvas` 驱动 8 款轻量程序化数学场景；过渡层使用 CSS `clip-path: circle()` 双缓冲渲染；交互层通过浮动 `/theme` Dock 提供键盘导航与即时预览。
 
@@ -459,7 +459,7 @@ git commit -m "feat(wallpaper): 实现浮动 /theme Dock 与输入框命令联�
 
 - [ ] **Step 1: 生成并置入 8 款主题缩略图**
 
-使用从 `/Users/apple/Desktop/gamma-video-frames` 中提取的各场景代表帧生成高质量 WebP 图像：
+使用从 `/Users/apple/Desktop/carpus-video-frames` 中提取的各场景代表帧生成高质量 WebP 图像：
 - `theme-claude-code.webp`
 - `theme-cloud-drift.webp`
 - `theme-honu-lagoon.webp`
@@ -512,7 +512,7 @@ git commit -m "feat(settings): 将外观设置中心特殊风格网格更新为 
 
 - [ ] **Step 4: 递增版本号**
 
-遵守 Gamma 工程规范，将 `apps/electron/package.json` 版本号从 `0.19.275` 递增至 `0.19.276`。
+遵守 Carpus 工程规范，将 `apps/electron/package.json` 版本号从 `0.19.275` 递增至 `0.19.276`。
 
 - [ ] **Step 5: 提交改动**
 

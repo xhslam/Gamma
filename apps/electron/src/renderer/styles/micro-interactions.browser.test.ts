@@ -11,7 +11,7 @@ beforeAll(async () => {
     import{Copy,LoaderCircle,ChevronUp,PanelLeft}from'lucide-react';
     import{Button}from'@/components/ui/button';import{DisclosureChevron}from'@/components/ui/disclosure-chevron';
     import'@/styles/globals.css';
-    function Demo(){const[open,setOpen]=useState(false);return React.createElement('main',{className:'gamma-ui',style:{padding:24,width:420}},
+    function Demo(){const[open,setOpen]=useState(false);return React.createElement('main',{className:'carpus-ui',style:{padding:24,width:420}},
       React.createElement('button',{id:'fold','data-disclosure-trigger':'', 'aria-expanded':open,onClick:()=>setOpen(v=>!v),style:{display:'flex',alignItems:'center',gap:8,width:320,height:34}},React.createElement(DisclosureChevron,{expanded:open}),React.createElement('span',{id:'fold-text'},'可展开内容'),React.createElement('span',{id:'fold-end',style:{marginLeft:'auto'}},'5')),
       React.createElement('button',{id:'selected','data-disclosure-trigger':'','aria-selected':true},React.createElement(DisclosureChevron,{expanded:false}),'已选目录'),
       React.createElement('button',{id:'radix','data-disclosure-trigger':'','data-state':'open'},React.createElement(DisclosureChevron), 'Radix内容'),

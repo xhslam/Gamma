@@ -17,7 +17,7 @@ beforeAll(async () => {
         const density=useAtomValue(workbenchDensityAtom),[value,setValue]=React.useState('保留我的草稿');
         return React.createElement('section',{'data-workbench-density':density},
           React.createElement('div',{'data-input-mode':'agent'},
-            React.createElement('div',{className:'gamma-composer'},React.createElement(RichTextInput,{value,onChange:setValue,onSubmit:()=>{}})),
+            React.createElement('div',{className:'carpus-composer'},React.createElement(RichTextInput,{value,onChange:setValue,onSubmit:()=>{}})),
             React.createElement(InputToolbarOverflow,{items:[{key:'attach',node:React.createElement('button',{type:'button'},'附件')}],trailing:React.createElement('button',{type:'button'},'发送')})),
           React.createElement(AppearanceSettings));
       }
@@ -39,7 +39,7 @@ describe('Given 真实 Chromium 中的工作台密度', () => {
         const row=f.row('parent');row.focus();
         for(const density of ['compact','comfortable']){
           f.setDensity(density);await api.delay(80);
-          results.push({row:row.getBoundingClientRect().height,project:document.querySelector('.gamma-sidebar-project-row').getBoundingClientRect().height,nav:document.querySelector('.gamma-sidebar-nav-item').getBoundingClientRect().height,focused:document.activeElement===row,dark:document.documentElement.classList.contains('dark')});
+          results.push({row:row.getBoundingClientRect().height,project:document.querySelector('.carpus-sidebar-project-row').getBoundingClientRect().height,nav:document.querySelector('.carpus-sidebar-nav-item').getBoundingClientRect().height,focused:document.activeElement===row,dark:document.documentElement.classList.contains('dark')});
         }
         f.root.unmount();await api.delay();
       }
@@ -57,10 +57,10 @@ describe('Given 真实 Chromium 中的工作台密度', () => {
     const result = await renderer.run<{ before: string; after: string; focus: boolean; draft: boolean; independent: boolean; theme: boolean }>(`
       document.documentElement.classList.add('dark','theme-honu-lagoon');
       const f=await window.mountWorkbench(),dom=document.querySelector('.tiptap');
-      dom.focus();const before=getComputedStyle(document.querySelector('.gamma-composer')).borderRadius;
+      dom.focus();const before=getComputedStyle(document.querySelector('.carpus-composer')).borderRadius;
       f.setDensity('comfortable');await window.leftSidebarRegression.delay(80);
-      const after=getComputedStyle(document.querySelector('.gamma-composer')).borderRadius;
-      const result={before,after,focus:document.activeElement===dom,draft:dom.textContent.includes('保留我的草稿'),independent:document.querySelector('.gamma-composer-footer').previousElementSibling.classList.contains('gamma-composer'),theme:document.documentElement.classList.contains('theme-honu-lagoon')};
+      const after=getComputedStyle(document.querySelector('.carpus-composer')).borderRadius;
+      const result={before,after,focus:document.activeElement===dom,draft:dom.textContent.includes('保留我的草稿'),independent:document.querySelector('.carpus-composer-footer').previousElementSibling.classList.contains('carpus-composer'),theme:document.documentElement.classList.contains('theme-honu-lagoon')};
       f.root.unmount();return result;
     `)
     expect(result).toEqual({ before: '12px', after: '14px', focus: true, draft: true, independent: true, theme: true })

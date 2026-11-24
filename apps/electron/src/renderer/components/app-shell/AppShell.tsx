@@ -330,9 +330,9 @@ export function AppShell(): React.ReactElement {
       <div data-workbench-density={density} className="shell-bg relative h-screen w-screen overflow-hidden bg-background">
         <div
           data-sidebar-collapsed={navigationCollapsed}
-          className={cn('gamma-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows))}
+          className={cn('carpus-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows))}
         >
-          <div className="gamma-workbench-frame">
+          <div className="carpus-workbench-frame">
             <SidebarTransition collapsed={navigationCollapsed} resizing={workspaceMaximized || draggedRightPanel !== null} width={LEFT_SIDEBAR_WIDTH}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
             </SidebarTransition>

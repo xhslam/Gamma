@@ -5,14 +5,14 @@
  */
 
 import {
-  GAMMA_DEFAULT_PERMISSION_MODE,
+  CARPUS_DEFAULT_PERMISSION_MODE,
   type AgentDelegationRole,
   type AgentDelegationStatus,
   type AgentSessionMeta,
-  type GammaPermissionMode,
-} from '@gamma/shared'
+  type CarpusPermissionMode,
+} from '@carpus/shared'
 
-const PERMISSION_RANK: Record<GammaPermissionMode, number> = {
+const PERMISSION_RANK: Record<CarpusPermissionMode, number> = {
   plan: 0,
   bypassPermissions: 1,
 }
@@ -63,16 +63,16 @@ export interface RecoveredDelegationState {
   title: string
   role: AgentDelegationRole
   goal: string
-  permissionMode: GammaPermissionMode
+  permissionMode: CarpusPermissionMode
   status: AgentDelegationStatus
   startedAt: number
   completedAt?: number
 }
 
 export function resolveDelegationPermissionMode(
-  _parentMode: GammaPermissionMode | undefined,
-  _requestedMode: GammaPermissionMode | undefined,
-): GammaPermissionMode {
+  _parentMode: CarpusPermissionMode | undefined,
+  _requestedMode: CarpusPermissionMode | undefined,
+): CarpusPermissionMode {
   // Pi 子会话目前固定直接执行。
   return 'bypassPermissions'
 }
@@ -81,7 +81,7 @@ export function buildRecoveredDelegationState(input: {
   parentSessionId: string
   delegationId: string
   session: AgentSessionMeta
-  fallbackPermissionMode?: GammaPermissionMode
+  fallbackPermissionMode?: CarpusPermissionMode
 }): RecoveredDelegationState {
   const persistedStatus = input.session.delegationStatus
   // 从持久化记录恢复但不在 live Map 中，说明当前进程并没有这个委派在跑。
@@ -97,7 +97,7 @@ export function buildRecoveredDelegationState(input: {
     title: input.session.title,
     role: input.session.delegationRole ?? 'custom',
     goal: input.session.delegationGoal ?? '',
-    permissionMode: input.session.permissionMode ?? input.fallbackPermissionMode ?? GAMMA_DEFAULT_PERMISSION_MODE,
+    permissionMode: input.session.permissionMode ?? input.fallbackPermissionMode ?? CARPUS_DEFAULT_PERMISSION_MODE,
     status,
     startedAt: input.session.createdAt,
     completedAt: persistedStatus ? input.session.updatedAt : undefined,
@@ -112,7 +112,7 @@ export function buildDelegationPrompt(input: {
   expectedOutput?: string
 }): string {
   const expectedOutput = input.expectedOutput?.trim()
-  return `你是 Gamma 协作子 Agent。你由父 Agent 会话 ${input.parentSessionId} 委派创建，委派 ID 为 ${input.delegationId}。
+  return `你是 Carpus 协作子 Agent。你由父 Agent 会话 ${input.parentSessionId} 委派创建，委派 ID 为 ${input.delegationId}。
 
 ## 工作边界
 

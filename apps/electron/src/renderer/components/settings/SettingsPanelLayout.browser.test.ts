@@ -10,12 +10,12 @@ beforeAll(async () => {
     import {Provider,createStore} from 'jotai';
     import {SettingsPanel} from '@/components/settings/SettingsPanel';
     import {settingsTabAtom,channelFormDirtyAtom} from '@/atoms/settings-tab';
-    import {DEFAULT_MARKDOWN_EDITOR_PREFERENCES} from '@gamma/shared';
+    import {DEFAULT_MARKDOWN_EDITOR_PREFERENCES} from '@carpus/shared';
     import {TooltipProvider} from '@/components/ui/tooltip';
     import '@/styles/globals.css';
     const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
     window.mountSettings=async (theme, tab='markdown-editor')=>{
-      document.documentElement.className='gamma-main-window '+theme;
+      document.documentElement.className='carpus-main-window '+theme;
       const host=document.getElementById('root');host.style.width='760px';host.style.height='400px';
       let closeCalls=0, requestClose, navigate;
       window.electronAPI={

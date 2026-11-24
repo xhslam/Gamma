@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@gamma/shared'
-import type { MarkdownEditorPreferences } from '@gamma/shared'
+import { DEFAULT_MARKDOWN_EDITOR_PREFERENCES } from '@carpus/shared'
+import type { MarkdownEditorPreferences } from '@carpus/shared'
 import { writeJsonFileAtomic, writeTextFileAtomic } from './safe-file'
 
 interface SettingsScenarioResult {
@@ -36,7 +36,7 @@ async function runSettingsScenario(settingsPath: string, scenario: string): Prom
 
 describe('Markdown 编辑器偏好持久化', () => {
   test('Given 缺失、旧版本或损坏配置 When 读取 Then 返回完整偏好且兼容旧 AI 字号', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-markdown-settings-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-markdown-settings-'))
     const settingsPath = join(directory, 'settings.json')
     const scenario = `console.log(JSON.stringify({preferences:getSettings().markdownEditor}))`
     try {
@@ -49,7 +49,7 @@ describe('Markdown 编辑器偏好持久化', () => {
   })
 
   test('Given 主题、源码偏好和自定义键 When 局部更新 Then 深合并、原子写盘且保留应用设置', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-markdown-settings-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-markdown-settings-'))
     const settingsPath = join(directory, 'settings.json')
     const initial: MarkdownEditorPreferences = { ...DEFAULT_MARKDOWN_EDITOR_PREFERENCES, theme: 'paper', fontSize: 20, sourceWordWrap: false, shortcuts: { sourcePeek: 'F2', toggleSource: 'F3', toggleEdit: 'F4' } }
     try {
@@ -66,7 +66,7 @@ describe('Markdown 编辑器偏好持久化', () => {
   })
 
   test('Given 手写坏值和不可信更新 When 读取保存 Then 每个字段规范化且不持久化未知偏好', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-markdown-settings-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-markdown-settings-'))
     const settingsPath = join(directory, 'settings.json')
     try {
       writeJsonFileAtomic(settingsPath, { markdownEditor: { theme: 'mint', fontSize: 100, shortcuts: { sourcePeek: 'x' }, tableFit: false } })
@@ -80,7 +80,7 @@ describe('Markdown 编辑器偏好持久化', () => {
   })
 
   test('Given 原子写入临时路径不可写 When 更新偏好 Then 抛出错误并保持完整旧配置', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'gamma-markdown-settings-'))
+    const directory = mkdtempSync(join(tmpdir(), 'carpus-markdown-settings-'))
     const settingsPath = join(directory, 'settings.json')
     try {
       writeJsonFileAtomic(settingsPath, { themeMode: 'dark', markdownEditor: DEFAULT_MARKDOWN_EDITOR_PREFERENCES })

@@ -110,7 +110,7 @@ import {
 import { PreviewPanel } from '@/components/diff/PreviewPanel'
 import { clearPreviewContentCacheForFile } from '@/lib/preview-content-cache'
 import { useOpenPreview } from '@/components/diff/preview-opener'
-import type { FileEntry, AgentPendingFile, AgentSessionMeta, SDKMessage, WorktreeInfo } from '@gamma/shared'
+import type { FileEntry, AgentPendingFile, AgentSessionMeta, SDKMessage, WorktreeInfo } from '@carpus/shared'
 import { setFilePanelDragData, getMediaTypeFromFilename, dispatchInsertFileMention } from '@/lib/file-panel-drag'
 import { CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT } from '@/lib/right-workspace-events'
 import {
@@ -1773,7 +1773,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
 
   return (
     <div
-      className="gamma-panel gamma-workspace-surface relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region"
+      className="carpus-panel carpus-workspace-surface relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region"
       data-panel="workspace"
       data-panel-open={isOpen}
       style={{ width }}
@@ -1893,7 +1893,7 @@ function AttachedFilesSection({ title, scope = 'project', showSessionBadge = tru
         return (
           <div
             key={filePath}
-            className="gamma-list-row flex items-center gap-1 pl-2 pr-2 text-sm cursor-pointer hover:bg-accent/50 group mx-2 rounded-lg"
+            className="carpus-list-row flex items-center gap-1 pl-2 pr-2 text-sm cursor-pointer hover:bg-accent/50 group mx-2 rounded-lg"
             onClick={() => onFilePreview?.(filePath)}
             draggable
             onDragStart={(e) => {
@@ -2133,7 +2133,7 @@ function AttachedDirTree({ dirPath, onDetach, selectedPaths, onSelect, refreshVe
       <div data-disclosure-group=""
         data-sticky-row={isSticky ? 'true' : undefined}
         className={cn(
-          'gamma-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
+          'carpus-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
           isSticky && cn(STICKY_ROW_BASE_CLASS, 'top-0 z-10'),
         )}
         style={{ paddingLeft }}
@@ -2157,7 +2157,7 @@ function AttachedDirTree({ dirPath, onDetach, selectedPaths, onSelect, refreshVe
             isSticky ? 'group-hover:bg-accent' : 'group-hover:bg-accent/50',
           )}
         />
-        <button type="button" data-disclosure-trigger="" className="gamma-disclosure-button" style={{ width: 14 }} aria-expanded={expanded} aria-label={(expanded ? '收起目录 ' : '展开目录 ') + dirName} onClick={(event) => { event.stopPropagation(); toggleExpand() }}><DisclosureChevron expanded={expanded} size={14}
+        <button type="button" data-disclosure-trigger="" className="carpus-disclosure-button" style={{ width: 14 }} aria-expanded={expanded} aria-label={(expanded ? '收起目录 ' : '展开目录 ') + dirName} onClick={(event) => { event.stopPropagation(); toggleExpand() }}><DisclosureChevron expanded={expanded} size={14}
           className={cn(
             'relative z-10 size-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150',
             expanded && 'rotate-90',
@@ -2361,7 +2361,7 @@ function AttachedDirItem({ expandedStateKey, entry, depth, selectedPaths, onSele
         ref={rowRef}
         data-sticky-row={isSticky ? 'true' : undefined}
         className={cn(
-          'gamma-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
+          'carpus-list-row file-tree-row relative flex items-center gap-1 pr-2 text-sm cursor-pointer group',
           isSticky && STICKY_ROW_BASE_CLASS,
         )}
         style={{
@@ -2397,7 +2397,7 @@ function AttachedDirItem({ expandedStateKey, entry, depth, selectedPaths, onSele
             选中态下 bg-accent 不透明背景会盖住原 border 色，组件内部已切到 accent-foreground。 */}
         {isSticky && <AncestorGuides depth={depth} isSelected={isSelected} />}
         {entry.isDirectory ? (
-          <button type="button" data-disclosure-trigger="" className="gamma-disclosure-button" style={{ width: 14 }} aria-expanded={expanded} aria-label={(expanded ? '收起目录 ' : '展开目录 ') + currentName} onClick={(event) => { event.stopPropagation(); handleClick(event) }}><DisclosureChevron expanded={expanded} size={14}
+          <button type="button" data-disclosure-trigger="" className="carpus-disclosure-button" style={{ width: 14 }} aria-expanded={expanded} aria-label={(expanded ? '收起目录 ' : '展开目录 ') + currentName} onClick={(event) => { event.stopPropagation(); handleClick(event) }}><DisclosureChevron expanded={expanded} size={14}
             className={cn(
               'relative z-10 size-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150',
               expanded && 'rotate-90',

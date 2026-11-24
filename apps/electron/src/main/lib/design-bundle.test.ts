@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { DESIGN_BUNDLE_REVISION, DESIGN_SOURCE_REVISION } from '@gamma/shared'
+import { DESIGN_BUNDLE_REVISION, DESIGN_SOURCE_REVISION } from '@carpus/shared'
 import { createDesignBundleService } from './design-bundle'
 import { prepareDesignBundle } from '../../../scripts/prepare-design-bundle'
 import type { DesignBundleDependencies, DesignCommandResult, DesignExecutionOptions } from './design-bundle'
@@ -19,7 +19,7 @@ async function fixture(): Promise<void> {
     await mkdir(join(skill, 'scripts', 'editor'), { recursive: true })
     await writeFile(join(skill, 'SKILL.md'), `---\nname: ${name}\n---\n`)
     if (name.startsWith('claude-')) {
-      await writeFile(join(skill, 'scripts', 'artifact.mjs'), 'console.log(JSON.stringify({args:process.argv.slice(2),node:process.versions.node,key:!!process.env.GAMMA_DESIGN_TEST_SECRET,options:!!process.env.NODE_OPTIONS}));')
+      await writeFile(join(skill, 'scripts', 'artifact.mjs'), 'console.log(JSON.stringify({args:process.argv.slice(2),node:process.versions.node,key:!!process.env.CARPUS_DESIGN_TEST_SECRET,options:!!process.env.NODE_OPTIONS}));')
       await writeFile(join(skill, 'scripts', 'editor', 'index.html'), '<html><head></head><body></body></html>')
       await writeFile(join(skill, 'scripts', 'editor', 'third-party-licenses.txt'), 'original licenses')
     }
@@ -33,7 +33,7 @@ function service(overrides: DesignBundleDependencies = {}) {
   return createDesignBundleService({ installRoot: root, runtimePath: '/mock/node', execute: async () => probeOutput, fetchSource: async () => source, ...overrides })
 }
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'gamma-design-bundle-test-'))
+  directory = await mkdtemp(join(tmpdir(), 'carpus-design-bundle-test-'))
   root = join(directory, 'cache')
   await fixture()
 })
@@ -54,7 +54,7 @@ describe('内置 design 运行包', () => {
     expect(await readFile(join(first.bundlePath!, 'NOTICE.md'), 'utf8')).toBe('original mixed license notice')
   })
   test('Given 应用内置固定完整包且没有用户缓存 When 离线读取和执行 Then 无需安装或网络', async () => {
-    await writeFile(join(source, '.gamma-design-revision'), DESIGN_BUNDLE_REVISION)
+    await writeFile(join(source, '.carpus-design-revision'), DESIGN_BUNDLE_REVISION)
     const calls: string[][] = []
     const bundle = service({ bundledRoot: source, fetchSource: async () => { throw new Error('不应联网') }, execute: async (_path, args) => {
       if (args[0] === '--input-type=module') return probeOutput
@@ -68,7 +68,7 @@ describe('内置 design 运行包', () => {
     await expect(lstat(root)).rejects.toThrow()
   })
   test('Given 内置包缺少编辑器文件 When 检查 Then 不误报可用也不自动下载', async () => {
-    await writeFile(join(source, '.gamma-design-revision'), DESIGN_BUNDLE_REVISION)
+    await writeFile(join(source, '.carpus-design-revision'), DESIGN_BUNDLE_REVISION)
     await rm(join(source, 'skills/claude-whiteboard/scripts/editor/index.html'))
     const bundle = service({ bundledRoot: source, fetchSource: async () => { throw new Error('不应联网') } })
     expect((await bundle.getDesignBundleStatus()).installed).toBe(false)
@@ -196,8 +196,8 @@ describe('固定 Node 的无 shell 命令桥', () => {
       return { stdout: 'result', stderr: '' }
     } })
     await bundle.installDesignBundle(true)
-    const secret = process.env.GAMMA_DESIGN_TEST_SECRET
-    process.env.GAMMA_DESIGN_TEST_SECRET = 'not-a-real-secret'
+    const secret = process.env.CARPUS_DESIGN_TEST_SECRET
+    process.env.CARPUS_DESIGN_TEST_SECRET = 'not-a-real-secret'
     try {
       const controller = new AbortController()
       const result = await bundle.runDesignArtifactCommand('canvas', ['comment-reply', '/tmp/artifact', 'comment-id', 'hello world; $(whoami)', '--resolve'], { timeoutMs: 1234, signal: controller.signal })
@@ -207,7 +207,7 @@ describe('固定 Node 的无 shell 命令桥', () => {
       expect(calls[0]!.options.timeout).toBe(1234)
       expect(calls[0]!.options.cwd).toBe('/tmp/artifact')
       expect(calls[0]!.options.signal).toBe(controller.signal)
-      expect(calls[0]!.options.env.GAMMA_DESIGN_TEST_SECRET).toBeUndefined()
+      expect(calls[0]!.options.env.CARPUS_DESIGN_TEST_SECRET).toBeUndefined()
       expect(calls[0]!.options.env.NODE_OPTIONS).toBeUndefined()
       expect(calls[0]!.options.env.ELECTRON_RUN_AS_NODE).toBe('1')
       await bundle.runDesignArtifactCommand('dashboard', ['write-db', '/tmp/artifact', '/tmp/batch.json'])
@@ -216,8 +216,8 @@ describe('固定 Node 的无 shell 命令桥', () => {
       await expect(bundle.runDesignArtifactCommand('canvas', ['check', '/tmp/artifact'], { signal: controller.signal })).rejects.toThrow('取消')
       expect(calls).toHaveLength(2)
     } finally {
-      if (secret === undefined) delete process.env.GAMMA_DESIGN_TEST_SECRET
-      else process.env.GAMMA_DESIGN_TEST_SECRET = secret
+      if (secret === undefined) delete process.env.CARPUS_DESIGN_TEST_SECRET
+      else process.env.CARPUS_DESIGN_TEST_SECRET = secret
     }
   })
   test('Given 白板已安装 When 读写和读取用户视图 Then 使用白板脚本且不允许网络分享', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { GitBashStatus, RuntimeStatus, ShellEnvironmentStatus, WslStatus } from '@gamma/shared'
+import type { GitBashStatus, RuntimeStatus, ShellEnvironmentStatus, WslStatus } from '@carpus/shared'
 import { buildAgentRuntimeEnv, mergeRuntimeEnv } from './agent-runtime-env'
 
 function runtimeStatus(shell: ShellEnvironmentStatus): RuntimeStatus {
@@ -24,14 +24,14 @@ const wsl: WslStatus = {
 const bothShells = runtimeStatus({ gitBash, wsl, recommended: 'git-bash' })
 
 describe('Agent Windows Shell 运行环境', () => {
-  test('Given 旧版用户 Skill When 注入新版 CLI Then 新旧变量指向同一 Gamma 二进制', () => {
+  test('Given 旧版用户 Skill When 注入新版 CLI Then 新旧变量指向同一 Carpus 二进制', () => {
     const result = buildAgentRuntimeEnv({
-      bundledCliPath: '/test/gamma',
+      bundledCliPath: '/test/carpus',
       platform: 'darwin',
       processEnv: {},
     })
-    expect(result.env.GAMMA_CLI).toBe('/test/gamma')
-    expect(result.env.PROMA_CLI).toBe('/test/gamma')
+    expect(result.env.CARPUS_CLI).toBe('/test/carpus')
+    expect(result.env.PROMA_CLI).toBe('/test/carpus')
   })
   test('Given Git Bash 与 WSL 均可用 When 使用默认策略 Then 优先使用 Git Bash', () => {
     const result = buildAgentRuntimeEnv({
@@ -45,7 +45,7 @@ describe('Agent Windows Shell 运行环境', () => {
       shellKind: 'git-bash',
       shellPath: gitBash.path,
       env: {
-        GAMMA_WINDOWS_SHELL: 'git-bash',
+        CARPUS_WINDOWS_SHELL: 'git-bash',
       },
     })
   })
@@ -64,8 +64,8 @@ describe('Agent Windows Shell 运行环境', () => {
       wslCommand: 'wsl.exe',
       wslDistro: 'Ubuntu-24.04',
       env: {
-        GAMMA_WINDOWS_SHELL: 'wsl',
-        GAMMA_WSL_DISTRO: 'Ubuntu-24.04',
+        CARPUS_WINDOWS_SHELL: 'wsl',
+        CARPUS_WSL_DISTRO: 'Ubuntu-24.04',
       },
     })
   })
@@ -90,9 +90,9 @@ describe('Agent Windows Shell 运行环境', () => {
   test('Given Windows Path 大小写不同 When 合并运行环境 Then 仅保留覆盖后的 PATH', () => {
     const result = mergeRuntimeEnv(
       { Path: 'C:\\Windows\\System32' },
-      { PATH: 'C:\\Gamma;C:\\Windows\\System32' },
+      { PATH: 'C:\\Carpus;C:\\Windows\\System32' },
     )
 
-    expect(result).toEqual({ PATH: 'C:\\Gamma;C:\\Windows\\System32' })
+    expect(result).toEqual({ PATH: 'C:\\Carpus;C:\\Windows\\System32' })
   })
 })

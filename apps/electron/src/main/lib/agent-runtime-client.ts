@@ -24,7 +24,7 @@ import {
   type AgentRuntimeRequest,
   type AgentRuntimeResponse,
   type AgentRuntimeState,
-} from '@gamma/shared'
+} from '@carpus/shared'
 
 type RuntimePort = Pick<MessagePortMain, 'close' | 'postMessage' | 'start'> & {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -196,11 +196,11 @@ export class AgentRuntimeClient {
       && this.state.status === 'starting'
     // 日志配置失败不能阻止正常会话启动。
     let loggerEnv: NodeJS.ProcessEnv = {}
-    try { loggerEnv = { GAMMA_COMPUTER_LOG_PATH: getComputerLogPath(), GAMMA_APP_VERSION: app.getVersion() } } catch { /* 尽力传递 */ }
+    try { loggerEnv = { CARPUS_COMPUTER_LOG_PATH: getComputerLogPath(), CARPUS_APP_VERSION: app.getVersion() } } catch { /* 尽力传递 */ }
     const runtimeProcess = await startUtilityProcessWithRetry(
       () => utilityProcess.fork(this.entryPath, [], {
-        serviceName: 'Gamma Runtime',
-        env: { ...process.env, ...this.env, GAMMA_AGENT_SESSION_ID: this.sessionId, ...loggerEnv },
+        serviceName: 'Carpus Runtime',
+        env: { ...process.env, ...this.env, CARPUS_AGENT_SESSION_ID: this.sessionId, ...loggerEnv },
       }),
       { shouldContinue: shouldContinueStartup },
     )
@@ -235,7 +235,7 @@ export class AgentRuntimeClient {
     port.start()
 
     const transfer: AgentRuntimePortTransfer = {
-      type: 'gamma-agent-runtime-port',
+      type: 'carpus-agent-runtime-port',
       protocolVersion: AGENT_RUNTIME_PROTOCOL_VERSION,
     }
     runtimeProcess.postMessage(transfer, [channel.port1])

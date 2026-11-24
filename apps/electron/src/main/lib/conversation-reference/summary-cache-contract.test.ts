@@ -11,11 +11,11 @@ import {
   getSummaryCacheFilePath, loadSummaryFromCache, isFallbackSummary,
   getChunkSummaryCacheFilePath, loadChunkSummaryFromCache,
 } from './ref-cache'
-import type { AgentContextRef } from '@gamma/shared'
+import type { AgentContextRef } from '@carpus/shared'
 import type { NormalizedReferencedMessage } from './context-builder'
 
 let previousHome: string | undefined
-beforeAll(() => { previousHome = setConfigHomeForTest(mkdtempSync(join(tmpdir(), 'gamma-summary-contract-'))) })
+beforeAll(() => { previousHome = setConfigHomeForTest(mkdtempSync(join(tmpdir(), 'carpus-summary-contract-'))) })
 afterAll(() => { setConfigHomeForTest(previousHome) })
 
 const messages: NormalizedReferencedMessage[] = Array.from({ length: 21 }, (_, i) => ({ id: `m${i}`, role: 'user', content: `隔离合成消息${i}` }))

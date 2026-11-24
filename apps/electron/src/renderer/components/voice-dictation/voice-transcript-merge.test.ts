@@ -25,9 +25,9 @@ describe('mergeVoiceDictationTranscript', () => {
   })
 
   test('inserts a separator when reconnecting English words', () => {
-    const first = mergeVoiceDictationTranscript(emptyState, 'Gamma', true, 'session-a')
+    const first = mergeVoiceDictationTranscript(emptyState, 'Carpus', true, 'session-a')
     const reconnected = mergeVoiceDictationTranscript(first.state, 'Agent', false, 'session-b')
 
-    expect(reconnected.text).toBe('Gamma Agent')
+    expect(reconnected.text).toBe('Carpus Agent')
   })
 })

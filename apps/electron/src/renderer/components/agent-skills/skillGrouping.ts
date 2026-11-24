@@ -1,4 +1,4 @@
-import type { SkillMeta } from '@gamma/shared'
+import type { SkillMeta } from '@carpus/shared'
 
 export interface SkillGroup {
   id: string

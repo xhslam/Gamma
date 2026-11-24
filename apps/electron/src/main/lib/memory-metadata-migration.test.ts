@@ -26,8 +26,8 @@ describe('BDD: 记忆元数据迁移工具 (memory-metadata-migration)', () => {
   let workspaceRoot: string
 
   beforeEach(() => {
-    // 严格限制于隔离临时沙箱目录，绝不接触 ~/.gamma 真实数据
-    sandboxDir = mkdtempSync(join(tmpdir(), 'gamma-memory-migration-bdd-'))
+    // 严格限制于隔离临时沙箱目录，绝不接触 ~/.carpus 真实数据
+    sandboxDir = mkdtempSync(join(tmpdir(), 'carpus-memory-migration-bdd-'))
     globalRoot = join(sandboxDir, 'global-memory')
     workspaceRoot = join(sandboxDir, 'workspace-memory')
     mkdirSync(globalRoot, { recursive: true })

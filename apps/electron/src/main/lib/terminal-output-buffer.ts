@@ -1,4 +1,4 @@
-import type { TerminalOutputEvent } from '@gamma/shared'
+import type { TerminalOutputEvent } from '@carpus/shared'
 
 export interface TerminalOutputBuffer {
   /** 当前仍保留在内存中的原始 PTY 输出。 */

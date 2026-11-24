@@ -34,7 +34,7 @@ export function Panel({
       data-panel="content"
       className={cn(
         // Base styles shared by all panels
-        'gamma-panel h-full flex flex-col min-h-0 min-w-0 overflow-hidden',
+        'carpus-panel h-full flex flex-col min-h-0 min-w-0 overflow-hidden',
         // Variant-specific styles
         variant === 'grow' && 'flex-1',
         variant === 'shrink' && 'shrink-0',

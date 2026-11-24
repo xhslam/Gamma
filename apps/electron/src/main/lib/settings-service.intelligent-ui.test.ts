@@ -18,7 +18,7 @@ async function scenario(path: string, code: string): Promise<Record<string, unkn
 
 describe('Intelligent UI 设置持久化', () => {
   test('Given 缺失、旧配置、损坏或非法类型 When 读取 Then 默认关闭且只有 boolean true 启用', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gamma-genui-settings-')), path = join(dir, 'settings.json')
+    const dir = mkdtempSync(join(tmpdir(), 'carpus-genui-settings-')), path = join(dir, 'settings.json')
     const read = () => scenario(path, 'console.log(JSON.stringify({enabled:getSettings().intelligentUiEnabled}))')
     try {
       expect((await read()).enabled).toBe(false)
@@ -31,7 +31,7 @@ describe('Intelligent UI 设置持久化', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   test('Given 配置 When 开关保存及写入失败 Then 原子更新、保留其他字段且失败不改变原文件', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gamma-genui-settings-')), path = join(dir, 'settings.json')
+    const dir = mkdtempSync(join(tmpdir(), 'carpus-genui-settings-')), path = join(dir, 'settings.json')
     try {
       writeJsonFileAtomic(path, { themeMode: 'dark', intelligentUiEnabled: false })
       expect(await scenario(path, 'updateSettings({intelligentUiEnabled:true});console.log(JSON.stringify({enabled:getSettings().intelligentUiEnabled,theme:getSettings().themeMode}))')).toEqual({ enabled: true, theme: 'dark' })

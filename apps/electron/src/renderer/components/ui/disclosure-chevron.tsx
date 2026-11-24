@@ -23,7 +23,7 @@ export function DisclosureChevron({ expanded, size = 14, strokeWidth = 1.5, clas
       {...props}
       size={size}
       strokeWidth={strokeWidth}
-      className={cn('gamma-disclosure-indicator shrink-0', className)}
+      className={cn('carpus-disclosure-indicator shrink-0', className)}
       data-disclosure-chevron=""
       data-expanded={expanded}
       style={dimensions}

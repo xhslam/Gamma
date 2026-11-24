@@ -46,7 +46,7 @@ beforeAll(async () => {
         store.set(currentAgentSessionIdAtom,'A');
         store.set(agentSidePanelOpenAtomFamily('A'),true);
         store.set(agentWorkspaceTabIdsAtom,new Map([['A',['terminal:layout']],['B',['terminal:layout']]]));
-        store.set(agentWorkspacesAtom,[{id:'project-a',name:'Gamma 项目'}]);
+        store.set(agentWorkspacesAtom,[{id:'project-a',name:'Carpus 项目'}]);
         store.set(agentSessionsAtom,[{id:'A',title:'会话A',workspaceId:'project-a',updatedAt:2},{id:'B',title:'会话B',updatedAt:1}]);
         store.set(agentSidePanelLayoutMapAtom,layouts ?? {A:{width:300,hasOpenedWideWorkspace:false,widePanelWidthOverride:null}});
         const Draft=({name})=>{React.useEffect(()=>{mounts[name]++},[]);return React.createElement('input',{'aria-label':name+'草稿',defaultValue:name+'初稿'})};
@@ -70,7 +70,7 @@ beforeAll(async () => {
           switchSession:id=>store.set(currentAgentSessionIdAtom,id),
           collapse:value=>store.set(sidebarCollapsedAtom,value),
           collapsed:()=>store.get(sidebarCollapsedAtom),
-          persisted:()=>JSON.parse(localStorage.getItem('gamma-agent-workspace-layout-by-session')),
+          persisted:()=>JSON.parse(localStorage.getItem('carpus-agent-workspace-layout-by-session')),
           swap:()=>document.querySelector('[aria-label="交换 Agent 与工作区位置"]').click(),
           order:()=>[...document.querySelector('[data-testid="agent-workspace-layout"]').children].map(node=>node.dataset.workspacePane),
         };
@@ -93,7 +93,7 @@ describe('Given 真实 Chromium Agent 与展示工作区布局', () => {
         const titleRect=title.getBoundingClientRect(),tabsRect=tabs.getBoundingClientRect();
         results.push({oneButton:document.querySelectorAll('[aria-label="展开侧边栏"]').length===1,
           oneTitle:document.querySelectorAll('[aria-label="会话菜单：会话A"]').length===1,
-          projectContext:title.closest('[data-testid="agent-session-header"]').querySelector('[title="Gamma 项目"]')?.textContent === 'Gamma 项目',
+          projectContext:title.closest('[data-testid="agent-session-header"]').querySelector('[title="Carpus 项目"]')?.textContent === 'Carpus 项目',
           sameRow:Math.abs((titleRect.top+titleRect.bottom)/2-(tabsRect.top+tabsRect.bottom)/2)<4,
           inset:!!button && button.getBoundingClientRect().left>=80,
           leading:!!button && button.closest('[data-workspace-pane]').dataset.workspacePane===(side==='left'?'workspace':'agent'),

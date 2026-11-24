@@ -7,9 +7,9 @@ import { mock } from 'bun:test'
 mock.module('electron', () => ({
   app: {
     isPackaged: true,
-    getPath: (name: string) => `/tmp/gamma-test/${name}`,
+    getPath: (name: string) => `/tmp/carpus-test/${name}`,
     getAppPath: () => process.cwd(),
-    getName: () => 'Gamma',
+    getName: () => 'Carpus',
     getVersion: () => '0.19.97',
     on: () => {},
     once: () => {},

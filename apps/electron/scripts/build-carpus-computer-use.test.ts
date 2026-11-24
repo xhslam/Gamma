@@ -3,25 +3,25 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BUNDLE_ID, COMPONENT_VERSION, DEFAULT_OUTPUT, assertInstallDestinationAbsent, buildComponent, installComponent, verifyComponent, verifyPinnedEngine } from './build-gamma-computer-use'
+import { BUNDLE_ID, COMPONENT_VERSION, DEFAULT_OUTPUT, assertInstallDestinationAbsent, buildComponent, installComponent, verifyComponent, verifyPinnedEngine } from './build-carpus-computer-use'
 
 const macOS = process.platform === 'darwin'
 const appRoot = resolve(import.meta.dir, '..')
-const temporary = mkdtempSync(join(tmpdir(), 'gamma-computer-build-test-'))
+const temporary = mkdtempSync(join(tmpdir(), 'carpus-computer-build-test-'))
 afterAll(() => rmSync(temporary, { recursive: true, force: true }))
 
-describe('Given gammaComputerUse 独立构建入口', () => {
+describe('Given carpusComputerUse 独立构建入口', () => {
   it('Then 使用独立版本和固定 bundle identity，不导入时构建或安装', () => {
     expect(COMPONENT_VERSION).toBe('1.0.2')
-    expect(BUNDLE_ID).toBe('com.gamma.computeruse')
-    expect(DEFAULT_OUTPUT).toBe(join(appRoot, 'out/gamma-computer-use/gammaComputerUse.app'))
+    expect(BUNDLE_ID).toBe('com.carpus.computeruse')
+    expect(DEFAULT_OUTPUT).toBe(join(appRoot, 'out/carpus-computer-use/carpusComputerUse.app'))
   })
-  it('When 请求旧开发 Electron 放行 Then CLI 拒绝且身份规则只允许已安装 Gamma', () => {
-    const result = spawnSync(process.execPath, [join(import.meta.dir, 'build-gamma-computer-use.ts'), '--development'], { encoding: 'utf8' })
+  it('When 请求旧开发 Electron 放行 Then CLI 拒绝且身份规则只允许已安装 Carpus', () => {
+    const result = spawnSync(process.execPath, [join(import.meta.dir, 'build-carpus-computer-use.ts'), '--development'], { encoding: 'utf8' })
     expect(result.status).not.toBe(0)
-    const identity = readFileSync(join(appRoot, 'native/gamma-computer-use/Identity.swift'), 'utf8')
-    expect(identity).toContain('/Applications/Gamma.app/Contents/MacOS/Gamma')
-    expect(identity).not.toContain('GammaDevelopmentParent')
+    const identity = readFileSync(join(appRoot, 'native/carpus-computer-use/Identity.swift'), 'utf8')
+    expect(identity).toContain('/Applications/Carpus.app/Contents/MacOS/Carpus')
+    expect(identity).not.toContain('CarpusDevelopmentParent')
     expect(identity).not.toContain('Electron.app')
   })
   it('When 校验固定引擎 Then 许可证和两个引擎文件摘要均匹配', () => {
@@ -40,7 +40,7 @@ describe('Given gammaComputerUse 独立构建入口', () => {
     expect(() => assertInstallDestinationAbsent(target)).toThrow('绝不覆盖')
     expect(readFileSync(join(target, 'user-file'), 'utf8')).toBe('保留')
     const link = join(temporary, 'dangling.app')
-    symlinkSync('/missing-gamma-component', link)
+    symlinkSync('/missing-carpus-component', link)
     expect(() => assertInstallDestinationAbsent(link)).toThrow('绝不覆盖')
   })
   it('When 安装目标不是固定路径 Then 无写入并拒绝', () => {
@@ -48,7 +48,7 @@ describe('Given gammaComputerUse 独立构建入口', () => {
     expect(existsSync(join(temporary, 'bad.app'))).toBe(false)
   })
   it('When 构建输出指向 Applications Then 拒绝', () => {
-    if (macOS) expect(() => buildComponent({ output: '/Applications/gammaComputerUse.app' })).toThrow('构建产物必须')
+    if (macOS) expect(() => buildComponent({ output: '/Applications/carpusComputerUse.app' })).toThrow('构建产物必须')
   })
 })
 
@@ -56,7 +56,7 @@ describe('Given gammaComputerUse 独立构建入口', () => {
 ;(macOS ? describe : describe.skip)('Given 原生执行器与目录边界 BDD', () => {
   const executable = join(temporary, 'native-behaviors')
   beforeAll(() => {
-    const native = join(appRoot, 'native/gamma-computer-use')
+    const native = join(appRoot, 'native/carpus-computer-use')
     execFileSync('/usr/bin/xcrun', ['swiftc', '-swift-version', '5', '-O', '-parse-as-library', ...['Protocol.swift', 'Identity.swift', 'Executor.swift', 'BehaviorTests.swift'].map(file => join(native, file)), '-o', executable], { stdio: 'pipe' })
   }, 60_000)
   it('Then 正常路径、真实后代取消、断连、输出上限及恶意参数均通过', () => {
@@ -71,15 +71,15 @@ describe('Given gammaComputerUse 独立构建入口', () => {
   it('When 已有构建产物 Then 原生签名和 identity 可独立校验', () => {
     if (!existsSync(DEFAULT_OUTPUT)) return
     verifyComponent(DEFAULT_OUTPUT)
-    const output = spawnSync(join(DEFAULT_OUTPUT, 'Contents/MacOS/gammaComputerUse'), ['--not-a-command'], { encoding: 'utf8' })
+    const output = spawnSync(join(DEFAULT_OUTPUT, 'Contents/MacOS/carpusComputerUse'), ['--not-a-command'], { encoding: 'utf8' })
     expect(output.status).toBe(64)
     expect(output.stderr).toContain('用法')
     const plist = readFileSync(join(DEFAULT_OUTPUT, 'Contents/Info.plist'), 'utf8')
     expect(plist).toContain('<key>LSUIElement</key><true/>')
     expect(plist).toContain(BUNDLE_ID)
-    expect(plist).toContain('<key>CFBundleIconFile</key><string>gamma-computer-use.icns</string>')
-    expect(readFileSync(join(DEFAULT_OUTPUT, 'Contents/Resources/gamma-computer-use.icns'))).toEqual(
-      readFileSync(join(appRoot, 'resources/gamma-computer-use.icns')),
+    expect(plist).toContain('<key>CFBundleIconFile</key><string>carpus-computer-use.icns</string>')
+    expect(readFileSync(join(DEFAULT_OUTPUT, 'Contents/Resources/carpus-computer-use.icns'))).toEqual(
+      readFileSync(join(appRoot, 'resources/carpus-computer-use.icns')),
     )
   })
 })

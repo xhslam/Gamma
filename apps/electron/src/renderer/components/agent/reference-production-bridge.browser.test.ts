@@ -7,7 +7,7 @@ import { createElectronRendererHarness } from '../../../test-utils/electron-rend
 
 /** 真实ElectronMain/完整preload/AgentView/默认utilityPi链路；仅模型的HTTP响应为本地合成数据。 */
 test('Given 完整生产桥与隔离HOME When UI附加、轮询、发送和重载 Then 历史引用持久化且上下文不写入历史', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'gamma-reference-real-bridge-'))
+  const directory = await mkdtemp(join(tmpdir(), 'carpus-reference-real-bridge-'))
   const requests: string[] = []
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
     requests.push(await request.text())
@@ -50,7 +50,7 @@ test('Given 完整生产桥与隔离HOME When UI附加、轮询、发送和重�
       mainProcessSetup: `const fixture=require(${JSON.stringify(join(directory, 'services.cjs'))});`,
       mainProcessReady: `await fixture.initialize(${JSON.stringify(`http://127.0.0.1:${server.port}/v1`)},${JSON.stringify(project)});`,
       mainWindowSetup: 'fixture.bindMainWindow(window);',
-      environment: { HOME: home, GAMMA_DEV: '1', GAMMA_AGENT_RUNTIME: '', NO_PROXY: 'localhost,127.0.0.1' },
+      environment: { HOME: home, CARPUS_DEV: '1', CARPUS_AGENT_RUNTIME: '', NO_PROXY: 'localhost,127.0.0.1' },
       timeoutMs: 60_000,
     })
     const result = await renderer.run<{ before: { isolated: boolean; attached: boolean; ready: boolean; history: boolean; rawPromptAbsent: boolean }; after: { historyCard: boolean; composerCleared: boolean } }>(`

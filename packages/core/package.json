@@ -1,8 +1,8 @@
 {
-  "name": "@gamma/core",
+  "name": "@carpus/core",
   "version": "0.2.19",
   "license": "AGPL-3.0-only",
-  "description": "gamma core types,storage and core logic with agents",
+  "description": "carpus core types,storage and core logic with agents",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -14,7 +14,7 @@
     "./highlight": "./src/highlight/index.ts"
   },
   "dependencies": {
-    "@gamma/shared": "workspace:*",
+    "@carpus/shared": "workspace:*",
     "highlight.js": "^11.11.1",
     "shiki": "^3.22.0"
   },

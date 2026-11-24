@@ -20,7 +20,7 @@ export function migrateLegacyRendererStorage(storage: LegacyStorageMigrationTarg
 
   for (const legacyKey of legacyKeys) {
     try {
-      const currentKey = `gamma-${legacyKey.slice('proma-'.length)}`
+      const currentKey = `carpus-${legacyKey.slice('proma-'.length)}`
       if (storage.getItem(currentKey) !== null) continue
       const value = storage.getItem(legacyKey)
       if (value !== null) storage.setItem(currentKey, value)

@@ -10,7 +10,7 @@ beforeAll(async () => {
     import {getDefaultStore} from 'jotai';
     import {richTextRenderingEnabledAtom} from '@/atoms/ui-preferences';
     import {undo} from '@codemirror/commands';
-    import {DEFAULT_MARKDOWN_EDITOR_PREFERENCES} from '@gamma/shared';
+    import {DEFAULT_MARKDOWN_EDITOR_PREFERENCES} from '@carpus/shared';
     import {MessageResponse,UserMessageContent} from '@/components/ai-elements/message';
     import {RichTextInput} from '@/components/ai-elements/rich-text-input';
     import {LiveMarkdownEditor} from '@/components/markdown/LiveMarkdownEditor';

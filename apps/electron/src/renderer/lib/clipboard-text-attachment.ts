@@ -1,4 +1,4 @@
-import type { AgentPendingFile } from '@gamma/shared'
+import type { AgentPendingFile } from '@carpus/shared'
 
 export interface ClipboardTextDraft {
   filename: string

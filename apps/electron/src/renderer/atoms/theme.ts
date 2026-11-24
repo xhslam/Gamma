@@ -12,9 +12,9 @@ import {
 import { ASCII_THEME_REGISTRY } from '../lib/ascii-theme-registry'
 import { customThemeCssVariables, resolveCustomThemeMode } from '../lib/custom-theme'
 
-const THEME_CACHE_KEY = 'gamma-theme-mode'
-const WALLPAPER_CACHE_KEY = 'gamma-chat-wallpaper'
-const CUSTOM_THEME_CACHE_KEY = 'gamma-custom-theme'
+const THEME_CACHE_KEY = 'carpus-theme-mode'
+const WALLPAPER_CACHE_KEY = 'carpus-chat-wallpaper'
+const CUSTOM_THEME_CACHE_KEY = 'carpus-custom-theme'
 const CUSTOM_THEME_DOM_PROPERTIES = Object.keys(customThemeCssVariables(DEFAULT_CUSTOM_THEME))
 
 function readCustomThemeCache(): unknown {
@@ -30,7 +30,7 @@ function readAppearanceCache(): ThemeAppearance {
   try {
     return normalizeThemeAppearance({
       themeMode: localStorage.getItem(THEME_CACHE_KEY),
-      themeStyle: localStorage.getItem('gamma-theme-style'),
+      themeStyle: localStorage.getItem('carpus-theme-style'),
       chatWallpaper: localStorage.getItem(WALLPAPER_CACHE_KEY),
       customTheme: readCustomThemeCache(),
     })

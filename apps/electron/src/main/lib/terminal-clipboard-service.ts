@@ -15,7 +15,7 @@ import type {
   TerminalClipboardContentResult,
   TerminalSavePastedImageInput,
   TerminalSavePastedImageResult,
-} from '@gamma/shared'
+} from '@carpus/shared'
 import { getConfigDir } from './config-paths'
 
 interface ClipboardReader {

@@ -3,8 +3,8 @@ import { build } from 'esbuild'
 import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DESIGN_BUNDLE_REVISION } from '@gamma/shared'
-import type { DesignArtifactKind } from '@gamma/shared'
+import { DESIGN_BUNDLE_REVISION } from '@carpus/shared'
+import type { DesignArtifactKind } from '@carpus/shared'
 import { createDesignArtifactService } from '../../../main/lib/design-artifacts'
 import { prepareDesignLocaleBundle } from '../../../main/lib/design-locale-bundle'
 import { getElectronExecutablePath } from '../../../test-utils/electron-executable'
@@ -17,7 +17,7 @@ let renderer: ElectronRendererHarness
 let directory: string
 let stop: () => Promise<void>
 beforeAll(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'gamma-design-locale-pages-'))
+  directory = await mkdtemp(join(tmpdir(), 'carpus-design-locale-pages-'))
   const bundle = resolve(import.meta.dir, '../../../../resources/design-bundle', DESIGN_BUNDLE_REVISION)
   await prepareDesignLocaleBundle(bundle)
   const project = join(directory, 'project'), storage = join(directory, 'storage')

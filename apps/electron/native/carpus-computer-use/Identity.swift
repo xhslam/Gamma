@@ -48,7 +48,7 @@ func processHash(_ pid: pid_t) throws -> Data {
 func ownIdentity() throws -> String {
     let hash = try processHash(getpid())
     try require(hash == diskHash(Bundle.main.bundleURL.path), "组件磁盘与运行签名不一致")
-    try require(Bundle.main.bundleIdentifier == "com.gamma.computeruse", "组件 bundle identity 无效")
+    try require(Bundle.main.bundleIdentifier == "com.carpus.computeruse", "组件 bundle identity 无效")
     return hash.map { String(format: "%02x", $0) }.joined()
 }
 func peerPID(_ fd: Int32) throws -> pid_t {
@@ -60,17 +60,17 @@ func peerPID(_ fd: Int32) throws -> pid_t {
     try require(getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0 && pid > 1, "无法核验 IPC 对端 PID")
     return pid
 }
-func authenticatePeer(_ fd: Int32, requireGammaParent: Bool) throws {
+func authenticatePeer(_ fd: Int32, requireCarpusParent: Bool) throws {
     let pid = try peerPID(fd)
     let ownPath = try executablePath(getpid())
     try require(executablePath(pid) == ownPath, "IPC 对端必须来自同一组件路径")
     try require(processHash(pid) == processHash(getpid()), "IPC 对端组件签名不一致")
-    if requireGammaParent {
+    if requireCarpusParent {
         let parent = try parentPID(pid)
         let path = try executablePath(parent)
-        try require(path == "/Applications/Gamma.app/Contents/MacOS/Gamma", "代理必须由已安装的 Gamma 主进程启动")
+        try require(path == "/Applications/Carpus.app/Contents/MacOS/Carpus", "代理必须由已安装的 Carpus 主进程启动")
         // 同时验证运行签名和固定路径的完整磁盘签名；不接受仅路径或 token。
-        try require(processHash(parent) == diskHash(path), "Gamma 父进程签名与磁盘不一致")
+        try require(processHash(parent) == diskHash(path), "Carpus 父进程签名与磁盘不一致")
         try require(try parentPID(pid) == parent, "代理父进程在校验期间发生变化")
     }
 }

@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import type { ComputerHost } from './computer-controller'
-import type { ComputerPermission } from '@gamma/shared'
+import type { ComputerPermission } from '@carpus/shared'
 
 interface Pending { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
 export interface ComputerHostCommand { executable: string; args?: string[] }
@@ -21,7 +21,7 @@ const NATIVE_REASONS: Readonly<Record<string, string>> = {
   'ambiguous-application': '存在多个应用进程，无法唯一授权',
   'invalid-application': '应用名称或标识无效',
   'unsafe-focus': '无法验证实际输入焦点',
-  'untrusted-surface': '目标属于Gamma或不可授权的系统界面',
+  'untrusted-surface': '目标属于Carpus或不可授权的系统界面',
   'unknown-target': '无法验证实际目标控件',
   'cross-application-drag': '暂不支持跨应用拖拽',
   'revoked': '原生授权已停止或失效',
@@ -120,7 +120,7 @@ export class ComputerNativeHost {
     const { executable, args } = this.command()
     let loggerEnvironment: { logPath: string; version: string } | undefined
     try { loggerEnvironment = this.options.loggerEnvironment?.() } catch { /* 日志配置失败不能阻止原生操作。 */ }
-    const child = spawn(executable, args ?? [], { stdio: ['pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: process.env.HOME, LANG: 'en_US.UTF-8', GAMMA_COMPUTER_LOG_PATH: loggerEnvironment?.logPath, GAMMA_APP_VERSION: loggerEnvironment?.version } })
+    const child = spawn(executable, args ?? [], { stdio: ['pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: process.env.HOME, LANG: 'en_US.UTF-8', CARPUS_COMPUTER_LOG_PATH: loggerEnvironment?.logPath, CARPUS_APP_VERSION: loggerEnvironment?.version } })
     this.child = child
     const decoder = new StringDecoder('utf8')
     let buffered = ''

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { ComputerPermission, ComputerPermissions, ComputerUsePreferences } from '@gamma/shared'
+import type { ComputerPermission, ComputerPermissions, ComputerUsePreferences } from '@carpus/shared'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { SettingsRow } from '@/components/settings/primitives/SettingsRow'
@@ -7,7 +7,7 @@ import { detectIsMac } from '@/lib/platform'
 
 /** 授权决定可以在本地撤销；读取失败时绝不覆盖既有偏好。 */
 export function ComputerAuthorizationSetting(): React.ReactElement {
-  const permissionOwner = detectIsMac() ? 'gammaComputerUse' : 'Gamma'
+  const permissionOwner = detectIsMac() ? 'carpusComputerUse' : 'Carpus'
   const [preferences, setPreferences] = React.useState<ComputerUsePreferences | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -78,7 +78,7 @@ export function ComputerAuthorizationSetting(): React.ReactElement {
         <p role="status" className="text-xs text-muted-foreground">{error ? '授权尚未读取' : '正在读取授权…'}</p>
         {error && <Button size="sm" variant="ghost" onClick={() => { void load() }}>重试读取</Button>}
       </> : <>
-        <p className="text-xs text-muted-foreground">{permissionOwner === 'gammaComputerUse' ? 'gammaComputerUse · ' : ''}agent-desktop{backendVersion ? ` ${backendVersion}` : ''}</p>
+        <p className="text-xs text-muted-foreground">{permissionOwner === 'carpusComputerUse' ? 'carpusComputerUse · ' : ''}agent-desktop{backendVersion ? ` ${backendVersion}` : ''}</p>
         <div className="space-y-2 border-b border-border/50 pb-3">
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy || permissionBusy !== null || permissions?.accessibility === true} onClick={() => { void requestPermission('accessibility') }}>{permissionBusy === 'accessibility' ? '正在请求辅助功能…' : permissions?.accessibility ? '辅助功能已授权' : `授权 ${permissionOwner} 辅助功能`}</Button>

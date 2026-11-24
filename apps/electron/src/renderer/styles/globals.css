@@ -68,9 +68,9 @@ body {
 
 @layer base {
   /* Electron 主窗口不应成为滚动容器；所有滚动必须停留在各自面板内。 */
-  html.gamma-main-window,
-  html.gamma-main-window body,
-  html.gamma-main-window #root {
+  html.carpus-main-window,
+  html.carpus-main-window body,
+  html.carpus-main-window #root {
     width: 100%;
     height: 100%;
     overflow: hidden;
@@ -114,17 +114,17 @@ body {
   background-color: hsl(var(--sidebar-control-surface-hover));
 }
 
-.gamma-sidebar button:focus-visible,
-.gamma-mode-button:focus-visible,
-.gamma-sidebar [role='button']:focus-visible {
+.carpus-sidebar button:focus-visible,
+.carpus-mode-button:focus-visible,
+.carpus-sidebar [role='button']:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gamma-sidebar,
-  .gamma-sidebar button,
-  .gamma-mode-button {
+  .carpus-sidebar,
+  .carpus-sidebar button,
+  .carpus-mode-button {
     transition: none;
   }
 }
@@ -1610,16 +1610,16 @@ body {
 
 /* 只控制明确标记的 UI 元素；不继承可变字重到 Markdown、代码、编辑器或 xterm。 */
 @supports (font-variation-settings: normal) {
-  :root:not(.theme-terminal-dark) .gamma-ui.font-medium,
-  :root:not(.theme-terminal-dark) .gamma-ui .font-medium {
+  :root:not(.theme-terminal-dark) .carpus-ui.font-medium,
+  :root:not(.theme-terminal-dark) .carpus-ui .font-medium {
     font-variation-settings: 'wght' var(--ui-medium);
   }
-  :root:not(.theme-terminal-dark) .gamma-ui.font-semibold,
-  :root:not(.theme-terminal-dark) .gamma-ui .font-semibold {
+  :root:not(.theme-terminal-dark) .carpus-ui.font-semibold,
+  :root:not(.theme-terminal-dark) .carpus-ui .font-semibold {
     font-variation-settings: 'wght' var(--ui-semibold);
   }
-  :root:not(.theme-terminal-dark) .gamma-ui.font-bold,
-  :root:not(.theme-terminal-dark) .gamma-ui .font-bold {
+  :root:not(.theme-terminal-dark) .carpus-ui.font-bold,
+  :root:not(.theme-terminal-dark) .carpus-ui .font-bold {
     font-variation-settings: 'wght' var(--ui-bold);
   }
 }
@@ -1670,26 +1670,26 @@ body {
 :root:not(.theme-terminal-dark) .message-item.is-user .inline-block[class~="bg-primary/10"] {
   border-radius: var(--radius-message);
 }
-.gamma-ui {
+.carpus-ui {
   font-optical-sizing: auto;
 }
 /* 时长只赋给明确声明过渡属性的控件；容器不得意外动画 padding/height，
  * 否则侧栏收起时 macOS 红绿灯避让空间会逐帧缩小。 */
-.gamma-ui[class*="transition-"] {
+.carpus-ui[class*="transition-"] {
   transition-duration: var(--motion-fast);
 }
-:root:not(.theme-terminal-dark) .gamma-ui.rounded-md {
+:root:not(.theme-terminal-dark) .carpus-ui.rounded-md {
   border-radius: var(--radius-control);
 }
 @media (prefers-reduced-motion: reduce) {
-  .gamma-ui,
-  .gamma-ui[class*="transition-"],
-  .gamma-ui *,
+  .carpus-ui,
+  .carpus-ui[class*="transition-"],
+  .carpus-ui *,
   :root:not(.theme-terminal-dark) [data-input-mode] > div:first-child:not(.border-dashed) {
     transition: none;
     animation: none;
   }
-  .gamma-ui:active { transform: none; }
+  .carpus-ui:active { transform: none; }
 }
 
 /* 只在有输入框的空会话中，把问候和输入框作为一组居中；短窗口保留原布局。 */
@@ -1722,34 +1722,34 @@ body {
   --workbench-input-radius: 14px;
   --workbench-sidebar-row-height: var(--list-row-height);
 }
-[data-workbench-density] .gamma-sidebar {
+[data-workbench-density] .carpus-sidebar {
   --workbench-sidebar-row-height: 36px;
 }
 /* --radius-input 同步给 PlanModeDashedBorder 的现有继承变量，避免虚线与外壳错位。 */
 [data-workbench-density] [data-input-mode="agent"] {
   --radius-input: var(--workbench-input-radius);
 }
-[data-workbench-density] [data-input-mode="agent"] > .gamma-composer:first-child {
+[data-workbench-density] [data-input-mode="agent"] > .carpus-composer:first-child {
   border-radius: var(--workbench-input-radius);
 }
 /* 复用 InputToolbarOverflow 的布局与折叠逻辑；可放在输入框外作为独立底部工具行。 */
-[data-workbench-density] [data-input-mode="agent"] > .gamma-composer-footer {
+[data-workbench-density] [data-input-mode="agent"] > .carpus-composer-footer {
   margin-top: 4px;
   padding-inline: 2px;
   height: 40px;
 }
-.gamma-sidebar[data-workbench-density] :is(.gamma-sidebar-nav-item, .gamma-sidebar-project-row, .session-quick-switch-row) {
+.carpus-sidebar[data-workbench-density] :is(.carpus-sidebar-nav-item, .carpus-sidebar-project-row, .session-quick-switch-row) {
   height: var(--workbench-sidebar-row-height);
   min-height: var(--workbench-sidebar-row-height);
   padding-top: 0;
   padding-bottom: 0;
 }
-.gamma-sidebar[data-workbench-density] .session-quick-switch-row:focus-visible {
+.carpus-sidebar[data-workbench-density] .session-quick-switch-row:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
 }
 
-.gamma-sidebar {
+.carpus-sidebar {
   --sidebar-content-inset: 8px;
   --sidebar-icon-inset: 12px;
   --sidebar-thread-rail-inset: 20px;
@@ -1759,18 +1759,18 @@ body {
   --sidebar-hover-surface: hsl(var(--foreground) / 0.04);
   --sidebar-selected-surface: hsl(var(--foreground) / 0.07);
 }
-.gamma-workbench .gamma-workbench-frame .gamma-panel[data-panel].gamma-sidebar {
+.carpus-workbench .carpus-workbench-frame .carpus-panel[data-panel].carpus-sidebar {
   padding: 0 var(--sidebar-content-inset) 8px;
 }
-.gamma-workbench-frame [data-sidebar-region="navigation"] .gamma-panel.gamma-sidebar {
+.carpus-workbench-frame [data-sidebar-region="navigation"] .carpus-panel.carpus-sidebar {
   border-right-width: 0;
 }
-.gamma-sidebar .gamma-sidebar-topbar {
+.carpus-sidebar .carpus-sidebar-topbar {
   margin-inline: calc(-1 * var(--sidebar-content-inset));
   margin-bottom: 4px;
 }
 /* 品牌字标单独使用正文衬线栈并放大一档；导航与控件仍保持 UI 无衬线。 */
-.gamma-sidebar .gamma-sidebar-brand {
+.carpus-sidebar .carpus-sidebar-brand {
   font-family: var(--font-body);
   font-size: 19px;
   line-height: 1;
@@ -1778,80 +1778,80 @@ body {
   letter-spacing: normal;
   color: hsl(var(--foreground));
 }
-.gamma-sidebar :is(.gamma-sidebar-new-button, .gamma-sidebar-nav-item, .gamma-sidebar-project-row, .session-quick-switch-row) {
+.carpus-sidebar :is(.carpus-sidebar-new-button, .carpus-sidebar-nav-item, .carpus-sidebar-project-row, .session-quick-switch-row) {
   height: var(--sidebar-row-height);
   min-height: var(--sidebar-row-height);
 }
-.gamma-sidebar :is(.gamma-sidebar-new-button, .gamma-sidebar-nav-item, .gamma-sidebar-project-row) {
+.carpus-sidebar :is(.carpus-sidebar-new-button, .carpus-sidebar-nav-item, .carpus-sidebar-project-row) {
   padding-inline: var(--sidebar-icon-inset) 8px;
 }
-.gamma-sidebar .gamma-sidebar-new-button {
+.carpus-sidebar .carpus-sidebar-new-button {
   background-color: hsl(var(--foreground) / 0.10);
 }
-.gamma-sidebar .gamma-sidebar-new-button:hover {
+.carpus-sidebar .carpus-sidebar-new-button:hover {
   background-color: hsl(var(--foreground) / 0.13);
 }
-.gamma-workbench-frame .gamma-panel[data-panel].gamma-sidebar .gamma-sidebar-new-button {
+.carpus-workbench-frame .carpus-panel[data-panel].carpus-sidebar .carpus-sidebar-new-button {
   background-color: hsl(var(--foreground) / 0.10);
 }
-.gamma-workbench-frame .gamma-panel[data-panel].gamma-sidebar .gamma-sidebar-new-button:hover {
+.carpus-workbench-frame .carpus-panel[data-panel].carpus-sidebar .carpus-sidebar-new-button:hover {
   background-color: hsl(var(--foreground) / 0.13);
 }
-.gamma-sidebar .gamma-sidebar-nav-item[aria-current="page"],
-.gamma-sidebar .gamma-sidebar-project[data-project-current="true"] .gamma-sidebar-project-row {
+.carpus-sidebar .carpus-sidebar-nav-item[aria-current="page"],
+.carpus-sidebar .carpus-sidebar-project[data-project-current="true"] .carpus-sidebar-project-row {
   background-color: var(--sidebar-selected-surface);
 }
-.gamma-sidebar .gamma-sidebar-section-heading {
+.carpus-sidebar .carpus-sidebar-section-heading {
   padding-inline: var(--sidebar-icon-inset) 0;
 }
-.gamma-sidebar .gamma-sidebar-section-heading > button {
+.carpus-sidebar .carpus-sidebar-section-heading > button {
   padding-inline: 0 4px;
 }
-.gamma-sidebar .gamma-sidebar-pinned-root {
+.carpus-sidebar .carpus-sidebar-pinned-root {
   padding-inline: var(--sidebar-icon-inset) 8px;
 }
-.gamma-sidebar .gamma-sidebar-project-row {
+.carpus-sidebar .carpus-sidebar-project-row {
   padding-right: 28px;
   font-weight: 400;
 }
-.gamma-sidebar .gamma-sidebar-project {
+.carpus-sidebar .carpus-sidebar-project {
   --sidebar-project-row-surface: hsl(var(--sidebar-surface));
 }
-.gamma-sidebar .gamma-sidebar-project[data-project-current="true"] {
+.carpus-sidebar .carpus-sidebar-project[data-project-current="true"] {
   --sidebar-project-row-surface: color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--foreground)) 7%);
 }
-.gamma-sidebar .gamma-sidebar-project:not([data-project-current="true"]):hover {
+.carpus-sidebar .carpus-sidebar-project:not([data-project-current="true"]):hover {
   --sidebar-project-row-surface: color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--foreground)) 4%);
 }
-.gamma-sidebar .gamma-sidebar-project-badge {
+.carpus-sidebar .carpus-sidebar-project-badge {
   display: none;
 }
-.gamma-sidebar .gamma-sidebar-project:is(:hover, :focus-within, [data-project-current="true"]) .gamma-sidebar-project-badge {
+.carpus-sidebar .carpus-sidebar-project:is(:hover, :focus-within, [data-project-current="true"]) .carpus-sidebar-project-badge {
   display: inline-flex;
 }
-.gamma-sidebar .gamma-sidebar-project-actions {
+.carpus-sidebar .carpus-sidebar-project-actions {
   pointer-events: none;
   padding-left: 16px;
 }
-.gamma-sidebar .gamma-sidebar-project:is(:hover, :focus-within, [data-project-collapsed="true"], :has(.gamma-sidebar-project-action[data-state="open"])) .gamma-sidebar-project-actions {
+.carpus-sidebar .carpus-sidebar-project:is(:hover, :focus-within, [data-project-collapsed="true"], :has(.carpus-sidebar-project-action[data-state="open"])) .carpus-sidebar-project-actions {
   background: linear-gradient(to right, transparent, var(--sidebar-project-row-surface) 16px);
 }
-.gamma-sidebar .gamma-sidebar-project-action {
+.carpus-sidebar .carpus-sidebar-project-action {
   opacity: 0;
   pointer-events: none;
 }
-.gamma-sidebar .gamma-sidebar-project-chevron {
+.carpus-sidebar .carpus-sidebar-project-chevron {
   opacity: 0;
   pointer-events: none;
 }
-.gamma-sidebar .gamma-sidebar-project[data-project-collapsed="true"] .gamma-sidebar-project-chevron,
-.gamma-sidebar .gamma-sidebar-project:is(:hover, :focus-within) .gamma-sidebar-project-action,
-.gamma-sidebar .gamma-sidebar-project:is(:hover, :focus-within) .gamma-sidebar-project-chevron,
-.gamma-sidebar .gamma-sidebar-project-action[data-state="open"] {
+.carpus-sidebar .carpus-sidebar-project[data-project-collapsed="true"] .carpus-sidebar-project-chevron,
+.carpus-sidebar .carpus-sidebar-project:is(:hover, :focus-within) .carpus-sidebar-project-action,
+.carpus-sidebar .carpus-sidebar-project:is(:hover, :focus-within) .carpus-sidebar-project-chevron,
+.carpus-sidebar .carpus-sidebar-project-action[data-state="open"] {
   opacity: 1;
   pointer-events: auto;
 }
-.gamma-sidebar .gamma-sidebar-thread-children {
+.carpus-sidebar .carpus-sidebar-thread-children {
   --sidebar-thread-rail-offset: 0px;
   --sidebar-thread-rail-start: 0px;
   --sidebar-thread-rail-end: 0px;
@@ -1859,7 +1859,7 @@ body {
   margin-left: calc(var(--sidebar-thread-rail-inset) + var(--sidebar-thread-rail-offset));
   padding-left: calc(var(--sidebar-thread-text-inset) - var(--sidebar-thread-rail-inset));
 }
-.gamma-sidebar .gamma-sidebar-thread-children::before {
+.carpus-sidebar .carpus-sidebar-thread-children::before {
   content: '';
   position: absolute;
   left: -1px;
@@ -1869,12 +1869,12 @@ body {
   background-color: hsl(var(--foreground) / 0.10);
   pointer-events: none;
 }
-.gamma-sidebar .gamma-sidebar-preview-tree {
+.carpus-sidebar .carpus-sidebar-preview-tree {
   --sidebar-thread-rail-start: 0px;
   --sidebar-thread-rail-end: 0px;
   position: relative;
 }
-.gamma-sidebar .gamma-sidebar-preview-tree::before {
+.carpus-sidebar .carpus-sidebar-preview-tree::before {
   content: '';
   position: absolute;
   left: calc(var(--sidebar-thread-rail-inset) - 1px);
@@ -1884,27 +1884,27 @@ body {
   background-color: hsl(var(--foreground) / 0.10);
   pointer-events: none;
 }
-.gamma-sidebar .gamma-sidebar-preview-tree > .gamma-sidebar-thread-children::before {
+.carpus-sidebar .carpus-sidebar-preview-tree > .carpus-sidebar-thread-children::before {
   content: none;
 }
-.gamma-sidebar .gamma-sidebar-delegation-children {
+.carpus-sidebar .carpus-sidebar-delegation-children {
   --sidebar-thread-rail-offset: 0px;
 }
-.gamma-sidebar .gamma-sidebar-pinned-children {
+.carpus-sidebar .carpus-sidebar-pinned-children {
   --sidebar-thread-rail-offset: 0px;
 }
-.gamma-sidebar .gamma-sidebar-preview-boundary {
+.carpus-sidebar .carpus-sidebar-preview-boundary {
   --sidebar-thread-text-inset: 28px;
   --sidebar-thread-rail-end: 0px;
 }
-.gamma-sidebar .gamma-sidebar-thread-row {
+.carpus-sidebar .carpus-sidebar-thread-row {
   position: relative;
   padding-inline: 0 8px;
 }
-.gamma-sidebar .gamma-sidebar-thread-empty {
+.carpus-sidebar .carpus-sidebar-thread-empty {
   height: var(--sidebar-row-height);
 }
-.gamma-sidebar .gamma-sidebar-thread-marker {
+.carpus-sidebar .carpus-sidebar-thread-marker {
   position: absolute;
   left: calc(var(--sidebar-thread-marker-inset) - var(--sidebar-thread-text-inset) - 3px);
   top: 50%;
@@ -1915,16 +1915,16 @@ body {
   background-color: hsl(var(--sidebar-surface));
   pointer-events: none;
 }
-.gamma-sidebar .gamma-sidebar-thread-row .gamma-sidebar-session-source-icon {
+.carpus-sidebar .carpus-sidebar-thread-row .carpus-sidebar-session-source-icon {
   display: none;
 }
-.gamma-sidebar .gamma-sidebar-thread-row:is(:hover, :focus-within, .agent-session-item-active) .gamma-sidebar-thread-marker {
+.carpus-sidebar .carpus-sidebar-thread-row:is(:hover, :focus-within, .agent-session-item-active) .carpus-sidebar-thread-marker {
   background-color: color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--foreground)) 4%);
 }
-.gamma-sidebar .gamma-sidebar-thread-row.agent-session-item-active .gamma-sidebar-thread-marker {
+.carpus-sidebar .carpus-sidebar-thread-row.agent-session-item-active .carpus-sidebar-thread-marker {
   background-color: color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--foreground)) 7%);
 }
-.gamma-sidebar .gamma-sidebar-thread-trailing {
+.carpus-sidebar .carpus-sidebar-thread-trailing {
   position: absolute;
   right: 4px;
   top: 50%;
@@ -1932,77 +1932,77 @@ body {
   padding-left: 12px;
   background: linear-gradient(to right, transparent, hsl(var(--sidebar-surface)) 12px);
 }
-.gamma-sidebar .gamma-sidebar-thread-row:is(:hover, :focus-within) .gamma-sidebar-thread-trailing {
+.carpus-sidebar .carpus-sidebar-thread-row:is(:hover, :focus-within) .carpus-sidebar-thread-trailing {
   background: linear-gradient(to right, transparent, color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--foreground)) 4%) 12px);
 }
-.gamma-sidebar .gamma-sidebar-thread-row.agent-session-item-active .gamma-sidebar-thread-trailing {
+.carpus-sidebar .carpus-sidebar-thread-row.agent-session-item-active .carpus-sidebar-thread-trailing {
   background: linear-gradient(to right, transparent, color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--foreground)) 7%) 12px);
 }
-.gamma-sidebar .gamma-sidebar-thread-row.agent-session-item-active.bg-warning\/\[0\.08\] .gamma-sidebar-thread-trailing {
+.carpus-sidebar .carpus-sidebar-thread-row.agent-session-item-active.bg-warning\/\[0\.08\] .carpus-sidebar-thread-trailing {
   background: linear-gradient(to right, transparent, color-mix(in srgb, hsl(var(--sidebar-surface)), hsl(var(--warning)) 8%) 12px);
 }
-.gamma-sidebar .gamma-sidebar-thread-row[data-quick-switch-label] .gamma-sidebar-thread-trailing {
+.carpus-sidebar .carpus-sidebar-thread-row[data-quick-switch-label] .carpus-sidebar-thread-trailing {
   background: hsl(var(--sidebar-surface));
 }
-.gamma-sidebar .gamma-sidebar-thread-action-row .gamma-sidebar-delegation-count {
+.carpus-sidebar .carpus-sidebar-thread-action-row .carpus-sidebar-delegation-count {
   display: none;
 }
-.gamma-sidebar .gamma-sidebar-thread-action-row:is(:hover, :focus-within) .gamma-sidebar-delegation-count {
+.carpus-sidebar .carpus-sidebar-thread-action-row:is(:hover, :focus-within) .carpus-sidebar-delegation-count {
   display: inline;
 }
-.gamma-sidebar .gamma-sidebar-footer {
+.carpus-sidebar .carpus-sidebar-footer {
   height: 56px;
   margin-inline: calc(-1 * var(--sidebar-content-inset));
   margin-bottom: -8px;
   padding-inline: var(--sidebar-content-inset);
   border-top-color: hsl(var(--foreground) / 0.10);
 }
-.gamma-sidebar .gamma-sidebar-footer-account {
+.carpus-sidebar .carpus-sidebar-footer-account {
   gap: 12px;
   padding-inline: 4px;
 }
-.gamma-sidebar .gamma-sidebar-footer-identity {
+.carpus-sidebar .carpus-sidebar-footer-identity {
   gap: 4px;
 }
-.gamma-sidebar .gamma-sidebar-footer-chevron {
+.carpus-sidebar .carpus-sidebar-footer-chevron {
   margin-left: 4px;
 }
-.gamma-sidebar .gamma-sidebar-avatar {
+.carpus-sidebar .carpus-sidebar-avatar {
   background-color: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
   box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.08);
 }
-.gamma-sidebar .gamma-sidebar-avatar img {
+.carpus-sidebar .carpus-sidebar-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.gamma-sidebar [data-sidebar-scroll] {
+.carpus-sidebar [data-sidebar-scroll] {
   scrollbar-gutter: stable;
 }
 @media (hover: none), (pointer: coarse) {
-  .gamma-sidebar .gamma-sidebar-project-chevron,
-  .gamma-sidebar .gamma-sidebar-project-action,
-  .gamma-sidebar .gamma-sidebar-thread-action-row .session-item-actions button {
+  .carpus-sidebar .carpus-sidebar-project-chevron,
+  .carpus-sidebar .carpus-sidebar-project-action,
+  .carpus-sidebar .carpus-sidebar-thread-action-row .session-item-actions button {
     opacity: 1;
     pointer-events: auto;
   }
-  .gamma-sidebar .gamma-sidebar-thread-action-row .gamma-sidebar-delegation-count {
+  .carpus-sidebar .carpus-sidebar-thread-action-row .carpus-sidebar-delegation-count {
     display: inline;
   }
 }
 @media (forced-colors: active) {
-  .gamma-sidebar .gamma-sidebar-project-actions,
-  .gamma-sidebar .gamma-sidebar-thread-trailing {
+  .carpus-sidebar .carpus-sidebar-project-actions,
+  .carpus-sidebar .carpus-sidebar-thread-trailing {
     background: Canvas;
   }
-  .gamma-sidebar .gamma-sidebar-thread-children::before {
+  .carpus-sidebar .carpus-sidebar-thread-children::before {
     background-color: GrayText;
   }
-  .gamma-sidebar .gamma-sidebar-preview-tree::before {
+  .carpus-sidebar .carpus-sidebar-preview-tree::before {
     background-color: GrayText;
   }
-  .gamma-sidebar .gamma-sidebar-thread-marker {
+  .carpus-sidebar .carpus-sidebar-thread-marker {
     background-color: Canvas;
     color: GrayText;
   }

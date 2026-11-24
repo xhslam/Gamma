@@ -9,7 +9,7 @@ import { writeJsonFileAtomic } from './safe-file'
 let home: string
 let previousHome: string | undefined
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'gamma-default-skill-upgrade-'))
+  home = mkdtempSync(join(tmpdir(), 'carpus-default-skill-upgrade-'))
   previousHome = setConfigHomeForTest(home)
   writeJsonFileAtomic(getAgentWorkspacesIndexPath(), { version: 2, workspaces: [{ id: 'workspace-id', slug: 'demo', name: '测试项目', createdAt: 1, updatedAt: 1 }] })
 })
@@ -24,7 +24,7 @@ function skill(parent: string, slug: string, version = '1.0.0'): string {
 
 describe('工作区默认 Skills 升级集成', () => {
   test('Given 新 bundle 不含历史四项 When 升级 Then 仍迁移原安装、保留停用决定并完整备份', () => {
-    skill(getDefaultSkillsDir(), 'gamma-coach', '1.2.0')
+    skill(getDefaultSkillsDir(), 'carpus-coach', '1.2.0')
     const active = getWorkspaceSkillsDir('demo')
     const inactive = getInactiveSkillsDir('demo')
     const build = skill(active, 'proma-build-ai-app')
@@ -35,7 +35,7 @@ describe('工作区默认 Skills 升级集成', () => {
 
     upgradeDefaultSkillsInWorkspaces()
     const installed = getAllWorkspaceSkills('demo')
-    for (const [slug, enabled] of [['gamma-build-ai-app', true], ['gamma-cloud-sdk', false], ['gamma-generate-image', true], ['gamma-gpt-image-2', false]] as const) {
+    for (const [slug, enabled] of [['carpus-build-ai-app', true], ['carpus-cloud-sdk', false], ['carpus-generate-image', true], ['carpus-gpt-image-2', false]] as const) {
       const found = installed.find((item) => item.slug === slug)
       expect(found?.name).toBe(slug)
       expect(found?.enabled).toBe(enabled)
@@ -43,8 +43,8 @@ describe('工作区默认 Skills 升级集成', () => {
       expect(readFileSync(join(parent, slug, 'custom.txt'), 'utf8')).toBe('定制文件')
     }
     expect(installed.some((item) => item.slug.startsWith('proma-'))).toBe(false)
-    expect(readFileSync(join(active, 'gamma-build-ai-app', 'guide.md'), 'utf8')).toContain('`gamma-cloud-sdk`')
-    expect(readFileSync(join(active, 'gamma-build-ai-app', 'SKILL.md'), 'utf8')).toContain('version: "1.0.1"')
+    expect(readFileSync(join(active, 'carpus-build-ai-app', 'guide.md'), 'utf8')).toContain('`carpus-cloud-sdk`')
+    expect(readFileSync(join(active, 'carpus-build-ai-app', 'SKILL.md'), 'utf8')).toContain('version: "1.0.1"')
     expect(readdirSync(join(getAgentWorkspacePath('demo'), '.legacy-skill-backups', 'skills'))).toHaveLength(2)
     expect(readdirSync(join(getAgentWorkspacePath('demo'), '.legacy-skill-backups', 'skills-inactive'))).toHaveLength(2)
     upgradeDefaultSkillsInWorkspaces()
@@ -54,34 +54,34 @@ describe('工作区默认 Skills 升级集成', () => {
   test('Given 默认源为空 When 升级 Then 仍修复已有历史模板', () => {
     skill(getInactiveSkillsDir('demo'), 'proma-cloud-sdk')
     upgradeDefaultSkillsInWorkspaces()
-    expect(existsSync(join(getInactiveSkillsDir('demo'), 'gamma-cloud-sdk', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'gamma-cloud-sdk'))).toBe(false)
+    expect(existsSync(join(getInactiveSkillsDir('demo'), 'carpus-cloud-sdk', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'carpus-cloud-sdk'))).toBe(false)
   })
 
   test('Given 缓存残留历史模板、工作区未安装 When 升级 Then 不再注入历史模板', () => {
-    skill(getDefaultSkillsDir(), 'gamma-build-ai-app')
-    skill(getDefaultSkillsDir(), 'gamma-cloud-sdk')
-    skill(getDefaultSkillsDir(), 'gamma-coach', '1.2.0')
+    skill(getDefaultSkillsDir(), 'carpus-build-ai-app')
+    skill(getDefaultSkillsDir(), 'carpus-cloud-sdk')
+    skill(getDefaultSkillsDir(), 'carpus-coach', '1.2.0')
     upgradeDefaultSkillsInWorkspaces()
-    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'gamma-coach', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'gamma-build-ai-app'))).toBe(false)
-    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'gamma-cloud-sdk'))).toBe(false)
+    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'carpus-coach', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'carpus-build-ai-app'))).toBe(false)
+    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'carpus-cloud-sdk'))).toBe(false)
   })
 
   test('Given 新 Coach 停用且旧 Coach 活跃 When 升级 Then 冲突不覆盖内容也不改变启用决定', () => {
-    skill(getDefaultSkillsDir(), 'gamma-coach', '9.0.0')
+    skill(getDefaultSkillsDir(), 'carpus-coach', '9.0.0')
     const old = skill(getWorkspaceSkillsDir('demo'), 'proma-coach')
-    const current = skill(getInactiveSkillsDir('demo'), 'gamma-coach', '1.0.0')
+    const current = skill(getInactiveSkillsDir('demo'), 'carpus-coach', '1.0.0')
     upgradeDefaultSkillsInWorkspaces()
     expect(readFileSync(join(old, 'SKILL.md'), 'utf8')).toContain('name: proma-coach')
     expect(readFileSync(join(current, 'SKILL.md'), 'utf8')).toContain('version: "1.0.0"')
-    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'gamma-coach'))).toBe(false)
+    expect(existsSync(join(getWorkspaceSkillsDir('demo'), 'carpus-coach'))).toBe(false)
   })
 })
 
 
 test('Given 索引工作区根链接到外部目录 When 升级 Then 不删除或迁移外部内容', () => {
-  skill(getDefaultSkillsDir(), 'gamma-coach', '9.0.0')
+  skill(getDefaultSkillsDir(), 'carpus-coach', '9.0.0')
   const external = join(home, 'external-project')
   const old = skill(join(external, 'skills'), 'proma-build-ai-app')
   const retired = skill(join(external, 'skills'), 'brainstorming')
@@ -91,6 +91,6 @@ test('Given 索引工作区根链接到外部目录 When 升级 Then 不删除�
   upgradeDefaultSkillsInWorkspaces()
   expect(readFileSync(join(old, 'SKILL.md'), 'utf8')).toContain('name: proma-build-ai-app')
   expect(existsSync(retired)).toBe(true)
-  expect(existsSync(join(external, 'skills', 'gamma-coach'))).toBe(false)
+  expect(existsSync(join(external, 'skills', 'carpus-coach'))).toBe(false)
   expect(existsSync(join(external, '.legacy-skill-backups'))).toBe(false)
 })

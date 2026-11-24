@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DESIGN_SKILL_SLUG } from '@gamma/shared'
+import { DESIGN_SKILL_SLUG } from '@carpus/shared'
 import { installDesignSkill } from './design-skill-install'
 
 const temporary: string[] = []
 afterEach(async () => { await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true }))) })
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'gamma-design-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'carpus-design-test-'))
   temporary.push(root)
   const skillsDirectory = join(root, 'skills')
   const inactiveSkillsDirectory = join(root, 'skills-inactive')

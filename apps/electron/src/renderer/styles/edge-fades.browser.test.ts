@@ -15,7 +15,7 @@ beforeAll(async () => {
     const read=()=>{const e=document.getElementById('sample-title'),s=getComputedStyle(e);return {overflow:e.dataset.titleOverflow,mask:s.maskImage,textOverflow:s.textOverflow,text:e.textContent,tag:e.tagName,title:e.title}};
     window.edgeFixture={root,wait,read,label,attachScrollFade,
       async mount(options={}){
-        root.render(React.createElement('div',{id:'title-row',className:'gamma-ui',style:{display:'flex',gap:8,width:options.width??240}},
+        root.render(React.createElement('div',{id:'title-row',className:'carpus-ui',style:{display:'flex',gap:8,width:options.width??240}},
           React.createElement(FadeTitle,{id:'sample-title',as:options.tag??'span',title:options.label??label,className:options.className??'flex-1 truncate',style:{fontSize:options.fontSize}},options.label??label),
           React.createElement('button',{id:'title-action',style:{flexShrink:0,width:28}},'操作')));
         await wait(30);await document.fonts.ready;await wait(50);

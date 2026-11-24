@@ -181,7 +181,7 @@ describe('AgentDesktopHost 传输和停止屏障', () => {
 
 describe('AgentDesktopHost 后代进程退出验证', () => {
   it('Given 运行中的执行者和后代 When 取消 Then 两者退出且不等待僵尸回收', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gamma-host-test-'))
+    const dir = mkdtempSync(join(tmpdir(), 'carpus-host-test-'))
     const ready = join(dir, 'ready')
     const host = new AgentDesktopHost(() => ({ executable: process.execPath }))
     const controller = new AbortController()

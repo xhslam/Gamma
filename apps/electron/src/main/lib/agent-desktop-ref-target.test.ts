@@ -7,7 +7,7 @@ import { readAgentDesktopRefTarget } from './agent-desktop-ref-target'
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'gamma-ref-target-test-'))
+  const root = mkdtempSync(join(tmpdir(), 'carpus-ref-target-test-'))
   roots.push(root)
   const base = join(root, 'state', 'sessions', 'session-123', 'snapshots', 'snapshot')
   mkdirSync(base, { recursive: true })

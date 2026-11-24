@@ -34,7 +34,7 @@ describe('Intelligent UI 安全与隔离', () => {
   })
   test('Given 回传数据 When 打包 Then 仅携带结构化数据且限制大小与凭据', () => {
     const event = validateIntelligentUiAction('analyze', { fields: { name: 'A' } })
-    expect(buildIntelligentUiActionMessage('message:1', event)).toContain('"source": "gamma-intelligent-ui"')
+    expect(buildIntelligentUiActionMessage('message:1', event)).toContain('"source": "carpus-intelligent-ui"')
     expect(() => validateIntelligentUiAction('save', { apiKey: 'x' })).toThrow()
     expect(() => validateIntelligentUiAction('save', { text: 'x'.repeat(17000) })).toThrow()
     expect(() => validateIntelligentUiAction('', {})).toThrow()

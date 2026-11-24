@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai'
 import { allPendingPermissionRequestsAtom } from '@/atoms/agent-atoms'
 import { useMessageSessionId } from '@/components/ai-elements/message'
 import { getToolExecutionPresentation } from '@/lib/tool-execution-presentation'
-import type { SDKMessage, SDKToolResultBlock, SDKUserMessage } from '@gamma/shared'
+import type { SDKMessage, SDKToolResultBlock, SDKUserMessage } from '@carpus/shared'
 
 interface ToolResultData {
   result?: string

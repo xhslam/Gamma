@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AutomaticMemoryChange, AutomaticMemorySnapshot } from '@gamma/shared'
+import type { AutomaticMemoryChange, AutomaticMemorySnapshot } from '@carpus/shared'
 import { AutomaticMemoryProcessor, type AutomaticMemoryJob, type AutomaticMemoryProcessorDependencies } from './automatic-memory-processor'
 
 function fixture() {

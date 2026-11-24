@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SDKMessage } from '@gamma/shared'
+import type { SDKMessage } from '@carpus/shared'
 import { assess, scenarios } from './verify-memory-retrieval'
 
 const messages = (text: string, success = true): SDKMessage[] => [
@@ -13,7 +13,7 @@ const messages = (text: string, success = true): SDKMessage[] => [
 ]
 describe('模型验收指标不伪造成功', () => {
   it('Given 本地协议fixture When 独立脚本跑完39次 Then 结果明确标为非模型验收', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gamma-eval-cli-'))
+    const root = mkdtempSync(join(tmpdir(), 'carpus-eval-cli-'))
     const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
       const body = await request.json() as { messages: Array<{ role: string }> }
       const scenario = scenarios.find(item => JSON.stringify(body.messages.filter(message => message.role === 'user')).includes(item.query))
@@ -25,7 +25,7 @@ describe('模型验收指标不伪造成功', () => {
     } })
     try {
       const output = join(root, 'report.json')
-      const child = Bun.spawn([process.execPath, new URL('./verify-memory-retrieval.ts', import.meta.url).pathname, '--fixture', '--output', output], { env: { ...process.env, GAMMA_MEMORY_EVAL_API_KEY: 'synthetic-key', GAMMA_MEMORY_EVAL_PROVIDER: 'openai', GAMMA_MEMORY_EVAL_MODEL: 'gpt-4o-mini', GAMMA_MEMORY_EVAL_BASE_URL: `http://127.0.0.1:${server.port}/v1` }, stdout: 'pipe', stderr: 'pipe' })
+      const child = Bun.spawn([process.execPath, new URL('./verify-memory-retrieval.ts', import.meta.url).pathname, '--fixture', '--output', output], { env: { ...process.env, CARPUS_MEMORY_EVAL_API_KEY: 'synthetic-key', CARPUS_MEMORY_EVAL_PROVIDER: 'openai', CARPUS_MEMORY_EVAL_MODEL: 'gpt-4o-mini', CARPUS_MEMORY_EVAL_BASE_URL: `http://127.0.0.1:${server.port}/v1` }, stdout: 'pipe', stderr: 'pipe' })
       const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
       if (code !== 0) throw new Error(`合成CLI失败：${stdout.slice(-1200)} ${stderr.slice(-1200)}`)
       expect(JSON.parse(readFileSync(output, 'utf8'))).toMatchObject({ mode: 'fixture-not-model', total: 39, passed: true, recall: 1, falseRead: 0, violations: 0 })
@@ -62,7 +62,7 @@ describe('模型验收指标不伪造成功', () => {
     const check = Bun.spawn([process.execPath, script, '--check'], { stdout: 'pipe', stderr: 'pipe' })
     expect(JSON.parse(await new Response(check.stdout).text())).toMatchObject({ modelTested: false, total: 39 })
     expect(await check.exited).toBe(0)
-    const env = { ...process.env }; delete env.GAMMA_MEMORY_EVAL_API_KEY; delete env.GAMMA_MEMORY_EVAL_MODEL
+    const env = { ...process.env }; delete env.CARPUS_MEMORY_EVAL_API_KEY; delete env.CARPUS_MEMORY_EVAL_MODEL
     const execution = Bun.spawn([process.execPath, script], { env, stdout: 'pipe', stderr: 'pipe' })
     await new Response(execution.stdout).text(); await new Response(execution.stderr).text()
     expect(await execution.exited).toBe(1)

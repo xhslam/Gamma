@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENT_SIZE } from '@gamma/shared'
+import { MAX_ATTACHMENT_SIZE } from '@carpus/shared'
 import { realpathSync, statSync } from 'node:fs'
 import { open } from 'node:fs/promises'
 import { extname } from 'node:path'

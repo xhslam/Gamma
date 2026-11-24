@@ -1,4 +1,4 @@
-import type { AgentSessionMeta, SDKMessage } from '@gamma/shared'
+import type { AgentSessionMeta, SDKMessage } from '@carpus/shared'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import type { TabItem } from '@/atoms/tab-atoms'
 
@@ -39,7 +39,7 @@ export function createExternalAgentRunUserMessage(input: {
     message: { content: [{ type: 'text', text: input.userMessage }] },
     parent_tool_use_id: null,
     _createdAt: input.startedAt,
-    _gammaLiveRunStartedAt: input.startedAt,
+    _carpusLiveRunStartedAt: input.startedAt,
   } as unknown as SDKMessage
 }
 

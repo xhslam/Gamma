@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { createVisualRendererHarness, type VisualRendererHarness } from '../../../../test-utils/visual-renderer'
 
 // 截图只写显式产物目录或系统临时目录，不绑定其他会话的工作台。
-const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || join(tmpdir(), 'gamma-right-panel-on-demand')
+const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || join(tmpdir(), 'carpus-right-panel-on-demand')
 try {
   mkdirSync(ARTIFACTS_DIR, { recursive: true })
 } catch {}
@@ -30,8 +30,8 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
     const result = await visualHarness.run<boolean[]>(`
       const api = window.onDemandTest;
       const root = document.getElementById('root'), frame = root.firstElementChild;
-      root.classList.add('gamma-workbench');
-      frame.classList.add('gamma-workbench-frame');
+      root.classList.add('carpus-workbench');
+      frame.classList.add('carpus-workbench-frame');
       document.documentElement.dataset.sceneTheme = 'cloud-drift';
       const results = [];
       const sameEdge = (a, b) => Math.abs(a - b) < 1;
@@ -54,8 +54,8 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
       } finally {
         api.setMarkdownLayout();
         delete document.documentElement.dataset.sceneTheme;
-        frame.classList.remove('gamma-workbench-frame');
-        root.classList.remove('gamma-workbench');
+        frame.classList.remove('carpus-workbench-frame');
+        root.classList.remove('carpus-workbench');
       }
       return results;
     `)
@@ -284,7 +284,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
       // 调用 openInBigPanel 切换到 S2 并打开指定文件
       window.onDemandTest.openInBigPanel('changes', {
         filePath: 'src/index.ts',
-        gitRoot: '/workspace/gamma',
+        gitRoot: '/workspace/carpus',
         baseRef: 'origin/main',
       })
       await window.onDemandTest.until(() => document.querySelector('[data-panel="workspace"][data-panel-open="true"] [role="tablist"]'))
@@ -335,7 +335,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
   test('Given 已打开预览 When 从文件浮层选择第二个文件 Then 原工作区保持展开且只添加实际文件标签', async () => {
     const result = await visualHarness.run<{ workspacePreserved: boolean; hasBothFiles: boolean; noPermanentTabs: boolean; overlayClosed: boolean }>(`
       window.onDemandTest.clearExplorationTabs()
-      window.onDemandTest.openInBigPanel('files', { filePath: '/workspace/gamma/src/index.ts', previewOnly: true })
+      window.onDemandTest.openInBigPanel('files', { filePath: '/workspace/carpus/src/index.ts', previewOnly: true })
       await window.onDemandTest.until(() => document.querySelector('[data-panel-open="true"] [role="tablist"]'))
       const previousTab = window.onDemandTest.getActiveTab()
       document.querySelector('[data-testid="on-demand-right-panel-nav"] button[aria-label^="文件"]').click()
@@ -358,7 +358,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
   test('Given 唯一文件预览 When 关闭最后一个标签 Then 工作区收起且不会回到文件浏览器', async () => {
     const result = await visualHarness.run<{ closed: boolean; noFileBrowser: boolean; plusRestored: boolean }>(`
       window.onDemandTest.clearExplorationTabs()
-      window.onDemandTest.openInBigPanel('files', { filePath: '/workspace/gamma/package.json', previewOnly: true })
+      window.onDemandTest.openInBigPanel('files', { filePath: '/workspace/carpus/package.json', previewOnly: true })
       await window.onDemandTest.until(() => document.querySelector('button[aria-label="关闭 package.json"]'))
       document.querySelector('button[aria-label="关闭 package.json"]').click()
       await window.onDemandTest.until(() => !window.onDemandTest.getIsBigPanelOpen())
@@ -407,7 +407,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
   test('Given 收起时活动标签已失效 When 点击展开 Then 恢复仍存在的真实文件标签', async () => {
     const result = await visualHarness.run<{ activeTab: string; noPlus: boolean; overlayClosed: boolean }>(`
       window.onDemandTest.clearExplorationTabs()
-      window.onDemandTest.openInBigPanel('files', { filePath: '/workspace/gamma/package.json', previewOnly: true })
+      window.onDemandTest.openInBigPanel('files', { filePath: '/workspace/carpus/package.json', previewOnly: true })
       await window.onDemandTest.until(() => document.querySelector('button[aria-label="关闭 package.json"]'))
       const originalTab = window.onDemandTest.getActiveTab()
       window.onDemandTest.collapseBigPanel()
@@ -515,7 +515,7 @@ describe('右侧按需面板 - 完整 Chromium 回归测试与全链路验证', 
       window.onDemandTest.closeOverlay()
       window.onDemandTest.openInBigPanel('changes', {
         filePath: 'src/index.ts',
-        gitRoot: '/workspace/gamma',
+        gitRoot: '/workspace/carpus',
         baseRef: 'origin/main',
       })
       await window.onDemandTest.delay(100)

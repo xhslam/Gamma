@@ -20,7 +20,7 @@ let fakeClipboardText = ''
 let fakeClipboardPlist = ''
 
 describe('终端剪贴板服务 terminal-clipboard-service', () => {
-  const testDir = join(tmpdir(), `gamma-term-clip-test-${Date.now()}`)
+  const testDir = join(tmpdir(), `carpus-term-clip-test-${Date.now()}`)
 
   beforeEach(() => {
     fakeClipboardImage = {

@@ -1,6 +1,6 @@
 ---
 name: knowledge-maintenance
-description: 维护 Gamma 项目地图与长期协作知识。当用户说“记住”“以后这样做”“你又忘了”、用户直接表达或重复出现的稳定偏好/决策/纠错，或当前任务发现项目 AGENTS.md 已过时时使用。将事实路由到项目根 AGENTS.md、Gamma workspace AGENTS.md、memory/、Skill 或 Context；历史会话仅在用户明确授权后分批作为补证据。不要将会话流水账或单次推断写入长期知识。
+description: 维护 Carpus 项目地图与长期协作知识。当用户说“记住”“以后这样做”“你又忘了”、用户直接表达或重复出现的稳定偏好/决策/纠错，或当前任务发现项目 AGENTS.md 已过时时使用。将事实路由到项目根 AGENTS.md、Carpus workspace AGENTS.md、memory/、Skill 或 Context；历史会话仅在用户明确授权后分批作为补证据。不要将会话流水账或单次推断写入长期知识。
 version: "1.0.5"
 ---
 
@@ -13,13 +13,13 @@ version: "1.0.5"
 | 信号 | 位置 |
 | --- | --- |
 | 当前项目如何运行、架构/目录/命令/验证/边界 | 项目根 `AGENTS.md` |
-| Gamma 执行环境、工作区流程、项目入口指针（不列已安装 Skills） | Gamma workspace `AGENTS.md` |
+| Carpus 执行环境、工作区流程、项目入口指针（不列已安装 Skills） | Carpus workspace `AGENTS.md` |
 | 协作约定、技术决定、踩坑经验、决策理由 | workspace `memory/` 的主题 Markdown |
 | 重复的可执行步骤 | Skill |
 | 长调研、证据正文、设计报告 | 项目 Context / 本地文档 |
 | 当前任务临时状态 | 会话工作台 |
 
-项目根 AGENTS.md 与 workspace AGENTS.md 都应最小更新、保留用户内容；项目事实不双写。优先维护已有 `<!-- gamma:... -->` 或兼容的 `<!-- proma:... -->` 区块，保留原标记。`gamma:knowledge-maintenance` 与 `proma:knowledge-maintenance` 表示同一协议；已有任一种时不得因改名再追加第二个区块。
+项目根 AGENTS.md 与 workspace AGENTS.md 都应最小更新、保留用户内容；项目事实不双写。优先维护已有 `<!-- carpus:... -->` 或兼容的 `<!-- proma:... -->` 区块，保留原标记。`carpus:knowledge-maintenance` 与 `proma:knowledge-maintenance` 表示同一协议；已有任一种时不得因改名再追加第二个区块。
 
 ## Memory 的组织
 

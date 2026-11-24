@@ -1,5 +1,5 @@
 /**
- * gamma session list — 列出会话索引（便宜，不读 JSONL 正文）。
+ * carpus session list — 列出会话索引（便宜，不读 JSONL 正文）。
  */
 import { register } from '../registry'
 import { listSessions } from '../sessions'

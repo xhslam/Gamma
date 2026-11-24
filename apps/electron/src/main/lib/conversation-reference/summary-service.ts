@@ -6,7 +6,7 @@
  * 包含输入预算防溢出分块、30秒超时熔断、磁盘原子缓存与优雅降级。
  */
 
-import { getAdapter, streamSSE } from '@gamma/core'
+import { getAdapter, streamSSE } from '@carpus/core'
 import {
   getChannelById,
   persistCodexOAuthCredentials,

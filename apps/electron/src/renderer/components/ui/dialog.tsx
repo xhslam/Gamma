@@ -47,7 +47,7 @@ const DialogContent = React.forwardRef<
       data-panel="floating"
       ref={ref}
       className={cn(
-        "gamma-panel",
+        "carpus-panel",
         // 保留 Radix 焦点圈定/恢复；12px圆角、1px描边和16px内边距由共享面板规则提供。
         "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4",
         "border border-border/50 bg-dialog text-dialog-foreground rounded-2xl p-6 shadow-[var(--shadow-dialog,var(--shadow-xl))] duration-200 titlebar-no-drag",

@@ -12,7 +12,7 @@ describe('Given Electron GUI 回归的钥匙串隔离', () => {
   })
 
   test.skipIf(process.platform !== 'darwin')('When 真实Electron连续启动并加解密 Then 内存钥匙串可用且无需用户授权', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'gamma-keychain-isolation-'))
+    const directory = await mkdtemp(join(tmpdir(), 'carpus-keychain-isolation-'))
     const entryPoint = join(directory, 'main.cjs')
     try {
       await writeFile(entryPoint, `
@@ -30,7 +30,7 @@ app.whenReady().then(async () => {
     await window.loadURL('data:text/html,<title>isolated</title>');
     await session.defaultSession.cookies.set({ url: 'https://isolated.test', name: 'synthetic', value: 'fixture', expirationDate: Date.now() / 1000 + 600 });
     await session.defaultSession.cookies.flushStore();
-    console.log('GAMMA_KEYCHAIN_ISOLATED_OK');
+    console.log('CARPUS_KEYCHAIN_ISOLATED_OK');
   } catch (error) { console.error(error); process.exitCode = 1; }
   finally { window?.destroy(); app.quit(); }
 });
@@ -47,7 +47,7 @@ app.whenReady().then(async () => {
             new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
           ])
           expect(code, stderr).toBe(0)
-          expect(stdout).toContain('GAMMA_KEYCHAIN_ISOLATED_OK')
+          expect(stdout).toContain('CARPUS_KEYCHAIN_ISOLATED_OK')
           expect(stderr).not.toMatch(/Keychain (?:lookup|add) failed/)
         } finally { clearTimeout(timeout) }
       }

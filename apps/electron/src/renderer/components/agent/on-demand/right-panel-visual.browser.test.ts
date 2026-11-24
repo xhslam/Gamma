@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { createVisualRendererHarness, type VisualRendererHarness } from '../../../../test-utils/visual-renderer'
 import { rightPanelFixture } from './right-panel-fixture'
 
-const artifacts = process.env.ARTIFACTS_DIR || join(tmpdir(), 'gamma-right-panel-visual')
+const artifacts = process.env.ARTIFACTS_DIR || join(tmpdir(), 'carpus-right-panel-visual')
 mkdirSync(artifacts, { recursive: true })
 const boot = `await window.onDemandTest.until(() => document.querySelector('[data-testid="on-demand-right-panel-nav"]'));`
 const openChanges = `${boot}
@@ -78,7 +78,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
 
   test('When 展开再收起 Then 布局平滑让位、面板与内容分层淡入，退出结束后才卸载', async () => {
     const result = await harness.run(`${boot}
-      const slot = document.querySelector('.gamma-on-demand-slot');
+      const slot = document.querySelector('.carpus-on-demand-slot');
       const chat = document.querySelector('[data-testid="chat-main-area"]');
       const original = chat.getBoundingClientRect().width;
       window.onDemandTest.toggleOverlay('files');
@@ -87,7 +87,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       const panel = document.querySelector('[data-testid="on-demand-overlay-panel"]');
       const widthDuring = slot.getBoundingClientRect().width;
       const opacityDuring = Number(getComputedStyle(panel).opacity);
-      const layerDelay = getComputedStyle(panel.querySelector('.gamma-on-demand-content')).animationDelay;
+      const layerDelay = getComputedStyle(panel.querySelector('.carpus-on-demand-content')).animationDelay;
       await window.onDemandTest.delay(260);
       const widthOpen = slot.getBoundingClientRect().width;
       const opacityOpen = Number(getComputedStyle(panel).opacity);
@@ -233,8 +233,8 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       const list = document.querySelector('[data-testid="on-demand-files-virtual-container"]');
       const rows = [...list.querySelectorAll('button')];
       const longRow = rows.find(row => row.textContent.includes('very-long-file-title-'));
-      const longTitle = longRow.querySelector('.gamma-fade-title');
-      const shortTitle = rows[0].querySelector('.gamma-fade-title');
+      const longTitle = longRow.querySelector('.carpus-fade-title');
+      const shortTitle = rows[0].querySelector('.carpus-fade-title');
       const directory = rows[0], collapsed = rows.find(row => row.textContent.includes('folder-2')).querySelector('[data-disclosure-chevron]');
       const titleXBefore = shortTitle?.getBoundingClientRect().x ?? 0;
       const first = {
@@ -254,7 +254,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       const after = {
         expandedOpacity: expanded ? getComputedStyle(expanded).opacity : 'missing',
         expandedTransform: expanded ? getComputedStyle(expanded).transform : 'missing',
-        titleXAfter: directory.querySelector('.gamma-fade-title')?.getBoundingClientRect().x ?? 1,
+        titleXAfter: directory.querySelector('.carpus-fade-title')?.getBoundingClientRect().x ?? 1,
       };
       longRow.click();
       await window.onDemandTest.until(() => window.onDemandTest.getIsBigPanelOpen());
@@ -321,7 +321,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       const panel = document.querySelector('[data-testid="on-demand-overlay-panel"]'), rect = panel.getBoundingClientRect();
       const style = getComputedStyle(panel);
       const metric = {left: rect.left, right: rect.right, width: rect.width, viewport: innerWidth,
-        animation: style.animationName, noTransition: getComputedStyle(document.querySelector('.gamma-on-demand-slot')).transitionDuration === '0s', translation: getComputedStyle(document.querySelector('[data-testid="on-demand-right-panel-nav"] button svg')).translate};
+        animation: style.animationName, noTransition: getComputedStyle(document.querySelector('.carpus-on-demand-slot')).transitionDuration === '0s', translation: getComputedStyle(document.querySelector('[data-testid="on-demand-right-panel-nav"] button svg')).translate};
       document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true}));
       await window.onDemandTest.delay(60);
       return {...metric, focused: document.activeElement?.getAttribute('aria-label')?.includes('文件') === true, immediateClose:!document.querySelector('[data-testid="on-demand-overlay-panel"]')};
@@ -343,7 +343,7 @@ describe('Given 新版按需右侧组件与已完成六步视觉', () => {
       await window.onDemandTest.until(() => document.querySelector('[aria-label="动态调研分支快捷面板"] [role="option"]'));
       const root = document.querySelector('[aria-label="动态调研分支快捷面板"]');
       return {fade: root.querySelector('[data-scroll-fade]')?.dataset.scrollFade,
-        titles: root.querySelectorAll('.gamma-fade-title').length,
+        titles: root.querySelectorAll('.carpus-fade-title').length,
         disclosure: root.querySelectorAll('[data-disclosure-chevron]').length,
         rowHeight: root.querySelector('[role="option"]').getBoundingClientRect().height};
     `)

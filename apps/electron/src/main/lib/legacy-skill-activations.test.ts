@@ -2,19 +2,19 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { SkillActivation } from '@gamma/shared'
+import type { SkillActivation } from '@carpus/shared'
 import { normalizeLegacyBuiltinSkillActivation } from './legacy-skill-activations'
 
 let root: string
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'gamma-skill-activation-')) })
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'carpus-skill-activation-')) })
 afterEach(() => { rmSync(root, { recursive: true, force: true }) })
 function activation(state = 'skills'): SkillActivation {
   return { slug: 'proma-build-ai-app', name: 'proma-build-ai-app', filePath: join(root, 'demo', state, 'proma-build-ai-app', 'SKILL.md'), workspaceSlug: 'demo', workspaceSkillPath: 'proma-build-ai-app/SKILL.md', sources: ['explicit'] }
 }
 function current(state = 'skills'): string {
-  const target = join(root, 'demo', state, 'gamma-build-ai-app')
+  const target = join(root, 'demo', state, 'carpus-build-ai-app')
   mkdirSync(target, { recursive: true })
-  writeFileSync(join(target, 'SKILL.md'), 'name: gamma-build-ai-app')
+  writeFileSync(join(target, 'SKILL.md'), 'name: carpus-build-ai-app')
   return target
 }
 describe('历史 Skill 会话引用', () => {
@@ -22,7 +22,7 @@ describe('历史 Skill 会话引用', () => {
     const target = current(state)
     const original = activation(state)
     const result = normalizeLegacyBuiltinSkillActivation(original, root)
-    expect(result).toEqual({ ...original, slug: 'gamma-build-ai-app', name: 'gamma-build-ai-app', filePath: join(target, 'SKILL.md'), workspaceSkillPath: 'gamma-build-ai-app/SKILL.md' })
+    expect(result).toEqual({ ...original, slug: 'carpus-build-ai-app', name: 'carpus-build-ai-app', filePath: join(target, 'SKILL.md'), workspaceSkillPath: 'carpus-build-ai-app/SKILL.md' })
     expect(original.slug).toBe('proma-build-ai-app')
     expect(normalizeLegacyBuiltinSkillActivation(result, root)).toBe(result)
   })
@@ -60,5 +60,5 @@ test('Given JSONL 激活数组含损坏项 When 归一 Then 原样保留且不�
     const corruptedActivation = value as unknown as SkillActivation
     expect(normalizeLegacyBuiltinSkillActivation(corruptedActivation, root)).toBe(corruptedActivation)
   }
-  expect(normalizeLegacyBuiltinSkillActivation(activation(), root).slug).toBe('gamma-build-ai-app')
+  expect(normalizeLegacyBuiltinSkillActivation(activation(), root).slug).toBe('carpus-build-ai-app')
 })

@@ -1,7 +1,7 @@
 {
-  "name": "gamma",
+  "name": "carpus",
   "version": "0.1.4",
-  "description": "Gamma，为专业用户设计的 Agent",
+  "description": "Carpus，为专业用户设计的 Agent",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -9,13 +9,13 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "bun run --filter='@gamma/electron' dev",
-    "electron:dev": "bun run --filter='@gamma/electron' dev",
-    "electron:build": "bun run --filter='@gamma/electron' build",
-    "electron:start": "bun run --filter='@gamma/electron' start",
-    "dist:mac": "bun run --filter='@gamma/electron' dist:mac",
-  "dist:win": "bun run --filter='@gamma/electron' dist:win",
-  "dist:linux": "bun run --filter='@gamma/electron' dist:linux",
+    "dev": "bun run --filter='@carpus/electron' dev",
+    "electron:dev": "bun run --filter='@carpus/electron' dev",
+    "electron:build": "bun run --filter='@carpus/electron' build",
+    "electron:start": "bun run --filter='@carpus/electron' start",
+    "dist:mac": "bun run --filter='@carpus/electron' dist:mac",
+  "dist:win": "bun run --filter='@carpus/electron' dist:win",
+  "dist:linux": "bun run --filter='@carpus/electron' dist:linux",
     "build": "bun run --filter='*' build",
     "typecheck": "bun run --filter='*' typecheck",
     "test": "bun test"

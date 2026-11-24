@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { SDKContentBlock, SDKMessage } from '@gamma/shared'
+import type { SDKContentBlock, SDKMessage } from '@carpus/shared'
 import { formatProcessElapsed, getProcessLiveStatus } from './process-live-status'
 
 const edit: SDKContentBlock = { type: 'tool_use', id: 'edit', name: 'Edit', input: { path: '/project/src/ProductCard.tsx' } }

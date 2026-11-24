@@ -57,7 +57,7 @@ export function WallpaperChoices({ onSelect, dock = false }: WallpaperChoicesPro
   }
 
   return (
-    <div className={cn('space-y-2', dock && 'gamma-wallpaper-choices-dock px-2.5 pb-2.5')} aria-busy={saving}>
+    <div className={cn('space-y-2', dock && 'carpus-wallpaper-choices-dock px-2.5 pb-2.5')} aria-busy={saving}>
       <div className="flex items-center justify-between gap-2">
         {!dock && <span className="text-sm font-medium">场景主题</span>}
         <button
@@ -75,7 +75,7 @@ export function WallpaperChoices({ onSelect, dock = false }: WallpaperChoicesPro
         ref={choices}
         role="group"
         aria-label="场景主题选项"
-        className={cn('gamma-wallpaper-choices grid gap-x-2 gap-y-3', dock ? 'grid-cols-4' : 'grid-cols-2')}
+        className={cn('carpus-wallpaper-choices grid gap-x-2 gap-y-3', dock ? 'grid-cols-4' : 'grid-cols-2')}
         onKeyDown={(event) => {
           if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
           const buttons = Array.from(choices.current?.querySelectorAll('button') ?? [])
@@ -140,7 +140,7 @@ export function ThemeFloatingDock({
         side="top"
         sideOffset={8}
         collisionPadding={12}
-        className="gamma-wallpaper-dock max-h-[var(--radix-popover-content-available-height)] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] overflow-y-auto p-0"
+        className="carpus-wallpaper-dock max-h-[var(--radix-popover-content-available-height)] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] overflow-y-auto p-0"
         onInteractOutside={() => { interactedOutside.current = true }}
         onCloseAutoFocus={(event) => {
           if (interactedOutside.current) event.preventDefault()

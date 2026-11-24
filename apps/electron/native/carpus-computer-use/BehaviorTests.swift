@@ -26,7 +26,7 @@ import Darwin
             try require(condition, "BDD 失败：\(text)")
             scenarios.append(text)
         }
-        let root = try systemTemporaryDirectory() + "/gamma-ad-\(UUID().uuidString)"
+        let root = try systemTemporaryDirectory() + "/carpus-ad-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         try FileManager.default.createDirectory(atPath: root + "/state", withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -80,7 +80,7 @@ import Darwin
         if CommandLine.arguments.contains("--live-ref") {
             let snapshotJob = EngineJob()
             var snapshotOutput = Data()
-            _ = try snapshotJob.execute(executable: engine, arguments: ["snapshot", "--app=com.gamma.app", "--skeleton"], root: root, session: session, connection: -1) { kind, bytes in
+            _ = try snapshotJob.execute(executable: engine, arguments: ["snapshot", "--app=com.carpus.app", "--skeleton"], root: root, session: session, connection: -1) { kind, bytes in
                 if kind == "stdout" { snapshotOutput.append(bytes) }
             }
             func firstRef(_ value: Any) -> String? {
@@ -108,7 +108,7 @@ import Darwin
                 if kind == "stdout" { readOutput.append(bytes) }
             }
             let readEnvelope = try JSONSerialization.jsonObject(with: readOutput) as? [String: Any]
-            try check(readEnvelope?["ok"] as? Bool == true, "Given 真实 Gamma 快照引用 When 下一条命令读取属性 Then retained_object owner 仍有效")
+            try check(readEnvelope?["ok"] as? Bool == true, "Given 真实 Carpus 快照引用 When 下一条命令读取属性 Then retained_object owner 仍有效")
         }
 
         func stoppedScenario(disconnect: Bool) throws {
@@ -142,7 +142,7 @@ import Darwin
             _ = try EngineJob().execute(executable: CommandLine.arguments[0], arguments: ["--output-fixture"], root: root, session: session, connection: -1) { _, _ in }
         }
         try check(oversized, "Given 输出超过24MiB Then 停止引擎并失败")
-        let peerRejected = rejected { try authenticatePeer(STDIN_FILENO, requireGammaParent: true) }
+        let peerRejected = rejected { try authenticatePeer(STDIN_FILENO, requireCarpusParent: true) }
         try check(peerRejected, "Given 非 Unix 授权代理 Then 身份验证失败")
         print(String(data: try JSONEncoder().encode(scenarios), encoding: .utf8)!)
     }

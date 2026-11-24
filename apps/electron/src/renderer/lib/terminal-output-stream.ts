@@ -1,4 +1,4 @@
-import type { TerminalOutputEvent } from '@gamma/shared'
+import type { TerminalOutputEvent } from '@carpus/shared'
 
 interface TerminalOutputStreamOptions {
   write: (data: string, callback: () => void) => void

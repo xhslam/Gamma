@@ -21,8 +21,8 @@ import {
   type AgentIslandPlanQuotaSnapshot,
   type NativeAgentIslandEvent,
   type NativeAgentIslandSnapshot,
-} from '@gamma/shared'
-import type { AgentStreamPayload } from '@gamma/shared'
+} from '@carpus/shared'
+import type { AgentStreamPayload } from '@carpus/shared'
 import { agentEventBus } from './agent-service'
 import { getAgentSessionMeta, listAgentSessions } from './agent-session-manager'
 import { isMacAgentIslandNativeHostReady, publishMacAgentIslandSnapshot } from './mac-agent-island-native-host'
@@ -151,8 +151,8 @@ function setToolDetail(session: InternalSessionSnapshot, toolName: string): void
 // ===== 事件映射（AgentStreamPayload → 灵动岛语义） =====
 
 function handleAgentEvent(sessionId: string, payload: AgentStreamPayload): void {
-  if (payload.kind === 'gamma_event') {
-    handleGammaEvent(sessionId, payload.event)
+  if (payload.kind === 'carpus_event') {
+    handleCarpusEvent(sessionId, payload.event)
   } else if (payload.kind === 'sdk_message') {
     handleSdkMessage(sessionId, payload.message)
   } else {
@@ -160,7 +160,7 @@ function handleAgentEvent(sessionId: string, payload: AgentStreamPayload): void 
   }
 }
 
-function handleGammaEvent(sessionId: string, event: import('@gamma/shared').GammaEvent): void {
+function handleCarpusEvent(sessionId: string, event: import('@carpus/shared').CarpusEvent): void {
   switch (event.type) {
     case 'permission_request': {
       const session = ensureSession(sessionId)
@@ -279,10 +279,10 @@ function handleGammaEvent(sessionId: string, event: import('@gamma/shared').Gamm
   }
 }
 
-function handleSdkMessage(sessionId: string, message: import('@gamma/shared').SDKMessage): void {
+function handleSdkMessage(sessionId: string, message: import('@carpus/shared').SDKMessage): void {
   switch (message.type) {
     case 'assistant': {
-      const aMsg = message as import('@gamma/shared').SDKAssistantMessage
+      const aMsg = message as import('@carpus/shared').SDKAssistantMessage
       if (aMsg.isReplay) return
       if (aMsg.error) {
         const session = ensureSession(sessionId)
@@ -313,7 +313,7 @@ function handleSdkMessage(sessionId: string, message: import('@gamma/shared').SD
       break
     }
     case 'user': {
-      const uMsg = message as import('@gamma/shared').SDKUserMessage
+      const uMsg = message as import('@carpus/shared').SDKUserMessage
       const session = sessions.get(sessionId)
       if (!session) break
       const content = uMsg.message?.content
@@ -332,7 +332,7 @@ function handleSdkMessage(sessionId: string, message: import('@gamma/shared').SD
       break
     }
     case 'result': {
-      const rMsg = message as import('@gamma/shared').SDKResultMessage
+      const rMsg = message as import('@carpus/shared').SDKResultMessage
       const session = ensureSession(sessionId)
       const isChildSession = isDelegatedChildSession(sessionId)
       if (rMsg.subtype === 'success') {
@@ -354,7 +354,7 @@ function handleSdkMessage(sessionId: string, message: import('@gamma/shared').SD
       break
     }
     case 'system': {
-      const sMsg = message as import('@gamma/shared').SDKSystemMessage
+      const sMsg = message as import('@carpus/shared').SDKSystemMessage
       const session = ensureSession(sessionId)
       switch (sMsg.subtype) {
         case 'task_started': {
@@ -649,12 +649,12 @@ function schedulePush(throttleMs = PUSH_THROTTLE_MS): void {
 }
 
 function requiresImmediateAgentIslandPush(payload: AgentStreamPayload): boolean {
-  if (payload.kind === 'gamma_event') {
+  if (payload.kind === 'carpus_event') {
     return ['permission_request', 'ask_user_request', 'exit_plan_mode_request', 'run_stopped'].includes(payload.event.type)
   }
   if (payload.kind !== 'sdk_message') return false
   const message = payload.message
-  return message.type === 'result' || (message.type === 'assistant' && Boolean((message as import('@gamma/shared').SDKAssistantMessage).error))
+  return message.type === 'result' || (message.type === 'assistant' && Boolean((message as import('@carpus/shared').SDKAssistantMessage).error))
 }
 
 // ===== 事件订阅与初始化 =====

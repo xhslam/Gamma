@@ -28,10 +28,10 @@ export function genuiPlugin(): Plugin {
   const resources = new Map(files.map(name => [name, readFileSync(resolve(root, 'lib/assets', name))]))
   for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) resources.set(name, readFileSync(resolve(root, name)))
   return {
-    name: 'gamma-genui-embed',
+    name: 'carpus-genui-embed',
     enforce: 'pre',
     resolveId(id, importer) {
-      if (id === '@gamma/genui-embed') return resolve(client, 'embed.ts')
+      if (id === '@carpus/genui-embed') return resolve(client, 'embed.ts')
       return resolveGenuiHostAdapter(id, importer, client, adapters)
     },
     buildStart() {

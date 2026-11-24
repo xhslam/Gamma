@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for gamma
+ * Shared type definitions for carpus
  */
 
 // Placeholder types - will be expanded as needed

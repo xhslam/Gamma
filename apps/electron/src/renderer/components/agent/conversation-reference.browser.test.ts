@@ -216,7 +216,7 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
   }, 20_000)
   for (const variant of [{name:'collapsed',dark:false,zoom:1},{name:'light',dark:false,zoom:1},{name:'dark',dark:true,zoom:1},{name:'narrow',dark:false,zoom:1.3}]) {
     test(`When ${variant.name} 真实视口显示引用 Then 列表独立滚动且固定头尾和关闭计数不重叠`, async () => {
-      const screenshotDirectory = process.env.GAMMA_REFERENCE_SCREENSHOT_DIR
+      const screenshotDirectory = process.env.CARPUS_REFERENCE_SCREENSHOT_DIR
       const result = await visual.run<{inside:boolean;footer:boolean;scrolls:boolean;separate:boolean;overflow:boolean}>(`
         document.documentElement.classList.toggle('dark',${variant.dark});
         await window.wait(500);
@@ -235,7 +235,7 @@ describe('Given 隔离数据与真实 Chromium 引用组件', () => {
     }, 30_000)
   }
   test('When 文件引用菜单独立展示 Then 新入口与文件标识具有相同高度和图标尺寸', async () => {
-    const directory = process.env.GAMMA_REFERENCE_SCREENSHOT_DIR
+    const directory = process.env.CARPUS_REFERENCE_SCREENSHOT_DIR
     const result = await visual.run(`
       window.fixture.setOpen(false);await window.wait(200);
       const header=document.querySelector('#test-file-menu > div > div');
