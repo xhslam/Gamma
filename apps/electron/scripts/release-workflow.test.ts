@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { YAML } from 'bun'
-import { readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { DESIGN_BUNDLE_REVISION } from '../../../packages/shared/src/types/design'
 import { GITHUB_RELEASE_REPO } from '../src/main/lib/github-release-client'
+import { digest } from './release-artifacts'
 
 interface Step { id?: string; if?: string; 'continue-on-error'?: boolean; run?: string; uses?: string; 'working-directory'?: string; with?: Record<string, string> }
 interface Job { needs?: string; if?: string; env?: Record<string, string>; outputs?: Record<string, string>; steps: Step[]; strategy?: { matrix: { include: { target: string }[] } }; permissions?: Record<string, string> }
@@ -41,6 +46,50 @@ describe('Given 标签发布工作流', () => {
     expect(restore).toBeGreaterThan(prepare)
     expect(steps[restore]!.if).toBe("steps.design.outcome == 'failure'")
     expect(build).toBeGreaterThan(restore)
+  })
+  test.skipIf(process.platform === 'win32')('When 恢复旧 Gamma 归档 Then 校验摘要和标记后转换为 Carpus 标记', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'carpus-legacy-design-'))
+    try {
+      const scripts = join(root, 'apps/electron/scripts')
+      mkdirSync(scripts, { recursive: true })
+      for (const relative of ['packages', 'apps/electron/src', 'apps/electron/scripts/release-artifacts.ts']) {
+        symlinkSync(fileURLToPath(new URL(`../../../${relative}`, import.meta.url)), join(root, relative))
+      }
+      const zip = join(root, 'fixture.zip')
+      const legacy = `Gamma.app/Contents/Resources/design-bundle/${DESIGN_BUNDLE_REVISION}/.gamma-design-revision`
+      mkdirSync(dirname(join(root, legacy)), { recursive: true })
+      const bin = join(root, 'bin')
+      mkdirSync(bin)
+      writeFileSync(join(bin, 'gh'), `#!/usr/bin/env bash
+set -eu
+[[ "$#" == 9 && "$*" == "release download v0.19.272 --repo xhslam/Carpus --pattern Gamma-0.19.272-mac-arm64.zip --output $9" ]]
+cp "$TEST_DESIGN_ARCHIVE" "$9"
+`, { mode: 0o755 })
+      const source = readFileSync(new URL('./restore-release-design-bundle.sh', import.meta.url), 'utf8')
+      const script = join(scripts, 'restore-release-design-bundle.sh')
+      const restored = join(root, 'apps/electron/resources/design-bundle', DESIGN_BUNDLE_REVISION)
+      for (const mode of ['digest-mismatch', 'marker-mismatch', 'valid']) {
+        writeFileSync(join(root, legacy), mode === 'marker-mismatch' ? 'wrong-revision\n' : `${DESIGN_BUNDLE_REVISION}\n`)
+        rmSync(zip, { force: true })
+        expect(Bun.spawnSync(['zip', '-q', zip, legacy], { cwd: root }).exitCode).toBe(0)
+        // 只为测试夹具替换真实发行包的固定摘要，仍由脚本实际计算和校验。
+        const fixtureDigest = mode === 'digest-mismatch' ? '0'.repeat(64) : await digest(zip, 'sha256')
+        writeFileSync(script, source.replace(/^seed_sha256=[a-f0-9]{64}$/m, `seed_sha256=${fixtureDigest}`))
+        const result = Bun.spawnSync(['bash', script], {
+          cwd: root, env: { ...process.env, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`, RUNNER_OS: 'Linux', TEST_DESIGN_ARCHIVE: zip },
+        })
+        if (mode !== 'valid') {
+          expect(result.exitCode).toBe(1)
+          expect(result.stderr.toString()).toContain(mode === 'digest-mismatch' ? 'SHA-256 不匹配' : '快照标记不匹配')
+          expect(existsSync(restored)).toBe(false)
+        } else {
+          expect(result.stderr.toString()).toBe('')
+          expect(result.exitCode).toBe(0)
+          expect(readFileSync(join(restored, '.carpus-design-revision'), 'utf8').trim()).toBe(DESIGN_BUNDLE_REVISION)
+          expect(existsSync(join(restored, '.gamma-design-revision'))).toBe(false)
+        }
+      }
+    } finally { rmSync(root, { recursive: true, force: true }) }
   })
   test('When 任一构建失败 Then 发布 job 不执行；发布前重新合并校验', () => {
     const job = workflow.jobs.publish!
