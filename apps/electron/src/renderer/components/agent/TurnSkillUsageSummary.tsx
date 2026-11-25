@@ -110,7 +110,7 @@ export function TurnSkillUsageSummary({
   if (activations.length === 0) return null
 
   return (
-    <div className={cn('pl-[46px] mt-3', !showDivider && 'mt-2')}>
+    <div className={cn('min-w-0', showDivider && 'mt-1')}>
       <div className={cn(showDivider && 'border-t-2 border-dashed border-border/60 pt-3')}>
         <div className="flex flex-wrap gap-1.5">
           {activations.map((activation) => (

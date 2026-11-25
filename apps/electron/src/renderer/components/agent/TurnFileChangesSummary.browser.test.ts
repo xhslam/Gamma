@@ -6,13 +6,14 @@ const fixture = String.raw`
   import { createRoot } from 'react-dom/client'
   import { Provider, createStore } from 'jotai'
   import { TurnFileChangesSummary } from '@/components/agent/TurnFileChangesSummary'
-  import { BasePathsProvider } from '@/components/ai-elements/message'
+  import { BasePathsProvider, Message, MessageContent } from '@/components/ai-elements/message'
+  import { Conversation, ConversationContent } from '@/components/ai-elements/conversation'
   import { previewFileMapAtom } from '@/atoms/preview-atoms'
   import { activeOnDemandOverlayAtom } from '@/atoms/on-demand-base-atoms'
   import '@/styles/globals.css'
 
   const store = createStore()
-  const paths = ['src/file.ts', 'src/second.ts', 'src/third.ts', 'src/fourth.ts', 'src/fifth.ts']
+  const paths = ['src/file.ts', 'src/second.ts', 'src/third.ts', 'src/fourth.ts', 'src/' + 'longfilename'.repeat(48) + '.ts']
   const files = paths.map(path => ({ path: '/project/' + path, additions: 1, deletions: 1, created: false }))
   const result = { files, coveredToolIds: paths.map((_, i) => 'edit-' + i), canUndo: true, undone: false }
   let undone = 0
@@ -38,9 +39,33 @@ const fixture = String.raw`
     }
     throw new Error(document.body.innerText)
   }
-  createRoot(document.getElementById('root')).render(React.createElement(Provider, { store },
-    React.createElement(BasePathsProvider, { sessionId: 's', basePaths: ['/project'] },
-      React.createElement(TurnFileChangesSummary, { basePath: '/project', turnMessages: messages }))))
+  const h = React.createElement
+  createRoot(document.getElementById('root')).render(h(Provider, { store },
+    h(BasePathsProvider, { sessionId: 's', basePaths: ['/project'] },
+      h('div', { className: 'flex h-[280px] min-w-0' },
+        h(Conversation, null, h(ConversationContent, null,
+          h(Message, { from: 'assistant' }, h(MessageContent, null,
+            h('div', { id: 'answer-column' }, '任务已完成。'.repeat(60)),
+            h(TurnFileChangesSummary, { basePath: '/project', turnMessages: messages })))))))))
+  window.measureCardAlignment = async () => {
+    await until(() => document.querySelector('[aria-label="本轮文件变更"]'))
+    const card = document.querySelector('[aria-label="本轮文件变更"]')
+    const output = document.getElementById('answer-column')
+    const root = document.getElementById('root')
+    const viewport = document.querySelector('[data-conversation-scroll-viewport]')
+    return [820, 340, 240].map(width => {
+      root.style.width = width + 'px'
+      const cardRect = card.getBoundingClientRect()
+      const outputRect = output.getBoundingClientRect()
+      viewport.scrollLeft = 100
+      return {
+        left: Math.abs(cardRect.left - outputRect.left) < 1,
+        right: Math.abs(cardRect.right - outputRect.right) < 1,
+        horizontalLock: viewport.scrollWidth === viewport.clientWidth && viewport.scrollLeft === 0 && getComputedStyle(viewport).overscrollBehaviorX === 'none',
+        verticalScroll: viewport.scrollHeight > viewport.clientHeight,
+      }
+    })
+  }
   window.exercise = async () => {
     await until(() => button('撤销') && !button('撤销').disabled)
     const list = document.querySelector('section ul')
@@ -87,4 +112,10 @@ test('任务完成后查看变更打开右上角改动，重复点击保持打�
     collapsedRows: ['查看文件：src/file.ts', '查看文件：src/second.ts', '查看文件：src/third.ts'],
     expandedRows: 5, themedBorder: true,
   })
+}, 30_000)
+
+
+test('宽窄对话列中卡片与正文对齐，长文件名不会使对话横向滚动', async () => {
+  const alignment = await renderer.run<Array<{ left: boolean; right: boolean; horizontalLock: boolean; verticalScroll: boolean }>>('return await window.measureCardAlignment()')
+  expect(alignment).toEqual(Array(3).fill({ left: true, right: true, horizontalLock: true, verticalScroll: true }))
 }, 30_000)

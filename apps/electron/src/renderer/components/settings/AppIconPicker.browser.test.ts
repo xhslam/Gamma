@@ -65,7 +65,7 @@ describe('图标设置真实 Chromium 交互', () => {
     expect(result).toEqual({ count: 13, loaded: true, migrated: '午夜冰青', chosen: '长春花蓝', calls: ['periwinkle'] })
   }, 20_000)
 
-  test('Given 旧配色配置与延迟读取 When 打开外观设置 Then 加载时禁用且读取后归一化为米白蓝绿', async () => {
+  test('Given 旧配色配置与延迟读取 When 打开外观设置 Then 加载时禁用且读取后归一化为白底黑色', async () => {
     const result = await renderer.run<{ loadingDisabled: boolean; chosen: string; ready: boolean }>(`
       let finishRead
       const picker = await window.iconRegression.mount({ getSettings: () => new Promise(resolve => { finishRead = resolve }) })
@@ -75,7 +75,7 @@ describe('图标设置真实 Chromium 交互', () => {
       await window.iconRegression.until(() => picker.buttons().every(button => !button.disabled))
       return { loadingDisabled, chosen: picker.chosen(), ready: !picker.status().includes('正在读取') }
     `)
-    expect(result).toEqual({ loadingDisabled: true, chosen: '米白蓝绿（默认）', ready: true })
+    expect(result).toEqual({ loadingDisabled: true, chosen: '白底黑色（默认）', ready: true })
   }, 20_000)
 
   test('Given 图标切换正在进行 When 重复点击且IPC返回失败 Then 仅提交一次并保留原图标与错误提示', async () => {
@@ -94,7 +94,7 @@ describe('图标设置真实 Chromium 交互', () => {
       await window.iconRegression.until(() => document.body.textContent.includes('图标切换失败'))
       return { calls, pendingDisabled, chosen: picker.chosen(), error: document.body.textContent.includes('图标切换失败') }
     `)
-    expect(result).toEqual({ calls: ['midnight-cyan'], pendingDisabled: true, chosen: '米白蓝绿（默认）', error: true })
+    expect(result).toEqual({ calls: ['midnight-cyan'], pendingDisabled: true, chosen: '白底黑色（默认）', error: true })
   }, 20_000)
 
   test('Given 读取配置失败 When 点击重试后成功保存新款 Then 清除读取错误并更新选中图标', async () => {

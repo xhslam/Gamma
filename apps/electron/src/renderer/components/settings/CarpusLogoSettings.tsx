@@ -69,7 +69,7 @@ export function CarpusLogoSettings(): React.ReactElement {
     <>
       <SettingsSection
         title="品牌 Logo"
-        description="下载十三款 Carpus 像素图标，用作机器人头像或品牌素材"
+        description="下载十三款 Carpus 机械芯片图标，用作机器人头像或品牌素材"
       >
         <div className="grid grid-cols-2 gap-4 min-[640px]:grid-cols-5">
           {APP_ICON_PREVIEWS.map((logo) => <LogoCard key={logo.id} logo={logo} />)}
@@ -82,7 +82,7 @@ export function CarpusLogoSettings(): React.ReactElement {
         <SettingsCard divided={false}>
           <div className="space-y-1.5 px-4 py-3 text-sm text-muted-foreground">
             <p>下载文件为 PNG 格式，建议使用 200 × 200 像素以上的头像。</p>
-            <p>米白蓝绿为默认应用图标，其他 12 款配色可在外观设置中选择。</p>
+            <p>白底黑色为默认应用图标，其他 12 款配色可在外观设置中选择。</p>
           </div>
         </SettingsCard>
       </SettingsSection>

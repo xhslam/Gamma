@@ -627,17 +627,14 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
           />
         )}
         </TurnFileMapProvider>
+        {/* 完成态汇总复用正文列，不另设宽度或头像缩进。 */}
+        {!isStreaming && (
+          <>
+            <TurnSkillUsageSummary inputMessage={turn.inputMessage} turnMessages={turn.turnMessages} />
+            <TurnFileChangesSummary turnMessages={turn.turnMessages} basePath={basePath} />
+          </>
+        )}
       </MessageContent>
-      {/* 完成态汇总：Skill 使用记录与文件变更卡片 */}
-      {!isStreaming && (
-        <>
-          <TurnSkillUsageSummary
-            inputMessage={turn.inputMessage}
-            turnMessages={turn.turnMessages}
-          />
-          <TurnFileChangesSummary turnMessages={turn.turnMessages} basePath={basePath} />
-        </>
-      )}
       {/* 操作栏：流式输出完成后显示操作按钮 */}
       {!isStreaming && (() => {
         const textContent = topLevelBlocks

@@ -69,7 +69,7 @@ describe('应用图标切换与重启恢复', () => {
     expect(runtime.savedVariants).toEqual([])
   })
 
-  test('Given 旧配色或缺失偏好 When 重启恢复 Then 使用默认米白蓝绿', () => {
+  test('Given 旧配色或缺失偏好 When 重启恢复 Then 使用默认白底黑色', () => {
     for (const variantId of ['black', 'gradient', '../icon', undefined, null]) {
       const runtime = createRuntime(variantId)
       expect(restoreAppIconVariant(runtime.dependencies)).toBe(true)

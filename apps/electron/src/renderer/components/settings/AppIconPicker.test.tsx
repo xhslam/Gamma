@@ -5,12 +5,12 @@ import { AppIconGrid } from './AppIconPicker'
 import { CarpusLogoSettings } from './CarpusLogoSettings'
 
 describe('十三款应用图标选择与品牌素材', () => {
-  test('Given 默认米白蓝绿 When 渲染图标选择器 Then 显示十三张真实图片并仅标记默认项', () => {
+  test('Given 默认白底黑色 When 渲染图标选择器 Then 显示十三张真实图片并仅标记默认项', () => {
     const html = renderToStaticMarkup(<AppIconGrid activeIcon="default" onSelect={() => {}} />)
     expect(html.match(/<img /g)).toHaveLength(13)
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
-    expect(html).toMatch(/aria-label="米白蓝绿（默认）" aria-pressed="true"/)
-    expect(html).toContain('carpus-ivory-teal.png')
+    expect(html).toMatch(/aria-label="白底黑色（默认）" aria-pressed="true"/)
+    expect(html).toContain('carpus-white-black.png')
     for (const icon of APP_ICON_PREVIEWS) {
       expect(icon.src).toBeTruthy()
       expect(html).toContain(icon.src)
@@ -21,7 +21,7 @@ describe('十三款应用图标选择与品牌素材', () => {
   test('Given 用户保存晴空钴蓝 When 渲染当前选择 Then 只有晴空钴蓝保持选中且默认仍可选择', () => {
     const html = renderToStaticMarkup(<AppIconGrid activeIcon="sky-cobalt" onSelect={() => {}} />)
     expect(html).toMatch(/aria-label="晴空钴蓝" aria-pressed="true"/)
-    expect(html).toMatch(/aria-label="米白蓝绿（默认）" aria-pressed="false"/)
+    expect(html).toMatch(/aria-label="白底黑色（默认）" aria-pressed="false"/)
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
     expect(html).toContain('focus-visible:ring-2')
   })
@@ -37,7 +37,7 @@ describe('十三款应用图标选择与品牌素材', () => {
     const html = renderToStaticMarkup(<AppIconGrid activeIcon="default" pendingIcon="midnight-cyan" onSelect={() => {}} />)
     expect(html.match(/disabled=""/g)).toHaveLength(13)
     expect(html).toContain('aria-busy="true"')
-    expect(html).toMatch(/aria-label="米白蓝绿（默认）" aria-pressed="true"/)
+    expect(html).toMatch(/aria-label="白底黑色（默认）" aria-pressed="true"/)
     expect(html).toMatch(/aria-label="午夜冰青" aria-pressed="false"/)
     expect(html).toContain('animate-spin')
   })

@@ -70,7 +70,7 @@ describe('应用图标偏好的读取与原子保存', () => {
     }
   })
 
-  test('Given 缺失或损坏的配置 When 读取图标偏好 Then 返回默认米白蓝绿', async () => {
+  test('Given 缺失或损坏的配置 When 读取图标偏好 Then 返回默认白底黑色', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'carpus-app-icon-settings-'))
     const settingsPath = join(tempDir, 'settings.json')
     const scenario = `console.log(JSON.stringify({ initialVariant: getSettings().appIconVariant }))`

@@ -1,7 +1,7 @@
 import { APP_ICON_VARIANTS } from '../../types/app-icons'
 import type { AppIconVariantId } from '../../types/app-icons'
 
-import icon0 from '../assets/bots/carpus-logos/carpus-ivory-teal.png'
+import icon0 from '../assets/bots/carpus-logos/carpus-white-black.png'
 import icon1 from '../assets/bots/carpus-logos/carpus-cream-orange.png'
 import icon2 from '../assets/bots/carpus-logos/carpus-lavender.png'
 import icon3 from '../assets/bots/carpus-logos/carpus-sky-cobalt.png'

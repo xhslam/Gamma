@@ -1,4 +1,4 @@
-/** 与 Auris 同系列的像素 γ 图标，米白蓝绿为默认款。 */
+/** 与 Auris 同系列的机械芯片 图标，白底黑色为默认款。 */
 interface AppIconDefinition {
   id: string
   name: string
@@ -9,7 +9,7 @@ interface AppIconDefinition {
 }
 
 export const APP_ICON_VARIANTS = [
-  { id: 'default', name: '米白蓝绿', description: '米白与蓝绿色', fileName: 'carpus-ivory-teal.png', background: '#F2EBDD', foreground: '#345F6C' },
+  { id: 'default', name: '白底黑色', description: '白色底板与黑色图案', fileName: 'carpus-white-black.png', background: '#FFFFFF', foreground: '#000000' },
   { id: 'cream-orange', name: '奶油橙', description: '奶油白与赤陶橙', fileName: 'carpus-cream-orange.png', background: '#F8EEE3', foreground: '#B94816' },
   { id: 'lavender', name: '浅紫罗兰', description: '浅薰衣草与紫罗兰', fileName: 'carpus-lavender.png', background: '#EBE1FC', foreground: '#6122C8' },
   { id: 'sky-cobalt', name: '晴空钴蓝', description: '晴空蓝与钴蓝', fileName: 'carpus-sky-cobalt.png', background: '#DEECFC', foreground: '#124FCD' },

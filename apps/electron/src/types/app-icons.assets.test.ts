@@ -136,11 +136,11 @@ function readIco256(): Buffer {
 }
 
 describe('十三款应用图标的原始来源、Dock 几何与打包资源', () => {
-  test('Given 已确认的十三款像素配色 When 读取资源清单 Then ID唯一且所有预览与运行文件齐全', async () => {
+  test('Given 已确认的十三款芯片配色 When 读取资源清单 Then ID唯一且所有预览与运行文件齐全', async () => {
     expect(APP_ICON_VARIANTS).toHaveLength(13)
     expect(new Set(APP_ICON_VARIANTS.map((variant) => variant.id)).size).toBe(13)
-    expect(APP_ICON_VARIANTS[0]).toMatchObject({ id: 'default', name: '米白蓝绿', fileName: 'carpus-ivory-teal.png', background: '#F2EBDD', foreground: '#345F6C' })
-    const source = readFileSync(join(sourcesDir, 'pixel-carpus.svg'), 'utf-8')
+    expect(APP_ICON_VARIANTS[0]).toMatchObject({ id: 'default', name: '白底黑色', fileName: 'carpus-white-black.png', background: '#FFFFFF', foreground: '#000000' })
+    const source = readFileSync(join(sourcesDir, 'mechanical-chip.svg'), 'utf-8')
     expect(source).toContain('<path')
     expect(source).not.toContain('<image')
     const expectedFiles = SOURCE_IDENTITIES.map((source) => source.fileName).sort()
@@ -163,14 +163,14 @@ describe('十三款应用图标的原始来源、Dock 几何与打包资源', ()
     expect(distinctExports.size).toBe(13)
   })
 
-  test('Given 深浅与彩色底板 When 检查笔画与留白 Then 十三款均保留不透明的像素γ与对应配色', async () => {
+  test('Given 深浅与彩色底板 When 检查笔画与留白 Then 十三款均保留不透明的机械芯片与对应配色', async () => {
     for (const variant of APP_ICON_VARIANTS) {
       const image = await decodeRgba(readFileSync(join(logosDir, variant.fileName)), 1024)
       const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16))
-      // 独立取样：左上臂、右上臂、下钩，以及分叉中间和两侧留白。
+      // 独立取样：外框、菱形指示灯、芯片，以及眼孔和底板留白。
       for (const [x, y, color] of [
-        [320, 270, variant.foreground], [680, 270, variant.foreground], [520, 750, variant.foreground],
-        [510, 300, variant.background], [200, 512, variant.background], [800, 512, variant.background],
+        [293, 515, variant.foreground], [538, 390, variant.foreground], [543, 549, variant.foreground],
+        [499, 557, variant.background], [589, 557, variant.background], [800, 512, variant.background],
       ] as const) {
         const offset = (y * 1024 + x) * 4
         expect([...image.pixels.subarray(offset, offset + 4)]).toEqual([...rgb(color), 255])
@@ -178,15 +178,15 @@ describe('十三款应用图标的原始来源、Dock 几何与打包资源', ()
     }
   })
 
-  test('Given 默认米白蓝绿的处理后PNG When 读取应用图标与内部品牌图 Then 两处使用同一份带透明留白的1024px导出', async () => {
-    const defaultIcon = readFileSync(join(logosDir, 'carpus-ivory-teal.png'))
+  test('Given 默认白底黑色的处理后PNG When 读取应用图标与内部品牌图 Then 两处使用同一份带透明留白的1024px导出', async () => {
+    const defaultIcon = readFileSync(join(logosDir, 'carpus-white-black.png'))
     const appIcon = readFileSync(join(resourcesDir, 'icon.png'))
     expect(appIcon.equals(defaultIcon)).toBe(true)
     expect(readFileSync(join(electronDir, 'src/renderer/assets/models/carpus.png')).equals(defaultIcon)).toBe(true)
     expectDockGeometry(await decodeRgba(appIcon, 1024))
   })
 
-  test('Given macOS安装图标 When 解码容器中各分辨率PNG Then 均保留透明四角与放大后的主体且1024px图对应默认米白蓝绿', async () => {
+  test('Given macOS安装图标 When 解码容器中各分辨率PNG Then 均保留透明四角与放大后的主体且1024px图对应默认白底黑色', async () => {
     const defaultPixels = (await decodeRgba(readFileSync(join(resourcesDir, 'icon.png')), 1024)).pixels
     for (const entry of readIcnsImages()) {
       const size = (await sharp(entry.png).metadata()).width
@@ -210,7 +210,7 @@ describe('十三款应用图标的原始来源、Dock 几何与打包资源', ()
     }
   })
 
-  test('Given Windows安装图标 When 解码256px容器图像 Then 保留四角透明与缩放后的21px留白且内部蓝绿色不被挖空', async () => {
+  test('Given Windows安装图标 When 解码256px容器图像 Then 保留四角透明与缩放后的21px留白且图案保持不透明', async () => {
     const image = await decodeRgba(readIco256(), 256)
     const expectedPixels = await sharp(join(resourcesDir, 'icon.png')).resize(256, 256).raw().toBuffer()
     // 缩小滤波可在边界产生极低alpha；以半透明阈值独立验收约214px主体的实际尺寸。
@@ -244,7 +244,7 @@ describe('十三款应用图标的原始来源、Dock 几何与打包资源', ()
     expect(opaqueMarginPixels).toBe(0)
     expect(nonOpaqueInteriorPixels).toBe(0)
     expect(opaqueDarkPixels).toBeGreaterThan(50)
-    // 不同缩小滤波器允许少量RGB差异，但应保持默认米白蓝绿。
+    // 不同缩小滤波器允许少量RGB差异，但应保持默认白底黑色。
     expect(colorDifference / comparedChannels).toBeLessThan(5)
   })
 })

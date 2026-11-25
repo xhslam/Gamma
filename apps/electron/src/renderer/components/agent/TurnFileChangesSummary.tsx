@@ -171,7 +171,7 @@ export function TurnFileChangesSummary({ turnMessages, sessionId: explicitSessio
   }
 
   return (
-    <div className="mt-3 min-w-0 pl-[46px]">
+    <div className="mt-1 min-w-0">
       <section aria-label="本轮文件变更" className="overflow-hidden rounded-xl border border-foreground/30 bg-muted/20">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -181,7 +181,7 @@ export function TurnFileChangesSummary({ turnMessages, sessionId: explicitSessio
               {hasCounts && <LineCounts additions={entries.reduce((sum, [, file]) => sum + file.additions!, 0)} deletions={entries.reduce((sum, [, file]) => sum + file.deletions!, 0)} />}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
             {summary?.undone ? <span role="status" className="px-2 text-xs text-muted-foreground">已撤销</span> : (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -204,7 +204,7 @@ export function TurnFileChangesSummary({ turnMessages, sessionId: explicitSessio
             <Button size="sm" variant="outline" onClick={() => setActiveOverlay('changes')}>查看变更</Button>
           </div>
         </div>
-        {error && <p role="alert" className="border-t border-foreground/20 px-3 py-2 text-xs text-destructive">{error}</p>}
+        {error && <p role="alert" className="break-words border-t border-foreground/20 px-3 py-2 text-xs text-destructive">{error}</p>}
         <ul id={listId} className="border-t border-foreground/20 py-1">
           {visibleEntries.map(([label, file]) => (
             <li key={label}>

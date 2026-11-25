@@ -63,7 +63,7 @@ export function ConversationContent({ className, scrollClassName, ...props }: Co
   }, [scrollRef])
   return (
     <StickToBottom.Content
-      scrollClassName={cn('scrollbar-none', scrollClassName)}
+      scrollClassName={cn('scrollbar-none overscroll-x-none', scrollClassName)}
       className={cn('flex flex-col gap-1 py-4 px-4 md:px-6', className)}
       {...props}
     />
