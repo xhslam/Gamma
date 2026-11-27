@@ -3,69 +3,76 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-test('Given 新用户、旧 profile 或运行中的 Proma When bootstrap 初始化 Then ready 前隔离路径且不提前加载业务模块', async () => {
+const entrypoint = join(import.meta.dir, '..', 'index.ts')
+
+test.each(['fresh', 'existing', 'legacy-running', 'proma-running', 'carpus-running', 'development'])('Given %s When Carpus 启动 Then 仅使用自身目录和实例锁', async (scenario) => {
   const root = mkdtempSync(join(tmpdir(), 'carpus-bootstrap-test-'))
   const script = join(root, 'verify.ts')
-  writeFileSync(script, [
-    "import { mock } from 'bun:test'",
-    "import assert from 'node:assert/strict'",
-    "import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'",
-    "import { join } from 'node:path'",
-    "import * as originalOS from 'node:os'",
-    "import { createRequire } from 'node:module'",
-    'const root = mkdtempSync(join(' + JSON.stringify(root) + ", 'case-'))",
-    'const scenario = process.argv[2]',
-    "const home = join(root, 'home'), appData = join(root, 'appData'), temp = join(root, 'temp')",
-    'for (const path of [home, appData, temp]) mkdirSync(path)',
-    "const oldProfile = join(appData, '@proma/electron')",
-    "if (scenario !== 'fresh') {",
-    '  mkdirSync(oldProfile, { recursive: true })',
-    "  mkdirSync(join(home, '.proma'))",
-    "  writeFileSync(join(home, '.proma', 'settings.json'), JSON.stringify({ name: '用户原文 Proma' }))",
-    "  writeFileSync(join(oldProfile, 'Local State'), '{}')",
-    '}',
-    "let name = '@carpus/electron'",
-    "const paths = { appData, temp, userData: join(root, 'not-created'), sessionData: join(root, 'not-created') }",
-    'const events = [], listeners = new Map()',
-    'const app = {',
-    '  isPackaged: true, getPath: (key) => paths[key],',
-    "  setPath: (key, value) => { assert.ok(existsSync(value), 'setPath 必须使用已有目录'); paths[key] = value },",
-    '  setName: (value) => { name = value },',
-    "  requestSingleInstanceLock: () => { events.push('lock:' + paths.userData); return !(scenario === 'busy' && paths.userData === oldProfile) },",
-    "  releaseSingleInstanceLock: () => events.push('release'),",
-    '  whenReady: () => new Promise(() => {}), on: (event, listener) => listeners.set(event, listener),',
-    "  commandLine: { appendSwitch: () => {} }, quit: () => events.push('quit')",
-    '}',
-    "mock.module('node:os', () => ({ ...originalOS, homedir: () => home, tmpdir: () => temp }))",
-    'const electronPath = createRequire(' + JSON.stringify(join(import.meta.dir, '..', 'index.ts')) + ").resolve('electron')",
-    "mock.module(electronPath, () => ({ app, dialog: {}, protocol: { registerSchemesAsPrivileged: () => events.push('protocol') }, safeStorage: {}, session: {} }))",
-    'await import(' + JSON.stringify(join(import.meta.dir, '..', 'index.ts')) + ')',
-    "assert.equal(existsSync(join(home, '.carpus')), false, '业务服务不能提前创建配置')",
-    "if (scenario === 'busy') {",
-    '  assert.ok(paths.userData.startsWith(temp))',
-    "  assert.equal(events.includes('protocol'), false)",
-    "  assert.equal(events.includes('release'), false)",
-    "  assert.equal(existsSync(join(appData, 'Carpus')), false)",
-    '} else {',
-    "  assert.equal(name, 'Carpus')",
-    "  assert.equal(paths.userData, join(appData, 'Carpus'))",
-    '  assert.equal(paths.sessionData, paths.userData)',
-    "  assert.ok(events.includes('protocol'))",
-    "  if (scenario === 'legacy') {",
-    "    assert.ok(events.indexOf('lock:' + oldProfile) < events.indexOf('release'))",
-    "    assert.ok(events.indexOf('release') < events.indexOf('lock:' + paths.userData))",
-    "    assert.equal(JSON.parse(readFileSync(join(home, '.proma', 'settings.json'), 'utf8')).name, '用户原文 Proma')",
-    "    assert.equal(JSON.parse(readFileSync(join(paths.userData, 'carpus-brand-migration.json'), 'utf8')).status, 'profile-pending')",
-    '  }',
-    '}',
-    "listeners.get('will-quit')?.()",
-    'rmSync(root, { recursive: true, force: true })',
-  ].join('\n'))
-  try {
-    for (const scenario of ['fresh', 'legacy', 'busy']) {
-      const child = Bun.spawn([process.execPath, script, scenario], { stdout: 'pipe', stderr: 'pipe' })
-      const [stdout, stderr, status] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
-      expect(status, scenario + '\n' + stdout + '\n' + stderr).toBe(0)
+  writeFileSync(script, `
+    import { mock } from 'bun:test'
+    import assert from 'node:assert/strict'
+    import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+    import { join } from 'node:path'
+    import * as originalOS from 'node:os'
+    import { createRequire } from 'node:module'
+    const root = ${JSON.stringify(root)}
+    const scenario = ${JSON.stringify(scenario)}
+    const home = join(root, 'home'), appData = join(root, 'appData')
+    const config = join(home, scenario === 'development' ? '.carpus-dev' : '.carpus')
+    const profile = join(appData, scenario === 'development' ? '@carpus/electron-dev-test' : 'Carpus')
+    for (const path of [home, appData]) mkdirSync(path)
+    const sentinels = new Map()
+    function preserve(directory, file, value) {
+      mkdirSync(directory, { recursive: true })
+      const path = join(directory, file)
+      writeFileSync(path, value)
+      sentinels.set(path, value)
     }
+    if (scenario === 'legacy-running') {
+      preserve(join(home, '.gamma'), 'settings.json', 'Gamma')
+      preserve(join(appData, 'Gamma'), 'Local State', 'Gamma profile')
+    }
+    if (scenario === 'legacy-running' || scenario === 'proma-running') {
+      preserve(join(home, '.proma'), 'settings.json', 'Proma')
+      preserve(join(appData, '@proma', 'electron'), 'Local State', 'Proma profile')
+      preserve(profile, 'carpus-brand-migration.json', '{"status":"profile-pending"}')
+    }
+    if (scenario === 'existing') preserve(config, 'settings.json', '{"name":"existing"}')
+    let name = '@carpus/electron'
+    const paths = { appData }
+    const events = []
+    const app = {
+      isPackaged: scenario !== 'development', getPath: (key) => paths[key],
+      setPath: (key, value) => { assert.equal(value, profile); assert.ok(existsSync(value)); paths[key] = value },
+      setName: (value) => { name = value },
+      requestSingleInstanceLock: () => { assert.equal(paths.userData, profile); events.push('lock'); return scenario !== 'carpus-running' },
+      whenReady: async () => { events.push('ready') },
+      commandLine: { appendSwitch: () => {} }, quit: () => events.push('quit'),
+    }
+    mock.module('node:os', () => ({ ...originalOS, homedir: () => home }))
+    const require = createRequire(${JSON.stringify(entrypoint)})
+    mock.module(require.resolve('electron'), () => ({ app, dialog: {}, protocol: { registerSchemesAsPrivileged: () => events.push('protocol') }, session: {}, systemPreferences: {} }))
+    mock.module(${JSON.stringify(join(import.meta.dir, '..', 'application.ts'))}, () => {
+      assert.ok(existsSync(config))
+      events.push('application')
+      return {}
+    })
+    await import(${JSON.stringify(entrypoint)})
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(name, scenario === 'development' ? 'Carpus-test' : 'Carpus')
+    assert.equal(paths.userData, profile)
+    assert.equal(paths.sessionData, profile)
+    assert.deepEqual(events, scenario === 'carpus-running' ? ['lock', 'quit'] : ['lock', 'protocol', 'ready', 'application'])
+    assert.equal(existsSync(config), scenario !== 'carpus-running')
+    for (const [path, value] of sentinels) assert.equal(readFileSync(path, 'utf8'), value)
+    if (scenario !== 'existing') assert.equal(existsSync(join(config, 'settings.json')), false, '不复制旧配置')
+  `)
+  try {
+    const child = Bun.spawn([process.execPath, script], {
+      env: { ...process.env, CARPUS_DEV: '', GAMMA_DEV: '', CARPUS_DEV_INSTANCE: 'test' },
+      stdout: 'pipe', stderr: 'pipe',
+    })
+    const [stdout, stderr, status] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+    expect(status, scenario + '\n' + stdout + '\n' + stderr).toBe(0)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
