@@ -14,6 +14,7 @@ import {
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { automationFormAtom } from '@/atoms/automation-atoms'
+import { detachedAgentSessionsAtom } from '@/lib/agent-task-window'
 import {
   currentAgentSessionIdAtom,
   agentSessionsAtom,
@@ -39,6 +40,10 @@ export function useOpenSession(): OpenSessionFn {
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
   return React.useCallback(
     (type: 'agent', sessionId: string, title: string, options?: OpenSessionOptions): void => {
+      if (store.get(detachedAgentSessionsAtom).has(sessionId)) {
+        void window.electronAPI.focusDetachedAgentWindow(sessionId).catch(console.error)
+        return
+      }
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = buildOpenTabRestore(
         sessionId,

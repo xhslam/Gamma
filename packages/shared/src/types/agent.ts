@@ -1626,6 +1626,10 @@ export interface AgentStreamEvent {
   event?: AgentEvent
 }
 
+export type AgentWindowChange =
+  | { type: 'detached'; sessionId: string }
+  | { type: 'attached'; session: AgentSessionMeta; snapshot?: AgentActiveSessionSnapshot; replay: AgentStreamEvent[] }
+
 export interface AgentActiveSessionSnapshot {
   sessionId: string
   /** 对应当前运行实例的启动时间，用于拒绝陈旧的 renderer 恢复快照。 */
@@ -2063,6 +2067,8 @@ export const AGENT_IPC_CHANNELS = {
   SELECT_BROWSER_TAB: 'agent:select-browser-tab',
   CLOSE_BROWSER_TAB: 'agent:close-browser-tab',
   GET_BROWSER_STATE: 'agent:get-browser-state',
+  OPEN_FILE_PREVIEW_GUEST: 'agent:open-file-preview-guest',
+  CLOSE_FILE_PREVIEW_GUEST: 'agent:close-file-preview-guest',
   SET_BROWSER_LAYOUT: 'agent:set-browser-layout',
   MINIMIZE_BROWSER: 'agent:minimize-browser',
   NAVIGATE_BROWSER: 'agent:navigate-browser',
@@ -2176,6 +2182,10 @@ export const AGENT_IPC_CHANNELS = {
   STREAM_ERROR: 'agent:stream:error',
   /** renderer 报告当前可见的 Agent 会话，用于流式优先级。 */
   SET_VISIBLE_STREAM_SESSION: 'agent:set-visible-stream-session',
+  DETACH_WINDOW: 'agent:detach-window',
+  WINDOW_READY: 'agent:window-ready',
+  WINDOW_CHANGED: 'agent:window-changed',
+  FOCUS_DETACHED_WINDOW: 'agent:focus-detached-window',
 
   // 附件
   /** 保存文件到 Agent session 工作目录 */

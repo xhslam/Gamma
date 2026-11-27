@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
-import type { PreviewFile } from '@/atoms/preview-atoms'
+import { getPreviewFileId, type PreviewFile } from '@/atoms/preview-atoms'
 import { agentSessionPathMapAtom } from '@/atoms/agent-atoms'
 import { DiffTabContent } from './DiffTabContent'
 import { PreviewContentErrorBoundary } from './PreviewContentErrorBoundary'
@@ -11,9 +11,10 @@ interface PreviewPanelProps {
   sessionId: string
   file: PreviewFile
   onClose: () => void
+  focused?: boolean
 }
 
-function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): React.ReactElement {
+function PreviewPanelContent({ sessionId, file, onClose, focused }: PreviewPanelProps): React.ReactElement {
   const sessionPath = useAtomValue(agentSessionPathMapAtom).get(sessionId) ?? ''
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-content-area titlebar-no-drag">
@@ -32,6 +33,7 @@ function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): R
             workspaceSkillSlug={file.workspaceSkillSlug}
             legacySkillFilePath={file.legacySkillFilePath}
             baseRef={file.baseRef}
+            htmlPreviewTarget={focused === undefined ? undefined : { id: getPreviewFileId(file), focused }}
             imageEditorPresentation="inline"
             onEmptyDiff={onClose}
           />
@@ -43,7 +45,7 @@ function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): R
 
 /** Pure file previews only re-render when their own file descriptor changes. */
 export const PreviewPanel = React.memo(PreviewPanelContent, (previous, next) => {
-  if (previous.sessionId !== next.sessionId || previous.file !== next.file) return false
+  if (previous.sessionId !== next.sessionId || previous.file !== next.file || previous.focused !== next.focused) return false
   // previewOnly never calls onEmptyDiff, so its parent callback must not defeat render isolation.
   return previous.file.previewOnly || previous.onClose === next.onClose
 })

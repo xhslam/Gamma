@@ -10,7 +10,7 @@ import { nextBrowserLayoutRevision } from './browser-layout-revision'
 // 它的可见性由 BrowserSlot 尺寸、Tab 生命周期与分栏拖动保护控制，不因为应用浮层
 //（Dialog、Popover、Dropdown、Toast 等）出现而隐藏，避免右侧浏览器白屏。
 
-export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: string }): React.ReactElement {
+export function BrowserSlot({ sessionId, tabId, filePreviewFocused, title }: { sessionId: string; tabId: string; filePreviewFocused?: boolean; title?: string }): React.ReactElement {
   const ref = React.useRef<HTMLDivElement>(null)
   const workspaceSide = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId)).workspaceSide === 'left' ? 'left' : 'right'
 
@@ -31,6 +31,7 @@ export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: st
       void setLayout({
         sessionId,
         tabId,
+        filePreviewFocused,
         revision: nextBrowserLayoutRevision(),
         visible: visible && !collapsed && !isPaneResizeProtected() && width > 4 && rect.height > 4,
         preserveSessionOnHide: preserveSessionOnHide || !!collapsed || isPaneResizeProtected(),
@@ -80,7 +81,7 @@ export function BrowserSlot({ sessionId, tabId }: { sessionId: string; tabId: st
       void setLayout({ sessionId, tabId, revision: nextBrowserLayoutRevision(), visible: false, preserveSessionOnHide: false, bounds: { x: 0, y: 0, width: 0, height: 0 } })
     }
     // 交换位置可能只改变坐标而不改变尺寸，ResizeObserver 无法捕获这次移动。
-  }, [sessionId, tabId, workspaceSide])
+  }, [sessionId, tabId, workspaceSide, filePreviewFocused])
 
-  return <div ref={ref} className="flex-1 min-h-0 bg-muted/15 titlebar-no-drag" aria-label="受管浏览器页面" />
+  return <div ref={ref} className="flex-1 min-h-0 bg-muted/15 titlebar-no-drag" aria-label={title ?? '受管浏览器页面'} />
 }

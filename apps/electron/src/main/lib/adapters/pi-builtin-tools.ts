@@ -860,7 +860,7 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
     sdk.defineTool({
       name: 'BrowserListTabs',
       label: '列出浏览器标签',
-      description: 'List all tabs in the current in-app browser session, including the user-visible tab and Agent working tab. Use tabId when intentionally operating another tab.',
+      description: 'List all tabs in the current in-app browser session, including HTML file preview guests (filePreviewGuest) and the Agent working tab. Use tabId when intentionally operating another tab.',
       parameters: Type.Object({}),
       async execute() { return jsonToolResult(await browserController.listTabs(ctx.sessionId)) },
     }),
@@ -902,7 +902,7 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       description: 'Close every tab in the current in-app browser session and hide its browser panel.',
       parameters: Type.Object({}),
       async execute() {
-        await browserController.close(ctx.sessionId)
+        await browserController.closeBrowserTabs(ctx.sessionId)
         return jsonToolResult({ closed: true })
       },
     }),

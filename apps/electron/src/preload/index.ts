@@ -40,6 +40,7 @@ import type {
   SessionMessageSearchResponse,
   AgentSessionMeta,
   AgentActiveSessionSnapshot,
+  AgentWindowChange,
   SetAgentSessionActiveWorktreeInput,
   SDKMessage,
   AgentSendInput,
@@ -295,6 +296,8 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   selectAgentBrowserTab: (input: import('@carpus/shared').BrowserTabInput) => Promise<import('@carpus/shared').BrowserViewState>
   closeAgentBrowserTab: (input: import('@carpus/shared').BrowserTabInput) => Promise<import('@carpus/shared').BrowserViewState | null>
   getAgentBrowserState: (sessionId: string) => Promise<import('@carpus/shared').BrowserViewState | null>
+  openFilePreviewGuest: (sessionId: string, previewId: string, filePath: string, access?: import('@carpus/shared').FileAccessOptions) => Promise<string | null>
+  closeFilePreviewGuest: (sessionId: string, tabId: string) => Promise<void>
   setAgentBrowserLayout: (layout: import('@carpus/shared').BrowserViewLayout) => Promise<void>
   minimizeAgentBrowser: (sessionId: string) => Promise<void>
   navigateAgentBrowser: (input: import('@carpus/shared').BrowserNavigateInput) => Promise<import('@carpus/shared').BrowserViewState>
@@ -508,6 +511,10 @@ export interface ElectronAPI extends DesignWorkbenchAPI {
   createAgentSession: (title?: string, channelId?: string, workspaceId?: string, modelId?: string, isDraft?: boolean) => Promise<AgentSessionMeta>
 
   /** 获取当前主进程仍在执行的 Agent 会话，供 renderer 重载后恢复运行态 */
+  detachAgentWindow: (sessionId: string, fromDrag: boolean) => Promise<boolean>
+  readyAgentWindow: () => Promise<void>
+  focusDetachedAgentWindow: (sessionId: string) => Promise<boolean>
+  onAgentWindowChanged: (callback: (change: AgentWindowChange) => void) => () => void
   listActiveAgentSessionSnapshots: () => Promise<AgentActiveSessionSnapshot[]>
 
   /** 获取 Agent 会话 SDKMessage（Phase 4 新格式） */
@@ -1463,6 +1470,8 @@ const electronAPI: ElectronAPI = {
   getAgentBrowserState: (sessionId: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_BROWSER_STATE, sessionId)
   },
+  openFilePreviewGuest: (sessionId, previewId, filePath, access) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FILE_PREVIEW_GUEST, sessionId, previewId, filePath, access),
+  closeFilePreviewGuest: (sessionId, tabId) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CLOSE_FILE_PREVIEW_GUEST, sessionId, tabId),
   setAgentBrowserLayout: (layout: import('@carpus/shared').BrowserViewLayout) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SET_BROWSER_LAYOUT, layout)
   },
@@ -1765,6 +1774,15 @@ const electronAPI: ElectronAPI = {
 
   createAgentSession: (title?: string, channelId?: string, workspaceId?: string, modelId?: string, isDraft?: boolean) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_SESSION, title, channelId, workspaceId, modelId, isDraft)
+  },
+
+  detachAgentWindow: (sessionId, fromDrag) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.DETACH_WINDOW, sessionId, fromDrag),
+  readyAgentWindow: () => ipcRenderer.invoke(AGENT_IPC_CHANNELS.WINDOW_READY),
+  focusDetachedAgentWindow: (sessionId) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.FOCUS_DETACHED_WINDOW, sessionId),
+  onAgentWindowChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: AgentWindowChange): void => callback(change)
+    ipcRenderer.on(AGENT_IPC_CHANNELS.WINDOW_CHANGED, listener)
+    return () => ipcRenderer.removeListener(AGENT_IPC_CHANNELS.WINDOW_CHANGED, listener)
   },
 
   listActiveAgentSessionSnapshots: () => {

@@ -5,6 +5,7 @@ import { AgentQueueCoordinator } from './agent-queue-coordinator'
 
 function fixture() {
   const runs: string[] = []
+  const previewTabs: Array<string | undefined> = []
   const finishes: Array<() => void> = []
   const state = { busy: false, targetAvailable: true, sendFails: false, targetThrows: false, generationThrows: false }
   const target = { isDestroyed: () => !state.targetAvailable } as WebContents
@@ -14,11 +15,11 @@ function fixture() {
     getWebContents: () => { if (state.targetThrows) throw new Error('窗口解析失败'); return state.targetAvailable ? target : null },
     reserveRunGeneration: () => { if (state.generationThrows) throw new Error('运行身份分配失败'); return ++generation },
     sendStarted: () => { if (state.sendFails) throw new Error('窗口已销毁') },
-    startRun: async (input) => { runs.push(input.queueMessageId); await new Promise<void>((resolve) => finishes.push(resolve)) },
+    startRun: async (input, _target, preview) => { runs.push(input.queueMessageId); previewTabs.push(preview?.activeTabId); await new Promise<void>((resolve) => finishes.push(resolve)) },
   })
   const input = (id: string): AgentDeferredQueueMessageInput => ({ sessionId: 's', queueMessageId: id, userMessage: id, channelId: 'c' })
   const flush = async () => { for (let i = 0; i < 8; ++i) await Promise.resolve() }
-  return { queue, runs, finishes, state, input, flush }
+  return { queue, runs, finishes, state, input, flush, previewTabs }
 }
 
 describe('Given 主进程消息队列持有完整执行生命周期', () => {
@@ -33,6 +34,15 @@ describe('Given 主进程消息队列持有完整执行生命周期', () => {
     f.finishes[0]!(); await f.flush()
     expect(f.runs).toEqual(['first', 'second'])
     f.finishes[1]!(); await f.flush()
+  })
+
+  test('When 排队期间用户切换预览 Then 运行收到提交时的 tabId', async () => {
+    const f = fixture(); f.state.busy = true
+    f.queue.enqueue(f.input('first'), { activeTabId: 'original', url: '', title: '预览', openedAt: 1, filePreviewGuest: true })
+    f.queue.enqueue(f.input('first'), { activeTabId: 'new', url: '', title: '另一个', openedAt: 2, filePreviewGuest: true })
+    f.state.busy = false; f.queue.onTargetAvailable('s'); await f.flush()
+    expect(f.previewTabs).toEqual(['original'])
+    f.finishes[0]!(); await f.flush()
   })
 
   test('When 启动预检占位中连续提交 Then 先排队，释放占位后按稳定 ID 顺序执行一次', async () => {

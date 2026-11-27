@@ -8,6 +8,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { isAgentTaskWindow } from '@/lib/agent-task-window'
 import { LeftSidebar } from './LeftSidebar'
 import { SidebarTransition } from './SidebarTransition'
 import { CollapsedSidebarHeader } from './CollapsedSidebarHeader'
@@ -333,12 +334,12 @@ export function AppShell(): React.ReactElement {
           className={cn('carpus-workbench flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows))}
         >
           <div className="carpus-workbench-frame">
-            <SidebarTransition collapsed={navigationCollapsed} resizing={workspaceMaximized || draggedRightPanel !== null} width={LEFT_SIDEBAR_WIDTH}>
+            {!isAgentTaskWindow && <SidebarTransition collapsed={navigationCollapsed} resizing={workspaceMaximized || draggedRightPanel !== null} width={LEFT_SIDEBAR_WIDTH}>
               <LeftSidebar width={LEFT_SIDEBAR_WIDTH} />
-            </SidebarTransition>
+            </SidebarTransition>}
 
             <div className="flex min-w-0 min-h-0 flex-1 flex-col">
-              {sidebarCollapsed && !workspaceMaximized && !hasAgentSessionHeader && <CollapsedSidebarHeader />}
+              {!isAgentTaskWindow && sidebarCollapsed && !workspaceMaximized && !hasAgentSessionHeader && <CollapsedSidebarHeader />}
               <WorkspacePanels
                 workspaceSide={workspaceSide}
                 workspaceOpen={isPanelOpen}

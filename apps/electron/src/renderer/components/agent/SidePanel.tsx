@@ -1592,7 +1592,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
 
     return (
     panePreviewId && panePreviewFile ? (
-      <div className="min-h-0 flex-1 overflow-hidden"><PreviewPanel sessionId={sessionId} file={panePreviewFile} onClose={() => handleClosePreviewTab(panePreviewId)} /></div>
+      <div className="min-h-0 flex-1 overflow-hidden"><PreviewPanel sessionId={sessionId} file={panePreviewFile} focused={isOpen && paneTab === effectiveActiveTab} onClose={() => handleClosePreviewTab(panePreviewId)} /></div>
     ) : paneBrowserTabId ? (
       browserState && browserState.tabs.some((tab) => tab.tabId === paneBrowserTabId) ? (
         tabDrag ? (

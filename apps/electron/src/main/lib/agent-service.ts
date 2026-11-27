@@ -1,3 +1,4 @@
+import { browserController, type BrowserUserContextSnapshot } from './browser-controller'
 import { captureReferenceSnapshotOrEmpty } from './conversation-reference/send-snapshot'
 /**
  * Agent 服务层（IPC 薄层）
@@ -14,7 +15,8 @@ import { captureReferenceSnapshotOrEmpty } from './conversation-reference/send-s
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { mkdir as mkdirAsync, writeFile as writeFileAsync } from 'node:fs/promises'
-import { BrowserWindow } from 'electron'
+import { getMainWindow } from './main-window-store'
+import { AgentStreamReplay } from './agent-stream-replay'
 import type { WebContents } from 'electron'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { AGENT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@carpus/shared'
@@ -35,6 +37,7 @@ import type {
   CarpusPermissionMode,
   AgentExternalRunSource,
   AgentActiveSessionSnapshot,
+  AgentWindowChange,
   AgentQueuedMessageSnapshot,
   AgentMessage,
 } from '@carpus/shared'
@@ -82,6 +85,28 @@ const streamRoutes = new AgentStreamRouteRegistry<WebContents>()
 /** 每个 renderer 当前可见的 Agent 会话；仅该会话维持 20fps partial。 */
 const visibleAgentSessionByWebContents = new WeakMap<WebContents, string | null>()
 const streamForwarder = new AgentStreamForwarder()
+const streamReplay = new AgentStreamReplay()
+const detachedStreamTargets = new Map<string, WebContents>()
+
+/** 接收端已订阅后才切换路由。历史由磁盘加载，未落盘投影由当前 run 补发。 */
+export function handoffAgentWindow(sessionId: string, target: WebContents, detached: boolean): void {
+  if (!detached) detachedStreamTargets.delete(sessionId)
+  const session = getSessionMetaForRenderer(sessionId)
+  if (!session) return
+  if (detached) detachedStreamTargets.set(sessionId, target)
+  const snapshot = listActiveAgentSessionSnapshots().find((item) => item.sessionId === sessionId)
+  const change: AgentWindowChange = { type: 'attached', session, snapshot, replay: streamReplay.read(sessionId) }
+  target.send(AGENT_IPC_CHANNELS.WINDOW_CHANGED, change)
+  if (snapshot) rebindWebContents(sessionId, target)
+  else agentQueueCoordinator.onTargetAvailable(sessionId)
+}
+
+export function listAgentSnapshotsForWindow(target: WebContents): AgentActiveSessionSnapshot[] {
+  return listActiveAgentSessionSnapshots().filter(({ sessionId }) => {
+    const detached = detachedStreamTargets.get(sessionId)
+    return detached ? detached === target : target === getMainRendererWebContents()
+  })
+}
 
 /**
  * 已挂载 destroyed 回收钩子的 webContents 集合。
@@ -107,6 +132,8 @@ function attachWebContentsCleanup(wc: WebContents): void {
 }
 
 function registerWebContents(sessionId: string, wc: WebContents) {
+  wc = detachedStreamTargets.get(sessionId) ?? wc
+  streamReplay.clear(sessionId)
   const previousWebContents = streamRoutes.get(sessionId)?.target
   if (previousWebContents && previousWebContents !== wc) streamForwarder.clear(sessionId)
   attachWebContentsCleanup(wc)
@@ -120,6 +147,7 @@ function registerWebContents(sessionId: string, wc: WebContents) {
  * 不匹配而无法投递，renderer 会永久保留 running 状态。
  */
 function rebindWebContents(sessionId: string, wc: WebContents) {
+  wc = detachedStreamTargets.get(sessionId) ?? wc
   const previousWebContents = streamRoutes.get(sessionId)?.target
   if (previousWebContents && previousWebContents !== wc) streamForwarder.clear(sessionId)
   const route = streamRoutes.rebind(sessionId, wc)
@@ -138,8 +166,9 @@ function getStreamRouteTargets(): Map<string, WebContents> {
 }
 
 export function rebindActiveAgentStreams(webContents: WebContents): AgentActiveSessionSnapshot[] {
-  const snapshots = listActiveAgentSessionSnapshots()
+  const snapshots = listAgentSnapshotsForWindow(webContents)
   for (const snapshot of snapshots) {
+    if (streamRoutes.get(snapshot.sessionId)) continue
     streamForwarder.clear(snapshot.sessionId)
     streamRoutes.rebind(snapshot.sessionId, webContents)
   }
@@ -147,25 +176,16 @@ export function rebindActiveAgentStreams(webContents: WebContents): AgentActiveS
   return snapshots
 }
 
-function isMainRendererWindow(win: BrowserWindow): boolean {
-  if (win.isDestroyed()) return false
-  const url = win.webContents.getURL()
-  if (!url) return false
-  if (url.startsWith('data:')) return false
-  return !url.includes('window=quick-task')
-    && !url.includes('window=voice-dictation')
-    && !url.includes('window=detached-preview')
-}
-
 function getMainRendererWebContents(): WebContents | null {
-  const win = BrowserWindow.getAllWindows().find(isMainRendererWindow)
-  return win && !win.webContents.isDestroyed() ? win.webContents : null
+  const target = getMainWindow()?.webContents
+  const url = target?.getURL()
+  return target && url && !url.startsWith('data:') ? target : null
 }
 
 const agentQueueCoordinator = new AgentQueueCoordinator({
   isActive: (sessionId) => startingAgentSessions.has(sessionId) || orchestrator.isActive(sessionId),
-  getWebContents: (sessionId) => streamRoutes.get(sessionId)?.target ?? getMainRendererWebContents(),
-  startRun: (input, webContents) => runAgent(input, webContents),
+  getWebContents: (sessionId) => detachedStreamTargets.get(sessionId) ?? streamRoutes.get(sessionId)?.target ?? getMainRendererWebContents(),
+  startRun: (input, webContents, filePreviewContext) => runAgent(input, webContents, filePreviewContext),
   sendStarted: (webContents, status) => {
     if (!webContents.isDestroyed()) webContents.send(AGENT_IPC_CHANNELS.QUEUED_MESSAGE_STATUS, status)
   },
@@ -234,6 +254,7 @@ function getSessionMetaForRenderer(sessionId: string) {
 }
 
 eventBus.use((sessionId, payload, next) => {
+  if (startingAgentSessions.has(sessionId)) streamReplay.record({ sessionId, payload } as AgentStreamEvent)
   const wc = streamRoutes.get(sessionId)?.target
   if (wc && !wc.isDestroyed()) {
     try {
@@ -281,6 +302,7 @@ export interface AgentRunExtensions {
 export async function runAgent(
   input: AgentRunInput,
   webContents: WebContents,
+  filePreviewContext?: BrowserUserContextSnapshot | null,
 ): Promise<void> {
   input = { ...input, contextRefs: input.contextRefs ?? captureReferenceSnapshotOrEmpty(input.sessionId, input.contextRefIds) }
   // deferred queue runs carry their queue id as an internal extension.
@@ -409,7 +431,7 @@ export async function runAgent(
           })
         }
       },
-    })
+    }, { filePreviewContext })
   } catch (err) {
     console.error('[Agent 服务] runAgent 未处理异常:', err)
     const errorMessage = err instanceof Error ? err.message : '未知错误'
@@ -435,6 +457,7 @@ export async function runAgent(
         streamForwarder.clear(input.sessionId)
       }
     } finally {
+      streamReplay.clear(input.sessionId)
       agentQueueCoordinator.onRunSettled(input.sessionId)
       releaseStart()
       agentQueueCoordinator.onTargetAvailable(input.sessionId)
@@ -618,6 +641,7 @@ export async function runAgentHeadless(
         streamForwarder.clear(runInput.sessionId)
       }
     } finally {
+      streamReplay.clear(runInput.sessionId)
       agentQueueCoordinator.onRunSettled(runInput.sessionId)
       releaseStart()
       agentQueueCoordinator.onTargetAvailable(runInput.sessionId)
@@ -721,6 +745,7 @@ export async function updateAgentPermissionMode(sessionId: string, mode: CarpusP
 export async function queueAgentMessage(
   input: AgentQueueMessageInput,
   _webContents: WebContents,
+  filePreviewContext = browserController.getFilePreviewContext(input.sessionId),
 ): Promise<string> {
   const refs = input.contextRefs ?? captureReferenceSnapshotOrEmpty(input.sessionId, input.contextRefIds)
   return orchestrator.queueMessage(
@@ -729,7 +754,7 @@ export async function queueAgentMessage(
     input.rawUserMessage,
     undefined,
     input.uuid,
-    { interrupt: input.interrupt, contextRefs: refs },
+    { interrupt: input.interrupt, contextRefs: refs, filePreviewContext },
     input.mentionedSkills,
     input.mentionedMcpServers,
     input.mentionedSessionIds,
@@ -749,6 +774,7 @@ export async function submitOrEnqueueAgentMessage(
   // 运行身份由主进程分配，任何 IPC 入口都不能注入或复用内部 generation。
   const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSubmitOrEnqueueInput & { runGeneration?: unknown }
   input = { ...publicInput, contextRefs: publicInput.contextRefs ?? captureReferenceSnapshotOrEmpty(publicInput.sessionId, publicInput.contextRefIds) }
+  const filePreviewContext = browserController.getFilePreviewContext(input.sessionId)
   rebindWebContents(input.sessionId, webContents)
 
   if (input.dispatch === 'now' && orchestrator.isActive(input.sessionId)) {
@@ -765,7 +791,7 @@ export async function submitOrEnqueueAgentMessage(
         mentionedSessionIds: input.mentionedSessionIds,
         mentionedTodoIds: input.mentionedTodoIds,
         mentionedCalendarEventIds: input.mentionedCalendarEventIds,
-      }, webContents)
+      }, webContents, filePreviewContext)
       return { disposition: 'injected' }
     } catch (error) {
       // Pi Utility 在 query 结束、renderer 尚未收到 STREAM_COMPLETE 的窗口会拒绝注入。
@@ -775,14 +801,14 @@ export async function submitOrEnqueueAgentMessage(
     }
   }
 
-  const disposition = agentQueueCoordinator.enqueue(input)
+  const disposition = agentQueueCoordinator.enqueue(input, filePreviewContext)
   return { disposition: disposition === 'started' ? 'started' : 'queued' }
 }
 
 /** 兼容旧调用：仅将消息追加到主进程 deferred queue。 */
 export function enqueueAgentQueuedMessage(input: AgentDeferredQueueMessageInput, webContents: WebContents): void {
   rebindWebContents(input.sessionId, webContents)
-  agentQueueCoordinator.enqueue({ ...input, contextRefs: input.contextRefs ?? captureReferenceSnapshotOrEmpty(input.sessionId, input.contextRefIds) })
+  agentQueueCoordinator.enqueue({ ...input, contextRefs: input.contextRefs ?? captureReferenceSnapshotOrEmpty(input.sessionId, input.contextRefIds) }, browserController.getFilePreviewContext(input.sessionId))
 }
 
 export function cancelAgentQueuedMessage(input: AgentQueuedMessageControlInput): boolean {

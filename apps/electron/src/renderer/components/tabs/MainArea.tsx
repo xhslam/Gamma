@@ -34,6 +34,7 @@ import {
   agentSideTemporaryAgentMapAtom,
   currentSessionSidePanelOpenAtom,
   getBrowserSidePanelTab,
+  getPreviewSidePanelTab,
 } from '@/atoms/agent-atoms'
 import {
   activeOnDemandOverlayAtom,
@@ -168,11 +169,12 @@ export const MainArea = React.memo(function MainArea(): React.ReactElement {
     // WebContentsView 不在 React DOM 中；点击后台 Browser Pane 的网页正文只能由主进程
     // 把原生 focus 映射回右侧 Pane/Tab 焦点。后台 Agent Session 不得借此抢前台。
     if (activeTab?.type !== 'agent' || activeTab.sessionId !== change.sessionId) return
+    const targetTab = change.filePreviewId ? getPreviewSidePanelTab(change.filePreviewId) : getBrowserSidePanelTab(change.tabId)
     store.set(agentSidePanelOpenAtomFamily(change.sessionId), true)
     setAgentSidePanelTabMap((previous) => {
-      if (previous.get(change.sessionId) === getBrowserSidePanelTab(change.tabId)) return previous
+      if (previous.get(change.sessionId) === targetTab) return previous
       const next = new Map(previous)
-      next.set(change.sessionId, getBrowserSidePanelTab(change.tabId))
+      next.set(change.sessionId, targetTab)
       return next
     })
   }, [activeTab, setAgentSidePanelTabMap, store])

@@ -131,14 +131,6 @@ function sortEntries(entries: ScopedFileEntry[]): ScopedFileEntry[] {
   })
 }
 
-function getFileBrowserStateKey(sessionId: string | null, roots: readonly FileBrowserRoot[]): string {
-  const rootKey = roots
-    .map((root) => `${root.scope}\u0000${root.path}`)
-    .sort()
-    .join('\u0001')
-  return `${sessionId ?? 'standalone'}\u0002${rootKey}`
-}
-
 export function FileBrowser({ rootPath, roots, hideToolbar, embedded, hideEmpty, access, projectRootPath, showSessionBadge = true, onAddToChat, onFilePreview, onOpenDirectoryTerminal }: FileBrowserProps): React.ReactElement {
   const rootsKey = getFileBrowserRootsKey(roots)
   const browserRoots = React.useMemo<FileBrowserRoot[]>(
@@ -163,10 +155,7 @@ export function FileBrowser({ rootPath, roots, hideToolbar, embedded, hideEmpty,
   const loadRequestIdRef = React.useRef(0)
   const filesVersion = useAtomValue(workspaceFilesVersionAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
-  const expandedStateKey = React.useMemo(
-    () => getFileBrowserStateKey(currentSessionId, browserRoots),
-    [currentSessionId, browserRoots],
-  )
+
 
   // ===== Agent 写入文件时的自动定位 =====
   const autoReveal = useAtomValue(fileBrowserAutoRevealAtom)
@@ -459,7 +448,7 @@ export function FileBrowser({ rootPath, roots, hideToolbar, embedded, hideEmpty,
           revealTarget={revealTarget}
           revealTs={revealTs}
           recentlyModifiedSet={recentlyModifiedSet}
-          expandedStateKey={expandedStateKey}
+          expandedStateKey={`${access?.sessionId ?? currentSessionId ?? 'standalone'}files:${entry.scope}:${entry.rootPath}`}
           onSelect={handleSelect}
           onShowInFolder={handleShowInFolder}
           onOpenInTerminal={handleOpenInTerminal}

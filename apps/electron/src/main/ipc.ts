@@ -225,7 +225,8 @@ import {
 } from './lib/agent-session-manager'
 import { reconcileReferenceSummaries } from './lib/conversation-reference/background-summary'
 import { listAgentSendOutbox, saveAgentSendOutbox, retryAgentSendOutbox, submitAgentMessageOnce, cancelQueuedAgentSend } from './lib/agent-send-outbox-service'
-import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listActiveAgentSessionSnapshots, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
+import { openAgentTaskWindow, readyAgentTaskWindow, focusAgentTaskWindow } from './lib/agent-task-window'
+import { stopAgent, stopAgentAndDrain, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, listAgentSnapshotsForWindow, listQueuedAgentMessages, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
 import { resolvePathAgainstAgentCwd } from './lib/agent-file-path'
 import { askUserService } from './lib/agent-ask-user-service'
@@ -2310,6 +2311,11 @@ export function registerIpcHandlers(): void {
   )
 
   // ===== Agent 会话管理相关 =====
+  ipcMain.handle(AGENT_IPC_CHANNELS.DETACH_WINDOW, (event, sessionId: string, fromDrag: boolean) =>
+    openAgentTaskWindow(event.sender, sessionId, fromDrag))
+  ipcMain.handle(AGENT_IPC_CHANNELS.WINDOW_READY, (event) => readyAgentTaskWindow(event.sender))
+  ipcMain.handle(AGENT_IPC_CHANNELS.FOCUS_DETACHED_WINDOW, (event, sessionId: string) =>
+    focusAgentTaskWindow(event.sender, sessionId))
 
   // 获取 Agent 会话列表
   ipcMain.handle(
@@ -2326,7 +2332,7 @@ export function registerIpcHandlers(): void {
   // 获取当前主进程仍在执行的 Agent 会话快照，供 renderer 重载后恢复运行态
   ipcMain.handle(
     AGENT_IPC_CHANNELS.ACTIVE_SESSIONS_SNAPSHOT,
-    async (): Promise<AgentActiveSessionSnapshot[]> => listActiveAgentSessionSnapshots(),
+    async (event): Promise<AgentActiveSessionSnapshot[]> => listAgentSnapshotsForWindow(event.sender),
   )
 
   // 获取归档会话列表（进入归档视图时按需加载）
@@ -2372,6 +2378,23 @@ export function registerIpcHandlers(): void {
       executionSource: session.sourceDelegationId ? 'delegation' : session.sourceAutomationId ? 'automation' : 'user',
     })
   }
+
+  ipcMain.handle(AGENT_IPC_CHANNELS.OPEN_FILE_PREVIEW_GUEST, async (event, sessionId: string, previewId: string, filePath: string, access?: FileAccessOptions): Promise<string | null> => {
+    await assertBrowserSessionAccess(event.sender.id, sessionId)
+    if (typeof previewId !== 'string' || typeof filePath !== 'string') return null
+    const options = normalizeFileAccessOptions({ sessionId, candidateBasePaths: access?.candidateBasePaths })
+    const resolved = await resolveAuthorizedPreviewPath(filePath, options)
+    if (!resolved || !/\.html?$/i.test(resolved)) return null
+    const parent = dirname(resolved)
+    const url = isExplicitPreviewDirectoryPath(parent, options)
+      ? `${registerCarpusDirectoryPath(parent)}/${encodeURIComponent(basename(resolved))}`
+      : registerCarpusFilePath(resolved)
+    return browserController.openFilePreviewGuest(sessionId, previewId, url)
+  })
+  ipcMain.handle(AGENT_IPC_CHANNELS.CLOSE_FILE_PREVIEW_GUEST, async (event, sessionId: string, tabId: string): Promise<void> => {
+    await assertMainRenderer(event.sender.id)
+    browserController.closeFilePreviewGuest(sessionId, tabId)
+  })
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.OPEN_BROWSER,
@@ -2423,7 +2446,7 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle(AGENT_IPC_CHANNELS.CLOSE_BROWSER, async (event, sessionId: string): Promise<void> => {
     await assertBrowserSessionAccess(event.sender.id, sessionId)
-    await browserController.close(sessionId)
+    await browserController.closeBrowserTabs(sessionId)
   })
   ipcMain.handle(AGENT_IPC_CHANNELS.LIST_BROWSER_TABS, async (event, sessionId: string): Promise<BrowserViewState> => {
     await assertBrowserSessionAccess(event.sender.id, sessionId)

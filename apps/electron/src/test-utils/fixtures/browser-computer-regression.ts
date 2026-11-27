@@ -1,12 +1,17 @@
-import { app, BrowserWindow, type WebContentsView } from 'electron'
+import { app, BrowserWindow, protocol, type WebContentsView } from 'electron'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { registerCarpusDirectoryPath } from '../../main/lib/local-file-protocol'
 import { createServer } from 'node:http'
 import { strict as assert } from 'node:assert'
 import { BrowserController } from '../../main/lib/browser-controller'
 
 async function main(): Promise<void> {
-app.setPath('userData', `${process.argv[2]}/profile`)
+const directory = process.env.CARPUS_REGRESSION_DIRECTORY!
+app.setPath('userData', join(directory, 'profile'))
 app.commandLine.appendSwitch('site-per-process')
 app.commandLine.appendSwitch('disable-gpu')
+protocol.registerSchemesAsPrivileged([{ scheme: 'carpus-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }])
 const checks: string[] = []
 const check = async (name: string, run: () => Promise<void>): Promise<void> => { await run(); checks.push(name) }
 const server = createServer((req, res) => {
@@ -29,9 +34,43 @@ const controller = new BrowserController()
 const owner = new BrowserWindow({ show: false, width: 1100, height: 1000 })
 controller.setOwnerWindow(owner)
 try {
+  const sessions = Reflect.get(controller, 'sessions') as Map<string, { tabs: Map<string, { view: WebContentsView }> }>
+  if (process.env.CARPUS_REGRESSION_FILE_PREVIEW === '1') {
+    owner.showInactive()
+    await check('Given 已展示的 HTML 文件 When Agent 操作 Then 复用同一个 guest 和表单状态', async () => {
+      writeFileSync(join(directory, 'page.html'), '<title>Live preview</title><link rel="stylesheet" href="page.css"><input aria-label="Live field"><button onclick="this.textContent=document.querySelector(&quot;input&quot;).value">Live button</button>')
+      writeFileSync(join(directory, 'page.css'), 'body { min-height: 2400px; }')
+      const base = registerCarpusDirectoryPath(directory)
+      const id = await controller.openFilePreviewGuest('preview', 'preview-file', `${base}/page.html`)
+      const layout = { sessionId: 'preview', tabId: id, revision: 1, filePreviewFocused: true, visible: true, bounds: { x: 0, y: 0, width: 700, height: 450 } }
+      controller.setLayout(layout)
+      const context = controller.getFilePreviewContext('preview')
+      assert.equal(context?.activeTabId, id)
+      assert.equal(controller.getFilePreviewContext('regression'), null)
+      assert.equal(controller.getState('preview'), null)
+      assert.equal(controller.listTabs('preview').tabs.find(tab => tab.tabId === id)?.filePreviewGuest, true)
+      const guest = sessions.get('preview')!.tabs.get(id)!.view.webContents
+      await guest.executeJavaScript('document.querySelector("input").value = "User state"')
+      const observed = await controller.observe('preview', id)
+      const button = observed.elements.find(element => element.role === 'button' && element.name === 'Live button')
+      assert.ok(button)
+      await controller.click('preview', button.ref, id)
+      await controller.scroll('preview', { position: 'bottom' }, id)
+      assert.equal(await guest.executeJavaScript('document.querySelector("button").textContent'), 'User state')
+      assert.ok(Number(await guest.executeJavaScript('scrollY')) > 500)
+      assert.equal(sessions.get('preview')!.tabs.size, 1)
+      await assert.rejects(controller.navigate('preview', 'https://example.com', id), /不能替换/)
+      controller.setLayout({ ...layout, revision: 2, filePreviewFocused: false })
+      assert.equal(controller.getFilePreviewContext('preview'), null)
+      controller.closeFilePreviewGuest('preview', id)
+      await assert.rejects(controller.observe('preview', id), /不存在/)
+    })
+    process.stdout.write(`CARPUS_BROWSER_RESULT:${JSON.stringify({ checks })}
+`)
+    return
+  }
   const port = (server.address() as { port: number }).port
   await controller.navigate('regression', `http://127.0.0.1:${port}/`)
-  const sessions = Reflect.get(controller, 'sessions') as Map<string, { tabs: Map<string, { view: WebContentsView }> }>
   const tab = [...sessions.get('regression')!.tabs.values()][0]!
   owner.contentView.addChildView(tab.view)
   tab.view.setBounds({ x: 0, y: 0, width: 1000, height: 950 })
@@ -72,7 +111,7 @@ try {
   await check('Given 无验证条件 When act Then 只记录 dispatched', async () => {
     const response = await controller.act('regression', await find('Plain child'), undefined).catch(async error => { throw new Error(String(error)+' hit='+JSON.stringify(await evaluate('(()=>{const r=plain.getBoundingClientRect();return {r:r.toJSON(),hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML,w:innerWidth,h:innerHeight}})()'))) })
     assert.equal(response.state.trace.at(-1)?.status, 'dispatched')
-    assert.equal(await evaluate('document.body.dataset.plain'), 'yes')
+    assert.equal((await controller.waitFor('regression', { kind: 'selector', value: 'body[data-plain="yes"]' }, 1500)).matched, true)
   })
   await check('Given 匹配或失败的条件 When act Then 状态分别为 verified 和 failed', async () => {
     const yes = await controller.act('regression', await find('Plain child'), { kind: 'selector', value: 'body[data-plain="yes"]' })

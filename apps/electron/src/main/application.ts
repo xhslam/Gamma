@@ -39,6 +39,7 @@ import { initializeRuntime } from './lib/runtime-init'
 import { seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
 import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
+import { hasAgentTaskWindows } from './lib/agent-task-window'
 import { stopAllTerminals } from './lib/terminal-service'
 import { agyTaskService } from './lib/agy-task-controller'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
@@ -561,11 +562,19 @@ function createWindow(): void {
     showRendererFailure(error instanceof Error ? error.message : String(error))
   })
 
+  // 有独立任务时保留主窗口作为交接目标；不要隐藏其他窗口。
+  mainWindow.on('close', (event) => {
+    if (getIsQuitting() || !hasAgentTaskWindows()) return
+    event.preventDefault()
+    saveMainWindowState()
+    mainWindow?.hide()
+  })
+
   // macOS: 点击关闭按钮时隐藏窗口+应用，而不是退出
   // 同时隐藏应用（类似 Cmd+H），确保点击 Dock 图标时 macOS 能正确触发 activate 事件
   if (process.platform === 'darwin') {
     mainWindow.on('close', (event) => {
-      if (!getIsQuitting()) {
+      if (!event.defaultPrevented && !getIsQuitting()) {
         // 隐藏前先刷新挂起的窗口状态保存
         if (windowStateSaveTimer) {
           clearTimeout(windowStateSaveTimer)
@@ -583,7 +592,7 @@ function createWindow(): void {
   // Windows: 点击关闭按钮时隐藏窗口到托盘，而不是退出
   if (process.platform === 'win32') {
     mainWindow.on('close', (event) => {
-      if (!getIsQuitting() && getTray()) {
+      if (!event.defaultPrevented && !getIsQuitting() && getTray()) {
         // 隐藏前先刷新挂起的窗口状态保存
         if (windowStateSaveTimer) {
           clearTimeout(windowStateSaveTimer)

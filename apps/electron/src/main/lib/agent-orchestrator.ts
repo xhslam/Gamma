@@ -89,7 +89,7 @@ import { resolvePiReasoningCapability } from './adapters/pi-model-registry'
 import { generateCodexTitle } from './adapters/pi-codex-title-generator'
 import { createFallbackTitle, sanitizeGeneratedTitle, TITLE_PROMPT } from './title-generation'
 import { claimWorkspaceMemoryRefreshOpportunity } from './agent-memory-refresh-service'
-import { browserController } from './browser-controller'
+import { browserController, type BrowserUserContextSnapshot } from './browser-controller'
 import { enqueueAutomaticMemory, getAutomaticMemoryRuntimeGuidance } from './automatic-memory-service'
 
 // ===== 类型定义 =====
@@ -686,7 +686,7 @@ export class AgentOrchestrator {
   async sendMessage(
     input: AgentRunInput,
     callbacks: SessionCallbacks,
-    extensions: { piCustomTools?: ToolDefinition[] } = {},
+    extensions: { piCustomTools?: ToolDefinition[]; filePreviewContext?: BrowserUserContextSnapshot | null } = {},
   ): Promise<void> {
     const { sessionId, userMessage, rawUserMessage, userMessageUuid, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid } = input
     const referenceSnapshot = input.contextRefs ?? captureReferenceSnapshotOrEmpty(sessionId, input.contextRefIds)
@@ -1118,7 +1118,7 @@ export class AgentOrchestrator {
         workspaceName: workspace?.name,
         workspaceSlug,
         agentCwd,
-        userBrowserContext: browserController.getUserContext(sessionId),
+        userBrowserContext: extensions.filePreviewContext ?? browserController.getUserContext(sessionId),
       })
       // 11.5 注入 mention 引用指令（Skill/MCP/会话）— 仅影响 prompt，不影响持久化
       let enrichedMessage = userMessage
@@ -2471,7 +2471,7 @@ export class AgentOrchestrator {
     rawText?: string,
     _priority?: string,
     presetUuid?: string,
-    opts?: { interrupt?: boolean; contextRefs?: AgentContextRef[] },
+    opts?: { interrupt?: boolean; contextRefs?: AgentContextRef[]; filePreviewContext?: BrowserUserContextSnapshot | null },
     mentionedSkills?: string[],
     mentionedMcpServers?: string[],
     mentionedSessionIds?: string[],
@@ -2493,7 +2493,7 @@ export class AgentOrchestrator {
       ? getAgentWorkspace(meta.workspaceId)?.slug
       : undefined
 
-    const userBrowserContext = browserController.getUserContext(sessionId)
+    const userBrowserContext = opts?.filePreviewContext ?? browserController.getUserContext(sessionId)
     // 运行中的 Agent 收到队列消息时也必须看到用户刚刚主动打开的页面。
     // 未打开浏览器时保持既有消息形态，避免给每条插队消息重复注入无关环境块。
     let enrichedText = userBrowserContext

@@ -28,6 +28,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { AgentWindowDragHandle } from './AgentWindowDragHandle'
+import { isAgentTaskWindow } from '@/lib/agent-task-window'
 import { FadeTitle } from '@/components/ui/fade-title'
 
 /** AgentHeader 属性接口 */
@@ -119,7 +121,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
     )}>
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}
       <div className="absolute inset-0 titlebar-drag-region pointer-events-none" />
-      {ownsWindowControls && <SidebarExpandButton />}
+      {ownsWindowControls && !isAgentTaskWindow && <SidebarExpandButton />}
       {workspaceName && (
         <div className="flex min-w-0 max-w-[30%] items-center gap-2">
           <FadeTitle className="truncate text-sm text-muted-foreground" title={workspaceName}>{workspaceName}</FadeTitle>
@@ -174,6 +176,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {!editing && !isAgentTaskWindow && <AgentWindowDragHandle key={sessionId} sessionId={sessionId} title={session.title} />}
       {/* S2 大面板展开时，保留恢复历史探索分支入口 */}
       {isRightPanelOpen && explorationBranches.length > 0 && (
         <DropdownMenu>

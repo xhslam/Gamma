@@ -66,7 +66,9 @@ import {
   sendDesktopNotification,
   playNotificationSoundForType,
 } from '@/atoms/notifications'
-import { tabsAtom, activeTabIdAtom, activeSessionIdAtom, openTab, updateTabTitle } from '@/atoms/tab-atoms'
+import { activeViewAtom } from '@/atoms/active-view'
+import { detachedAgentSessionsAtom } from '@/lib/agent-task-window'
+import { tabsAtom, activeTabIdAtom, activeSessionIdAtom, closeTab, openTab, updateTabTitle } from '@/atoms/tab-atoms'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import { agentDiffUnseenChangesAtom, agentDiffUnseenFilesAtom } from '@/atoms/agent-atoms'
 import { channelsAtom } from '@/atoms/channel-atoms'
@@ -1139,8 +1141,8 @@ export function useGlobalAgentListeners(): void {
     // ===== 0. 初始化：恢复 stoppedByUser、主进程真实运行态与 deferred queue 投影 =====
     // 队列由主进程持有。reload 后只将还在主进程队列中的项合并到本地，
     // 使用 queueMessageId 去重，绝不覆盖用户在 reload 窗口内刚更新的本地投影。
-    const restoreQueuedMessages = async (): Promise<void> => {
-      const sessionIds = new Set<string>([
+    const restoreQueuedMessages = async (onlySessionId?: string): Promise<void> => {
+      const sessionIds = onlySessionId ? new Set([onlySessionId]) : new Set<string>([
         ...store.get(agentSessionsAtom).map((session) => session.id),
         ...store.get(agentSessionMessageQueueAtom).keys(),
       ])
@@ -1195,7 +1197,7 @@ export function useGlobalAgentListeners(): void {
     }).catch(console.error)
 
     // ===== 1. 流式事件 =====
-    const handleStreamEvent = (streamEvent: AgentStreamEvent): void => {
+    const handleStreamEvent = (streamEvent: AgentStreamEvent, replaying = false): void => {
         const { sessionId, payload } = streamEvent
 
         unstable_batchedUpdates(() => {
@@ -1604,7 +1606,7 @@ export function useGlobalAgentListeners(): void {
               return map
             })
             // 桌面通知（带提示音 + 会话导航）
-            sendBlockingNotification(
+            if (!replaying) sendBlockingNotification(
               sessionId,
               '需要权限确认',
               event.request.toolName
@@ -1621,7 +1623,7 @@ export function useGlobalAgentListeners(): void {
               return map
             })
             // 桌面通知（带提示音 + 会话导航）
-            sendBlockingNotification(
+            if (!replaying) sendBlockingNotification(
               sessionId,
               'Agent 需要你的输入',
               event.request.questions[0]?.question ?? 'Agent 有问题需要你回答',
@@ -1660,7 +1662,7 @@ export function useGlobalAgentListeners(): void {
               return next
             })
             // 桌面通知（带提示音 + 会话导航）
-            sendBlockingNotification(
+            if (!replaying) sendBlockingNotification(
               sessionId,
               'Agent 计划待审批',
               'Agent 已完成计划，等待你的审批',
@@ -2154,7 +2156,59 @@ export function useGlobalAgentListeners(): void {
     syncVisibleAgentStreamSession()
     const unsubscribeVisibleSession = store.sub(activeSessionIdAtom, syncVisibleAgentStreamSession)
 
+    const cleanupWindowChanged = window.electronAPI.onAgentWindowChanged?.((change) => {
+      const sessionId = change.type === 'attached' ? change.session.id : change.sessionId
+      unstable_batchedUpdates(() => {
+        streamEventBatcher.clear(sessionId)
+        store.set(agentSessionStreamingStateAtomFamily(sessionId), undefined)
+        store.set(liveMessagesMapAtom, (previous) => {
+          if (!previous.has(sessionId)) return previous
+          const next = new Map(previous)
+          next.delete(sessionId)
+          return next
+        })
+        const discardRequests = <T,>(previous: Map<string, T>): Map<string, T> => {
+          if (!previous.has(sessionId)) return previous
+          const next = new Map(previous)
+          next.delete(sessionId)
+          return next
+        }
+        store.set(allPendingPermissionRequestsAtom, discardRequests)
+        store.set(allPendingAskUserRequestsAtom, discardRequests)
+        store.set(allPendingExitPlanRequestsAtom, discardRequests)
+        store.set(agentSessionMessageQueueAtom, discardRequests)
+        store.set(agentStreamErrorsAtom, discardRequests)
+        store.set(detachedAgentSessionsAtom, (previous) => {
+          const next = new Set(previous)
+          if (change.type === 'attached') next.delete(sessionId)
+          else next.add(sessionId)
+          return next
+        })
+        if (change.type === 'detached') {
+          const tabs = store.get(tabsAtom)
+          const tab = tabs.find((item) => item.type === 'agent' && item.sessionId === sessionId)
+          if (!tab) return
+          const next = closeTab(tabs, store.get(activeTabIdAtom), tab.id)
+          store.set(tabsAtom, next.tabs)
+          store.set(activeTabIdAtom, next.activeTabId)
+          store.set(currentAgentSessionIdAtom, store.get(activeSessionIdAtom))
+          return
+        }
+        store.set(agentSessionsAtom, (previous) => upsertAgentSession(previous, change.session))
+        if (change.snapshot) {
+          store.set(agentSessionStreamingStateAtomFamily(sessionId),
+            mergeActiveAgentSessionSnapshot(undefined, change.snapshot, latestTerminalRun.get(sessionId)))
+        }
+        makeNavigateToSession(sessionId, change.session.title)()
+        store.set(activeViewAtom, 'conversations')
+        for (const event of change.replay) handleStreamEvent(event, true)
+      })
+      if (change.type === 'attached') void restoreQueuedMessages(sessionId).catch(console.error)
+    })
+    void window.electronAPI.readyAgentWindow?.().catch(console.error)
+
     return () => {
+      cleanupWindowChanged?.()
       cleanupEvent()
       streamEventBatcher.dispose()
       unsubscribeVisibleSession()

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getElectronExecutablePath, getIsolatedElectronTestArguments } from '../../test-utils/electron-executable'
 
-test('Given 真实 Electron CDP When 输入/遮挡/验证/iframe 回归 Then 所有场景通过', async () => {
+async function runRegression(filePreview: boolean): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'carpus-browser-computer-'))
   try {
     const runner = join(directory, 'runner.cjs')
@@ -13,10 +13,10 @@ test('Given 真实 Electron CDP When 输入/遮挡/验证/iframe 回归 Then 所
       entryPoints: [resolve(import.meta.dir, '../../test-utils/fixtures/browser-computer-regression.ts')],
       outfile: runner, bundle: true, platform: 'node', format: 'cjs', external: ['electron'],
       plugins: [{ name: 'isolated-preferences', setup(builder) {
-        builder.onLoad({ filter: /\/settings-service\.ts$/ }, () => ({ contents: 'export const getSettings = () => ({ browserRiskDisclaimerVersion: 999 })', loader: 'ts' }))
+        builder.onLoad({ filter: /settings-service[.]ts$/ }, () => ({ contents: 'export const getSettings = () => ({ browserRiskDisclaimerVersion: 999 })', loader: 'ts' }))
       } }],
     })
-    const environment = { ...process.env }; delete environment.ELECTRON_RUN_AS_NODE
+    const environment = { ...process.env, CARPUS_REGRESSION_FILE_PREVIEW: filePreview ? '1' : '0', CARPUS_REGRESSION_DIRECTORY: directory } as NodeJS.ProcessEnv; delete environment.ELECTRON_RUN_AS_NODE
     const child = Bun.spawn([getElectronExecutablePath(), ...getIsolatedElectronTestArguments(runner, directory)], { stdout: 'pipe', stderr: 'pipe', env: environment })
     const timeout = setTimeout(() => child.kill(), 40_000)
     try {
@@ -26,7 +26,10 @@ test('Given 真实 Electron CDP When 输入/遮挡/验证/iframe 回归 Then 所
       const result = JSON.parse(line.slice('CARPUS_BROWSER_RESULT:'.length)) as { checks: string[]; error?: string }
       if (result.error) throw new Error(`${result.checks.length} 个场景已通过；${result.error}`)
       expect(code).toBe(0)
-      expect(result.checks.length).toBe(13)
+      expect(result.checks.length).toBe(filePreview ? 1 : 13)
     } finally { clearTimeout(timeout) }
   } finally { await rm(directory, { recursive: true, force: true }) }
-}, 60_000)
+}
+
+test('Given 真实 Electron CDP When 输入/遮挡/验证/iframe 回归 Then 所有场景通过', () => runRegression(false), 60_000)
+test('Given 用户正在操作 HTML 文件预览 When Agent 检查并点击滚动 Then 复用同一页面', () => runRegression(true), 60_000)

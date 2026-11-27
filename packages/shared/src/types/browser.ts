@@ -13,6 +13,7 @@ export interface BrowserViewLayout {
   /** Renderer 全局单调递增代际；主进程忽略晚到的旧布局 IPC。 */
   revision: number
   visible: boolean
+  filePreviewFocused?: boolean
   /** overlay 临时遮挡页面时为 true；Slot 仍挂载，session 不应进入 LRU。 */
   preserveSessionOnHide?: boolean
   bounds: BrowserViewBounds
@@ -49,6 +50,7 @@ export interface BrowserTabState {
 }
 
 export interface BrowserTabSummary {
+  filePreviewGuest?: boolean
   tabId: string
   url: string
   title: string
@@ -93,6 +95,7 @@ export type BrowserStateChange = BrowserViewState | BrowserSessionClosed
 
 /** 原生 WebContentsView 获得用户焦点；renderer 用它同步双 Pane 焦点与工具栏目标。 */
 export interface BrowserTabFocusChange {
+  filePreviewId?: string
   sessionId: string
   tabId: string
 }

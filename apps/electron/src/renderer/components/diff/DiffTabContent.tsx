@@ -33,6 +33,7 @@ import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
 import { useImageCommentAvailability } from '@/hooks/use-image-comment-availability'
 import { useShortcut } from '@/hooks/useShortcut'
 import { initShortcutRegistry } from '@/lib/shortcut-registry'
+import { HtmlFilePreview } from './HtmlFilePreview'
 import { DiffView } from './DiffView'
 import { LiveMarkdownEditor, type LiveMarkdownEditorHandle, type LiveMarkdownTextSelection } from '@/components/markdown/LiveMarkdownEditor'
 import { createLiveMarkdownImageResolver } from '@/components/markdown/live-markdown-media'
@@ -255,11 +256,12 @@ interface DiffTabContentProps {
   toolbarActions?: React.ReactNode
   /** 基准 ref（如 "origin/main"），用于 worktree vs main 模式 */
   baseRef?: string
+  htmlPreviewTarget?: { id: string; focused: boolean }
   /** 正文保持弹窗编辑；右侧预览直接在当前图片区域编辑。 */
   imageEditorPresentation?: 'lightbox' | 'inline'
 }
 
-export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewOnly, readOnly, basePaths, unrestricted, workspaceSkillSlug, legacySkillFilePath, onEmptyDiff, toolbarActions, baseRef, imageEditorPresentation = 'lightbox' }: DiffTabContentProps): React.ReactElement {
+export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewOnly, readOnly, basePaths, unrestricted, workspaceSkillSlug, legacySkillFilePath, onEmptyDiff, toolbarActions, baseRef, htmlPreviewTarget, imageEditorPresentation = 'lightbox' }: DiffTabContentProps): React.ReactElement {
   const ext = getExtension(filePath)
   const isMarkdown = previewOnly && MD_EXTS.has(ext)
   const isHtml = previewOnly && HTML_EXTS.has(ext)
@@ -2046,7 +2048,11 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                 />
               ) : null
             ) : isLegacyOffice ? null : isHtml && !htmlSourceMode ? (
-              htmlPreviewUrl ? (
+              htmlPreviewUrl ? htmlPreviewTarget && sessionId ? (
+                <HtmlFilePreview key={htmlPreviewUrl} sessionId={sessionId} previewId={htmlPreviewTarget.id}
+                  focused={htmlPreviewTarget.focused} filePath={filePath} access={fileAccess}
+                  fallbackUrl={htmlPreviewUrl} title={`${filePath.split(/[\\/]/).pop() || 'HTML'} 渲染预览`} />
+              ) : (
                 <iframe
                   src={htmlPreviewUrl}
                   className="h-full w-full border-0 bg-card"

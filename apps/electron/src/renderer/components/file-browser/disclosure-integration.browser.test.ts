@@ -10,11 +10,13 @@ beforeAll(async () => {
     const file=(name,parent=base,dir=false)=>({name,path:parent+'/'+name,isDirectory:dir,size:1,modifiedAt:0});
     window.electronAPI={listDirectory:async p=>{calls.push(p);return p===base?[file('Alpha',base,true),file('Beta',base,true),file('说明.md')]:[file('child.md',p)]},getSettings:async()=>({})};
     const store=createStore();
-    createRoot(document.getElementById('root')).render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement('main',{style:{width:480,padding:16}},
-      React.createElement('section',{id:'files'},React.createElement(FileBrowser,{rootPath:base,embedded:true,hideToolbar:true})),
+    const root=createRoot(document.getElementById('root'));
+    const render=(mode='both')=>root.render(React.createElement(Provider,{store},React.createElement(TooltipProvider,null,React.createElement('main',{style:{width:480,padding:16}},
+      React.createElement('section',{id:'files'},mode==='preview'?React.createElement('p',null,'HTML 预览'):React.createElement(FileBrowser,{roots:mode==='both'?[{path:base,scope:'session'},{path:base+'/project',scope:'project'}]:[{path:base,scope:'session'}],embedded:true,hideToolbar:true})),
       React.createElement('section',{id:'agent-block'},React.createElement(ContentBlock,{block:{type:'tool_use',id:'agent-1',name:'Agent',input:{description:'审查交互',prompt:'只读审查'}},allMessages:[],childBlocks:[{type:'text',text:'子Agent正文'}]}))
     ))));
-    window.foldIntegration={calls,base,wait:async(p)=>{for(let i=0;i<150;i++){if(p())return;await new Promise(r=>setTimeout(r,20))}throw Error('等待目录/内容超时 '+document.body.innerText)},pause:()=>new Promise(r=>setTimeout(r,200)),arrow:(name)=>document.querySelector('#files button[aria-label="展开目录 '+name+'"],#files button[aria-label="收起目录 '+name+'"]')};
+    render();
+    window.foldIntegration={calls,base,render,wait:async(p)=>{for(let i=0;i<150;i++){if(p())return;await new Promise(r=>setTimeout(r,20))}throw Error('等待目录/内容超时 '+document.body.innerText)},pause:()=>new Promise(r=>setTimeout(r,200)),arrow:(name)=>document.querySelector('#files button[aria-label="展开目录 '+name+'"],#files button[aria-label="收起目录 '+name+'"]')};
   `)
 }, 60_000)
 afterAll(async () => { await renderer?.dispose() })
@@ -37,6 +39,16 @@ describe('Given 真实目录及子Agent内容折叠', () => {
     `, {keyboard:true})
     expect(result).toMatchObject({native:true,open:'true',loads:1,rowHeight:34,width:14,focus:true})
     expect(result.afterX).toBe(result.beforeX)
+  })
+
+  test('When 从预览返回会话产物（文件来源布局改变） Then 保留该目录展开', async () => {
+    const expanded = await renderer.run<string>(`
+      const f=window.foldIntegration;await f.wait(()=>f.arrow('Beta'));f.arrow('Beta').click();await f.wait(()=>f.arrow('Beta')?.getAttribute('aria-expanded')==='true');
+      f.render('preview');await f.wait(()=>!f.arrow('Beta'));
+      f.render('session');await f.wait(()=>f.arrow('Beta'));
+      return f.arrow('Beta').getAttribute('aria-expanded');
+    `)
+    expect(expanded).toBe('true')
   })
 
   test('When 展开子Agent后查看底部收起入口 Then 始终显示90度箭头并且收起仍有效', async () => {

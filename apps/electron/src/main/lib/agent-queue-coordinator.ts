@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import type { BrowserUserContextSnapshot } from './browser-controller'
 import type {
   AgentDeferredQueueMessageInput,
   AgentMoveQueuedMessageInput,
@@ -12,12 +13,13 @@ type DispatchedQueueRunInput = AgentDeferredQueueMessageInput & { runGeneration:
 interface QueueEntry {
   input: AgentDeferredQueueMessageInput
   queuedAt: number
+  filePreviewContext?: BrowserUserContextSnapshot | null
 }
 
 export interface AgentQueueCoordinatorOptions {
   isActive: (sessionId: string) => boolean
   getWebContents: (sessionId: string) => WebContents | null
-  startRun: (input: DispatchedQueueRunInput, webContents: WebContents) => Promise<void>
+  startRun: (input: DispatchedQueueRunInput, webContents: WebContents, filePreviewContext?: BrowserUserContextSnapshot | null) => Promise<void>
   sendStarted: (webContents: WebContents, status: AgentQueuedMessageStatus) => void
   /** 运行身份由生命周期所有者分配，队列只负责调度。 */
   reserveRunGeneration: (sessionId: string) => number
@@ -33,14 +35,14 @@ export class AgentQueueCoordinator {
 
   constructor(private readonly options: AgentQueueCoordinatorOptions) {}
 
-  enqueue(input: AgentDeferredQueueMessageInput): 'started' | 'queued' {
+  enqueue(input: AgentDeferredQueueMessageInput, filePreviewContext?: BrowserUserContextSnapshot | null): 'started' | 'queued' {
     if (this.dispatching.get(input.sessionId) === input.queueMessageId) return 'started'
     const queue = this.queues.get(input.sessionId) ?? []
     if (queue.some((entry) => entry.input.queueMessageId === input.queueMessageId)) {
       const runStarted = this.dispatching.get(input.sessionId) === input.queueMessageId
       return runStarted ? 'started' : 'queued'
     }
-    queue.push({ input, queuedAt: Date.now() })
+    queue.push({ input, queuedAt: Date.now(), filePreviewContext })
     this.queues.set(input.sessionId, queue)
     // 明确的新提交可恢复用户停止后保留的队列，窗口重绑不能代替用户意图。
     if (this.paused.get(input.sessionId) === 'stopped') this.paused.delete(input.sessionId)
@@ -162,7 +164,7 @@ export class AgentQueueCoordinator {
         runGeneration,
       })
       void Promise.resolve()
-        .then(() => this.options.startRun({ ...entry.input, startedAt, runGeneration, userMessageUuid: messageId }, webContents))
+        .then(() => this.options.startRun({ ...entry.input, startedAt, runGeneration, userMessageUuid: messageId }, webContents, entry.filePreviewContext))
         .then(
           () => this.finishDispatch(sessionId, messageId),
           () => this.finishDispatch(sessionId, messageId),

@@ -76,6 +76,8 @@ import { ArrowRight } from 'lucide-react'
 import { diffCapabilities } from '@carpus/shared'
 import type { WorkspaceCapabilities } from '@carpus/shared'
 import { showCapabilityChangeToasts } from './lib/capabilities-toast'
+import { detachedAgentSessionsAtom, isAgentTaskWindow } from './lib/agent-task-window'
+import { NewAgentWindowShortcut } from './components/shortcuts/NewAgentWindowShortcut'
 import { GlobalShortcuts } from './components/shortcuts/GlobalShortcuts'
 import { VoiceDictationApp } from './components/voice-dictation/VoiceDictationApp'
 import { TabSwitcher } from './components/tabs/TabSwitcher'
@@ -233,7 +235,10 @@ function AgentSettingsInitializer(): null {
       // 加载工作区列表并恢复上次选中的工作区
       window.electronAPI.listAgentWorkspaces().then((workspaces) => {
         setAgentWorkspaces(workspaces)
-        if (settings.agentWorkspaceId) {
+        const taskWorkspaceId = isAgentTaskWindow ? store.get(currentAgentWorkspaceIdAtom) : null
+        if (taskWorkspaceId) {
+          setCurrentWorkspaceId(taskWorkspaceId)
+        } else if (settings.agentWorkspaceId) {
           // 验证工作区仍然存在
           const exists = workspaces.some((w) => w.id === settings.agentWorkspaceId)
           setCurrentWorkspaceId(exists ? settings.agentWorkspaceId! : workspaces[0]?.id ?? null)
@@ -692,7 +697,11 @@ function TabStatePersistenceInitializer(): null {
         : []
       const agentSessions = [...activeAgentSessions, ...archivedAgentSessions]
 
-      const restored = restoreAgentOnlyTabState(tabState, new Set(agentSessions.map((session) => session.id)))
+      const availableIds = new Set(agentSessions.map((session) => session.id))
+      for (const id of store.get(detachedAgentSessionsAtom)) availableIds.delete(id)
+      // 若加载期间已经交接了一条会话，不用旧的本地标签覆盖它。
+      if (store.get(tabsAtom).length > 0) return
+      const restored = restoreAgentOnlyTabState(tabState, availableIds)
       store.set(tabsAtom, restored.tabs)
       store.set(activeTabIdAtom, restored.activeTabId)
       store.set(currentAgentSessionIdAtom, restored.tabs[0]?.sessionId ?? null)
@@ -906,18 +915,23 @@ if (isQuickTaskWindow) {
       <ThemeInitializer />
       <AgentSettingsInitializer />
       <NotificationsInitializer />
-      <DockBadgeInitializer />
+      {!isAgentTaskWindow && <DockBadgeInitializer />}
       <UiPreferencesInitializer />
       <MarkdownFontSizeInitializer />
       <AgentListenersInitializer />
-      <UpdaterInitializer />
-      <AutomationInitializer />
-      <FeishuInitializer />
-      <TabStatePersistenceInitializer />
-      <VoiceDictationApp embedded />
+      {!isAgentTaskWindow && <>
+        <UpdaterInitializer />
+        <AutomationInitializer />
+        <FeishuInitializer />
+        <TabStatePersistenceInitializer />
+      </>}
+      <NewAgentWindowShortcut />
+      {!isAgentTaskWindow && <VoiceDictationApp embedded />}
       <SettingsWindowSync />
-      <GlobalShortcuts />
-      <TabSwitcher />
+      {!isAgentTaskWindow && <>
+        <GlobalShortcuts />
+        <TabSwitcher />
+      </>}
       <App />
     </React.StrictMode>
   )
