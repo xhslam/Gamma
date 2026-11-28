@@ -39,7 +39,6 @@ import {
   type SessionMessageSearch,
 } from '@/lib/session-message-search'
 import { toTranscript } from '@carpus/session-core'
-import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AssistantLogo, MessageGroupRenderer, getGroupId, getGroupPreview, extractUserText, type MessageGroup } from './SDKMessageRenderer'
 import { buildLiveGroupSet } from './live-group-set'
@@ -52,6 +51,7 @@ import { getSDKCompactStatus } from '@carpus/shared'
 import { agentLiveMessagesAtomFamily, agentSessionStreamingStateAtomFamily, type AgentStreamState } from '@/atoms/agent-atoms'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
+import { ProcessLiveStatus } from './ProcessLiveStatus'
 
 const EMPTY_SDK_MESSAGES: SDKMessage[] = []
 
@@ -556,32 +556,7 @@ export function DurationBadge({ durationMs, usage }: { durationMs: number; usage
   )
 }
 
-/** Agent 运行指示器 — Shimmer Spinner + 无括号的运行时间 */
-function AgentRunningIndicator({ startedAt }: { startedAt?: number }): React.ReactElement {
-  const [elapsed, setElapsed] = React.useState(0)
-
-  React.useEffect(() => {
-    const start = startedAt ?? Date.now()
-    const update = (): void => setElapsed((Date.now() - start) / 1000)
-    update()
-    const timer = setInterval(update, 100)
-    return () => clearInterval(timer)
-  }, [startedAt])
-
-  const formatTime = (seconds: number): string => {
-    if (seconds < 60) return `${seconds.toFixed(1)}s`
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `${m}m ${s.toFixed(1)}s`
-  }
-
-  return (
-    <div className="flex items-center gap-2 min-h-[28px]">
-      <Spinner size="sm" className="text-primary/75" />
-      <span className="text-[13px] font-light text-muted-foreground/75 tabular-nums">Agent Running {formatTime(elapsed)}</span>
-    </div>
-  )
-}
+const WAITING_FOR_MODEL = { key: 'model', label: '正在等待模型响应', running: true, waiting: false }
 
 interface AgentTranscriptHistoryHandle {
   scrollToMessage: (messageId: string, onMounted?: (target: HTMLElement) => void) => void
@@ -596,6 +571,7 @@ interface AgentTranscriptHistoryProps {
   sessionModelId?: string
   groupHistoryTurns: Map<string, number>
   streaming: boolean
+  suppressLiveStatus?: boolean
   stoppedByUser?: boolean
   onFork?: (upToMessageUuid: string) => void
   onRewind?: (assistantMessageUuid: string) => void
@@ -641,6 +617,7 @@ function areTranscriptRowsEqual(
     || previous.sessionPath !== next.sessionPath
     || previous.sessionModelId !== next.sessionModelId
     || previous.streaming !== next.streaming
+    || previous.suppressLiveStatus !== next.suppressLiveStatus
     || previous.stoppedByUser !== next.stoppedByUser
     || previous.onFork !== next.onFork
     || previous.onRewind !== next.onRewind
@@ -666,6 +643,7 @@ const AgentTranscriptRows = React.memo(function AgentTranscriptRows({
   sessionModelId,
   groupHistoryTurns,
   streaming,
+  suppressLiveStatus,
   stoppedByUser,
   onFork,
   onRewind,
@@ -712,6 +690,7 @@ const AgentTranscriptRows = React.memo(function AgentTranscriptRows({
               onCompact={shouldDisableActions ? undefined : onCompact}
               historyTurn={groupHistoryTurns.get(groupId)}
               isStreaming={isLive || undefined}
+              suppressLiveStatus={isLive ? suppressLiveStatus : undefined}
               stoppedByUser={isLastAssistantTurn || undefined}
               sessionModelId={sessionModelId}
             />
@@ -735,6 +714,7 @@ const AgentTranscriptHistory = React.forwardRef<AgentTranscriptHistoryHandle, Ag
   sessionModelId,
   groupHistoryTurns,
   streaming,
+  suppressLiveStatus,
   stoppedByUser,
   onFork,
   onRewind,
@@ -845,6 +825,7 @@ const AgentTranscriptHistory = React.forwardRef<AgentTranscriptHistoryHandle, Ag
           sessionModelId={sessionModelId}
           groupHistoryTurns={groupHistoryTurns}
           streaming={streaming}
+          suppressLiveStatus={suppressLiveStatus}
           stoppedByUser={stoppedByUser}
           onFork={onFork}
           onRewind={onRewind}
@@ -1186,6 +1167,7 @@ export const AgentMessages = React.memo(function AgentMessages({
                 sessionModelId={sessionModelId}
                 groupHistoryTurns={groupHistoryTurns}
                 streaming={streaming}
+                suppressLiveStatus={suppressAgentRunning}
                 stoppedByUser={stoppedByUser}
                 onFork={onFork}
                 onRewind={onRewind}
@@ -1198,14 +1180,8 @@ export const AgentMessages = React.memo(function AgentMessages({
                 onCompact={onCompact}
               />
 
-              {/* 有实时助手内容时：显示运行指示器或占位（防止 streaming 结束到 Actions Bar 出现之间的高度跳动） */}
-              {/* 不使用 mt：ConversationContent 的 gap-1(4px) 已提供间距，
-                  匹配内部 MessageActions 的 gap-0.5(2px)+mt-0.5(2px)=4px 间距 */}
-              {hasLiveAssistantContent && !suppressAgentRunning && (
-                <div className="pl-[56px] min-h-[28px]">
-                  {retrying && <RetryingNotice retrying={retrying} />}
-                  {streaming && <AgentRunningIndicator startedAt={startedAt} />}
-                </div>
+              {hasLiveAssistantContent && !suppressAgentRunning && retrying && (
+                <div className="pl-[56px]"><RetryingNotice retrying={retrying} /></div>
               )}
 
               {/* 首个 live assistant block 到达前，先乐观渲染 assistant 外壳和 Logo；文本仍完全由 SDKMessage 渲染。 */}
@@ -1218,7 +1194,11 @@ export const AgentMessages = React.memo(function AgentMessages({
                   />
                   <MessageContent>
                     {retrying && <RetryingNotice retrying={retrying} />}
-                    {streaming && <AgentRunningIndicator startedAt={startedAt} />}
+                    {streaming && !retrying && (
+                      <div className="process-timeline">
+                        <ProcessLiveStatus status={WAITING_FOR_MODEL} streaming startedAt={startedAt} />
+                      </div>
+                    )}
                   </MessageContent>
                 </Message>
               )}

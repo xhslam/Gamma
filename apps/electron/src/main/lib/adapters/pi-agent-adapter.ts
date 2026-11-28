@@ -215,6 +215,8 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   memoryUserId?: string
   /** 是否挂载长期记忆扩展（子 Agent、后台任务、computer use 会话应设为 false）。 */
   memoryEnabled?: boolean
+  /** 对桌面交互会话启用普通回复的进度提醒。 */
+  liveProgress?: boolean
   /** 长期记忆是否只读模式 */
   memoryReadOnly?: boolean
 }
@@ -1621,7 +1623,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       // 分支外的任务及失败调用不能成为当前进度；压缩不删除分支中的原始工具结果。
       const taskProgress = new CarpusTaskProgressController(sessionManager.getBranch()
         .filter((entry) => entry.type === 'message')
-        .map((entry) => entry.message))
+        .map((entry) => entry.message), input.liveProgress)
       const { modelRuntime, model } = await buildModel(sdk, input)
       const autoCompactionReserveTokens = calculatePiAutoCompactionReserveTokens(
         model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,

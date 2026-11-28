@@ -235,3 +235,58 @@ describe('Pi 任务进度同步', () => {
     },
   )
 })
+
+
+describe('Pi 可见进度提醒', () => {
+  const work = { toolName: 'Read', isError: false, result: { content: [] } }
+
+  test('Given 未创建任务清单 When 连续五步没有正文 Then 只在原定的下一次 provider 请求提醒', async () => {
+    const manager = SessionManager.inMemory()
+    const runner = realExtensionRunner(new CarpusTaskProgressController([], true), manager)
+    const errors: string[] = []
+    runner.onError((error) => { errors.push(error.error) })
+    const messages: AgentMessage[] = [{ role: 'user', content: '检查构建', timestamp: 1 }]
+    for (let index = 1; index <= 6; index += 1) {
+      await runner.emit({ type: 'tool_execution_end', toolCallId: `read-${index}`, ...work })
+      const context = await runner.emitContext(messages)
+      if (index === 5) {
+        expect(context).toHaveLength(2)
+        expect(JSON.stringify(context[1])).toContain('如果现在即可交付，直接给最终结果')
+      } else {
+        expect(context).toEqual(messages)
+      }
+    }
+    expect(errors).toEqual([])
+    expect(messages).toHaveLength(1)
+    expect(manager.getBranch()).toHaveLength(0)
+  })
+
+  test('Given 连续执行 When 含私有思考和控制工具 Then 不算可见回复或额外工作', () => {
+    const harness = extensionHarness(new CarpusTaskProgressController([], true))
+    const context = { type: 'context', messages: [] }
+    for (let index = 0; index < 4; index += 1) harness.emit('tool_execution_end', work)
+    harness.emit('tool_execution_end', { ...work, parentToolCallId: 'parent' })
+    harness.emit('tool_execution_end', { ...work, toolName: 'TaskList' })
+    expect(harness.emit('context', context)).toBeUndefined()
+    harness.emit('message_end', { message: { role: 'assistant', content: [
+      { type: 'thinking', thinking: '内部分析' }, { type: 'text', text: '<think>内部分析</think>  ' },
+    ] } })
+    harness.emit('tool_execution_end', work)
+    expect(JSON.stringify(harness.emit('context', context))).toContain('可见进度提醒')
+  })
+
+  test('Given 已说过进度 When 继续执行 Then 从本次正文重新计数，后台运行不提醒', () => {
+    const interactive = extensionHarness(new CarpusTaskProgressController([], true))
+    const background = extensionHarness(new CarpusTaskProgressController())
+    const context = { type: 'context', messages: [] }
+    for (const harness of [interactive, background]) {
+      for (let index = 0; index < 4; index += 1) harness.emit('tool_execution_end', work)
+      harness.emit('message_end', { message: { role: 'assistant', content: [{ type: 'text', text: '找到原因，接下来验证。' }] } })
+      for (let index = 0; index < 4; index += 1) harness.emit('tool_execution_end', work)
+      expect(harness.emit('context', context)).toBeUndefined()
+      harness.emit('tool_execution_end', work)
+    }
+    expect(interactive.emit('context', context)).toBeDefined()
+    expect(background.emit('context', context)).toBeUndefined()
+  })
+})

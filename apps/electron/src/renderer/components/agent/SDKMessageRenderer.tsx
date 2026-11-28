@@ -22,9 +22,11 @@ import { TurnFileChangesSummary, buildTurnFileNameMap } from './TurnFileChangesS
 import { TurnSkillUsageSummary } from './TurnSkillUsageSummary'
 import { ReferencedConversationsMessageCard } from './ReferencedConversationsMessageCard'
 import type { AgentContextRef } from '@carpus/shared'
-import { ProcessBlockGroup, buildAssistantTurnRenderItems } from './ProcessBlockGroup'
-import { isVisibleProcessBlock } from './process-block-visibility'
-import { extractToolResultText, TASK_TOOL_NAMES } from './task-progress'
+import { ProcessBlockGroup, buildAssistantTurnRenderItems, usePendingProcessToolIds } from './ProcessBlockGroup'
+import { ProcessLiveStatus } from './ProcessLiveStatus'
+import { getProcessLiveStatus } from './process-live-status'
+import { TaskProgressCard } from './TaskProgressCard'
+import { aggregateTaskItems, extractToolResultText, TASK_TOOL_NAMES } from './task-progress'
 import { normalizeThinkTagsInContentBlocks } from './thinking-tag-parser'
 // 会话转录的纯逻辑(Turn 分组 / 快照去重 / 预览)已下沉到 @carpus/session-core 作为唯一真源。
 // 这里 import 供本文件内部使用，并 re-export 以保持既有 `from './SDKMessageRenderer'` 导入方零改动。
@@ -427,13 +429,14 @@ export interface AssistantTurnRendererProps {
   onRestoreProjectRoot?: () => void
   /** 是否正在流式输出中（隐藏操作栏） */
   isStreaming?: boolean
+  suppressLiveStatus?: boolean
   /** 是否被用户中断 */
   stoppedByUser?: boolean
   /** 用户在前端选择的模型 ID（优先用于显示名称） */
   sessionModelId?: string
 }
 
-export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onRewind, onCreateTodo, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot, isStreaming, stoppedByUser, sessionModelId }: AssistantTurnRendererProps): React.ReactElement | null {
+export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onRewind, onCreateTodo, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot, isStreaming, suppressLiveStatus, stoppedByUser, sessionModelId }: AssistantTurnRendererProps): React.ReactElement | null {
   const channels = useAtomValue(channelsAtom)
   // 收集所有 assistant 消息的内容块，保留 parent_tool_use_id 关联
   interface EnrichedBlock {
@@ -515,11 +518,23 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     (b) => b.type === 'text' && 'text' in b && !!(b as { text: string }).text
   )
 
-  const renderItems = React.useMemo(() => {
-    return buildAssistantTurnRenderItems(topLevelBlocks, {
-      isStreaming,
-    })
-  }, [topLevelBlocks, isStreaming])
+  const renderItems = buildAssistantTurnRenderItems(topLevelBlocks)
+  const showLiveStatus = !!isStreaming && !suppressLiveStatus
+  const pendingToolIds = usePendingProcessToolIds(!!isStreaming)
+  const activeForm = React.useMemo(() => aggregateTaskItems(taskActivities, !isStreaming)
+    .findLast((item) => item.status === 'in_progress')?.activeForm, [taskActivities, isStreaming])
+  const statusBlocks = renderItems.flatMap((item) => item.type === 'process-group'
+    ? item.items.map(({ block }) => block)
+    : [item.item.block])
+  const turnStatus = showLiveStatus
+    ? getProcessLiveStatus(statusBlocks, allMessages, true, pendingToolIds, activeForm)
+    : undefined
+
+  // 如果工具尚未结束，把状态留在它的日志里，即便模型已经输出了下一段文字。
+  const currentToolGroup = turnStatus && renderItems.findLast((item) => item.type === 'process-group'
+    && item.items.some(({ block }) => block.type === 'tool_use' && block.id === turnStatus.key))
+  const tailItem = renderItems.at(-1)
+  const liveGroup = currentToolGroup ?? (tailItem?.type === 'process-group' ? tailItem : undefined)
 
   // 本轮「文件名 → 绝对路径」映射：与 footer chips 同源，供正文内联文件引用补全裸文件名
   const turnFileMap = React.useMemo(
@@ -572,10 +587,6 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     )
   }
 
-  const renderProcessGroupBlock = (block: SDKContentBlock, i: number): React.ReactNode => {
-    return renderTopLevelBlock(block, i)
-  }
-
   return (
     <Message from="assistant">
       <MessageHeader
@@ -585,35 +596,37 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
       />
       <MessageContent>
         <TurnFileMapProvider map={turnFileMap}>
-        <div className={cn('space-y-2')}>
+        <div className="space-y-2">
+          <TaskProgressCard activities={taskActivities} streamEnded={!isStreaming} approvalPending={turnStatus?.waiting} />
           {renderItems.map((item) => {
             if (item.type === 'block') {
               return renderTopLevelBlock(item.item.block, item.item.index)
             }
 
-            // 任务工具只进入计划清单；不支持的内容块不生成空时间线节点。
-            const visibleItems = item.items.filter(({ block }) => isVisibleProcessBlock(block))
-            if (visibleItems.length === 0 && taskActivities.length === 0) return null
-            const groupBlocks = visibleItems.map((groupItem) => groupItem.block)
-            const firstIndex = item.items[0]?.index ?? 0
-            const groupKey = `process-${firstIndex}`
+            const groupBlocks = item.items.map(({ block }) => block)
+            const isCurrentGroup = !!turnStatus && item === liveGroup
             return (
               <ProcessBlockGroup
-                key={groupKey}
+                key={`process-${item.items[0]?.index}`}
                 blocks={groupBlocks}
                 allMessages={allMessages}
-                isStreaming={isStreaming}
-                taskActivities={taskActivities}
+                isStreaming={isCurrentGroup}
+                showElapsed={isCurrentGroup}
+                liveStatusOverride={isCurrentGroup ? turnStatus : undefined}
                 startedAt={processStartedAt}
-                durationMs={durationMs}
-                renderChildren={() => visibleItems.map((groupItem) => (
-                  <React.Fragment key={groupItem.index}>
-                    {renderProcessGroupBlock(groupItem.block, groupItem.index)}
+                renderChildren={() => item.items.map(({ block, index }) => (
+                  <React.Fragment key={index}>
+                    {renderTopLevelBlock(block, index)}
                   </React.Fragment>
                 ))}
               />
             )
           })}
+          {turnStatus && !liveGroup && (
+            <div className="process-timeline">
+              <ProcessLiveStatus status={turnStatus} streaming startedAt={processStartedAt} />
+            </div>
+          )}
         </div>
         {/* 如果有错误但也有内容块，在末尾以 tail 形式挂错误横幅附错误提示 + 重试按钮，保留正文本身的 markdown 排版 */}
         {hasError && errorContent && topLevelBlocks.length > 0 && (
@@ -1442,6 +1455,7 @@ export interface MessageGroupRendererProps {
   historyTurn?: number
   /** 是否正在流式输出中（隐藏操作栏） */
   isStreaming?: boolean
+  suppressLiveStatus?: boolean
   /** 是否被用户中断 */
   stoppedByUser?: boolean
   /** 用户在前端选择的模型 ID（优先用于显示名称） */
@@ -1494,7 +1508,7 @@ export function getGroupId(group: MessageGroup): string {
 
 // getGroupPreview 已迁移至 @carpus/session-core（本文件从该包 import 并 re-export）
 
-export const MessageGroupRenderer = React.memo(function MessageGroupRenderer({ group, allMessages, basePath, onFork, onRewind, onAgentHistoryQuoteClick, onCreateTodo, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot, historyTurn, isStreaming, stoppedByUser, sessionModelId }: MessageGroupRendererProps): React.ReactElement | null {
+export const MessageGroupRenderer = React.memo(function MessageGroupRenderer({ group, allMessages, basePath, onFork, onRewind, onAgentHistoryQuoteClick, onCreateTodo, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot, historyTurn, isStreaming, suppressLiveStatus, stoppedByUser, sessionModelId }: MessageGroupRendererProps): React.ReactElement | null {
   const groupId = getGroupId(group)
 
   if (group.type === 'user') {
@@ -1539,6 +1553,7 @@ export const MessageGroupRenderer = React.memo(function MessageGroupRenderer({ g
         onRelinkProjectRoot={onRelinkProjectRoot}
         onRestoreProjectRoot={onRestoreProjectRoot}
         isStreaming={isStreaming}
+        suppressLiveStatus={suppressLiveStatus}
         stoppedByUser={stoppedByUser}
         sessionModelId={sessionModelId}
       />
@@ -1558,6 +1573,7 @@ export const MessageGroupRenderer = React.memo(function MessageGroupRenderer({ g
   && previous.onRestoreProjectRoot === next.onRestoreProjectRoot
   && previous.historyTurn === next.historyTurn
   && previous.isStreaming === next.isStreaming
+  && previous.suppressLiveStatus === next.suppressLiveStatus
   && previous.stoppedByUser === next.stoppedByUser
   && previous.sessionModelId === next.sessionModelId
   && previous.externalMetadataSignature === next.externalMetadataSignature

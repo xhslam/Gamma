@@ -26,10 +26,10 @@ beforeAll(async () => {
         await this.wait(360);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
       },
       renderCalls:0,
-      async renderTurn(blocks,results=[],expand=true){
+      async renderTurn(blocks,results=[],expand=true,streaming=true,key,suppressLiveStatus=false){
         const message={type:'assistant',uuid:'assistant-1',parent_tool_use_id:null,message:{role:'assistant',content:blocks}};
         const messages=[message,...results.map(r=>({type:'user',message:{role:'user',content:[{type:'tool_result',tool_use_id:r.id,content:r.text??'',is_error:r.error}]},parent_tool_use_id:null}))];const turn={type:'assistant-turn',assistantMessages:[message],turnMessages:messages};
-        root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,React.createElement(AssistantTurnRenderer,{turn,allMessages:messages,isStreaming:true})))));
+        root.render(React.createElement(Provider,{store},React.createElement(BasePathsProvider,{sessionId:'A'},React.createElement(TooltipProvider,null,React.createElement(AssistantTurnRenderer,{key,turn,allMessages:messages,isStreaming:streaming,suppressLiveStatus})))));
         await this.wait(360);if(expand&&document.querySelector('[data-process-group-toggle]')?.getAttribute('aria-expanded')==='false')await this.toggle();return this.read();
       },
       wait:ms=>new Promise(r=>setTimeout(r,ms)),
@@ -117,6 +117,33 @@ describe('Given 可折叠执行过程时间线', () => {
     expect(snapshots[0]?.statuses).toEqual(['success', 'success'])
     expect(snapshots[1]?.expanded).toBe('false')
     expect(snapshots[1]?.statuses).toEqual([])
+  }, 30_000)
+
+  test('Given 流式进度短句 When 开始执行、完成并重开历史 Then 原话始终留在正文且不重复', async () => {
+    const view = await renderer.run<{ sameNode: boolean; live: string; ticking: boolean; quiet: boolean; liveLogs: string[]; history: string[]; plans: number; elapsed: number }>(`
+      const api=window.timeline;
+      const start={type:'text',text:'我先核对配置。'}, finding={type:'text',text:'配置没问题，接下来检查构建。'}, answer={type:'text',text:'构建通过。'};
+      const [read,build]=${tools};
+      const task={type:'tool_use',id:'task',name:'TaskCreate',input:{subject:'验证'}};
+      const results=[{id:'a'}, {id:'b'}, {id:'task',text:JSON.stringify({task:{id:'plan',subject:'验证',status:'completed'}})}];
+      const textLines=()=>[...document.querySelectorAll('p')].filter(el=>!el.closest('[data-process-log]')&&[start.text,finding.text,answer.text].includes(el.textContent));
+      const animation=()=>document.querySelector('[data-process-elapsed]')?.textContent;
+      await api.renderTurn([start],[],false,true,'progress');
+      const first=textLines()[0], initialElapsed=animation();await api.wait(1150);
+      const ticking=initialElapsed!==animation();
+      await api.renderTurn([start,task,read],[],false,true,'progress');
+      const sameNode=textLines()[0]===first&&!!first, live=document.querySelector('[data-process-current-action] .process-live-action-text')?.textContent;
+      await api.renderTurn([start,task,read,finding,build],results.slice(0,1).concat(results.slice(2)),false,true,'progress');
+      const liveLogs=[...document.querySelectorAll('[data-process-group-toggle]')].map(el=>el.getAttribute('aria-expanded'));
+      await api.renderTurn([start,task,read,finding,build],results,false,true,'progress',true);
+      const quiet=!document.querySelector('[data-process-elapsed]');
+      await api.renderTurn([start,task,read,finding,build,answer],results,false,false,'reopened');
+      return { sameNode, live, ticking, quiet, liveLogs, history:textLines().map(el=>el.textContent), plans:document.querySelectorAll('[data-process-plan]').length, elapsed:document.querySelectorAll('[data-process-elapsed]').length };
+    `)
+    expect(view).toEqual({
+      sameNode: true, live: '正在执行 pwd', ticking: true, quiet: true, liveLogs: ['false', 'true'],
+      history: ['我先核对配置。', '配置没问题，接下来检查构建。', '构建通过。'], plans: 1, elapsed: 0,
+    })
   }, 30_000)
 
   test('When 完整消息包含隐藏任务工具与最终答案 Then 不产生空节点且答案留在时间线外', async () => {

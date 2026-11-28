@@ -7,11 +7,12 @@ interface ProcessLiveStatusProps {
   streaming: boolean
   startedAt?: number
   durationMs?: number
-  children: React.ReactNode
+  children?: React.ReactNode
+  showElapsed?: boolean
 }
 
 /** 时间只来自真实 run 起点或终态耗时；没有时间证据的历史记录不补造计时。 */
-export function ProcessLiveStatus({ status, streaming, startedAt, durationMs, children }: ProcessLiveStatusProps): React.ReactElement {
+export function ProcessLiveStatus({ status, streaming, startedAt, durationMs, children, showElapsed = true }: ProcessLiveStatusProps): React.ReactElement {
   const [mountedAt] = React.useState(Date.now)
   const [now, setNow] = React.useState(Date.now)
   const lastElapsedRef = React.useRef<number>()
@@ -43,11 +44,11 @@ export function ProcessLiveStatus({ status, streaming, startedAt, durationMs, ch
       <span className="process-live-dots" data-running={status.running} aria-hidden="true">
         <span>·</span><span>·</span><span>·</span>
       </span>
-      <span data-process-current-action="" className="process-live-action" title={status.label} aria-live="polite" aria-atomic="true">
+      <span data-process-current-action="" className="process-live-action" title={status.label} aria-live={streaming ? 'polite' : undefined} aria-atomic="true">
         {outgoingLabel && <span aria-hidden="true" className="process-live-action-outgoing">{outgoingLabel}</span>}
         <span key={status.label} className="process-live-action-text">{status.label}</span>
       </span>
-      {elapsed != null && <span data-process-elapsed="" className="process-live-time">{formatProcessElapsed(elapsed)}</span>}
+      {showElapsed && elapsed != null && <span data-process-elapsed="" className="process-live-time">{formatProcessElapsed(elapsed)}</span>}
       {children}
     </div>
   )

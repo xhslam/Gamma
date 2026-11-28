@@ -26,6 +26,16 @@ export function getProcessLiveStatus(
   pendingToolIds: ReadonlySet<string> = NO_APPROVALS,
   activeForm?: string,
 ): ProcessLiveStatus {
+  const tools = blocks.filter((block): block is SDKToolUseBlock => block.type === 'tool_use')
+  if (!streaming) {
+    const lastTool = tools.at(-1)
+    return {
+      key: lastTool?.id ?? 'record',
+      label: lastTool ? compactAction(lastTool) : '整理回复',
+      running: false,
+      waiting: false,
+    }
+  }
   const completed = new Set<string>()
   for (const message of messages) {
     if (message.type !== 'user') continue
@@ -35,11 +45,10 @@ export function getProcessLiveStatus(
       if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') completed.add(block.tool_use_id)
     }
   }
-  const tools = blocks.filter((block): block is SDKToolUseBlock => block.type === 'tool_use')
   const unresolved = tools.filter((block) => !completed.has(block.id))
   const approval = unresolved.findLast((block) => pendingToolIds.has(block.id))
   const current = approval ?? unresolved.at(-1)
-  if (streaming && current) {
+  if (current) {
     return {
       key: current.id,
       label: `${approval ? '等待确认 ' : '正在'}${compactAction(current)}`,
@@ -47,18 +56,9 @@ export function getProcessLiveStatus(
       waiting: !!approval,
     }
   }
-  if (streaming) {
-    const thinking = blocks.at(-1)?.type === 'thinking'
-    const label = activeForm || (thinking ? '正在思考' : '正在整理回复')
-    return { key: `action:${label}`, label, running: true, waiting: false }
-  }
-  const lastTool = tools.at(-1)
-  return {
-    key: lastTool?.id ?? 'record',
-    label: lastTool ? compactAction(lastTool) : '整理回复',
-    running: false,
-    waiting: false,
-  }
+  const thinking = blocks.at(-1)?.type === 'thinking'
+  const label = thinking ? '正在思考' : (activeForm || '正在整理回复')
+  return { key: `action:${label}`, label, running: true, waiting: false }
 }
 
 export function formatProcessElapsed(milliseconds: number): string {

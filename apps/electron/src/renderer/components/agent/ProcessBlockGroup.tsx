@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useAtomValue } from 'jotai'
+import { atom, useAtomValue } from 'jotai'
 import { allPendingPermissionRequestsAtom } from '@/atoms/agent-atoms'
 import type { ToolActivity } from '@/atoms/agent-atoms'
 import { useMessageSessionId } from '@/components/ai-elements/message'
@@ -9,7 +9,7 @@ import { ProcessCurrentToolContext } from './ProcessTimelineContent'
 import { isVisibleProcessBlock } from './process-block-visibility'
 import { ProcessLiveStatus } from './ProcessLiveStatus'
 import { DisclosureChevron } from '@/components/ui/disclosure-chevron'
-import { getProcessLiveStatus } from './process-live-status'
+import { getProcessLiveStatus, type ProcessLiveStatus as LiveStatus } from './process-live-status'
 import { TaskProgressCard } from './TaskProgressCard'
 import { aggregateTaskItems } from './task-progress'
 import './process-timeline.css'
@@ -24,6 +24,9 @@ interface ProcessBlockGroupProps {
   blocks: SDKContentBlock[]
   allMessages?: SDKMessage[]
   isStreaming?: boolean
+  /** 多段日志只在当前段显示整个请求的计时。 */
+  showElapsed?: boolean
+  liveStatusOverride?: LiveStatus
   taskActivities?: ToolActivity[]
   historicalTaskSubjects?: Map<string, string>
   startedAt?: number
@@ -32,6 +35,7 @@ interface ProcessBlockGroupProps {
   renderChildren: () => React.ReactNode
 }
 
+const EMPTY_PERMISSION_REQUESTS_ATOM = atom<ReadonlyMap<string, { toolUseId?: string }[]>>(new Map())
 const EMPTY_MESSAGES: SDKMessage[] = []
 const EMPTY_ACTIVITIES: ToolActivity[] = []
 const PROCESS_GROUP_VIEWPORT_HEIGHT = 320
@@ -52,65 +56,20 @@ export type AssistantTurnRenderItem =
       items: IndexedContentBlock[]
     }
 
-interface BuildAssistantTurnRenderItemsOptions {
-  isStreaming?: boolean
-}
-
-function getTrailingTextStartIndex(blocks: SDKContentBlock[]): number | null {
-  const lastBlock = blocks[blocks.length - 1]
-  if (lastBlock?.type !== 'text') return null
-
-  let finalStartIndex = blocks.length - 1
-  while (finalStartIndex > 0 && blocks[finalStartIndex - 1]?.type === 'text') {
-    finalStartIndex -= 1
-  }
-  return finalStartIndex
-}
-
-export function buildAssistantTurnRenderItems(
-  blocks: SDKContentBlock[],
-  options: BuildAssistantTurnRenderItemsOptions = {},
-): AssistantTurnRenderItem[] {
-  if (blocks.length === 0) return []
-
-  // 只要流式末尾出现 text，就按常规消息布局直接展示。若 Agent 之后继续调用工具，
-  // text 不再位于末尾，会自动回归过程组，避免把中间状态误认为最终答案。
-  const hasProcessBlock = blocks.some((block) => block.type === 'tool_use' || block.type === 'thinking')
-  const trailingTextStartIndex = getTrailingTextStartIndex(blocks)
-  const canSplitStreamingFinalOutput = options.isStreaming
-    && hasProcessBlock
-    && trailingTextStartIndex !== null
-    && trailingTextStartIndex > 0
-
-  if (options.isStreaming && hasProcessBlock && !canSplitStreamingFinalOutput) {
-    return buildProcessGroupItems(blocks)
-  }
-
-  if (trailingTextStartIndex === null) {
-    return buildProcessGroupItems(blocks)
-  }
-
+/** 正常回复独立渲染，后续工具不得把它移进可折叠日志。 */
+export function buildAssistantTurnRenderItems(blocks: SDKContentBlock[]): AssistantTurnRenderItem[] {
   const items: AssistantTurnRenderItem[] = []
-  if (trailingTextStartIndex > 0) {
-    items.push(...buildProcessGroupItems(
-      blocks.slice(0, trailingTextStartIndex),
-    ))
-  }
-
-  for (let index = trailingTextStartIndex; index < blocks.length; index++) {
-    const block = blocks[index]
-    if (!block) continue
-    items.push({ type: 'block', item: { block, index } })
-  }
-
+  blocks.forEach((block, index) => {
+    if (!isVisibleProcessBlock(block)) return
+    if (block.type === 'text') {
+      items.push({ type: 'block', item: { block, index } })
+      return
+    }
+    const last = items.at(-1)
+    if (last?.type === 'process-group') last.items.push({ block, index })
+    else items.push({ type: 'process-group', items: [{ block, index }] })
+  })
   return items
-}
-
-function buildProcessGroupItems(blocks: SDKContentBlock[]): AssistantTurnRenderItem[] {
-  return [{
-    type: 'process-group',
-    items: blocks.map((block, index) => ({ block, index })),
-  }]
 }
 
 /**
@@ -168,8 +127,16 @@ const StableProcessChild = React.memo(
   (previous, next) => previous.child === next.child,
 )
 
+export function usePendingProcessToolIds(enabled = true): ReadonlySet<string> {
+  const sessionId = useMessageSessionId()
+  const pendingPermissions = useAtomValue(enabled ? allPendingPermissionRequestsAtom : EMPTY_PERMISSION_REQUESTS_ATOM)
+  return React.useMemo(() => new Set(
+    sessionId ? pendingPermissions.get(sessionId)?.map((request) => request.toolUseId).filter((id): id is string => !!id) : [],
+  ), [sessionId, pendingPermissions])
+}
+
 export function ProcessBlockGroup({
-  blocks, allMessages = EMPTY_MESSAGES, isStreaming = false,
+  blocks, allMessages = EMPTY_MESSAGES, isStreaming = false, showElapsed = true, liveStatusOverride,
   taskActivities = EMPTY_ACTIVITIES, historicalTaskSubjects, startedAt, durationMs, renderChildren,
 }: ProcessBlockGroupProps): React.ReactElement {
   const contentId = React.useId()
@@ -189,19 +156,15 @@ export function ProcessBlockGroup({
   const keepProgressViewport = false
   const shouldShowContent = isContentExpanded || shouldRenderContent
   const visibleChildren = shouldShowContent ? renderChildren() : null
-  const sessionId = useMessageSessionId()
-  const pendingPermissions = useAtomValue(allPendingPermissionRequestsAtom)
-  const pendingToolIds = React.useMemo(() => new Set(
-    sessionId ? pendingPermissions.get(sessionId)?.map((request) => request.toolUseId).filter((id): id is string => !!id) : [],
-  ), [sessionId, pendingPermissions])
+  const pendingToolIds = usePendingProcessToolIds(isStreaming && !liveStatusOverride)
   const taskItems = React.useMemo(
     () => aggregateTaskItems(taskActivities, !isStreaming, historicalTaskSubjects),
     [taskActivities, isStreaming, historicalTaskSubjects],
   )
-  const activeForm = taskItems.findLast((item) => item.status === 'in_progress')?.activeForm
+  const taskActiveForm = taskItems.findLast((item) => item.status === 'in_progress')?.activeForm
   const liveStatus = React.useMemo(
-    () => getProcessLiveStatus(blocks, allMessages, isStreaming, pendingToolIds, activeForm),
-    [blocks, allMessages, isStreaming, pendingToolIds, activeForm],
+    () => liveStatusOverride ?? getProcessLiveStatus(blocks, allMessages, isStreaming, pendingToolIds, taskActiveForm),
+    [blocks, allMessages, isStreaming, pendingToolIds, taskActiveForm, liveStatusOverride],
   )
 
   React.useEffect(() => {
@@ -343,7 +306,7 @@ export function ProcessBlockGroup({
         historicalTaskSubjects={historicalTaskSubjects}
         approvalPending={liveStatus.waiting}
       />
-      <ProcessLiveStatus status={isStreaming ? liveStatus : { ...liveStatus, label: blocks.some((block) => block.type === 'tool_use') ? `已执行 ${blocks.filter((block) => block.type === 'tool_use').length} 项操作` : liveStatus.label }} streaming={isStreaming} startedAt={startedAt} durationMs={durationMs}>
+      <ProcessLiveStatus status={isStreaming ? liveStatus : { ...liveStatus, label: blocks.some((block) => block.type === 'tool_use') ? `已执行 ${blocks.filter((block) => block.type === 'tool_use').length} 项操作` : liveStatus.label }} streaming={isStreaming} showElapsed={showElapsed} startedAt={startedAt} durationMs={durationMs}>
         <button
           type="button"
           data-process-group-toggle=""

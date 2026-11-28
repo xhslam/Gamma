@@ -1572,6 +1572,7 @@ export class AgentOrchestrator {
       const memoryRefreshOpportunity = workspaceSlug && !automationContext && !input.triggeredBy && !memoryGuidance?.needsCollaborationProfile
         ? claimWorkspaceMemoryRefreshOpportunity(workspaceSlug)
         : undefined
+      const liveProgress = !automationContext && (!input.triggeredBy || input.triggeredBy === 'user')
       const systemPromptAppend = buildSystemPrompt({
         workspaceName: workspace?.name,
         workspaceSlug,
@@ -1581,6 +1582,7 @@ export class AgentOrchestrator {
         permissionMode: initialPermissionMode,
         collaborationAvailable,
         intelligentUiInteractive: !automationContext && !input.triggeredBy,
+        liveProgress,
         currentModelId: selectedModelId,
         projectInstructions,
         projectKnowledgeMaintenanceApproved,
@@ -1680,6 +1682,7 @@ export class AgentOrchestrator {
         initialUserMessageUuid,
         piAgentDir: getSdkConfigDir(),
         piSessionDir: join(getSdkConfigDir(), 'sessions'),
+        liveProgress,
         memoryEnabled: (input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode,
         ...(((input.triggeredBy === 'user' || !input.triggeredBy) && !automationContext && !desktopMode) ? {
           memoryRoot: getMemoryDir(),
